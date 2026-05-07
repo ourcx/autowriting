@@ -1,0 +1,431 @@
+.batch-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(10, 10, 10, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--spacing-lg);
+}
+
+.batch-modal {
+  background: var(--color-canvas);
+  border-radius: var(--rounded-xl);
+  box-shadow: 0 10px 40px rgba(10, 10, 10, 0.15);
+  max-width: 600px;
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-hairline);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-lg);
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--color-ink);
+  letter-spacing: -0.3px;
+}
+
+.btn-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-ink);
+  transition: all 0.2s ease;
+  border-radius: var(--rounded-md);
+}
+
+.btn-close:hover {
+  background: var(--color-surface-card);
+}
+
+.modal-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+/* 表单部分 */
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.form-label {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-body);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.count-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  background: var(--color-brand-teal);
+  color: var(--color-on-dark);
+  border-radius: var(--rounded-md);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* API 提供商选择 */
+.provider-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  cursor: pointer;
+  border-radius: var(--rounded-md);
+  transition: all 0.2s ease;
+}
+
+.radio-option:hover {
+  background: var(--color-surface-card);
+}
+
+.radio-option input[type='radio'] {
+  cursor: pointer;
+  accent-color: var(--color-brand-teal);
+}
+
+.radio-option span {
+  font-size: 14px;
+  color: var(--color-ink);
+}
+
+/* 封面列表 */
+.covers-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.cover-config {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-lg);
+}
+
+.config-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: var(--color-brand-teal);
+  color: var(--color-on-dark);
+  border-radius: var(--rounded-md);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.config-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-group label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-body);
+}
+
+.input-field,
+.textarea-field,
+.select-field {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-md);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  color: var(--color-ink);
+  background: var(--color-canvas);
+  transition: all 0.2s ease;
+}
+
+.input-field:focus,
+.textarea-field:focus,
+.select-field:focus {
+  outline: none;
+  border-color: var(--color-brand-teal);
+  box-shadow: 0 0 0 2px rgba(26, 58, 58, 0.1);
+}
+
+.textarea-field {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-sm);
+}
+
+.btn-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--color-error);
+  border-radius: var(--rounded-md);
+  cursor: pointer;
+  color: var(--color-error);
+  transition: all 0.2s ease;
+}
+
+.btn-remove:hover {
+  background: var(--color-error);
+  color: var(--color-on-primary);
+}
+
+.btn-add-cover {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm);
+  background: transparent;
+  border: 2px dashed var(--color-hairline);
+  border-radius: var(--rounded-lg);
+  cursor: pointer;
+  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn-add-cover:hover {
+  border-color: var(--color-brand-teal);
+  color: var(--color-brand-teal);
+  background: rgba(26, 58, 58, 0.05);
+}
+
+/* 进度条 */
+.progress-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--color-hairline);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-brand-teal), var(--color-brand-mint));
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-muted);
+  text-align: center;
+}
+
+/* 结果展示 */
+.results-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg);
+  overflow-y: auto;
+  max-height: 500px;
+}
+
+.result-item {
+  position: relative;
+  border-radius: var(--rounded-lg);
+  overflow: hidden;
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-hairline);
+}
+
+.result-item img {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+  display: block;
+}
+
+.result-info {
+  padding: var(--spacing-xs);
+  background: var(--color-canvas);
+}
+
+.result-info h4 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cached-badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 6px;
+  background: var(--color-brand-teal);
+  color: var(--color-on-dark);
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: var(--rounded-xs);
+}
+
+.warning {
+  margin: 4px 0 0 0;
+  font-size: 11px;
+  color: var(--color-error);
+}
+
+/* 底部按钮 */
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg);
+  border-top: 1px solid var(--color-hairline);
+  background: var(--color-surface-card);
+}
+
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: var(--rounded-md);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  height: 44px;
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--color-ink);
+  border: 1px solid var(--color-hairline);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--color-canvas);
+  border-color: var(--color-brand-teal);
+  color: var(--color-brand-teal);
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-primary-active);
+  box-shadow: 0 4px 12px rgba(10, 10, 10, 0.15);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 响应式设计 */
+@media (max-width: 600px) {
+  .batch-modal {
+    max-width: 100%;
+    max-height: 100vh;
+  }
+
+  .modal-header {
+    padding: var(--spacing-md);
+  }
+
+  .modal-header h2 {
+    font-size: 20px;
+  }
+
+  .modal-content {
+    padding: var(--spacing-md);
+    gap: var(--spacing-md);
+  }
+
+  .field-row {
+    grid-template-columns: 1fr;
+  }
+
+  .results-container {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    padding: var(--spacing-md);
+  }
+
+  .modal-footer {
+    padding: var(--spacing-md);
+    flex-direction: column-reverse;
+  }
+
+  .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

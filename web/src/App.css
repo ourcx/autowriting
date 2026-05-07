@@ -1,0 +1,129 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: var(--color-canvas);
+}
+
+.app-header {
+  background: linear-gradient(180deg, var(--color-canvas) 0%, var(--color-surface-soft) 100%);
+  border-bottom: 1px solid var(--color-hairline);
+  padding: 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(8px);
+}
+
+.header-content {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: var(--spacing-md) var(--spacing-lg);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.logo:hover {
+  transform: translateY(-2px);
+}
+
+.logo h1 {
+  font-family: 'Inter', sans-serif;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--color-ink);
+  letter-spacing: -0.3px;
+}
+
+.logo svg {
+  color: var(--color-brand-teal);
+  transition: color 0.2s ease;
+}
+
+.logo:hover svg {
+  color: var(--color-brand-pink);
+}
+
+.nav {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+.nav-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-muted);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: var(--rounded-md);
+  transition: all 0.2s ease;
+}
+
+.nav-btn:hover {
+  background-color: var(--color-surface-card);
+  color: var(--color-ink);
+  border-color: var(--color-hairline);
+}
+
+.nav-btn.active {
+  background-color: var(--color-brand-teal);
+  color: var(--color-on-dark);
+  border-color: var(--color-brand-teal);
+  box-shadow: 0 4px 12px rgba(26, 58, 58, 0.15);
+}
+
+.app-main {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-lg);
+  background-color: var(--color-canvas);
+}
+
+/* 滚动条美化 */
+.app-main::-webkit-scrollbar {
+  width: 8px;
+}
+
+.app-main::-webkit-scrollbar-track {
+  background: var(--color-surface-soft);
+}
+
+.app-main::-webkit-scrollbar-thumb {
+  background: var(--color-hairline);
+  border-radius: var(--rounded-full);
+}
+
+.app-main::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted-soft);
+}
+
+@media (max-width: 768px) {
+  .header-content {
+    flex-direction: column;
+    gap: var(--spacing-md);
+  }
+
+  .logo h1 {
+    font-size: 20px;
+  }
+
+  .app-main {
+    padding: var(--spacing-md);
+  }
+}
