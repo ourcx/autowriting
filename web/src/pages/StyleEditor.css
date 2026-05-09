@@ -1,0 +1,479 @@
+/* StyleEditor — 样式管理页 */
+
+.se-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #fffaf0;
+  overflow: hidden;
+}
+
+/* ── Header ───────────────────────────────────────────────────── */
+.se-header {
+  height: 60px;
+  background: #ffffff;
+  border-bottom: 1px solid #e5e5e5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  flex-shrink: 0;
+  gap: 16px;
+}
+
+.se-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.se-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  background: #fffaf0;
+  color: #0a0a0a;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+
+.se-back-btn:hover {
+  background: #faf5e8;
+}
+
+.se-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.se-header-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #6a6a6a;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  background: #f5f0e0;
+  padding: 3px 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.se-header-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0a0a0a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.se-dirty-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f59e0b;
+  flex-shrink: 0;
+}
+
+.se-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.se-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, opacity 0.12s;
+}
+
+.se-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.se-btn-primary {
+  background: #0a0a0a;
+  color: #ffffff;
+}
+
+.se-btn-primary:hover:not(:disabled) {
+  background: #1f1f1f;
+}
+
+.se-btn-primary.success {
+  background: #22c55e;
+}
+
+.se-btn-secondary {
+  background: #fffaf0;
+  color: #0a0a0a;
+  border: 1px solid #e5e5e5;
+}
+
+.se-btn-secondary:hover {
+  background: #faf5e8;
+}
+
+.se-btn-danger {
+  background: #fff5f5;
+  color: #ef4444;
+  border: 1px solid #fecaca;
+}
+
+.se-btn-danger:hover {
+  background: #fee2e2;
+}
+
+/* ── Body 三栏 ────────────────────────────────────────────────── */
+.se-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── 左侧模板列表 ──────────────────────────────────────────────── */
+.se-sidebar {
+  width: 210px;
+  flex-shrink: 0;
+  background: #ffffff;
+  border-right: 1px solid #e5e5e5;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 16px;
+}
+
+.se-sidebar-section {
+  padding: 0 8px;
+}
+
+.se-section-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 4px;
+}
+
+.se-section-label {
+  margin: 0;
+  padding: 14px 8px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #9a9a9a;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.se-new-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px;
+  margin-top: 10px;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  background: #fffaf0;
+  color: #0a0a0a;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.se-new-btn:hover {
+  background: #faf5e8;
+}
+
+.se-no-custom {
+  font-size: 12px;
+  color: #9a9a9a;
+  padding: 6px 8px 10px;
+  margin: 0;
+}
+
+.se-tmpl-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+  margin-bottom: 2px;
+}
+
+.se-tmpl-item:hover {
+  background: #faf5e8;
+}
+
+.se-tmpl-item.active {
+  background: #fffaf0;
+  border-color: #e5e5e5;
+}
+
+.se-tmpl-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.se-tmpl-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.se-tmpl-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0a0a0a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.se-tmpl-desc {
+  font-size: 11px;
+  color: #9a9a9a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── 中间编辑器 ───────────────────────────────────────────────── */
+.se-editor-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: #fafafa;
+  border-right: 1px solid #e5e5e5;
+}
+
+/* 元数据栏 */
+.se-meta-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #ffffff;
+  border-bottom: 1px solid #f0f0f0;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.se-meta-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.se-meta-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #9a9a9a;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.se-meta-input {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  background: #fffaf0;
+  color: #0a0a0a;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.12s;
+  min-width: 140px;
+}
+
+.se-meta-input:focus {
+  border-color: #9a9a9a;
+}
+
+.se-meta-input:disabled {
+  background: #f9f9f9;
+  color: #9a9a9a;
+  cursor: not-allowed;
+}
+
+.se-meta-field-color .se-color-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.se-color-picker {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  padding: 2px;
+  cursor: pointer;
+  background: none;
+}
+
+.se-color-picker:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.se-color-hex {
+  font-size: 13px;
+  font-weight: 500;
+  color: #3a3a3a;
+  font-family: "Menlo", "Monaco", monospace;
+}
+
+.se-builtin-notice {
+  font-size: 12px;
+  color: #9a9a9a;
+  background: #faf5e8;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  padding: 6px 12px;
+  align-self: center;
+}
+
+/* CSS 编辑器标题 */
+.se-css-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 12px 16px 8px;
+  flex-shrink: 0;
+}
+
+.se-css-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6a6a6a;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.se-css-hint {
+  font-size: 11px;
+  color: #9a9a9a;
+}
+
+.se-css-hint code {
+  font-family: "Menlo", "Monaco", monospace;
+  font-size: 11px;
+  background: #f0f0f0;
+  padding: 0 4px;
+  border-radius: 3px;
+  color: #e83e8c;
+}
+
+/* CSS Textarea */
+.se-css-textarea {
+  flex: 1;
+  width: 100%;
+  padding: 12px 16px;
+  font-family: "Menlo", "Monaco", "Courier New", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #1a1a1a;
+  background: #fafafa;
+  border: none;
+  resize: none;
+  outline: none;
+  box-sizing: border-box;
+  tab-size: 2;
+}
+
+.se-css-textarea:focus {
+  background: #fffef9;
+}
+
+.se-css-textarea[readonly] {
+  color: #6a6a6a;
+  cursor: not-allowed;
+}
+
+/* ── 右侧预览 ──────────────────────────────────────────────────── */
+.se-preview-pane {
+  width: 360px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: #f5f5f4;
+  overflow: hidden;
+}
+
+.se-preview-header {
+  padding: 14px 16px 10px;
+  background: #ffffff;
+  border-bottom: 1px solid #f0f0f0;
+  flex-shrink: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.se-preview-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6a6a6a;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.se-preview-sub {
+  font-size: 11px;
+  color: #9a9a9a;
+}
+
+.se-preview-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.se-preview-card {
+  background: #ffffff;
+  border-radius: 10px;
+  border: 1px solid #e8e8e8;
+  overflow: hidden;
+}
+
+/* #wemd 由注入的 CSS 控制，只设置最低限 */
+#wemd {
+  display: block;
+  min-height: 60px;
+}

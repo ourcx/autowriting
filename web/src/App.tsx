@@ -1,61 +1,45 @@
-import { useState } from 'react'
-import { FileText, Plus, Zap, Image, Send } from 'lucide-react'
+import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom'
+import { FileText } from 'lucide-react'
 import Dashboard from './pages/Dashboard'
 import ArticleEditor from './pages/ArticleEditor'
+import WeChatPreview from './pages/WeChatPreview'
+import StyleEditor from './pages/StyleEditor'
 import './App.css'
 
-type Page = 'dashboard' | 'editor'
-
-function App() {
-  const [currentPage, setCurrentPage] = useState<Page>('dashboard')
-  const [selectedArticleId, setSelectedArticleId] = useState<string>('')
-
-  const handleCreateArticle = (articleId: string) => {
-    setSelectedArticleId(articleId)
-    setCurrentPage('editor')
-  }
-
-  const handleEditArticle = (articleId: string) => {
-    setSelectedArticleId(articleId)
-    setCurrentPage('editor')
-  }
-
-  const handleBack = () => {
-    setCurrentPage('dashboard')
-    setSelectedArticleId('')
-  }
+// 仪表板页（带顶部导航）
+function DashboardPage() {
+  const navigate = useNavigate()
 
   return (
     <div className="app">
       <header className="app-header">
         <div className="header-content">
-          <div className="logo">
-            <FileText size={32} />
+          <div className="logo" style={{ cursor: 'pointer' }} onClick={() => navigate('/')}>
+            <FileText size={28} />
             <h1>AI 自动写作系统</h1>
           </div>
-          <nav className="nav">
-            <button 
-              className={`nav-btn ${currentPage === 'dashboard' ? 'active' : ''}`}
-              onClick={() => handleBack()}
-            >
-              <Plus size={20} />
-              仪表板
-            </button>
-          </nav>
         </div>
       </header>
-
       <main className="app-main">
-        {currentPage === 'dashboard' ? (
-          <Dashboard
-            onCreateArticle={handleCreateArticle}
-            onEditArticle={handleEditArticle}
-          />
-        ) : (
-          <ArticleEditor articleId={selectedArticleId} onBack={handleBack} />
-        )}
+        <Dashboard
+          onCreateArticle={(id) => navigate(`/editor/${id}`)}
+          onEditArticle={(id) => navigate(`/editor/${id}`)}
+        />
       </main>
     </div>
+  )
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<DashboardPage />} />
+        <Route path="/editor/:articleId" element={<ArticleEditor />} />
+        <Route path="/preview/:articleId" element={<WeChatPreview />} />
+        <Route path="/styles" element={<StyleEditor />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
 

@@ -1,0 +1,136 @@
+/* WeChatPreview 独立页面布局 */
+
+.wechat-preview-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: #fffaf0; /* canvas */
+}
+
+/* ---- 顶部导航 ---- */
+.preview-nav {
+  height: 64px;
+  background: #fffaf0;
+  border-bottom: 1px solid #e5e5e5;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.preview-nav-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 32px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.preview-nav-back {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  height: 40px;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  background: #fffaf0;
+  color: #0a0a0a;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.preview-nav-back:hover {
+  background: #faf5e8;
+  border-color: #9a9a9a;
+}
+
+.preview-nav-title {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.preview-nav-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6a6a6a;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.preview-nav-article {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0a0a0a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 480px;
+}
+
+.preview-nav-styles-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  height: 40px;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  background: #fffaf0;
+  color: #0a0a0a;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+
+.preview-nav-styles-btn:hover {
+  background: #faf5e8;
+  border-color: #9a9a9a;
+}
+
+/* ---- 主内容区 ---- */
+.preview-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- 加载态 ---- */
+.preview-loading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: #6a6a6a;
+}
+
+.preview-loading p {
+  font-size: 14px;
+  margin: 0;
+}
+
+.preview-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e5e5e5;
+  border-top-color: #0a0a0a;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
