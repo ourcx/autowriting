@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import ModelSelector from './ModelSelector'
+import { loadAIConfig } from '../utils/aiConfig'
 import './CoverGenerator.css'
 
 interface CoverGeneratorProps {
@@ -91,22 +92,23 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
     setError(null)
 
     try {
+      const aiConfig = loadAIConfig()
       const response = await fetch('/api/generate-cover', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title,
-          content: content.substring(0, 500), // 只发送前 500 字
+          content: content.substring(0, 500),
           style: selectedStyle,
           color: selectedColor,
-          provider: apiProvider
+          provider: apiProvider || aiConfig.coverProvider,
+          aiConfig,
         })
       })
 
       if (!response.ok) {
-        throw new Error('生成封面失败')
+        const errData = await response.json().catch(() => ({}))
+        throw new Error(errData.error || '生成封面失败')
       }
 
       const data = await response.json()

@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
+import type { MouseEvent as ReactMouseEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Plus, Trash2, Save, Copy, Check } from 'lucide-react'
 import MarkdownIt from 'markdown-it'
@@ -6,7 +7,6 @@ import hljs from 'highlight.js'
 import {
   TemplateItem,
   loadAllTemplates,
-  loadCustomTemplates,
   saveCustomTemplate,
   deleteCustomTemplate,
   createNewTemplate,
@@ -46,6 +46,62 @@ export default function StyleEditor() {
 
   const styleElRef = useRef<HTMLStyleElement | null>(null)
   const cssTextareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // ── 拖拽分栏宽度 ─────────────────────────────────────────────
+  const [sidebarWidth, setSidebarWidth] = useState(220)
+  const [previewWidth, setPreviewWidth] = useState(380)
+
+  const sidebarResizerRef = useRef<HTMLDivElement>(null)
+  const previewResizerRef = useRef<HTMLDivElement>(null)
+
+  // 左侧 resizer：调整 sidebar 宽度
+  const handleSidebarResizerDown = useCallback((e: ReactMouseEvent) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startW = sidebarWidth
+    sidebarResizerRef.current?.classList.add('dragging')
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    const onMove = (ev: MouseEvent) => {
+      const w = Math.min(360, Math.max(160, startW + ev.clientX - startX))
+      setSidebarWidth(w)
+    }
+    const onUp = () => {
+      sidebarResizerRef.current?.classList.remove('dragging')
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }, [sidebarWidth])
+
+  // 右侧 resizer：调整 preview 宽度（向左拖增大 preview，反之缩小）
+  const handlePreviewResizerDown = useCallback((e: ReactMouseEvent) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startW = previewWidth
+    previewResizerRef.current?.classList.add('dragging')
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    const onMove = (ev: MouseEvent) => {
+      // 向左拖（clientX 减小）=> preview 变大
+      const w = Math.min(600, Math.max(280, startW - (ev.clientX - startX)))
+      setPreviewWidth(w)
+    }
+    const onUp = () => {
+      previewResizerRef.current?.classList.remove('dragging')
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }, [previewWidth])
 
   // 加载模板列表
   const reloadTemplates = useCallback(() => {
@@ -194,7 +250,7 @@ export default function StyleEditor() {
 
       <div className="se-body">
         {/* ── 左侧模板列表 ── */}
-        <aside className="se-sidebar">
+        <aside className="se-sidebar" style={{ width: sidebarWidth }}>
           <div className="se-sidebar-section">
             <p className="se-section-label">内置模板</p>
             {builtinList.map(t => (
@@ -238,6 +294,14 @@ export default function StyleEditor() {
             ))}
           </div>
         </aside>
+
+        {/* 左侧拖拽手柄 */}
+        <div
+          className="se-resizer"
+          ref={sidebarResizerRef}
+          onMouseDown={handleSidebarResizerDown}
+          title="拖拽调整宽度"
+        />
 
         {/* ── 中间编辑器 ── */}
         <div className="se-editor-pane">
@@ -306,8 +370,16 @@ export default function StyleEditor() {
           />
         </div>
 
+        {/* 右侧拖拽手柄 */}
+        <div
+          className="se-resizer"
+          ref={previewResizerRef}
+          onMouseDown={handlePreviewResizerDown}
+          title="拖拽调整宽度"
+        />
+
         {/* ── 右侧实时预览 ── */}
-        <div className="se-preview-pane">
+        <div className="se-preview-pane" style={{ width: previewWidth }}>
           <div className="se-preview-header">
             <span className="se-preview-label">实时预览</span>
             <span className="se-preview-sub">所有 Markdown 元素</span>

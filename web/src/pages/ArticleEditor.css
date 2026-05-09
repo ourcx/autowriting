@@ -136,6 +136,18 @@
   cursor: not-allowed;
 }
 
+.btn-ghost {
+  background: transparent;
+  color: var(--color-muted);
+  border: 1px solid transparent;
+}
+
+.btn-ghost:hover {
+  background: var(--color-surface-soft);
+  color: var(--color-ink);
+  border-color: var(--color-hairline);
+}
+
 .btn-secondary {
   background: var(--color-canvas);
   color: var(--color-ink);
@@ -486,6 +498,78 @@
   margin-top: var(--spacing-md);
 }
 
+/* ── 新用户引导横幅 ── */
+.editor-setup-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px var(--spacing-lg);
+  background: #fffbe6;
+  border-bottom: 1px solid #f0d080;
+  font-size: 13px;
+  color: #7a5c00;
+}
+
+.editor-setup-banner button {
+  padding: 3px 10px;
+  background: #1a3a3a;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.editor-setup-banner button:hover {
+  background: #2d6a4f;
+}
+
+/* ── 生成错误横幅 ── */
+.editor-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px var(--spacing-lg);
+  background: #fff2f2;
+  border-bottom: 1px solid #fcc;
+  font-size: 13px;
+  color: #9b1c1c;
+}
+
+.editor-error-banner button {
+  padding: 3px 10px;
+  background: #9b1c1c;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.editor-error-banner button:hover {
+  background: #7f1d1d;
+}
+
+.editor-error-close {
+  margin-left: auto;
+  background: transparent !important;
+  color: #9b1c1c !important;
+  font-size: 14px !important;
+  padding: 0 4px !important;
+  opacity: 0.7;
+}
+
+.editor-error-close:hover {
+  opacity: 1;
+  background: transparent !important;
+}
+
+/* ── 响应式设计 ── */
 /* 响应式设计 */
 @media (max-width: 768px) {
   .editor-header {

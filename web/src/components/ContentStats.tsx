@@ -1,5 +1,4 @@
 import { BarChart3, Clock, FileText, Eye } from 'lucide-react'
-import { countWords, calculateReadingTime, generateTableOfContents } from '../utils/markdownRenderer'
 import './ContentStats.css'
 
 interface ContentStatsProps {
@@ -7,7 +6,23 @@ interface ContentStatsProps {
   title?: string
 }
 
-export default function ContentStats({ content, title }: ContentStatsProps) {
+function countWords(text: string): number {
+  return text.replace(/[#*`\[\]()]/g, '').trim().length
+}
+
+function calculateReadingTime(text: string): number {
+  return Math.ceil(countWords(text) / 200)
+}
+
+function generateTableOfContents(markdown: string): Array<{ level: number; title: string }> {
+  return markdown.split('\n').reduce<Array<{ level: number; title: string }>>((acc, line) => {
+    const m = line.match(/^(#{1,6})\s+(.+?)$/)
+    if (m) acc.push({ level: m[1].length, title: m[2].trim() })
+    return acc
+  }, [])
+}
+
+export default function ContentStats({ content }: ContentStatsProps) {
   const wordCount = countWords(content)
   const readingTime = calculateReadingTime(content)
   const headings = generateTableOfContents(content)

@@ -55,6 +55,29 @@
   color: var(--color-brand-pink);
 }
 
+.dash-styles-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 16px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-md);
+  background: var(--color-canvas);
+  color: var(--color-muted);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.dash-styles-btn:hover {
+  background: var(--color-surface-soft);
+  color: var(--color-ink);
+  border-color: var(--color-muted);
+}
+
 .nav {
   display: flex;
   gap: var(--spacing-xs);
@@ -111,6 +134,49 @@
 
 .app-main::-webkit-scrollbar-thumb:hover {
   background: var(--color-muted-soft);
+}
+
+/* ── Dashboard 首次使用引导横幅 ── */
+.dash-setup-guide {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px var(--spacing-lg);
+  background: linear-gradient(90deg, #fffbe6 0%, #fff8d6 100%);
+  border-bottom: 1px solid #f0d080;
+  font-size: 14px;
+  color: #7a5c00;
+}
+
+.dash-setup-guide strong {
+  font-weight: 600;
+}
+
+.dash-setup-guide svg {
+  flex-shrink: 0;
+  color: #c97d00;
+}
+
+.dash-setup-guide > div {
+  flex: 1;
+}
+
+.dash-setup-guide button {
+  padding: 6px 16px;
+  background: #1a3a3a;
+  color: #fff;
+  border: none;
+  border-radius: var(--rounded-md);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.dash-setup-guide button:hover {
+  background: #2d6a4f;
 }
 
 @media (max-width: 768px) {

@@ -1,36 +1,11 @@
-import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom'
-import { FileText } from 'lucide-react'
-import Dashboard from './pages/Dashboard'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import DashboardPage from './pages/DashboardPage'
 import ArticleEditor from './pages/ArticleEditor'
 import WeChatPreview from './pages/WeChatPreview'
 import StyleEditor from './pages/StyleEditor'
-import './App.css'
+import AISettings from './pages/AISettings'
 
-// 仪表板页（带顶部导航）
-function DashboardPage() {
-  const navigate = useNavigate()
-
-  return (
-    <div className="app">
-      <header className="app-header">
-        <div className="header-content">
-          <div className="logo" style={{ cursor: 'pointer' }} onClick={() => navigate('/')}>
-            <FileText size={28} />
-            <h1>AI 自动写作系统</h1>
-          </div>
-        </div>
-      </header>
-      <main className="app-main">
-        <Dashboard
-          onCreateArticle={(id) => navigate(`/editor/${id}`)}
-          onEditArticle={(id) => navigate(`/editor/${id}`)}
-        />
-      </main>
-    </div>
-  )
-}
-
-function App() {
+export default function App() {
   return (
     <BrowserRouter>
       <Routes>
@@ -38,9 +13,10 @@ function App() {
         <Route path="/editor/:articleId" element={<ArticleEditor />} />
         <Route path="/preview/:articleId" element={<WeChatPreview />} />
         <Route path="/styles" element={<StyleEditor />} />
+        <Route path="/settings" element={<AISettings />} />
+        {/* 404 兜底：重定向回首页 */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   )
 }
-
-export default App

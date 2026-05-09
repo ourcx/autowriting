@@ -1,6 +1,6 @@
 /* =============================================================
- * WeChatRenderer — CSS Template Editor + Live Preview
- * Clay Design System tokens applied throughout
+ * WeChatRenderer — Clay 米色主题 + 绿色点缀
+ * Canvas #fffaf0 · Accent green #1a3a3a / #2d6a4f
  * ============================================================= */
 
 /* ── 根容器 ─────────────────────────────────────────────────── */
@@ -9,7 +9,7 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  background: #f5f5f4;
+  background: var(--color-canvas);
 }
 
 /* ── 顶部工具栏 ──────────────────────────────────────────────── */
@@ -19,8 +19,8 @@
   gap: 12px;
   padding: 0 20px;
   height: 52px;
-  background: #ffffff;
-  border-bottom: 1px solid #e5e5e5;
+  background: var(--color-surface-soft);
+  border-bottom: 1px solid var(--color-hairline);
   flex-shrink: 0;
   z-index: 20;
 }
@@ -44,10 +44,10 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  height: 34px;
-  padding: 0 10px;
-  background: #f9f9f9;
-  border: 1px solid #e5e5e5;
+  height: 32px;
+  padding: 0 8px;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
 }
 
@@ -61,19 +61,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #3a3a3a;
-  transition: background 0.1s;
+  color: var(--color-muted);
+  transition: background 0.1s, color 0.1s;
 }
 
 .wr-fontsize-btn:hover {
-  background: #ebe6d6;
+  background: var(--color-surface-card);
+  color: var(--color-ink);
 }
 
 .wr-fontsize-value {
-  font-size: 13px;
-  font-weight: 500;
-  color: #0a0a0a;
-  min-width: 34px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-body-strong);
+  min-width: 32px;
   text-align: center;
 }
 
@@ -81,24 +82,30 @@
 .wr-stat {
   font-size: 12px;
   font-weight: 500;
-  color: #9a9a9a;
+  color: var(--color-muted-soft);
 }
 
 /* 复制提示 */
 .wr-copy-hint {
   font-size: 12px;
-  color: #9a9a9a;
+  color: var(--color-muted-soft);
   white-space: nowrap;
+  transition: color 0.25s;
 }
 
-/* 复制按钮 */
+.wr-copy-hint-success {
+  color: #2d6a4f;
+  font-weight: 500;
+}
+
+/* 复制按钮 — 绿色调 */
 .wr-copy-btn {
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 40px;
-  padding: 0 18px;
-  background: #0a0a0a;
+  height: 36px;
+  padding: 0 16px;
+  background: #1a3a3a;
   color: #ffffff;
   border: none;
   border-radius: 10px;
@@ -106,18 +113,27 @@
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s;
+  transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+  letter-spacing: -0.1px;
 }
 
 .wr-copy-btn:hover {
-  background: #1f1f1f;
+  background: #2d6a4f;
+  box-shadow: 0 4px 12px rgba(26, 58, 58, 0.25);
+  transform: translateY(-1px);
+}
+
+.wr-copy-btn:active {
+  transform: translateY(0);
+  box-shadow: none;
 }
 
 .wr-copy-btn.success {
-  background: #22c55e;
+  background: #2d6a4f;
+  box-shadow: 0 4px 12px rgba(45, 106, 79, 0.3);
 }
 
-/* ── 主体布局：左 sidebar + 右 preview ──────────────────────── */
+/* ── 主体布局：左 sidebar + 拖拽条 + 右 preview ─────────────── */
 .wr-main {
   flex: 1;
   display: flex;
@@ -128,20 +144,45 @@
 /* ── 左侧边栏 ────────────────────────────────────────────────── */
 .wr-sidebar {
   width: 260px;
+  min-width: 180px;
+  max-width: 480px;
   flex-shrink: 0;
-  background: #ffffff;
-  border-right: 1px solid #e5e5e5;
+  background: var(--color-surface-soft);
+  border-right: 1px solid var(--color-hairline);
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-/* 侧边栏标题行（含「管理」按钮） */
+/* 拖拽调整宽度手柄 */
+.wr-resizer {
+  width: 5px;
+  flex-shrink: 0;
+  background: transparent;
+  cursor: col-resize;
+  position: relative;
+  transition: background 0.15s;
+  z-index: 10;
+}
+
+.wr-resizer::after {
+  content: '';
+  position: absolute;
+  inset: 0 -2px;
+  background: transparent;
+}
+
+.wr-resizer:hover,
+.wr-resizer.dragging {
+  background: #2d6a4f;
+}
+
+/* 侧边栏标题行 */
 .wr-sidebar-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-right: 12px;
+  padding-right: 10px;
 }
 
 .wr-sidebar-section-label {
@@ -149,11 +190,11 @@
   align-items: center;
   gap: 8px;
   margin: 0;
-  padding: 14px 16px 8px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #6a6a6a;
-  letter-spacing: 1px;
+  padding: 14px 14px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--color-muted);
+  letter-spacing: 1.5px;
   text-transform: uppercase;
 }
 
@@ -164,20 +205,21 @@
   height: 24px;
   padding: 0 9px;
   margin-top: 6px;
-  border: 1px solid #e5e5e5;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
-  background: #fffaf0;
-  color: #6a6a6a;
+  background: var(--color-canvas);
+  color: var(--color-muted);
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.1s, color 0.1s;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 
 .wr-manage-styles-btn:hover {
-  background: #faf5e8;
-  color: #0a0a0a;
+  background: #f0f7f4;
+  color: #1a3a3a;
+  border-color: #a4d4c5;
 }
 
 /* 模板列表 */
@@ -200,24 +242,25 @@
   background: transparent;
   cursor: pointer;
   text-align: left;
-  transition: background 0.12s, border-color 0.12s;
+  transition: background 0.12s, border-color 0.12s, transform 0.1s;
 }
 
 .wr-tmpl-item:hover {
-  background: #faf5e8;
+  background: var(--color-surface-card);
+  transform: translateX(2px);
 }
 
 .wr-tmpl-item.active {
-  background: #fffaf0;
-  border-color: #e5e5e5;
+  background: #e8f4f0;
+  border-color: #a4d4c5;
 }
 
 .wr-tmpl-dot {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   flex-shrink: 0;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
 }
 
 .wr-tmpl-info {
@@ -231,28 +274,36 @@
 .wr-tmpl-name {
   font-size: 13px;
   font-weight: 600;
-  color: #0a0a0a;
+  color: var(--color-ink);
   white-space: nowrap;
+  letter-spacing: -0.1px;
 }
 
 .wr-tmpl-desc {
   font-size: 11px;
-  color: #9a9a9a;
+  color: var(--color-muted-soft);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* 选中勾选标记 — 绿色 */
 .wr-tmpl-check {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #0a0a0a;
-  color: #fff;
+  background: #2d6a4f;
+  color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  animation: pop-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes pop-in {
+  from { transform: scale(0); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
 }
 
 /* CSS 编辑器区 */
@@ -261,16 +312,16 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-hairline);
   padding-top: 4px;
 }
 
 .wr-css-hint {
   font-size: 10px;
-  font-weight: 500;
-  color: #22c55e;
-  background: rgba(34, 197, 94, 0.1);
-  padding: 2px 6px;
+  font-weight: 600;
+  color: #2d6a4f;
+  background: rgba(45, 106, 79, 0.1);
+  padding: 2px 7px;
   border-radius: 4px;
   letter-spacing: 0;
   text-transform: none;
@@ -283,19 +334,21 @@
   padding: 10px 14px;
   font-family: "Menlo", "Monaco", "Courier New", Consolas, monospace;
   font-size: 11.5px;
-  line-height: 1.65;
-  color: #1a1a1a;
-  background: #fdfdfd;
+  line-height: 1.7;
+  color: #2a3a2a;
+  background: var(--color-canvas);
   border: none;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-hairline);
   resize: none;
   outline: none;
   box-sizing: border-box;
   tab-size: 2;
+  transition: background 0.15s;
 }
 
 .wr-css-textarea:focus {
-  background: #fffaf0;
+  background: #f8fdf8;
+  color: #1a2a1a;
 }
 
 /* ── 右侧预览 ────────────────────────────────────────────────── */
@@ -304,36 +357,59 @@
   overflow-y: auto;
   display: flex;
   justify-content: center;
-  padding: 28px 24px 48px;
-  background: #f5f5f4;
+  padding: 32px 28px 60px;
+  background: var(--color-surface-card);
+  min-width: 0;
 }
 
-/* 文章卡片：纯白 */
+/* 滚动条 */
+.wr-preview::-webkit-scrollbar { width: 6px; }
+.wr-preview::-webkit-scrollbar-track { background: transparent; }
+.wr-preview::-webkit-scrollbar-thumb { background: var(--color-surface-strong); border-radius: 3px; }
+.wr-preview::-webkit-scrollbar-thumb:hover { background: #a4d4c5; }
+
+/* 文章卡片：纯白，带手机感边框 */
 .wr-article-card {
   width: 100%;
   max-width: 680px;
   background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #e8e8e8;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
+  border-radius: 16px;
+  border: 1px solid var(--color-hairline);
+  box-shadow:
+    0 2px 8px rgba(0,0,0,0.06),
+    0 8px 24px rgba(0,0,0,0.08);
   overflow: hidden;
   height: fit-content;
+  animation: card-in 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 顶部绿色装饰条 */
+.wr-article-card::before {
+  content: '';
+  display: block;
+  height: 3px;
+  background: linear-gradient(90deg, #1a3a3a 0%, #2d6a4f 40%, #a4d4c5 100%);
 }
 
 /* 文章标题栏 */
 .wr-article-header {
   padding: 20px 24px 16px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-hairline-soft);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .wr-article-badge {
   font-size: 10px;
-  font-weight: 600;
-  color: #9a9a9a;
-  letter-spacing: 1.2px;
+  font-weight: 700;
+  color: var(--color-muted-soft);
+  letter-spacing: 1.5px;
   text-transform: uppercase;
 }
 
@@ -341,11 +417,12 @@
   margin: 0;
   font-size: 17px;
   font-weight: 600;
-  color: #0a0a0a;
+  color: var(--color-ink);
   line-height: 1.4;
+  letter-spacing: -0.2px;
 }
 
-/* #wemd 的 padding 由模板 CSS 自身控制，这里只做兜底 */
+/* #wemd 由模板 CSS 控制 */
 #wemd {
   display: block;
   min-height: 100px;
@@ -363,26 +440,28 @@
 }
 
 .wr-empty-icon {
-  width: 52px;
-  height: 52px;
-  background: #f5f0e0;
-  border-radius: 14px;
+  width: 56px;
+  height: 56px;
+  background: var(--color-surface-soft);
+  border-radius: 16px;
+  border: 1px solid var(--color-hairline);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #6a6a6a;
+  color: var(--color-muted-soft);
 }
 
 .wr-empty-title {
   margin: 0;
   font-size: 15px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--color-muted);
 }
 
 .wr-empty-desc {
   margin: 0;
   font-size: 13px;
-  color: #9a9a9a;
+  color: var(--color-muted-soft);
   text-align: center;
+  line-height: 1.6;
 }

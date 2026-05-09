@@ -37,15 +37,6 @@ const COLOR_LABELS: Record<string, string> = {
   blueberry: '蓝莓蓝'
 }
 
-const COLOR_MAP: Record<string, string> = {
-  matcha: '#078a52',
-  slushie: '#3bd3fd',
-  lemon: '#fbbd41',
-  ube: '#43089f',
-  pomegranate: '#fc7981',
-  blueberry: '#01418d'
-}
-
 export const BatchCoverGenerator: React.FC<BatchCoverGeneratorProps> = ({
   onClose,
   onSuccess

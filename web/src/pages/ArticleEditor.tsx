@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Zap, Save, Edit3 } from 'lucide-react'
-import axios from 'axios'
+import { ArrowLeft, Zap, Save, Edit3, Palette, Settings, AlertTriangle } from 'lucide-react'
+import { useAIReadiness, fetchServerStatus } from '../store/useConfigStore'
+import { fetchArticle, saveArticle, generateArticle, extractErrorMessage } from '../utils/apiHelpers'
 import CoverGenerator from '../components/CoverGenerator'
 import CoverHistory from '../components/CoverHistory'
 import BatchCoverGenerator from '../components/BatchCoverGenerator'
@@ -26,9 +27,16 @@ export default function ArticleEditor() {
   const [data, setData] = useState<ArticleData>({ task: '', materials: '', article: '', title: '' })
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
+  const [generateError, setGenerateError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabId>('task')
   const [showBatchGenerator, setShowBatchGenerator] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
+
+  // 从 store 读取配置就绪状态（本地 + 服务端综合判断）
+  const { localConfig: aiConfig, articleReady: apiKeyReady } = useAIReadiness()
+
+  // 首次挂载时拉一次服务端状态
+  useEffect(() => { fetchServerStatus() }, [])
 
   useEffect(() => {
     if (!articleId) return
@@ -57,8 +65,8 @@ export default function ArticleEditor() {
   const fetchArticleData = async () => {
     try {
       setLoading(true)
-      const res = await axios.get(`/api/articles/${articleId}`)
-      setData(res.data)
+      const d = await fetchArticle(articleId)
+      setData(d)
     } catch (err) {
       console.error('加载文章失败', err)
     } finally {
@@ -68,7 +76,7 @@ export default function ArticleEditor() {
 
   const handleSave = async () => {
     try {
-      await axios.post(`/api/articles/${articleId}`, data)
+      await saveArticle(articleId, data)
       alert('保存成功！')
     } catch {
       alert('保存失败')
@@ -76,16 +84,19 @@ export default function ArticleEditor() {
   }
 
   const handleGenerate = async () => {
+    // 前置检查：未配置 Key 时直接提示，不发请求
+    if (!apiKeyReady) {
+      setGenerateError('未配置 AI API Key，请先前往「AI 配置」页面填写后再生成。')
+      return
+    }
     try {
       setGenerating(true)
-      const res = await axios.post(`/api/articles/${articleId}/generate`, {
-        task: data.task,
-        materials: data.materials,
-      })
-      setData(prev => ({ ...prev, article: res.data.article }))
+      setGenerateError(null)
+      const article = await generateArticle(articleId, data.task, data.materials, aiConfig)
+      setData(prev => ({ ...prev, article }))
       setActiveTab('article')
-    } catch {
-      alert('生成失败，请检查任务和素材是否完整')
+    } catch (err) {
+      setGenerateError(extractErrorMessage(err, '生成失败，请检查配置后重试'))
     } finally {
       setGenerating(false)
     }
@@ -104,6 +115,28 @@ export default function ArticleEditor() {
 
   return (
     <div className="editor">
+      {/* ── 未配置 Key 提示横幅 ── */}
+      {!apiKeyReady && (
+        <div className="editor-setup-banner">
+          <AlertTriangle size={15} />
+          <span>还没配置 AI API Key，生成文章需要先</span>
+          <button onClick={() => navigate('/settings')}>前往配置</button>
+          <span>（已配置的可忽略此提示）</span>
+        </div>
+      )}
+
+      {/* ── 生成错误横幅 ── */}
+      {generateError && (
+        <div className="editor-error-banner">
+          <AlertTriangle size={15} />
+          <span>{generateError}</span>
+          {generateError.includes('API Key') && (
+            <button onClick={() => navigate('/settings')}>去配置</button>
+          )}
+          <button className="editor-error-close" onClick={() => setGenerateError(null)}>✕</button>
+        </div>
+      )}
+
       {/* 顶部 Header */}
       <div className="editor-header">
         <button className="btn-back" onClick={() => navigate('/')}>
@@ -132,6 +165,22 @@ export default function ArticleEditor() {
         </div>
 
         <div className="header-actions">
+          <button
+            className="btn btn-ghost"
+            onClick={() => navigate('/settings')}
+            title="AI 模型和 API Key 配置"
+          >
+            <Settings size={16} />
+            AI 配置
+          </button>
+          <button
+            className="btn btn-ghost"
+            onClick={() => navigate('/styles')}
+            title="管理 CSS 样式模板"
+          >
+            <Palette size={16} />
+            管理样式
+          </button>
           <button className="btn btn-secondary" onClick={handleSave}>
             <Save size={20} />
             保存

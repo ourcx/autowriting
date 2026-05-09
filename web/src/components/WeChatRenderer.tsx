@@ -114,6 +114,42 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
   const [copied, setCopied] = useState(false)
   const previewRef = useRef<HTMLDivElement>(null)
 
+  // 拖拽分栏宽度
+  const [sidebarWidth, setSidebarWidth] = useState(260)
+  const resizerRef = useRef<HTMLDivElement>(null)
+  const isDraggingRef = useRef(false)
+  const dragStartXRef = useRef(0)
+  const dragStartWidthRef = useRef(0)
+
+  const handleResizerMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    isDraggingRef.current = true
+    dragStartXRef.current = e.clientX
+    dragStartWidthRef.current = sidebarWidth
+    resizerRef.current?.classList.add('dragging')
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current) return
+      const delta = e.clientX - dragStartXRef.current
+      const newWidth = Math.min(480, Math.max(180, dragStartWidthRef.current + delta))
+      setSidebarWidth(newWidth)
+    }
+
+    const onMouseUp = () => {
+      isDraggingRef.current = false
+      resizerRef.current?.classList.remove('dragging')
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+  }, [sidebarWidth])
+
   // 监听 StyleEditor 发出的模板更新事件
   useEffect(() => {
     const sync = () => {
@@ -218,18 +254,26 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
           <span className="wr-stat">{charCount.toLocaleString()} 字</span>
         </div>
         <div className="wr-toolbar-right">
-          <span className="wr-copy-hint">复制后粘贴到公众号编辑器</span>
+          {copied ? (
+            <span className="wr-copy-hint wr-copy-hint-success">
+              已复制富文本，打开公众号编辑器 → 直接 Ctrl+V 粘贴
+            </span>
+          ) : (
+            <span className="wr-copy-hint">
+              点击复制 → 粘贴到公众号编辑器，样式自动带入
+            </span>
+          )}
           <button className={`wr-copy-btn ${copied ? 'success' : ''}`} onClick={handleCopy}>
             {copied ? <Check size={15} /> : <Copy size={15} />}
-            {copied ? '已复制' : '复制内容'}
+            {copied ? '已复制！' : '复制内容'}
           </button>
         </div>
       </div>
 
-      {/* ── 主体：左侧模板 + 右侧预览 ── */}
+      {/* ── 主体：左侧模板 + 拖拽条 + 右侧预览 ── */}
       <div className="wr-main">
         {/* 左侧边栏 */}
-        <div className="wr-sidebar">
+        <div className="wr-sidebar" style={{ width: sidebarWidth }}>
           <div className="wr-sidebar-header">
             <p className="wr-sidebar-section-label">样式模板</p>
             <button
@@ -273,6 +317,14 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
             />
           </div>
         </div>
+
+        {/* 拖拽手柄 */}
+        <div
+          className="wr-resizer"
+          ref={resizerRef}
+          onMouseDown={handleResizerMouseDown}
+          title="拖拽调整宽度"
+        />
 
         {/* 右侧预览 */}
         <div className="wr-preview">

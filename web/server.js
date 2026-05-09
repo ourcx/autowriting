@@ -15,42 +15,40 @@ const __dirname = path.dirname(__filename)
 const app = express()
 const PORT = process.env.PORT || 3000
 
-// 项目根目录
-const PROJECT_ROOT = path.join(__dirname, '..')
-const DRAFTS_DIR = path.join(PROJECT_ROOT, '公众号写作', 'drafts')
-const AGENTS_FILE = path.join(PROJECT_ROOT, 'AGENTS.md')
-const CACHE_DIR = path.join(PROJECT_ROOT, '.cache', 'covers')
-const HISTORY_FILE = path.join(PROJECT_ROOT, '.cache', 'cover_history.json')
+// 目录配置 — 支持环境变量覆盖（独立部署时可自定义）
+const PROJECT_ROOT = process.env.PROJECT_ROOT || path.join(__dirname, '..')
+const DRAFTS_DIR = process.env.DRAFTS_DIR || path.join(PROJECT_ROOT, '公众号写作', 'drafts')
+const AGENTS_FILE = process.env.AGENTS_FILE || path.join(PROJECT_ROOT, 'AGENTS.md')
+const DATA_DIR = process.env.DATA_DIR || path.join(PROJECT_ROOT, '.cache')
+const CACHE_DIR = path.join(DATA_DIR, 'covers')
+const HISTORY_FILE = path.join(DATA_DIR, 'cover_history.json')
 
-// MaaS API 配置
-const MAAS_CONFIG = {
-  apiKey: process.env.MAAS_API_KEY || '',
-  baseUrl: process.env.MAAS_BASE_URL || 'https://maas.devops.xiaohongshu.com/v1',
-  userEmail: process.env.MAAS_USER_EMAIL || '',
-  appId: process.env.MAAS_APP_ID || 'qs-api'
-}
-
-// Stability AI 配置
-const STABILITY_CONFIG = {
-  apiKey: process.env.STABILITY_API_KEY || '',
-  baseUrl: process.env.STABILITY_BASE_URL || 'https://api.stability.ai/v1',
-  engine: process.env.STABILITY_ENGINE || 'stable-diffusion-3-large'
-}
-
-// OpenAI 配置
-const OPENAI_CONFIG = {
-  apiKey: process.env.OPENAI_API_KEY || '',
-  baseUrl: 'https://api.openai.com/v1',
-  model: 'dall-e-3'
+// 服务端 AI 配置（兜底，用户在前端配置的会覆盖这里）
+const SERVER_AI_CONFIG = {
+  // 文章生成
+  articleProvider: process.env.ARTICLE_PROVIDER || 'openai',
+  articleApiKey: process.env.OPENAI_API_KEY || process.env.ARTICLE_API_KEY || '',
+  articleBaseUrl: process.env.ARTICLE_BASE_URL || 'https://api.openai.com/v1',
+  articleModel: process.env.ARTICLE_MODEL || 'gpt-4o',
+  // MaaS（内部）
+  maasApiKey: process.env.MAAS_API_KEY || '',
+  maasBaseUrl: process.env.MAAS_BASE_URL || 'https://maas.devops.xiaohongshu.com/v1',
+  maasUserEmail: process.env.MAAS_USER_EMAIL || '',
+  // 封面
+  coverProvider: process.env.COVER_PROVIDER || 'local',
+  coverApiKey: process.env.COVER_API_KEY || process.env.OPENAI_API_KEY || '',
+  // Stability（保留兼容）
+  stabilityApiKey: process.env.STABILITY_API_KEY || '',
+  stabilityBaseUrl: process.env.STABILITY_BASE_URL || 'https://api.stability.ai/v1',
 }
 
 // 图片管理系统配置
-const IMAGES_DIR = path.join(PROJECT_ROOT, '.cache', 'images')
-const IMAGES_METADATA_FILE = path.join(PROJECT_ROOT, '.cache', 'images_metadata.json')
+const IMAGES_DIR = path.join(DATA_DIR, 'images')
+const IMAGES_METADATA_FILE = path.join(DATA_DIR, 'images_metadata.json')
 
 // 微信发布配置
-const PUBLISH_DIR = path.join(PROJECT_ROOT, '.cache', 'publish')
-const PUBLISH_HISTORY_FILE = path.join(PROJECT_ROOT, '.cache', 'publish_history.json')
+const PUBLISH_DIR = path.join(DATA_DIR, 'publish')
+const PUBLISH_HISTORY_FILE = path.join(DATA_DIR, 'publish_history.json')
 
 // 中间件
 app.use(cors())
@@ -241,17 +239,18 @@ function updateImageInfo(imageId, updates) {
   return null
 }
 
-// OpenAI DALL-E 生成函数
-async function generateWithDallE(prompt) {
-  if (!OPENAI_CONFIG.apiKey) {
-    throw new Error('OpenAI API key not configured')
+// OpenAI DALL-E 生成函数（apiKey 由调用方传入）
+async function generateWithDallE(prompt, apiKey) {
+  const key = apiKey || SERVER_AI_CONFIG.coverApiKey
+  if (!key) {
+    throw new Error('OpenAI API key not configured. 请前往「AI 配置」页面设置。')
   }
   
   try {
     const response = await axios.post(
-      `${OPENAI_CONFIG.baseUrl}/images/generations`,
+      'https://api.openai.com/v1/images/generations',
       {
-        model: OPENAI_CONFIG.model,
+        model: 'dall-e-3',
         prompt: prompt,
         n: 1,
         size: '1024x1024',
@@ -260,7 +259,7 @@ async function generateWithDallE(prompt) {
       },
       {
         headers: {
-          'Authorization': `Bearer ${OPENAI_CONFIG.apiKey}`,
+          'Authorization': `Bearer ${key}`,
           'Content-Type': 'application/json'
         }
       }
@@ -628,20 +627,24 @@ app.post('/api/articles/:articleId', (req, res) => {
 app.post('/api/articles/:articleId/generate', async (req, res) => {
   try {
     const { articleId } = req.params
-    const { task, materials } = req.body
+    // aiConfig 由前端 /settings 页面配置并传入，优先级高于服务端环境变量
+    const { task, materials, aiConfig } = req.body
 
     if (!task || !materials) {
       return res.status(400).json({ error: '任务和素材不能为空' })
     }
 
-    // 读取 AGENTS.md
+    // 合并配置：前端传入 > 服务端环境变量
+    const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
+
+    // 读取 AGENTS.md 写作规范
     let agentsContent = ''
     if (fs.existsSync(AGENTS_FILE)) {
       agentsContent = fs.readFileSync(AGENTS_FILE, 'utf-8')
     }
 
     // 构建提示词
-    const prompt = `你是一个专业的内容创作助手。请严格按照以下要求完成文章写作任务。
+    const userPrompt = `你是一个专业的内容创作助手。请严格按照以下要求完成文章写作任务。
 
 # 写作规范（必须严格遵守）
 ${agentsContent}
@@ -656,57 +659,83 @@ ${materials}
 
 现在请根据以上规范和素材，直接输出完整的文章内容（纯 Markdown 格式，不要有任何其他说明）：`
 
-    // 调用 MaaS API
+    // 根据 provider 选择调用方式
+    let requestHeaders = { 'Content-Type': 'application/json' }
+    let requestUrl = ''
+    let requestModel = ''
+
+    if (cfg.articleProvider === 'maas') {
+      requestUrl = `${cfg.maasBaseUrl}/chat/completions`
+      requestModel = 'deepseek-v4-pro'
+      requestHeaders['api-key'] = cfg.maasApiKey
+      requestHeaders['x-maas-user-email'] = cfg.maasUserEmail
+      requestHeaders['x-maas-app-id'] = 'qs-api'
+    } else {
+      // openai / openai-compat
+      requestUrl = `${cfg.articleBaseUrl}/chat/completions`
+      requestModel = cfg.articleModel || 'gpt-4o'
+      requestHeaders['Authorization'] = `Bearer ${cfg.articleApiKey}`
+    }
+
+    if (!cfg.articleApiKey && cfg.articleProvider !== 'maas') {
+      return res.status(400).json({
+        error: '未配置 API Key，请前往「AI 配置」页面设置后重试'
+      })
+    }
+    if (cfg.articleProvider === 'maas' && !cfg.maasApiKey) {
+      return res.status(400).json({
+        error: '未配置 MaaS API Key，请前往「AI 配置」页面设置后重试'
+      })
+    }
+
     const response = await axios.post(
-      `${MAAS_CONFIG.baseUrl}/chat/completions`,
+      requestUrl,
       {
-        model: 'deepseek-v4-pro',
+        model: requestModel,
         messages: [
           {
             role: 'system',
             content: '你是一个专业的内容创作助手，擅长按照规范和要求生成高质量的文章内容。'
           },
-          {
-            role: 'user',
-            content: prompt
-          }
+          { role: 'user', content: userPrompt }
         ],
         temperature: 0.9,
         max_tokens: 4096,
         stream: false
       },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'api-key': MAAS_CONFIG.apiKey,
-          'x-maas-user-email': MAAS_CONFIG.userEmail,
-          'x-maas-app-id': MAAS_CONFIG.appId
-        }
-      }
+      { headers: requestHeaders }
     )
 
     const article = response.data.choices[0].message.content
 
-    // 保存文章
+    // 保存文章到本地文件
     const articlePath = getArticlePath(articleId, 'article')
     ensureDir(path.dirname(articlePath))
     fs.writeFileSync(articlePath, article, 'utf-8')
 
     res.json({ article })
   } catch (error) {
-    console.error('Error generating article:', error)
-    res.status(500).json({ error: error.message })
+    console.error('Error generating article:', error.response?.data || error.message)
+    const msg = error.response?.data?.error?.message || error.message
+    res.status(500).json({ error: msg })
   }
 })
 
 // 生成封面
 app.post('/api/generate-cover', async (req, res) => {
   try {
-    const { title, content, style, color, provider } = req.body
+    // aiConfig 由前端 CoverGenerator 传入（来自 /settings 配置）
+    const { title, content, style, color, provider: reqProvider, aiConfig } = req.body
 
     if (!title) {
       return res.status(400).json({ error: '标题不能为空' })
     }
+
+    // 合并配置：前端传入 > 服务端环境变量
+    const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
+    // provider 优先取前端传的（允许覆盖），其次取 aiConfig.coverProvider，最后用 local
+    const provider = reqProvider || cfg.coverProvider || 'local'
+    const coverApiKey = cfg.coverApiKey || cfg.stabilityApiKey || ''
 
     // 生成缓存 key
     const cacheKey = generateCacheKey(title, style, color)
@@ -715,14 +744,10 @@ app.post('/api/generate-cover', async (req, res) => {
     const cached = getCachedImage(cacheKey)
     if (cached) {
       const historyItem = addToHistory(title, style, color, provider, cached.imageUrl, cacheKey)
-      return res.json({
-        imageUrl: cached.imageUrl,
-        cached: true,
-        historyId: historyItem.id
-      })
+      return res.json({ imageUrl: cached.imageUrl, cached: true, historyId: historyItem.id })
     }
 
-    // 使用本地演示模式
+    // 本地 SVG 占位（免费）
     if (provider === 'local') {
       const svgContent = generatePlaceholderCover(title, style, color)
       const imageUrl = `data:image/svg+xml;base64,${Buffer.from(svgContent).toString('base64')}`
@@ -731,52 +756,44 @@ app.post('/api/generate-cover', async (req, res) => {
       return res.json({ imageUrl, historyId: historyItem.id })
     }
 
-    // 使用 Stability AI
+    // Stability AI
     if (provider === 'stability') {
+      const stabilityKey = coverApiKey || SERVER_AI_CONFIG.stabilityApiKey
       try {
         const prompt = generatePrompt(title, content, style, color)
-        
         const response = await axios.post(
-          `${STABILITY_CONFIG.baseUrl}/image-to-image`,
+          `${SERVER_AI_CONFIG.stabilityBaseUrl}/text-to-image/v1/engines/${process.env.STABILITY_ENGINE || 'stable-diffusion-3-large'}/text-to-image`,
           {
-            prompt: prompt,
-            negative_prompt: 'blurry, low quality, distorted',
-            steps: 30,
-            guidance_scale: 7.5,
-            width: 1200,
-            height: 630,
+            text_prompts: [{ text: prompt, weight: 1 }],
+            cfg_scale: 7,
+            height: 640,
+            width: 1216,
             samples: 1,
-            seed: Math.floor(Math.random() * 1000000)
+            steps: 30,
           },
           {
             headers: {
-              'Authorization': `Bearer ${STABILITY_CONFIG.apiKey}`,
-              'Content-Type': 'application/json'
+              'Authorization': `Bearer ${stabilityKey}`,
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
             }
           }
         )
-
-        if (response.data.artifacts && response.data.artifacts.length > 0) {
-          const imageBase64 = response.data.artifacts[0].base64
-          const imageUrl = `data:image/png;base64,${imageBase64}`
+        if (response.data.artifacts?.length > 0) {
+          const imageUrl = `data:image/png;base64,${response.data.artifacts[0].base64}`
           cacheImage(cacheKey, imageUrl, { title, style, color, provider: 'stability' })
           const historyItem = addToHistory(title, style, color, provider, imageUrl, cacheKey)
           return res.json({ imageUrl, historyId: historyItem.id })
-        } else {
-          throw new Error('No image generated')
         }
+        throw new Error('No image generated')
       } catch (error) {
         console.error('Stability AI error:', error.response?.data || error.message)
-        // 降级到本地模式
+        // 降级到本地
         const svgContent = generatePlaceholderCover(title, style, color)
         const imageUrl = `data:image/svg+xml;base64,${Buffer.from(svgContent).toString('base64')}`
         cacheImage(cacheKey, imageUrl, { title, style, color, provider: 'local' })
         const historyItem = addToHistory(title, style, color, provider, imageUrl, cacheKey)
-        return res.json({
-          imageUrl,
-          historyId: historyItem.id,
-          warning: 'Stability AI 生成失败，已使用本地模式'
-        })
+        return res.json({ imageUrl, historyId: historyItem.id, warning: 'Stability AI 生成失败，已使用本地模式' })
       }
     }
 
@@ -784,31 +801,22 @@ app.post('/api/generate-cover', async (req, res) => {
     if (provider === 'openai') {
       try {
         const prompt = generatePrompt(title, content, style, color)
-        const imageUrl = await generateWithDallE(prompt)
-        
+        const imageUrl = await generateWithDallE(prompt, coverApiKey)
         cacheImage(cacheKey, imageUrl, { title, style, color, provider: 'openai' })
         const historyItem = addToHistory(title, style, color, provider, imageUrl, cacheKey)
-        
-        // 添加到图片库
         addImageToLibrary(imageUrl, title, 'cover', [style, color], 'openai')
-        
         return res.json({ imageUrl, historyId: historyItem.id })
       } catch (error) {
         console.error('OpenAI DALL-E error:', error.message)
-        // 降级到本地模式
         const svgContent = generatePlaceholderCover(title, style, color)
         const imageUrl = `data:image/svg+xml;base64,${Buffer.from(svgContent).toString('base64')}`
         cacheImage(cacheKey, imageUrl, { title, style, color, provider: 'local' })
         const historyItem = addToHistory(title, style, color, provider, imageUrl, cacheKey)
-        return res.json({
-          imageUrl,
-          historyId: historyItem.id,
-          warning: 'OpenAI DALL-E 生成失败，已使用本地模式'
-        })
+        return res.json({ imageUrl, historyId: historyItem.id, warning: `DALL-E 生成失败（${error.message}），已使用本地模式` })
       }
     }
 
-    res.status(400).json({ error: '未知的 API 提供商' })
+    res.status(400).json({ error: '未知的图片生成服务商' })
   } catch (error) {
     console.error('Error generating cover:', error)
     res.status(500).json({ error: error.message })
@@ -1264,6 +1272,37 @@ app.get('/api/images/stats', (req, res) => {
 // 健康检查
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' })
+})
+
+// 服务端配置状态查询（只暴露「是否已配置」，不返回 Key 明文）
+app.get('/api/config/status', (req, res) => {
+  const hasMaasKey  = !!SERVER_AI_CONFIG.maasApiKey
+  const hasOpenaiKey = !!SERVER_AI_CONFIG.articleApiKey
+  const hasCoverKey = !!SERVER_AI_CONFIG.coverApiKey
+  const hasStabilityKey = !!SERVER_AI_CONFIG.stabilityApiKey
+
+  // 推断服务端默认的文章 provider
+  let serverArticleProvider = SERVER_AI_CONFIG.articleProvider
+  if (!serverArticleProvider || serverArticleProvider === 'openai') {
+    // 如果配置了 MaaS Key，优先展示 maas
+    if (hasMaasKey) serverArticleProvider = 'maas'
+    else if (hasOpenaiKey) serverArticleProvider = 'openai'
+    else serverArticleProvider = null
+  }
+
+  res.json({
+    // 文章生成
+    articleProvider: serverArticleProvider,
+    articleReady: hasMaasKey || hasOpenaiKey,
+    maasReady: hasMaasKey,
+    maasEmail: hasMaasKey ? SERVER_AI_CONFIG.maasUserEmail : null,
+    openaiReady: hasOpenaiKey,
+    // 封面生成
+    coverProvider: SERVER_AI_CONFIG.coverProvider || 'local',
+    coverReady: hasCoverKey || hasStabilityKey || SERVER_AI_CONFIG.coverProvider === 'local',
+    dalleReady: hasCoverKey,
+    stabilityReady: hasStabilityKey,
+  })
 })
 
 // 启动服务器
