@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Calendar, FileText, Trash2, ArrowRight, RefreshCw, Zap, Clock } from 'lucide-react'
+import { Plus, Calendar, FileText, Trash2, ArrowRight, RefreshCw, Zap } from 'lucide-react'
 import { fetchArticleList, deleteArticle } from '../utils/apiHelpers'
 import './Dashboard.css'
 
@@ -20,14 +20,6 @@ const STATUS_META: Record<string, { label: string; className: string }> = {
   draft:     { label: '草稿',  className: 'status-draft' },
   generated: { label: '已生成', className: 'status-generated' },
   published: { label: '已发布', className: 'status-published' },
-}
-
-// 把 YYYYMMDD 格式化成「5月10日」
-function formatDate(dateStr: string) {
-  const d = dateStr.replace(/(\d{4})(\d{2})(\d{2}).*/, '$1-$2-$3')
-  const date = new Date(d)
-  if (isNaN(date.getTime())) return dateStr
-  return `${date.getMonth() + 1}月${date.getDate()}日`
 }
 
 export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardProps) {
@@ -210,11 +202,9 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
                     <div className="dash-article-dot" data-status={article.status} />
                     <div>
                       <p className="dash-article-title">
-                        {article.title || `文章 ${article.date}`}
+                        {article.title || '未命名文章'}
                       </p>
                       <div className="dash-article-meta">
-                        <Clock size={11} />
-                        {formatDate(article.date)}
                         <span className={`dash-status-tag ${meta.className}`}>
                           {meta.label}
                         </span>

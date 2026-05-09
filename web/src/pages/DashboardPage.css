@@ -81,8 +81,8 @@
 }
 
 .dp-nav-btn:hover {
-  background: var(--color-surface-soft);
-  color: var(--color-ink);
+  background: #f0f7f4;
+  color: #1a3a3a;
   border-color: #a4d4c5;
 }
 

@@ -1,5 +1,10 @@
 /* ================================================================
  * Dashboard — 左右两栏布局，米色 + 绿色点缀
+ *
+ * 按钮 hover 规范（全站统一）：
+ *   次按钮  → bg #f0f7f4  border #a4d4c5  color #1a3a3a
+ *   主按钮  → bg #2d6a4f  shadow teal
+ *   危险按钮→ bg #fff2f2  border #fcc     color #c0392b
  * ================================================================ */
 
 .dash-root {
@@ -265,9 +270,9 @@
 }
 
 .dash-refresh-btn:hover:not(:disabled) {
-  background: var(--color-surface-soft);
+  background: #f0f7f4;
   border-color: #a4d4c5;
-  color: #2d6a4f;
+  color: #1a3a3a;
 }
 
 .dash-refresh-btn:disabled {
@@ -358,6 +363,10 @@
   gap: 5px;
   font-size: 12px;
   color: var(--color-muted);
+}
+
+.dash-meta-sep {
+  color: var(--color-hairline);
 }
 
 /* 状态 tag */

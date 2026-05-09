@@ -96,8 +96,9 @@
 }
 
 .preview-nav-styles-btn:hover {
-  background: #faf5e8;
-  border-color: #9a9a9a;
+  background: #f0f7f4;
+  border-color: #a4d4c5;
+  color: #1a3a3a;
 }
 
 /* ---- 主内容区 ---- */

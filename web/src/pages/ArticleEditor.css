@@ -96,9 +96,9 @@
 }
 
 .btn-back:hover {
-  background: var(--color-surface-card);
-  border-color: var(--color-brand-teal);
-  color: var(--color-brand-teal);
+  background: #f0f7f4;
+  border-color: #a4d4c5;
+  color: #1a3a3a;
 }
 
 .header-actions {
@@ -143,9 +143,9 @@
 }
 
 .btn-ghost:hover {
-  background: var(--color-surface-soft);
-  color: var(--color-ink);
-  border-color: var(--color-hairline);
+  background: #f0f7f4;
+  color: #1a3a3a;
+  border-color: #a4d4c5;
 }
 
 .btn-secondary {
@@ -155,9 +155,9 @@
 }
 
 .btn-secondary:hover {
-  background: var(--color-surface-card);
-  border-color: var(--color-brand-teal);
-  color: var(--color-brand-teal);
+  background: #f0f7f4;
+  border-color: #a4d4c5;
+  color: #1a3a3a;
 }
 
 .btn-success {

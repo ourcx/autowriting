@@ -504,9 +504,19 @@ app.get('/api/articles', (req, res) => {
         if (fs.existsSync(titlePath)) {
           title = fs.readFileSync(titlePath, 'utf-8').trim()
         }
+
+        // 再尝试从文章内容第一行取标题
+        if (!title) {
+          const defaultArticlePath = path.join(rawDir, 'article_raw.md')
+          if (fs.existsSync(defaultArticlePath)) {
+            const content = fs.readFileSync(defaultArticlePath, 'utf-8')
+            const firstLine = content.split('\n')[0]?.replace(/^#+\s*/, '').trim()
+            if (firstLine) title = firstLine
+          }
+        }
         
         if (!title) {
-          title = `文章 ${dateDir}`
+          title = `文章 ${articleId}`
         }
         
         articles.push({
@@ -538,6 +548,11 @@ app.get('/api/articles', (req, res) => {
         // 优先读取自定义标题
         if (fs.existsSync(titlePath)) {
           title = fs.readFileSync(titlePath, 'utf-8').trim()
+        } else if (fs.existsSync(articlePath)) {
+          // 从生成的文章内容取第一行（H1 标题），与编辑器页面逻辑一致
+          const content = fs.readFileSync(articlePath, 'utf-8')
+          const firstLine = content.split('\n')[0]?.replace(/^#+\s*/, '').trim()
+          if (firstLine) title = firstLine
         } else if (fs.existsSync(taskPath)) {
           const content = fs.readFileSync(taskPath, 'utf-8')
           const match = content.match(/文章主题[：:]\s*(.+)/i)
@@ -545,7 +560,7 @@ app.get('/api/articles', (req, res) => {
         }
 
         if (!title) {
-          title = `文章 ${dateDir}`
+          title = `文章 ${articleId}`
         }
 
         if (fs.existsSync(articlePath)) {
