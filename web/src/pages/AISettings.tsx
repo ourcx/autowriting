@@ -87,38 +87,51 @@ export default function AISettings() {
       </header>
 
       <div className="as-body">
-        {/* ── 服务端配置状态总览 ── */}
-        {serverStatus && (
-          <div className="as-server-status">
-            <div className="as-server-status-title">
-              <Server size={14} />
-              服务端配置状态
+        {/* ── 配置状态总览（合并本地浏览器 + 服务端 .env 两个来源） ── */}
+        {(() => {
+          const localMaas    = config.articleProvider === 'maas' && !!config.maasApiKey
+          const localOpenai  = config.articleProvider !== 'maas' && !!config.articleApiKey
+          const localDalle   = config.coverProvider === 'openai' && !!config.coverApiKey
+          const localStab    = config.coverProvider === 'stability' && !!config.coverApiKey
+          const maasOk       = localMaas    || !!serverStatus?.maasReady
+          const openaiOk     = localOpenai  || !!serverStatus?.openaiReady
+          const dalleOk      = localDalle   || !!serverStatus?.dalleReady
+          const stabilityOk  = localStab    || !!serverStatus?.stabilityReady
+          const anyOk        = maasOk || openaiOk || dalleOk || stabilityOk
+          return (
+            <div className="as-server-status">
+              <div className="as-server-status-title">
+                <Server size={14} />
+                配置状态
+              </div>
+              <div className="as-server-status-pills">
+                <span className={`as-pill ${maasOk ? 'ok' : 'off'}`}>
+                  {maasOk ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
+                  MaaS {maasOk
+                    ? (localMaas ? '已配置（本地）' : `已配置（${serverStatus?.maasEmail || '服务端'}）`)
+                    : '未配置'}
+                </span>
+                <span className={`as-pill ${openaiOk ? 'ok' : 'off'}`}>
+                  {openaiOk ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
+                  OpenAI {openaiOk ? (localOpenai ? '已配置（本地）' : '已配置（服务端）') : '未配置'}
+                </span>
+                <span className={`as-pill ${dalleOk ? 'ok' : 'off'}`}>
+                  {dalleOk ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
+                  DALL-E {dalleOk ? (localDalle ? '已配置（本地）' : '已配置（服务端）') : '未配置'}
+                </span>
+                <span className={`as-pill ${stabilityOk ? 'ok' : 'off'}`}>
+                  {stabilityOk ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
+                  Stability {stabilityOk ? (localStab ? '已配置（本地）' : '已配置（服务端）') : '未配置'}
+                </span>
+              </div>
+              {anyOk && (
+                <p className="as-server-status-note">
+                  已配置（本地）表示 Key 保存在浏览器；已配置（服务端）表示从 .env 读取。
+                </p>
+              )}
             </div>
-            <div className="as-server-status-pills">
-              <span className={`as-pill ${serverStatus.maasReady ? 'ok' : 'off'}`}>
-                {serverStatus.maasReady ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
-                MaaS {serverStatus.maasReady ? `已配置（${serverStatus.maasEmail || '内部'}）` : '未配置'}
-              </span>
-              <span className={`as-pill ${serverStatus.openaiReady ? 'ok' : 'off'}`}>
-                {serverStatus.openaiReady ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
-                OpenAI {serverStatus.openaiReady ? '已配置' : '未配置'}
-              </span>
-              <span className={`as-pill ${serverStatus.dalleReady ? 'ok' : 'off'}`}>
-                {serverStatus.dalleReady ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
-                DALL-E {serverStatus.dalleReady ? '已配置' : '未配置'}
-              </span>
-              <span className={`as-pill ${serverStatus.stabilityReady ? 'ok' : 'off'}`}>
-                {serverStatus.stabilityReady ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
-                Stability {serverStatus.stabilityReady ? '已配置' : '未配置'}
-              </span>
-            </div>
-            {serverStatus.articleReady && (
-              <p className="as-server-status-note">
-                服务端已配置可用的文章生成 Key，浏览器本地不填也可直接生成文章。
-              </p>
-            )}
-          </div>
-        )}
+          )
+        })()}
 
         {/* ── 文章生成 ── */}
         <section className="as-section">

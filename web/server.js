@@ -7,7 +7,16 @@ import axios from 'axios'
 import dotenv from 'dotenv'
 import crypto from 'crypto'
 
-dotenv.config()
+// 依次尝试：web/.env → 项目根目录 .env，先找到哪个用哪个
+const envInWebDir  = path.join(__dirname, '.env')
+const envInRoot    = path.join(__dirname, '..', '.env')
+if (fs.existsSync(envInWebDir)) {
+  dotenv.config({ path: envInWebDir })
+} else if (fs.existsSync(envInRoot)) {
+  dotenv.config({ path: envInRoot })
+} else {
+  dotenv.config() // 兜底：从 cwd 找
+}
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
