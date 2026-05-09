@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
-import { Plus, Calendar, FileText, Trash2, Edit2, RefreshCw } from 'lucide-react'
-import axios from 'axios'
+import { useState, useEffect, useRef } from 'react'
+import { Plus, Calendar, FileText, Trash2, ArrowRight, RefreshCw, Zap, Clock } from 'lucide-react'
+import { fetchArticleList, deleteArticle } from '../utils/apiHelpers'
 import './Dashboard.css'
 
 interface Article {
-  id: string  // 唯一标识：日期-序号 或 日期-标题
+  id: string
   date: string
   title: string
   status: 'draft' | 'generated' | 'published'
@@ -16,176 +16,227 @@ interface DashboardProps {
   onEditArticle?: (articleId: string) => void
 }
 
+const STATUS_META: Record<string, { label: string; className: string }> = {
+  draft:     { label: '草稿',  className: 'status-draft' },
+  generated: { label: '已生成', className: 'status-generated' },
+  published: { label: '已发布', className: 'status-published' },
+}
+
+// 把 YYYYMMDD 格式化成「5月10日」
+function formatDate(dateStr: string) {
+  const d = dateStr.replace(/(\d{4})(\d{2})(\d{2}).*/, '$1-$2-$3')
+  const date = new Date(d)
+  if (isNaN(date.getTime())) return dateStr
+  return `${date.getMonth() + 1}月${date.getDate()}日`
+}
+
 export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardProps) {
   const [articles, setArticles] = useState<Article[]>([])
   const [loading, setLoading] = useState(true)
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0])
+  const [creating, setCreating] = useState(false)
+  const titleRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    fetchArticles()
-  }, [])
+  useEffect(() => { loadArticles() }, [])
 
-  const fetchArticles = async () => {
+  const loadArticles = async () => {
     try {
       setLoading(true)
-      const response = await axios.get('/api/articles')
-      setArticles(response.data)
-    } catch (error) {
-      console.error('Failed to fetch articles:', error)
+      setArticles(await fetchArticleList())
+    } catch (e) {
+      console.error('加载文章失败', e)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleCreateNew = () => {
+  const handleCreate = () => {
     const dateStr = newDate.replace(/-/g, '')
-    const titleInput = document.getElementById('new-article-title') as HTMLInputElement
-    const title = titleInput?.value.trim() || ''
-    
-    // 生成唯一 ID：如果有标题就用 日期-标题，否则用 日期-时间戳
+    const title = titleRef.current?.value.trim() || ''
     let articleId = dateStr
+
     if (title) {
-      // 使用标题作为 ID 的一部分（去除特殊字符）
-      const titleSlug = title.replace(/[^\w\u4e00-\u9fff]/g, '').substring(0, 20)
-      articleId = `${dateStr}-${titleSlug}`
+      const slug = title.replace(/[^\w\u4e00-\u9fff]/g, '').substring(0, 20)
+      articleId = `${dateStr}-${slug}`
+      localStorage.setItem(`article_title_${articleId}`, title)
     } else {
-      // 没有标题就用时间戳确保唯一性
       articleId = `${dateStr}-${Date.now()}`
     }
-    
-    // 保存标题到 localStorage 临时存储
-    if (title) {
-      localStorage.setItem(`article_title_${articleId}`, title)
-    }
-    
+
+    setCreating(true)
     onCreateArticle(articleId)
   }
 
-  const handleDelete = async (articleId: string) => {
-    if (confirm('确定要删除这篇文章吗？')) {
-      try {
-        await axios.delete(`/api/articles/${articleId}`)
-        fetchArticles()
-      } catch (error) {
-        console.error('Failed to delete article:', error)
-      }
+  const handleDelete = async (articleId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!confirm('确定删除这篇文章？')) return
+    try {
+      await deleteArticle(articleId)
+      loadArticles()
+    } catch (e) {
+      console.error('删除失败', e)
     }
   }
 
-  const getStatusLabel = (status: string) => {
-    const labels: Record<string, string> = {
-      draft: '草稿',
-      generated: '已生成',
-      published: '已发布'
-    }
-    return labels[status] || status
-  }
-
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      draft: '#9f9b93',
-      generated: '#fbbd41',
-      published: '#078a52'
-    }
-    return colors[status] || '#000'
+  const stats = {
+    total: articles.length,
+    generated: articles.filter(a => a.status === 'generated' || a.status === 'published').length,
+    draft: articles.filter(a => a.status === 'draft').length,
   }
 
   return (
-    <div className="dashboard">
-      <div className="dashboard-header">
-        <h2>文章管理</h2>
-        <p>创建和管理你的公众号文章</p>
-      </div>
+    <div className="dash-root">
+      {/* ── 左栏：创建 + 统计 ─────────────────────────── */}
+      <aside className="dash-sidebar">
+        {/* 统计数字 */}
+        <div className="dash-stats">
+          <div className="dash-stat">
+            <span className="dash-stat-num">{stats.total}</span>
+            <span className="dash-stat-label">篇文章</span>
+          </div>
+          <div className="dash-stat-divider" />
+          <div className="dash-stat">
+            <span className="dash-stat-num dash-stat-num--green">{stats.generated}</span>
+            <span className="dash-stat-label">已生成</span>
+          </div>
+          <div className="dash-stat-divider" />
+          <div className="dash-stat">
+            <span className="dash-stat-num">{stats.draft}</span>
+            <span className="dash-stat-label">草稿</span>
+          </div>
+        </div>
 
-      <div className="create-section">
-        <div className="create-card">
-          <h3>创建新文章</h3>
-          <div className="create-form">
-            <div className="form-group">
-              <label>选择日期</label>
+        {/* 创建卡片 */}
+        <div className="dash-create-card">
+          <div className="dash-create-header">
+            <div className="dash-create-icon">
+              <Plus size={18} />
+            </div>
+            <h2>新建文章</h2>
+          </div>
+
+          <div className="dash-create-fields">
+            <div className="dash-field">
+              <label>
+                <Calendar size={12} />
+                日期
+              </label>
               <input
                 type="date"
+                className="dash-input"
                 value={newDate}
-                onChange={(e) => setNewDate(e.target.value)}
-                className="date-input"
+                onChange={e => setNewDate(e.target.value)}
               />
             </div>
-            <div className="form-group">
-              <label>文章标题（可选）</label>
+            <div className="dash-field">
+              <label>
+                <FileText size={12} />
+                标题
+                <span className="dash-optional">可选</span>
+              </label>
               <input
+                ref={titleRef}
                 type="text"
-                placeholder="输入文章标题，留空则使用日期"
-                className="title-input"
-                id="new-article-title"
+                className="dash-input"
+                placeholder="留空则自动用日期命名"
+                onKeyDown={e => { if (e.key === 'Enter') handleCreate() }}
               />
             </div>
-            <button className="btn btn-primary" onClick={handleCreateNew}>
-              <Plus size={20} />
-              创建文章
-            </button>
           </div>
-        </div>
-      </div>
 
-      <div className="articles-section">
-        <div className="section-header">
-          <h3>最近文章</h3>
           <button
-            className="btn-refresh"
-            onClick={() => fetchArticles()}
-            disabled={loading}
-            title="刷新文章列表"
+            className="dash-create-btn"
+            onClick={handleCreate}
+            disabled={creating}
           >
-            <RefreshCw size={18} />
+            {creating ? (
+              <>
+                <RefreshCw size={16} className="dash-spin" />
+                创建中...
+              </>
+            ) : (
+              <>
+                <Zap size={16} />
+                开始写作
+                <ArrowRight size={15} className="dash-arrow" />
+              </>
+            )}
+          </button>
+
+          <p className="dash-create-hint">
+            创建后进入编辑器，填写任务要求和素材，一键生成文章
+          </p>
+        </div>
+      </aside>
+
+      {/* ── 右栏：文章列表 ───────────────────────────── */}
+      <main className="dash-main">
+        <div className="dash-list-header">
+          <h3>文章列表</h3>
+          <button
+            className="dash-refresh-btn"
+            onClick={loadArticles}
+            disabled={loading}
+            title="刷新"
+          >
+            <RefreshCw size={15} className={loading ? 'dash-spin' : ''} />
           </button>
         </div>
+
         {loading ? (
-          <div className="loading">加载中...</div>
+          <div className="dash-loading">
+            <RefreshCw size={20} className="dash-spin" />
+            <span>加载中...</span>
+          </div>
         ) : articles.length === 0 ? (
-          <div className="empty-state">
-            <FileText size={48} />
-            <p>还没有文章，创建一篇吧！</p>
+          <div className="dash-empty">
+            <div className="dash-empty-icon">
+              <FileText size={32} />
+            </div>
+            <p>还没有文章</p>
+            <span>从左边创建第一篇开始</span>
           </div>
         ) : (
-          <div className="articles-grid">
-            {articles.map((article) => (
-              <div key={article.id} className="article-card">
-                <div className="article-header">
-                  <div>
-                    <h4>{article.title || `文章 ${article.date}`}</h4>
-                    <p className="article-date">
-                      <Calendar size={14} />
-                      {article.date}
-                    </p>
+          <ul className="dash-article-list">
+            {articles.map(article => {
+              const meta = STATUS_META[article.status] || STATUS_META.draft
+              return (
+                <li
+                  key={article.id}
+                  className="dash-article-item"
+                  onClick={() => onEditArticle?.(article.id)}
+                >
+                  <div className="dash-article-left">
+                    <div className="dash-article-dot" data-status={article.status} />
+                    <div>
+                      <p className="dash-article-title">
+                        {article.title || `文章 ${article.date}`}
+                      </p>
+                      <div className="dash-article-meta">
+                        <Clock size={11} />
+                        {formatDate(article.date)}
+                        <span className={`dash-status-tag ${meta.className}`}>
+                          {meta.label}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <span
-                    className="status-badge"
-                    style={{ backgroundColor: getStatusColor(article.status) }}
-                  >
-                    {getStatusLabel(article.status)}
-                  </span>
-                </div>
-                <div className="article-actions">
-                  <button
-                    className="btn btn-small btn-secondary"
-                    onClick={() => onEditArticle?.(article.id)}
-                  >
-                    <Edit2 size={16} />
-                    编辑
-                  </button>
-                  <button
-                    className="btn btn-small btn-danger"
-                    onClick={() => handleDelete(article.id)}
-                  >
-                    <Trash2 size={16} />
-                    删除
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+                  <div className="dash-article-right">
+                    <ArrowRight size={15} className="dash-article-arrow" />
+                    <button
+                      className="dash-delete-btn"
+                      onClick={e => handleDelete(article.id, e)}
+                      title="删除"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
         )}
-      </div>
+      </main>
     </div>
   )
 }

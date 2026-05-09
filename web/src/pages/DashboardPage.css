@@ -1,0 +1,107 @@
+/* ================================================================
+ * DashboardPage — 全屏布局容器
+ * ================================================================ */
+
+.dp-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--color-canvas);
+  overflow: hidden;
+}
+
+/* ── Header ─────────────────────────────────────────────────────── */
+.dp-header {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background: var(--color-canvas);
+  border-bottom: 1px solid var(--color-hairline);
+  flex-shrink: 0;
+}
+
+/* Logo */
+.dp-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.dp-logo-mark {
+  width: 30px;
+  height: 30px;
+  background: #1a3a3a;
+  color: #fff;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.dp-logo:hover .dp-logo-mark {
+  background: #2d6a4f;
+}
+
+.dp-logo span {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-ink);
+  letter-spacing: -0.2px;
+}
+
+/* Nav 按钮 */
+.dp-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dp-nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  background: transparent;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-md);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.dp-nav-btn:hover {
+  background: var(--color-surface-soft);
+  color: var(--color-ink);
+  border-color: #a4d4c5;
+}
+
+/* 未配置警告按钮 */
+.dp-nav-btn--warn {
+  background: #fffbe6;
+  border-color: #f0d080;
+  color: #7a5c00;
+}
+
+.dp-nav-btn--warn:hover {
+  background: #fff8d6;
+  border-color: #e8b900;
+  color: #5a4000;
+}
+
+/* ── 主体 ───────────────────────────────────────────────────────── */
+.dp-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
