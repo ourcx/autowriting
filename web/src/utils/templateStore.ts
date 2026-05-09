@@ -32,28 +32,54 @@ export const CSS_DEFAULT = `/* ====== 经典蓝 ====== */
   text-align: justify;
 }
 #wemd h1 {
-  margin: 32px 0 24px;
+  margin: 32px 0 20px;
   text-align: center;
   font-size: 22px;
   font-weight: bold;
   color: #111111;
+  padding-bottom: 14px;
+  border-bottom: 2px solid #e5e7eb;
+  position: relative;
 }
 #wemd h2 {
-  margin: 28px 0 16px;
+  margin: 28px 0 14px;
   font-size: 18px;
   font-weight: bold;
   color: #1e6bb8;
-  border-left: 4px solid #1e6bb8;
-  padding-left: 10px;
+  padding-left: 14px;
+  position: relative;
+}
+#wemd h2::before {
+  content: "";
+  display: block;
+  position: absolute;
+  left: 0;
+  top: 3px;
+  bottom: 3px;
+  width: 4px;
+  background: #1e6bb8;
+  border-radius: 2px;
 }
 #wemd h3 {
-  margin: 22px 0 12px;
+  margin: 22px 0 10px;
   font-size: 16px;
   font-weight: bold;
-  color: #444444;
+  color: #1e6bb8;
+  padding-left: 18px;
+  position: relative;
+}
+#wemd h3::before {
+  content: "◆";
+  display: block;
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 11px;
+  color: #5a9fd4;
+  line-height: 1.6;
 }
 #wemd h4 {
-  margin: 18px 0 10px;
+  margin: 18px 0 8px;
   font-size: 15px;
   font-weight: bold;
   color: #555555;
@@ -67,17 +93,17 @@ export const CSS_DEFAULT = `/* ====== 经典蓝 ====== */
   line-height: 1.75;
 }
 #wemd blockquote {
-  margin: 16px 0;
-  padding: 14px 18px;
-  background: #f5f5f5;
-  border-left: 4px solid #d1d5db;
-  border-radius: 4px;
-  color: #666666;
+  margin: 18px 0;
+  padding: 14px 16px 14px 20px;
+  background: #f0f7ff;
+  border-left: 4px solid #1e6bb8;
+  border-radius: 0 6px 6px 0;
+  color: #555555;
 }
 #wemd blockquote p {
   margin: 0;
   font-size: 15px;
-  line-height: 1.7;
+  line-height: 1.75;
 }
 #wemd strong {
   font-weight: bold;
@@ -85,10 +111,11 @@ export const CSS_DEFAULT = `/* ====== 经典蓝 ====== */
 }
 #wemd em {
   font-style: italic;
+  color: #1e6bb8;
 }
 #wemd code {
-  color: #e83e8c;
-  background: #f8f9fa;
+  color: #d63384;
+  background: #fdf0f5;
   padding: 2px 6px;
   border-radius: 3px;
   font-size: 14px;
@@ -97,8 +124,8 @@ export const CSS_DEFAULT = `/* ====== 经典蓝 ====== */
 #wemd pre {
   margin: 16px 0;
   padding: 16px;
-  background: #282c34;
-  border-radius: 8px;
+  background: #1e2330;
+  border-radius: 6px;
   overflow-x: auto;
 }
 #wemd pre code {
@@ -112,7 +139,7 @@ export const CSS_DEFAULT = `/* ====== 经典蓝 ====== */
 #wemd a {
   color: #1e6bb8;
   text-decoration: none;
-  border-bottom: 1px solid #1e6bb8;
+  border-bottom: 1px solid #b3d0f0;
 }
 #wemd hr {
   margin: 28px 0;
@@ -132,10 +159,10 @@ export const CSS_DEFAULT = `/* ====== 经典蓝 ====== */
   font-size: 14px;
 }
 #wemd th {
-  background: #f3f4f6;
-  color: #374151;
+  background: #dbeafe;
+  color: #1e3a5f;
   font-weight: bold;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #bfdbfe;
   padding: 10px 12px;
   text-align: left;
 }
@@ -145,7 +172,7 @@ export const CSS_DEFAULT = `/* ====== 经典蓝 ====== */
   color: #374151;
 }
 #wemd tr:nth-child(even) td {
-  background: #fafafa;
+  background: #f8faff;
 }`
 
 export const CSS_MORANDI = `/* ====== 莫兰迪 ====== */
@@ -163,33 +190,58 @@ export const CSS_MORANDI = `/* ====== 莫兰迪 ====== */
   letter-spacing: 0.3px;
 }
 #wemd h1 {
-  margin: 32px 0 24px;
+  margin: 32px 0 20px;
   text-align: center;
   font-size: 22px;
   font-weight: normal;
   color: #1A261D;
-  letter-spacing: 2px;
+  letter-spacing: 3px;
+  padding-bottom: 12px;
+  position: relative;
+}
+#wemd h1::after {
+  content: "";
+  display: block;
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 40px;
+  height: 2px;
+  background: #4F6F52;
+  margin-left: -20px;
 }
 #wemd h2 {
-  margin: 28px 0 16px;
+  margin: 28px 0 14px;
   font-size: 18px;
   font-weight: bold;
   color: #4F6F52;
-  border-left: 5px solid #4F6F52;
-  padding-left: 12px;
-  border-bottom: 1px solid #E8EBE9;
-  padding-bottom: 8px;
+  padding: 8px 12px 8px 16px;
+  background: #f0f5f0;
+  border-left: 4px solid #4F6F52;
+  border-radius: 0 4px 4px 0;
 }
 #wemd h3 {
-  margin: 22px 0 12px;
+  margin: 22px 0 10px;
   font-size: 16px;
   font-weight: bold;
+  color: #4F6F52;
+  padding-left: 20px;
+  position: relative;
+}
+#wemd h3::before {
+  content: "▎";
+  display: block;
+  position: absolute;
+  left: 0;
+  top: 0;
   color: #739072;
+  font-size: 16px;
 }
 #wemd h4 {
-  margin: 18px 0 10px;
+  margin: 18px 0 8px;
   font-size: 15px;
-  color: #739072;
+  color: #556B58;
+  font-weight: bold;
 }
 #wemd ul, #wemd ol {
   margin: 12px 0;
@@ -201,17 +253,17 @@ export const CSS_MORANDI = `/* ====== 莫兰迪 ====== */
   color: #3A4D39;
 }
 #wemd blockquote {
-  margin: 16px 0;
+  margin: 18px 0;
   padding: 14px 18px;
-  background: #F6F8F6;
-  border: 1px dashed #739072;
-  border-radius: 6px;
+  background: #f4f8f4;
+  border-left: 3px solid #739072;
+  border-radius: 0 6px 6px 0;
   color: #556B58;
 }
 #wemd blockquote p {
   margin: 0;
   font-size: 15px;
-  line-height: 1.8;
+  line-height: 1.85;
 }
 #wemd strong {
   font-weight: bold;
@@ -223,7 +275,7 @@ export const CSS_MORANDI = `/* ====== 莫兰迪 ====== */
 }
 #wemd code {
   color: #4F6F52;
-  background: #F0F4F0;
+  background: #eef3ee;
   padding: 2px 6px;
   border-radius: 3px;
   font-size: 14px;
@@ -233,7 +285,7 @@ export const CSS_MORANDI = `/* ====== 莫兰迪 ====== */
   margin: 16px 0;
   padding: 16px;
   background: #2f3e32;
-  border-radius: 8px;
+  border-radius: 6px;
   overflow-x: auto;
 }
 #wemd pre code {
@@ -247,12 +299,13 @@ export const CSS_MORANDI = `/* ====== 莫兰迪 ====== */
 #wemd a {
   color: #4F6F52;
   text-decoration: none;
-  border-bottom: 1px solid #4F6F52;
+  border-bottom: 1px solid #a0bea2;
 }
 #wemd hr {
   margin: 28px 0;
   border: none;
   border-top: 1px dashed #b0c4b1;
+  position: relative;
 }
 #wemd img {
   display: block;
@@ -267,10 +320,10 @@ export const CSS_MORANDI = `/* ====== 莫兰迪 ====== */
   font-size: 14px;
 }
 #wemd th {
-  background: #e8ede8;
+  background: #dde8de;
   color: #2f3e32;
   font-weight: bold;
-  border: 1px solid #c8d5c9;
+  border: 1px solid #b8cebc;
   padding: 10px 12px;
   text-align: left;
 }
@@ -280,7 +333,7 @@ export const CSS_MORANDI = `/* ====== 莫兰迪 ====== */
   color: #3A4D39;
 }
 #wemd tr:nth-child(even) td {
-  background: #f4f7f4;
+  background: #f4f8f4;
 }`
 
 export const CSS_MINIMAL = `/* ====== 极简黑 ====== */
@@ -297,31 +350,55 @@ export const CSS_MINIMAL = `/* ====== 极简黑 ====== */
   text-align: justify;
 }
 #wemd h1 {
-  margin: 32px 0 24px;
+  margin: 32px 0 20px;
   text-align: center;
   font-size: 24px;
   font-weight: 900;
   color: #000000;
   letter-spacing: -0.5px;
+  padding-bottom: 14px;
   border-bottom: 3px solid #000000;
-  padding-bottom: 12px;
 }
 #wemd h2 {
-  margin: 28px 0 16px;
+  margin: 28px 0 14px;
   font-size: 18px;
   font-weight: 800;
   color: #000000;
-  border-bottom: 2px solid #000000;
   padding-bottom: 8px;
+  border-bottom: 1px solid #cccccc;
+  position: relative;
+}
+#wemd h2::before {
+  content: "";
+  display: block;
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 36px;
+  height: 2px;
+  background: #000000;
 }
 #wemd h3 {
-  margin: 22px 0 12px;
+  margin: 22px 0 10px;
   font-size: 16px;
   font-weight: 700;
-  color: #333333;
+  color: #222222;
+  padding-left: 14px;
+  position: relative;
+}
+#wemd h3::before {
+  content: "";
+  display: block;
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 6px;
+  height: 6px;
+  background: #000000;
+  border-radius: 1px;
 }
 #wemd h4 {
-  margin: 18px 0 10px;
+  margin: 18px 0 8px;
   font-size: 15px;
   font-weight: 600;
   color: #444444;
@@ -335,29 +412,28 @@ export const CSS_MINIMAL = `/* ====== 极简黑 ====== */
   line-height: 1.8;
 }
 #wemd blockquote {
-  margin: 16px 0;
+  margin: 18px 0;
   padding: 12px 16px;
-  background: #f9f9f9;
-  border-left: 3px solid #000000;
-  color: #555555;
+  background: #f5f5f5;
+  border-left: 4px solid #000000;
+  color: #444444;
 }
 #wemd blockquote p {
   margin: 0;
   font-size: 15px;
+  line-height: 1.75;
 }
 #wemd strong {
   font-weight: bold;
   color: #000000;
-  background: #f0f0f0;
-  padding: 0 3px;
-  border-radius: 2px;
 }
 #wemd em {
   font-style: italic;
+  color: #555555;
 }
 #wemd code {
   color: #000000;
-  background: #f0f0f0;
+  background: #eeeeee;
   padding: 2px 6px;
   border-radius: 2px;
   font-size: 14px;
@@ -371,7 +447,7 @@ export const CSS_MINIMAL = `/* ====== 极简黑 ====== */
   overflow-x: auto;
 }
 #wemd pre code {
-  color: #f0f0f0;
+  color: #eeeeee;
   font-size: 13px;
   line-height: 1.6;
   background: transparent;
@@ -381,7 +457,7 @@ export const CSS_MINIMAL = `/* ====== 极简黑 ====== */
 #wemd a {
   color: #000000;
   text-decoration: none;
-  border-bottom: 1px solid #000000;
+  border-bottom: 1px solid #888888;
   font-weight: 600;
 }
 #wemd hr {
@@ -401,19 +477,19 @@ export const CSS_MINIMAL = `/* ====== 极简黑 ====== */
   font-size: 14px;
 }
 #wemd th {
-  background: #000000;
+  background: #111111;
   color: #ffffff;
   font-weight: bold;
-  border: 1px solid #000000;
+  border: 1px solid #111111;
   padding: 10px 12px;
   text-align: left;
 }
 #wemd td {
-  border: 1px solid #333333;
+  border: 1px solid #cccccc;
   padding: 10px 12px;
 }
 #wemd tr:nth-child(even) td {
-  background: #f9f9f9;
+  background: #f5f5f5;
 }`
 
 export const CSS_SUNSET = `/* ====== 夕阳橙 ====== */
@@ -431,32 +507,59 @@ export const CSS_SUNSET = `/* ====== 夕阳橙 ====== */
   letter-spacing: 0.2px;
 }
 #wemd h1 {
-  margin: 32px 0 24px;
+  margin: 32px 0 20px;
   text-align: center;
   font-size: 22px;
   font-weight: bold;
-  color: #8b3a0f;
+  color: #6b1d0a;
   letter-spacing: 2px;
+  padding-bottom: 14px;
+  position: relative;
+}
+#wemd h1::after {
+  content: "";
+  display: block;
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 60px;
+  height: 2px;
+  background: #c8602a;
+  margin-left: -30px;
 }
 #wemd h2 {
-  margin: 28px 0 16px;
+  margin: 28px 0 14px;
   font-size: 18px;
   font-weight: bold;
   color: #8b3a0f;
+  padding: 6px 12px 6px 16px;
+  background: #fdf6ee;
   border-left: 4px solid #c8602a;
-  padding-left: 10px;
-  font-style: italic;
+  border-radius: 0 4px 4px 0;
 }
 #wemd h3 {
-  margin: 22px 0 12px;
+  margin: 22px 0 10px;
   font-size: 16px;
   font-weight: bold;
   color: #b25220;
+  padding-left: 20px;
+  position: relative;
+}
+#wemd h3::before {
+  content: "✦";
+  display: block;
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 12px;
+  color: #c8602a;
+  line-height: 1.7;
 }
 #wemd h4 {
-  margin: 18px 0 10px;
+  margin: 18px 0 8px;
   font-size: 15px;
   color: #b25220;
+  font-weight: bold;
 }
 #wemd ul, #wemd ol {
   margin: 12px 0;
@@ -468,7 +571,7 @@ export const CSS_SUNSET = `/* ====== 夕阳橙 ====== */
   color: #3d2b1f;
 }
 #wemd blockquote {
-  margin: 16px 0;
+  margin: 18px 0;
   padding: 14px 18px;
   background: #fdf6ee;
   border-left: 4px solid #c8602a;
@@ -478,7 +581,7 @@ export const CSS_SUNSET = `/* ====== 夕阳橙 ====== */
 #wemd blockquote p {
   margin: 0;
   font-size: 15px;
-  line-height: 1.8;
+  line-height: 1.85;
 }
 #wemd strong {
   font-weight: bold;
@@ -490,7 +593,7 @@ export const CSS_SUNSET = `/* ====== 夕阳橙 ====== */
 }
 #wemd code {
   color: #c8602a;
-  background: #fdf0e6;
+  background: #fdeee4;
   padding: 2px 6px;
   border-radius: 3px;
   font-size: 14px;
@@ -514,7 +617,7 @@ export const CSS_SUNSET = `/* ====== 夕阳橙 ====== */
 #wemd a {
   color: #c8602a;
   text-decoration: none;
-  border-bottom: 1px solid #c8602a;
+  border-bottom: 1px solid #e5a882;
 }
 #wemd hr {
   margin: 28px 0;
@@ -534,7 +637,7 @@ export const CSS_SUNSET = `/* ====== 夕阳橙 ====== */
   font-size: 14px;
 }
 #wemd th {
-  background: #fdf0e6;
+  background: #f5ddc8;
   color: #6b1d0a;
   font-weight: bold;
   border: 1px solid #e5c9a0;
@@ -553,7 +656,7 @@ export const CSS_SUNSET = `/* ====== 夕阳橙 ====== */
 export const CSS_AURORA = `/* ====== 极光紫 ====== */
 #wemd {
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
-  color: #334155;
+  color: #2d2a3e;
   line-height: 1.8;
   word-break: break-word;
   padding: 24px 24px 40px;
@@ -564,32 +667,59 @@ export const CSS_AURORA = `/* ====== 极光紫 ====== */
   text-align: justify;
 }
 #wemd h1 {
-  margin: 32px 0 24px;
+  margin: 32px 0 20px;
   text-align: center;
   font-size: 22px;
   font-weight: bold;
-  color: #0f172a;
+  color: #1a0d3b;
+  padding-bottom: 14px;
+  position: relative;
+}
+#wemd h1::after {
+  content: "";
+  display: block;
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 48px;
+  height: 3px;
+  background: #7c3aed;
+  margin-left: -24px;
+  border-radius: 2px;
 }
 #wemd h2 {
-  margin: 28px 0 16px;
+  margin: 28px 0 14px;
   font-size: 18px;
   font-weight: bold;
   color: #4c1d95;
+  padding: 7px 12px 7px 16px;
+  background: #f3eeff;
   border-left: 4px solid #7c3aed;
-  padding: 6px 6px 6px 14px;
-  background: linear-gradient(90deg, rgba(124,58,237,0.07), transparent);
-  border-radius: 0 8px 8px 0;
+  border-radius: 0 6px 6px 0;
 }
 #wemd h3 {
-  margin: 22px 0 12px;
+  margin: 22px 0 10px;
   font-size: 16px;
   font-weight: bold;
   color: #5b21b6;
+  padding-left: 20px;
+  position: relative;
+}
+#wemd h3::before {
+  content: "◈";
+  display: block;
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 13px;
+  color: #7c3aed;
+  line-height: 1.6;
 }
 #wemd h4 {
-  margin: 18px 0 10px;
+  margin: 18px 0 8px;
   font-size: 15px;
   color: #6d28d9;
+  font-weight: bold;
 }
 #wemd ul, #wemd ol {
   margin: 12px 0;
@@ -598,12 +728,12 @@ export const CSS_AURORA = `/* ====== 极光紫 ====== */
 #wemd li {
   margin: 6px 0;
   line-height: 1.8;
-  color: #334155;
+  color: #2d2a3e;
 }
 #wemd blockquote {
-  margin: 16px 0;
+  margin: 18px 0;
   padding: 14px 18px;
-  background: rgba(102,126,234,0.06);
+  background: #f3eeff;
   border-left: 4px solid #7c3aed;
   border-radius: 0 8px 8px 0;
   color: #4c1d95;
@@ -622,8 +752,8 @@ export const CSS_AURORA = `/* ====== 极光紫 ====== */
   color: #5b21b6;
 }
 #wemd code {
-  color: #7c3aed;
-  background: rgba(124,58,237,0.08);
+  color: #6d28d9;
+  background: #ede9fe;
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 14px;
@@ -632,12 +762,12 @@ export const CSS_AURORA = `/* ====== 极光紫 ====== */
 #wemd pre {
   margin: 16px 0;
   padding: 16px;
-  background: #0f172a;
-  border-radius: 10px;
+  background: #1a0d3b;
+  border-radius: 8px;
   overflow-x: auto;
 }
 #wemd pre code {
-  color: #b8a4ed;
+  color: #c4b5fd;
   font-size: 13px;
   line-height: 1.6;
   background: transparent;
@@ -647,12 +777,12 @@ export const CSS_AURORA = `/* ====== 极光紫 ====== */
 #wemd a {
   color: #7c3aed;
   text-decoration: none;
-  border-bottom: 1px solid #7c3aed;
+  border-bottom: 1px solid #c4b5fd;
 }
 #wemd hr {
   margin: 28px 0;
   border: none;
-  border-top: 1px solid rgba(124,58,237,0.2);
+  border-top: 1px solid #d8c8f8;
 }
 #wemd img {
   display: block;
@@ -667,20 +797,20 @@ export const CSS_AURORA = `/* ====== 极光紫 ====== */
   font-size: 14px;
 }
 #wemd th {
-  background: rgba(124,58,237,0.1);
+  background: #ede9fe;
   color: #4c1d95;
   font-weight: bold;
-  border: 1px solid rgba(124,58,237,0.2);
+  border: 1px solid #c4b5fd;
   padding: 10px 12px;
   text-align: left;
 }
 #wemd td {
-  border: 1px solid rgba(124,58,237,0.15);
+  border: 1px solid #ddd6fe;
   padding: 10px 12px;
-  color: #334155;
+  color: #2d2a3e;
 }
 #wemd tr:nth-child(even) td {
-  background: rgba(124,58,237,0.03);
+  background: #f8f5ff;
 }`
 
 // ── 内置模板列表 ─────────────────────────────────────────────────────────────
