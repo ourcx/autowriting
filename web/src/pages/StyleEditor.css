@@ -341,8 +341,10 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   background: var(--color-canvas);
   border-right: 1px solid var(--color-hairline);
+  overflow: hidden;
 }
 
 /* 元数据栏 */
@@ -438,8 +440,9 @@
 /* ── AI 生成面板 ────────────────────────────────────────────────── */
 
 .se-ai-panel {
-  border-bottom: 1px solid var(--color-hairline);
-  background: #f8fcf9;
+  flex-shrink: 0;
+  border-bottom: 2px solid #a4d4c5;
+  background: #eef7f2;
 }
 
 .se-ai-toggle {
@@ -447,17 +450,17 @@
   align-items: center;
   gap: 7px;
   width: 100%;
-  padding: 10px 16px;
+  padding: 11px 18px;
   background: none;
   border: none;
   cursor: pointer;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   color: #1a3a3a;
   text-align: left;
   transition: background 0.15s;
 }
-.se-ai-toggle:hover { background: #eef7f2; }
+.se-ai-toggle:hover { background: #ddf0e8; }
 
 .se-ai-toggle-badge {
   font-size: 10px;
@@ -477,10 +480,14 @@
 }
 
 .se-ai-body {
-  padding: 0 16px 16px;
+  padding: 4px 18px 16px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  max-height: 480px;
+  overflow-y: auto;
+  background: #f8fcf9;
+  border-top: 1px solid #c8e6d8;
 }
 
 .se-ai-desc {
