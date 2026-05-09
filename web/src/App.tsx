@@ -4,10 +4,12 @@ import ArticleEditor from './pages/ArticleEditor'
 import WeChatPreview from './pages/WeChatPreview'
 import StyleEditor from './pages/StyleEditor'
 import AISettings from './pages/AISettings'
+import ToastProvider from './components/Toast'
 
 export default function App() {
   return (
     <BrowserRouter>
+      <ToastProvider />
       <Routes>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/editor/:articleId" element={<ArticleEditor />} />

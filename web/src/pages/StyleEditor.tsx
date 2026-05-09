@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Trash2, Save, Copy, Check } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Save, Copy, Check, Wand2, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
+import { toast, showConfirm } from '../components/Toast'
+import { loadAIConfig } from '../utils/aiConfig'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import {
@@ -43,6 +45,12 @@ export default function StyleEditor() {
   const [editCss, setEditCss] = useState('')
   const [isDirty, setIsDirty] = useState(false)
   const [saved, setSaved] = useState(false)
+
+  // AI 生成面板状态
+  const [aiPanelOpen, setAiPanelOpen] = useState(false)
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [aiGenerating, setAiGenerating] = useState(false)
+  const [aiPreviewCss, setAiPreviewCss] = useState('')  // 预览生成结果
 
   const styleElRef = useRef<HTMLStyleElement | null>(null)
   const cssTextareaRef = useRef<HTMLTextAreaElement>(null)
@@ -184,9 +192,56 @@ export default function StyleEditor() {
   // 删除自定义模板
   const handleDelete = () => {
     if (isBuiltin || !selectedTemplate) return
-    if (!window.confirm(`确定删除「${selectedTemplate.name}」？`)) return
-    deleteCustomTemplate(selectedId)
-    setSelectedId('default')
+    showConfirm({
+      message: `确定删除「${selectedTemplate.name}」？`,
+      detail: '删除后无法恢复。',
+      confirmText: '删除',
+      danger: true,
+      onConfirm: () => {
+        deleteCustomTemplate(selectedId)
+        setSelectedId('default')
+      },
+    })
+  }
+
+  // AI 生成样式
+  const handleAIGenerate = async () => {
+    if (!aiPrompt.trim()) {
+      toast.warn('请先输入风格描述')
+      return
+    }
+    try {
+      setAiGenerating(true)
+      setAiPreviewCss('')
+      const aiConfig = loadAIConfig()
+      const resp = await fetch('/api/generate-style', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: aiPrompt,
+          baseCSS: editCss,
+          aiConfig,
+        }),
+      })
+      const data = await resp.json()
+      if (!resp.ok) throw new Error(data.error || '生成失败')
+      setAiPreviewCss(data.css)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '生成失败'
+      toast.error(msg)
+    } finally {
+      setAiGenerating(false)
+    }
+  }
+
+  // 把 AI 预览结果应用到编辑器
+  const handleApplyAI = () => {
+    if (!aiPreviewCss) return
+    setEditCss(aiPreviewCss)
+    setIsDirty(true)
+    setAiPreviewCss('')
+    setAiPanelOpen(false)
+    toast.success('样式已应用，记得点保存')
   }
 
   // CSS textarea Tab 键支持
@@ -343,6 +398,87 @@ export default function StyleEditor() {
             {isBuiltin && (
               <div className="se-builtin-notice">
                 内置模板只读，点「克隆此模板」可在副本上自由编辑
+              </div>
+            )}
+          </div>
+
+          {/* ── AI 样式生成面板 ── */}
+          <div className={`se-ai-panel ${aiPanelOpen ? 'open' : ''}`}>
+            <button
+              className="se-ai-toggle"
+              onClick={() => setAiPanelOpen(v => !v)}
+            >
+              <Wand2 size={14} />
+              <span>AI 生成样式</span>
+              <span className="se-ai-toggle-badge">Beta</span>
+              <span className="se-ai-toggle-chevron">
+                {aiPanelOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </span>
+            </button>
+
+            {aiPanelOpen && (
+              <div className="se-ai-body">
+                <p className="se-ai-desc">
+                  描述你想要的样式风格，AI 自动生成配套 CSS。生成后可预览、确认后替换当前 CSS。
+                </p>
+
+                {/* 快捷标签 */}
+                <div className="se-ai-tags">
+                  {[
+                    '简约白底，蓝色点缀',
+                    '暗色科技感，霓虹绿',
+                    '小清新，粉绿配色',
+                    '商务正式，深蓝灰',
+                    '温暖阅读感，橘色标题',
+                    '极简黑白，大字号',
+                  ].map(tag => (
+                    <button
+                      key={tag}
+                      className="se-ai-tag"
+                      onClick={() => setAiPrompt(tag)}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+
+                <textarea
+                  className="se-ai-input"
+                  value={aiPrompt}
+                  onChange={e => setAiPrompt(e.target.value)}
+                  placeholder="例如：深色背景，主题色用紫色，标题加粗且有下划线装饰，blockquote 用左边框+浅紫背景，代码块深灰背景白色字..."
+                  rows={3}
+                />
+
+                <div className="se-ai-actions">
+                  <button
+                    className="se-ai-btn-generate"
+                    onClick={handleAIGenerate}
+                    disabled={aiGenerating || !aiPrompt.trim()}
+                  >
+                    {aiGenerating
+                      ? <><Loader2 size={14} className="se-ai-spin" /> 生成中...</>
+                      : <><Wand2 size={14} /> 生成 CSS</>
+                    }
+                  </button>
+                  {aiPreviewCss && (
+                    <button
+                      className="se-ai-btn-apply"
+                      onClick={handleApplyAI}
+                    >
+                      <Check size={14} />
+                      应用到编辑器
+                    </button>
+                  )}
+                </div>
+
+                {/* 预览生成结果 */}
+                {aiPreviewCss && (
+                  <div className="se-ai-preview-wrap">
+                    <div className="se-ai-preview-label">生成结果（点击「应用」替换当前 CSS）</div>
+                    <pre className="se-ai-preview-code">{aiPreviewCss}</pre>
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { showConfirm } from './Toast'
 import './ImageLibrary.css'
 
 interface ImageItem {
@@ -85,18 +86,23 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({ onImageSelect }) => 
     }
   }
 
-  const handleDeleteImage = async (id: string) => {
-    if (!confirm('确定要删除这张图片吗？')) return
-
-    try {
-      const response = await fetch(`/api/images/${id}`, { method: 'DELETE' })
-      if (response.ok) {
-        loadImages()
-        loadStats()
-      }
-    } catch (error) {
-      console.error('Error deleting image:', error)
-    }
+  const handleDeleteImage = (id: string) => {
+    showConfirm({
+      message: '确定要删除这张图片吗？',
+      confirmText: '删除',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          const response = await fetch(`/api/images/${id}`, { method: 'DELETE' })
+          if (response.ok) {
+            loadImages()
+            loadStats()
+          }
+        } catch (error) {
+          console.error('Error deleting image:', error)
+        }
+      },
+    })
   }
 
   const toggleTag = (tag: string) => {

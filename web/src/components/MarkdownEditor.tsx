@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import { toast } from './Toast'
 import { Eye, Edit2, Copy, Download } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -22,7 +23,7 @@ export default function MarkdownEditor({
 
   const handleCopy = () => {
     navigator.clipboard.writeText(value)
-    alert('已复制到剪贴板')
+    toast.info('已复制到剪贴板')
   }
 
   const handleDownload = () => {

@@ -7,19 +7,34 @@ import axios from 'axios'
 import dotenv from 'dotenv'
 import crypto from 'crypto'
 
+// __dirname 必须在 dotenv 之前定义（ESM 模块不自动注入）
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
 // 依次尝试：web/.env → 项目根目录 .env，先找到哪个用哪个
-const envInWebDir  = path.join(__dirname, '.env')
-const envInRoot    = path.join(__dirname, '..', '.env')
+const envInWebDir = path.join(__dirname, '.env')
+const envInRoot   = path.join(__dirname, '..', '.env')
 if (fs.existsSync(envInWebDir)) {
   dotenv.config({ path: envInWebDir })
 } else if (fs.existsSync(envInRoot)) {
+  // 根目录 .env 里的相对路径（DRAFTS_DIR / AGENTS_FILE 等）以项目根目录为基准展开
   dotenv.config({ path: envInRoot })
+  const root = path.join(__dirname, '..')
+  if (process.env.DRAFTS_DIR && !path.isAbsolute(process.env.DRAFTS_DIR)) {
+    process.env.DRAFTS_DIR = path.join(root, process.env.DRAFTS_DIR)
+  }
+  if (process.env.AGENTS_FILE && !path.isAbsolute(process.env.AGENTS_FILE)) {
+    process.env.AGENTS_FILE = path.join(root, process.env.AGENTS_FILE)
+  }
+  if (process.env.DATA_DIR && !path.isAbsolute(process.env.DATA_DIR)) {
+    process.env.DATA_DIR = path.join(root, process.env.DATA_DIR)
+  }
+  if (process.env.CACHE_DIR && !path.isAbsolute(process.env.CACHE_DIR)) {
+    process.env.CACHE_DIR = path.join(root, process.env.CACHE_DIR)
+  }
 } else {
   dotenv.config() // 兜底：从 cwd 找
 }
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -1327,6 +1342,108 @@ app.get('/api/config/status', (req, res) => {
     dalleReady: hasCoverKey,
     stabilityReady: hasStabilityKey,
   })
+})
+
+// AI 样式生成接口
+app.post('/api/generate-style', async (req, res) => {
+  try {
+    const { prompt, baseCSS, aiConfig: clientAiConfig } = req.body
+    if (!prompt) return res.status(400).json({ error: '缺少 prompt 参数' })
+
+    // 合并配置
+    const aiConfig = { ...SERVER_AI_CONFIG, ...clientAiConfig }
+
+    // 决定使用的 API
+    const isMaas = aiConfig.articleProvider === 'maas' && aiConfig.maasApiKey
+    const apiKey  = isMaas ? aiConfig.maasApiKey : (aiConfig.articleApiKey || aiConfig.openaiApiKey)
+    const baseUrl = isMaas ? (aiConfig.maasBaseUrl || SERVER_AI_CONFIG.maasBaseUrl) : (aiConfig.articleBaseUrl || 'https://api.openai.com/v1')
+    const model   = isMaas ? (aiConfig.maasModel || 'deepseek-v3') : (aiConfig.articleModel || 'gpt-4o')
+
+    if (!apiKey) return res.status(400).json({ error: '未配置 AI API Key' })
+
+    // ── 精心设计的提示词 ──────────────────────────────────────────────
+    const systemPrompt = `你是一名专业的微信公众号 CSS 设计师，专门为微信公众号文章设计排版样式。
+
+## CSS 规范约束
+
+所有选择器必须以 \`#wemd\` 开头，确保样式只作用于文章区域。
+
+需要覆盖以下 HTML 元素（全部以 #wemd 开头）：
+- 标题：h1, h2, h3, h4
+- 段落：p
+- 列表：ul, ol, li
+- 引用：blockquote
+- 代码：code, pre
+- 强调：strong, em
+- 链接：a
+- 表格：table, th, td
+- 分割线：hr
+- 图片：img
+
+## 设计原则
+
+1. **可读性第一**：正文字号不低于 15px，行高 1.7 以上
+2. **主题一致**：颜色、字体、间距要有统一的视觉语言
+3. **微信适配**：不使用 CSS 变量（微信渲染器不支持），不用外部字体
+4. **简洁有力**：用最少的 CSS 实现最强的视觉效果
+
+## 输出要求
+
+只输出纯 CSS 代码，不加任何解释、不加 markdown 代码块，不加注释，直接以 \`#wemd {\` 开头。`
+
+    const userPrompt = `请根据以下风格要求生成微信公众号文章的 CSS 样式：
+
+**风格描述**：${prompt}
+
+${baseCSS ? `**参考已有样式**（可在此基础上改进，不要原样复制）：
+\`\`\`css
+${baseCSS.slice(0, 2000)}
+\`\`\`` : ''}
+
+要求：
+- 颜色方案要符合描述的风格
+- 标题层级要有明显区分
+- 正文部分要舒适易读
+- h2 标题加左侧装饰线或背景色，视觉突出
+- blockquote 要有专属样式，不能和正文混淆
+- 代码块要有深色背景、浅色文字
+- 只输出 CSS 代码，从 \`#wemd {\` 开始`
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    }
+    if (isMaas && aiConfig.maasUserEmail) {
+      headers['X-User-Email'] = aiConfig.maasUserEmail
+    }
+
+    const response = await axios.post(
+      `${baseUrl}/chat/completions`,
+      {
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user',   content: userPrompt },
+        ],
+        temperature: 0.8,
+        max_tokens: 3000,
+      },
+      { headers, timeout: 60000 }
+    )
+
+    const css = response.data.choices?.[0]?.message?.content?.trim() || ''
+    // 清理可能残留的 markdown 代码块标记
+    const cleanCss = css
+      .replace(/^```css\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/\s*```\s*$/i, '')
+      .trim()
+
+    res.json({ css: cleanCss })
+  } catch (err) {
+    console.error('样式生成失败', err?.response?.data || err.message)
+    res.status(500).json({ error: err?.response?.data?.error?.message || err.message || '生成失败' })
+  }
 })
 
 // 启动服务器

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { toast } from '../components/Toast'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Zap, Save, Edit3, Palette, Settings, AlertTriangle } from 'lucide-react'
 import { useAIReadiness, fetchServerStatus } from '../store/useConfigStore'
@@ -77,9 +78,9 @@ export default function ArticleEditor() {
   const handleSave = async () => {
     try {
       await saveArticle(articleId, data)
-      alert('保存成功！')
+      toast.success('保存成功')
     } catch {
-      alert('保存失败')
+      toast.error('保存失败，请重试')
     }
   }
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Trash2, RefreshCw, Download, Copy } from 'lucide-react'
 import axios from 'axios'
+import { toast, showConfirm } from './Toast'
 import './CoverHistory.css'
 
 interface HistoryItem {
@@ -47,28 +48,39 @@ export const CoverHistory: React.FC = () => {
     }
   }
 
-  const handleDelete = async (id: string) => {
-    if (confirm('确定要删除这条记录吗？')) {
-      try {
-        await axios.delete(`/api/cover-history/${id}`)
-        fetchHistory()
-        fetchStats()
-      } catch (error) {
-        console.error('Failed to delete history:', error)
-      }
-    }
+  const handleDelete = (id: string) => {
+    showConfirm({
+      message: '确定要删除这条记录吗？',
+      confirmText: '删除',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await axios.delete(`/api/cover-history/${id}`)
+          fetchHistory()
+          fetchStats()
+        } catch (error) {
+          console.error('Failed to delete history:', error)
+        }
+      },
+    })
   }
 
-  const handleClearAll = async () => {
-    if (confirm('确定要清除所有历史记录吗？这个操作无法撤销。')) {
-      try {
-        await axios.delete('/api/cover-history')
-        setHistory([])
-        fetchStats()
-      } catch (error) {
-        console.error('Failed to clear history:', error)
-      }
-    }
+  const handleClearAll = () => {
+    showConfirm({
+      message: '确定要清除所有历史记录吗？',
+      detail: '这个操作无法撤销。',
+      confirmText: '清除全部',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await axios.delete('/api/cover-history')
+          setHistory([])
+          fetchStats()
+        } catch (error) {
+          console.error('Failed to clear history:', error)
+        }
+      },
+    })
   }
 
   const handleDownload = (imageUrl: string, title: string) => {
@@ -82,7 +94,7 @@ export const CoverHistory: React.FC = () => {
 
   const handleCopyUrl = (imageUrl: string) => {
     navigator.clipboard.writeText(imageUrl)
-    alert('图片 URL 已复制到剪贴板')
+    toast.info('图片 URL 已复制到剪贴板')
   }
 
   const getStyleLabel = (style: string) => {

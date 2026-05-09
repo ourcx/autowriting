@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { toast } from './Toast'
 import { X, Plus, Trash2, Zap } from 'lucide-react'
 import axios from 'axios'
 import './BatchCoverGenerator.css'
@@ -83,12 +84,12 @@ export const BatchCoverGenerator: React.FC<BatchCoverGeneratorProps> = ({
   const handleGenerate = async () => {
     const validCovers = covers.filter(c => c.title.trim())
     if (validCovers.length === 0) {
-      alert('请至少输入一个标题')
+      toast.warn('请至少输入一个标题')
       return
     }
 
     if (validCovers.length > 10) {
-      alert('单次最多生成 10 个封面')
+      toast.warn('单次最多生成 10 个封面')
       return
     }
 
@@ -107,7 +108,7 @@ export const BatchCoverGenerator: React.FC<BatchCoverGeneratorProps> = ({
       onSuccess?.(response.data.results)
     } catch (error) {
       console.error('Batch generation error:', error)
-      alert('批量生成失败，请重试')
+      toast.error('批量生成失败，请重试')
     } finally {
       setGenerating(false)
     }

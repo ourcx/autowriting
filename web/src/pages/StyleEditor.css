@@ -435,6 +435,185 @@
   line-height: 1.5;
 }
 
+/* ── AI 生成面板 ────────────────────────────────────────────────── */
+
+.se-ai-panel {
+  border-bottom: 1px solid var(--color-hairline);
+  background: #f8fcf9;
+}
+
+.se-ai-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 10px 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a3a3a;
+  text-align: left;
+  transition: background 0.15s;
+}
+.se-ai-toggle:hover { background: #eef7f2; }
+
+.se-ai-toggle-badge {
+  font-size: 10px;
+  font-weight: 600;
+  background: #2d6a4f;
+  color: #fff;
+  padding: 1px 6px;
+  border-radius: 20px;
+  letter-spacing: 0.5px;
+}
+
+.se-ai-toggle-chevron {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  color: #666;
+}
+
+.se-ai-body {
+  padding: 0 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.se-ai-desc {
+  margin: 0;
+  font-size: 12px;
+  color: #666;
+  line-height: 1.5;
+}
+
+/* 快捷标签 */
+.se-ai-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.se-ai-tag {
+  padding: 4px 10px;
+  border: 1px solid #c8e6d8;
+  border-radius: 20px;
+  background: #eef7f2;
+  color: #1a5c40;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.se-ai-tag:hover {
+  background: #2d6a4f;
+  color: #fff;
+  border-color: #2d6a4f;
+}
+
+/* 输入框 */
+.se-ai-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid #c8e6d8;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #1a2e1a;
+  resize: vertical;
+  font-family: inherit;
+  box-sizing: border-box;
+  transition: border 0.15s;
+}
+.se-ai-input:focus {
+  outline: none;
+  border-color: #2d6a4f;
+}
+
+/* 操作按钮区 */
+.se-ai-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.se-ai-btn-generate {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  background: #1a3a3a;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.se-ai-btn-generate:hover:not(:disabled) { background: #2d6a4f; }
+.se-ai-btn-generate:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.se-ai-btn-apply {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #eef7f2;
+  color: #1a5c40;
+  border: 1.5px solid #a4d4c5;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.se-ai-btn-apply:hover {
+  background: #2d6a4f;
+  color: #fff;
+  border-color: #2d6a4f;
+}
+
+@keyframes se-spin {
+  to { transform: rotate(360deg); }
+}
+.se-ai-spin { animation: se-spin 0.7s linear infinite; }
+
+/* 预览代码块 */
+.se-ai-preview-wrap {
+  border: 1.5px solid #c8e6d8;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.se-ai-preview-label {
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #2d6a4f;
+  background: #eef7f2;
+  border-bottom: 1px solid #c8e6d8;
+  letter-spacing: 0.3px;
+}
+
+.se-ai-preview-code {
+  margin: 0;
+  padding: 12px;
+  font-family: 'Fira Code', 'Cascadia Code', 'Menlo', monospace;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: #1a2e1a;
+  max-height: 220px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
 /* CSS 编辑器 Header */
 .se-css-header {
   display: flex;

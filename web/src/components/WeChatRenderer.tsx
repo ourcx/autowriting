@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
+import { toast } from './Toast'
 import { Copy, Check, Minus, Plus, ExternalLink } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import MarkdownIt from 'markdown-it'
@@ -214,7 +215,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
       setTimeout(() => setCopied(false), 2500)
     } catch (err) {
       console.error('复制失败', err)
-      alert('复制失败，请手动全选 (Ctrl+A) 后复制')
+      toast.warn('复制失败，请手动全选 (Ctrl+A) 后复制')
     }
   }, [html, editedCss, fontSize])
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Plus, Calendar, FileText, Trash2, ArrowRight, RefreshCw, Zap } from 'lucide-react'
 import { fetchArticleList, deleteArticle } from '../utils/apiHelpers'
+import { showConfirm } from '../components/Toast'
 import './Dashboard.css'
 
 interface Article {
@@ -59,15 +60,22 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
     onCreateArticle(articleId)
   }
 
-  const handleDelete = async (articleId: string, e: React.MouseEvent) => {
+  const handleDelete = (articleId: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!confirm('确定删除这篇文章？')) return
-    try {
-      await deleteArticle(articleId)
-      loadArticles()
-    } catch (e) {
-      console.error('删除失败', e)
-    }
+    showConfirm({
+      message: '确定删除这篇文章？',
+      detail: '删除后无法恢复。',
+      confirmText: '删除',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await deleteArticle(articleId)
+          loadArticles()
+        } catch (err) {
+          console.error('删除失败', err)
+        }
+      },
+    })
   }
 
   const stats = {
