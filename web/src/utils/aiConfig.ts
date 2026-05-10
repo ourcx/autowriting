@@ -22,6 +22,11 @@ export interface AIConfig {
   maasApiKey: string
   maasBaseUrl: string
   maasUserEmail: string
+
+  // Embedding（向量索引）
+  embeddingApiKey: string   // 默认回落到 articleApiKey
+  embeddingBaseUrl: string  // 默认 https://api.openai.com/v1
+  embeddingModel: string    // 默认 text-embedding-3-small
 }
 
 export const DEFAULT_CONFIG: AIConfig = {
@@ -36,6 +41,10 @@ export const DEFAULT_CONFIG: AIConfig = {
   maasApiKey: '',
   maasBaseUrl: 'https://maas.devops.xiaohongshu.com/v1',
   maasUserEmail: '',
+
+  embeddingApiKey: '',
+  embeddingBaseUrl: 'https://api.openai.com/v1',
+  embeddingModel: 'text-embedding-3-small',
 }
 
 export function loadAIConfig(): AIConfig {

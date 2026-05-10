@@ -22,19 +22,27 @@ const INDEX_DIR = path.join(DATA_DIR, 'rag_index')
 let _embeddings = null
 function getEmbeddings(aiConfig = {}) {
   const cfg = { ...SERVER_AI_CONFIG, ...aiConfig }
-  // 优先用配置的 openai key，MaaS 一般不提供 embedding，用 openai 兜底
-  const apiKey  = cfg.articleApiKey || cfg.coverApiKey || ''
-  const baseURL = cfg.articleBaseUrl && cfg.articleProvider !== 'maas'
-    ? cfg.articleBaseUrl
-    : 'https://api.openai.com/v1'
-  if (!apiKey) throw new Error('未配置 OpenAI API Key，RAG 功能需要 embedding 接口')
-  if (!_embeddings || _embeddings._apiKey !== apiKey) {
+
+  // embedding 专用配置优先，其次回落到文章生成的 key/url
+  const apiKey  = cfg.embeddingApiKey  || cfg.articleApiKey || cfg.coverApiKey || ''
+  const baseURL = cfg.embeddingBaseUrl || (
+    cfg.articleBaseUrl && cfg.articleProvider !== 'maas'
+      ? cfg.articleBaseUrl
+      : 'https://api.openai.com/v1'
+  )
+  const model   = cfg.embeddingModel   || 'text-embedding-3-small'
+
+  if (!apiKey) throw new Error('未配置 Embedding API Key，请在知识库页面填写后重试')
+
+  // key/model/url 任一变化时重建实例
+  const cacheKey = `${apiKey}|${baseURL}|${model}`
+  if (!_embeddings || _embeddings._cacheKey !== cacheKey) {
     _embeddings = new OpenAIEmbeddings({
       openAIApiKey: apiKey,
-      modelName: 'text-embedding-3-small',
+      modelName:    model,
       configuration: { baseURL },
     })
-    _embeddings._apiKey = apiKey
+    _embeddings._cacheKey = cacheKey
   }
   return _embeddings
 }

@@ -1,18 +1,23 @@
 /**
  * RAG 管理页  /rag
- * - 索引状态卡片
- * - 一键重建索引
+ * - Embedding 配置（Key / Base URL / 模型）存 localStorage
+ * - 索引状态 + 一键重建
  * - 相似度搜索测试
  */
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Database, RefreshCw, Search, FileText, Layers, BookOpen, AlertCircle, CheckCircle } from 'lucide-react'
+import {
+  ArrowLeft, Database, RefreshCw, Search,
+  FileText, Layers, BookOpen, AlertCircle, CheckCircle,
+  Settings2, ChevronDown, ChevronRight,
+} from 'lucide-react'
 import { toast } from '../components/Toast'
+import { useConfigStore, updateLocalConfig } from '../store/useConfigStore'
 import './RagPage.css'
 
 interface IndexStatus {
-  indexed:   boolean
-  size?:     number
+  indexed:    boolean
+  size?:      number
   updatedAt?: string
   indexDir?:  string
 }
@@ -32,6 +37,12 @@ const TYPE_CONFIG: Record<string, { label: string; color: string; icon: React.Re
   task_sub: { label: '任务参考', color: 'lavender', icon: <Layers    size={13} /> },
 }
 
+const PRESET_MODELS = [
+  'text-embedding-3-small',
+  'text-embedding-3-large',
+  'text-embedding-ada-002',
+]
+
 function fmtSize(bytes: number) {
   if (bytes < 1024)       return `${bytes} B`
   if (bytes < 1024 ** 2)  return `${(bytes / 1024).toFixed(1)} KB`
@@ -40,41 +51,77 @@ function fmtSize(bytes: number) {
 
 export default function RagPage() {
   const navigate = useNavigate()
+  const { localConfig } = useConfigStore()
 
+  // ── Embedding 配置（读写 localConfig）────────────────────────────────────
+  const [embKey,     setEmbKey]     = useState(localConfig.embeddingApiKey  || '')
+  const [embUrl,     setEmbUrl]     = useState(localConfig.embeddingBaseUrl || 'https://api.openai.com/v1')
+  const [embModel,   setEmbModel]   = useState(localConfig.embeddingModel   || 'text-embedding-3-small')
+  const [embOpen,    setEmbOpen]    = useState(!localConfig.embeddingApiKey) // 未配置时默认展开
+  const [embDirty,   setEmbDirty]   = useState(false)
+
+  // ── 索引状态 ──────────────────────────────────────────────────────────────
   const [status,    setStatus]    = useState<IndexStatus | null>(null)
   const [building,  setBuilding]  = useState(false)
-  const [buildLog,  setBuildLog]  = useState<string | null>(null)
+  const [buildLog,  setBuildLog]  = useState<{ ok: boolean; msg: string } | null>(null)
 
+  // ── 搜索 ──────────────────────────────────────────────────────────────────
   const [query,     setQuery]     = useState('')
   const [searching, setSearching] = useState(false)
   const [results,   setResults]   = useState<RagDoc[] | null>(null)
+
+  // 实际生效的 key：专用 > 文章 key 回落
+  const effectiveKey = embKey || localConfig.articleApiKey || ''
+  const hasKey       = !!effectiveKey
+
+  // 组装发给后端的 aiConfig
+  const embAiConfig = {
+    embeddingApiKey:  effectiveKey,
+    embeddingBaseUrl: embUrl || 'https://api.openai.com/v1',
+    embeddingModel:   embModel || 'text-embedding-3-small',
+  }
 
   useEffect(() => { fetchStatus() }, [])
 
   async function fetchStatus() {
     try {
       const res = await fetch('/api/rag/status')
-      const data = await res.json()
-      setStatus(data)
+      setStatus(await res.json())
     } catch {
       setStatus({ indexed: false })
     }
   }
 
+  function saveEmbConfig() {
+    updateLocalConfig({
+      embeddingApiKey:  embKey,
+      embeddingBaseUrl: embUrl,
+      embeddingModel:   embModel,
+    })
+    setEmbDirty(false)
+    toast.success('Embedding 配置已保存')
+  }
+
   async function handleBuild() {
+    if (!hasKey) { toast.error('请先配置 Embedding API Key'); return }
+    if (embDirty) { toast.warn('配置有未保存的改动，请先保存'); return }
     setBuilding(true)
     setBuildLog(null)
     try {
-      const res  = await fetch('/api/rag/index', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      const res  = await fetch('/api/rag/index', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ aiConfig: embAiConfig }),
+      })
       const data = await res.json()
       if (data.error) throw new Error(data.error)
-      setBuildLog(`成功索引 ${data.indexed} 篇文档，切分为 ${data.chunks} 个片段`)
+      setBuildLog({ ok: true, msg: `成功索引 ${data.indexed} 篇文档，切分为 ${data.chunks} 个片段` })
       toast.success('索引构建完成')
       fetchStatus()
     } catch (e: unknown) {
       const msg = (e as Error).message
-      setBuildLog(`失败：${msg}`)
-      toast.error('索引构建失败：' + msg)
+      setBuildLog({ ok: false, msg: `失败：${msg}` })
+      toast.error('构建失败：' + msg)
     } finally {
       setBuilding(false)
     }
@@ -82,13 +129,14 @@ export default function RagPage() {
 
   async function handleSearch() {
     if (!query.trim()) return
+    if (!hasKey) { toast.error('请先配置 Embedding API Key'); return }
     setSearching(true)
     setResults(null)
     try {
       const res  = await fetch('/api/rag/search', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ query: query.trim(), topK: 6 }),
+        body:    JSON.stringify({ query: query.trim(), topK: 6, aiConfig: embAiConfig }),
       })
       const data = await res.json()
       if (data.error) throw new Error(data.error)
@@ -111,20 +159,117 @@ export default function RagPage() {
         </button>
         <div className="rp-header-title">
           <Database size={17} />
-          向量索引管理
+          向量知识库
         </div>
         <div style={{ width: 80 }} />
       </header>
 
       <div className="rp-body">
 
-        {/* ── 索引状态卡片 ── */}
+        {/* ══ Embedding 配置 ══ */}
+        <section className="rp-section">
+          <button className="rp-collapsible-header" onClick={() => setEmbOpen(v => !v)}>
+            <div className="rp-collapsible-left">
+              <Settings2 size={15} />
+              <span className="rp-section-label" style={{ margin: 0 }}>Embedding 配置</span>
+              {!hasKey && <span className="rp-badge-warn">未配置</span>}
+              {hasKey && !embKey && <span className="rp-badge-info">使用文章 Key</span>}
+              {embDirty && <span className="rp-badge-dirty">未保存</span>}
+            </div>
+            {embOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+          </button>
+
+          {embOpen && (
+            <div className="rp-emb-card">
+              <div className="rp-emb-grid">
+
+                {/* API Key */}
+                <div className="rp-field">
+                  <label className="rp-field-label">
+                    API Key
+                    <span className="rp-field-hint">留空则使用「AI 配置」中的 OpenAI Key</span>
+                  </label>
+                  <input
+                    className="rp-input rp-input-mono"
+                    type="password"
+                    placeholder={localConfig.articleApiKey ? '留空使用文章 Key（已配置）' : 'sk-...'}
+                    value={embKey}
+                    onChange={e => { setEmbKey(e.target.value); setEmbDirty(true) }}
+                  />
+                </div>
+
+                {/* Base URL */}
+                <div className="rp-field">
+                  <label className="rp-field-label">
+                    Base URL
+                    <span className="rp-field-hint">兼容 OpenAI 接口的代理或本地服务</span>
+                  </label>
+                  <input
+                    className="rp-input rp-input-mono"
+                    placeholder="https://api.openai.com/v1"
+                    value={embUrl}
+                    onChange={e => { setEmbUrl(e.target.value); setEmbDirty(true) }}
+                  />
+                </div>
+
+                {/* 模型 */}
+                <div className="rp-field">
+                  <label className="rp-field-label">
+                    Embedding 模型
+                    <span className="rp-field-hint">需与 Base URL 服务商支持的模型对应</span>
+                  </label>
+                  <div className="rp-model-row">
+                    <input
+                      className="rp-input rp-input-mono"
+                      placeholder="text-embedding-3-small"
+                      value={embModel}
+                      onChange={e => { setEmbModel(e.target.value); setEmbDirty(true) }}
+                      list="rp-model-list"
+                    />
+                    <datalist id="rp-model-list">
+                      {PRESET_MODELS.map(m => <option key={m} value={m} />)}
+                    </datalist>
+                  </div>
+                  <div className="rp-preset-pills">
+                    {PRESET_MODELS.map(m => (
+                      <button
+                        key={m}
+                        className={`rp-preset-pill${embModel === m ? ' rp-preset-pill--active' : ''}`}
+                        onClick={() => { setEmbModel(m); setEmbDirty(true) }}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+
+              <div className="rp-emb-footer">
+                <span className="rp-emb-info">
+                  {hasKey
+                    ? `当前使用${embKey ? '专用 Key' : '文章 Key 回落'} · ${embModel || 'text-embedding-3-small'}`
+                    : '未配置任何 Key，无法构建索引'}
+                </span>
+                <button
+                  className="rp-btn-primary"
+                  onClick={saveEmbConfig}
+                  disabled={!embDirty}
+                >
+                  保存配置
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* ══ 索引状态 ══ */}
         <section className="rp-section">
           <div className="rp-section-label">索引状态</div>
           <div className="rp-status-card">
             <div className="rp-status-left">
               {status === null ? (
-                <span className="rp-dot rp-dot-loading" />
+                <span className="rp-dot-loading" />
               ) : status.indexed ? (
                 <CheckCircle size={20} className="rp-icon-ok" />
               ) : (
@@ -132,26 +277,23 @@ export default function RagPage() {
               )}
               <div>
                 <div className="rp-status-title">
-                  {status === null  && '加载中...'}
-                  {status?.indexed  === false && '尚未建立索引'}
-                  {status?.indexed  === true  && '索引已就绪'}
+                  {status === null           && '加载中...'}
+                  {status?.indexed === false && '尚未建立索引'}
+                  {status?.indexed === true  && '索引已就绪'}
                 </div>
-                {status?.indexed && (
-                  <div className="rp-status-meta">
-                    {status.size && <span>{fmtSize(status.size)}</span>}
-                    {status.updatedAt && <span>更新于 {new Date(status.updatedAt).toLocaleString('zh-CN')}</span>}
-                    {status.indexDir && <span className="rp-mono">{status.indexDir}</span>}
-                  </div>
-                )}
-                {!status?.indexed && status !== null && (
-                  <div className="rp-status-meta">点击右侧按钮扫描草稿目录并建立向量索引（需要 OpenAI Embedding API Key）</div>
-                )}
+                <div className="rp-status-meta">
+                  {status?.indexed && status.size      && <span>{fmtSize(status.size)}</span>}
+                  {status?.indexed && status.updatedAt && <span>更新于 {new Date(status.updatedAt).toLocaleString('zh-CN')}</span>}
+                  {status?.indexed && status.indexDir  && <span className="rp-mono">{status.indexDir}</span>}
+                  {!status?.indexed && status !== null && <span>扫描草稿目录，向量化后存入本地 HNSWLib</span>}
+                </div>
               </div>
             </div>
             <button
-              className={`rp-btn-primary ${building ? 'rp-btn-loading' : ''}`}
+              className={`rp-btn-primary${building ? ' rp-btn-loading' : ''}`}
               onClick={handleBuild}
-              disabled={building}
+              disabled={building || !hasKey || embDirty}
+              title={!hasKey ? '请先配置 Key' : embDirty ? '请先保存 Embedding 配置' : ''}
             >
               <RefreshCw size={14} className={building ? 'rp-spin' : ''} />
               {building ? '构建中...' : status?.indexed ? '重新构建' : '立即构建'}
@@ -159,19 +301,19 @@ export default function RagPage() {
           </div>
 
           {buildLog && (
-            <div className={`rp-build-log ${buildLog.startsWith('失败') ? 'rp-build-log--error' : ''}`}>
-              {buildLog}
+            <div className={`rp-build-log${buildLog.ok ? '' : ' rp-build-log--error'}`}>
+              {buildLog.msg}
             </div>
           )}
         </section>
 
-        {/* ── 搜索测试区 ── */}
+        {/* ══ 搜索测试 ══ */}
         <section className="rp-section">
           <div className="rp-section-label">相似度搜索测试</div>
           <div className="rp-search-row">
             <input
               className="rp-input"
-              placeholder="输入任意文本，测试向量检索效果..."
+              placeholder={status?.indexed ? '输入任意文本，测试向量检索效果...' : '请先构建索引'}
               value={query}
               onChange={e => setQuery(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleSearch() }}
@@ -187,11 +329,6 @@ export default function RagPage() {
             </button>
           </div>
 
-          {!status?.indexed && (
-            <p className="rp-hint">请先构建索引后再测试搜索</p>
-          )}
-
-          {/* 结果列表 */}
           {results !== null && (
             <div className="rp-results">
               {results.length === 0 ? (
@@ -205,14 +342,9 @@ export default function RagPage() {
                       return (
                         <div key={i} className={`rp-result-card rp-result-card--${cfg.color}`}>
                           <div className="rp-result-header">
-                            <span className="rp-result-badge">
-                              {cfg.icon}
-                              {cfg.label}
-                            </span>
+                            <span className="rp-result-badge">{cfg.icon}{cfg.label}</span>
                             <span className="rp-result-dir">{doc.dir}</span>
-                            <span className="rp-result-sim">
-                              {Math.round((1 - doc.score) * 100)}% 相似
-                            </span>
+                            <span className="rp-result-sim">{Math.round((1 - doc.score) * 100)}% 相似</span>
                           </div>
                           <p className="rp-result-content">{doc.content}</p>
                         </div>
@@ -225,24 +357,24 @@ export default function RagPage() {
           )}
         </section>
 
-        {/* ── 使用说明 ── */}
+        {/* ══ 使用说明 ══ */}
         <section className="rp-section">
           <div className="rp-section-label">使用说明</div>
           <div className="rp-guide-grid">
             <div className="rp-guide-card rp-guide-card--teal">
               <div className="rp-guide-step">01</div>
-              <div className="rp-guide-title">构建索引</div>
-              <p>扫描所有草稿目录下的 <code>article_raw.md</code>、<code>task.md</code>、<code>materials.md</code>，切片后用 OpenAI Embedding 向量化并存入本地 HNSWLib。</p>
+              <div className="rp-guide-title">配置 Embedding</div>
+              <p>填写 API Key 和模型名（兼容任意 OpenAI 格式接口）。留空 Key 时自动回落到文章生成的 Key。</p>
             </div>
             <div className="rp-guide-card rp-guide-card--peach">
               <div className="rp-guide-step">02</div>
-              <div className="rp-guide-title">自动召回</div>
-              <p>生成文章时，系统自动用当前任务描述检索 top-4 相关片段，注入 prompt「往期参考」区域，让 AI 保持风格一致。</p>
+              <div className="rp-guide-title">构建索引</div>
+              <p>扫描所有草稿的 <code>article_raw.md</code> / <code>task.md</code> / <code>materials.md</code>，切片向量化，存入本地 HNSWLib。</p>
             </div>
             <div className="rp-guide-card rp-guide-card--lavender">
               <div className="rp-guide-step">03</div>
-              <div className="rp-guide-title">定期重建</div>
-              <p>每次写完新文章后，点「重新构建」刷新索引，把最新内容也纳入参考。索引存在 <code>.cache/rag_index/</code>。</p>
+              <div className="rp-guide-title">自动召回</div>
+              <p>生成文章时自动检索 top-4 相关片段注入 prompt，让 AI 风格保持一致。写完新文章后点「重新构建」刷新。</p>
             </div>
           </div>
         </section>
