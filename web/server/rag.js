@@ -10,38 +10,107 @@
 import fs from 'fs'
 import path from 'path'
 import { HNSWLib } from '@langchain/community/vectorstores/hnswlib'
-import { OpenAIEmbeddings } from '@langchain/openai'
+import { Embeddings } from '@langchain/core/embeddings'
 import { Document } from '@langchain/core/documents'
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters'
 import { DATA_DIR, DRAFTS_DIR, SERVER_AI_CONFIG } from './config.js'
 
 const INDEX_DIR = path.join(DATA_DIR, 'rag_index')
 
-// ── Embeddings 实例（懒加载，避免启动时就报错） ──────────────────────────────
+// ── 自定义 Embeddings 类（直接 fetch，不依赖 LangChain OpenAI 封装）─────────
+// 好处：
+//   1. 不会自动附加 encoding_format:'float'（部分服务商不支持）
+//   2. 支持 dimensions / instruction 等扩展参数
+//   3. 支持任意自定义 Header（如 X-Failover-Enabled）
+
+class RawEmbeddings extends Embeddings {
+  constructor({ apiKey, baseURL, model, dimensions, instruction, extraHeaders = {} }) {
+    super({})
+    this.apiKey       = apiKey
+    this.baseURL      = baseURL.replace(/\/$/, '')
+    this.model        = model
+    this.dimensions   = dimensions   // 可选，number
+    this.instruction  = instruction  // 可选，string
+    this.extraHeaders = extraHeaders // 可选，object
+  }
+
+  /** 单条文本向量化 */
+  async embedQuery(text) {
+    return this._embed(text)
+  }
+
+  /** 批量向量化（每批最多 64 条，避免超长） */
+  async embedDocuments(texts) {
+    const BATCH = 64
+    const results = []
+    for (let i = 0; i < texts.length; i += BATCH) {
+      const batch = texts.slice(i, i + BATCH)
+      const vecs  = await Promise.all(batch.map(t => this._embed(t)))
+      results.push(...vecs)
+    }
+    return results
+  }
+
+  async _embed(text) {
+    const body = { model: this.model, input: text }
+    if (this.dimensions)  body.dimensions  = this.dimensions
+    if (this.instruction) body.instruction = this.instruction
+
+    const resp = await fetch(`${this.baseURL}/embeddings`, {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${this.apiKey}`,
+        ...this.extraHeaders,
+      },
+      body: JSON.stringify(body),
+    })
+
+    if (!resp.ok) {
+      const err = await resp.text()
+      throw new Error(`${resp.status} [${resp.statusText}] ${err}`)
+    }
+
+    const data = await resp.json()
+    const vec  = data?.data?.[0]?.embedding
+    if (!Array.isArray(vec)) throw new Error('Embedding API 返回格式异常：' + JSON.stringify(data))
+    return vec
+  }
+}
+
+// ── Embeddings 实例（懒加载，配置变化时重建） ─────────────────────────────────
 
 let _embeddings = null
 function getEmbeddings(aiConfig = {}) {
   const cfg = { ...SERVER_AI_CONFIG, ...aiConfig }
 
   // embedding 专用配置优先，其次回落到文章生成的 key/url
-  const apiKey  = cfg.embeddingApiKey  || cfg.articleApiKey || cfg.coverApiKey || ''
-  const baseURL = cfg.embeddingBaseUrl || (
+  const apiKey      = cfg.embeddingApiKey  || cfg.articleApiKey || cfg.coverApiKey || ''
+  const baseURL     = cfg.embeddingBaseUrl || (
     cfg.articleBaseUrl && cfg.articleProvider !== 'maas'
       ? cfg.articleBaseUrl
       : 'https://api.openai.com/v1'
   )
-  const model   = cfg.embeddingModel   || 'text-embedding-3-small'
+  const model       = cfg.embeddingModel       || 'text-embedding-3-small'
+  const dimensions  = cfg.embeddingDimensions  || undefined
+  const instruction = cfg.embeddingInstruction || undefined
+
+  // extraHeaders：JSON 字符串或对象
+  let extraHeaders = {}
+  if (cfg.embeddingExtraHeaders) {
+    try {
+      extraHeaders = typeof cfg.embeddingExtraHeaders === 'string'
+        ? JSON.parse(cfg.embeddingExtraHeaders)
+        : cfg.embeddingExtraHeaders
+    } catch { /* 解析失败忽略 */ }
+  }
 
   if (!apiKey) throw new Error('未配置 Embedding API Key，请在知识库页面填写后重试')
 
-  // key/model/url 任一变化时重建实例
-  const cacheKey = `${apiKey}|${baseURL}|${model}`
+  // 任意参数变化时重建实例
+  const cacheKey = JSON.stringify({ apiKey, baseURL, model, dimensions, instruction, extraHeaders })
   if (!_embeddings || _embeddings._cacheKey !== cacheKey) {
-    _embeddings = new OpenAIEmbeddings({
-      openAIApiKey: apiKey,
-      modelName:    model,
-      configuration: { baseURL },
-    })
+    _embeddings = new RawEmbeddings({ apiKey, baseURL, model, dimensions, instruction, extraHeaders })
     _embeddings._cacheKey = cacheKey
   }
   return _embeddings

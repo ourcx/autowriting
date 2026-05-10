@@ -54,11 +54,15 @@ export default function RagPage() {
   const { localConfig } = useConfigStore()
 
   // ── Embedding 配置（读写 localConfig）────────────────────────────────────
-  const [embKey,     setEmbKey]     = useState(localConfig.embeddingApiKey  || '')
-  const [embUrl,     setEmbUrl]     = useState(localConfig.embeddingBaseUrl || 'https://api.openai.com/v1')
-  const [embModel,   setEmbModel]   = useState(localConfig.embeddingModel   || 'text-embedding-3-small')
+  const [embKey,     setEmbKey]     = useState(localConfig.embeddingApiKey       || '')
+  const [embUrl,     setEmbUrl]     = useState(localConfig.embeddingBaseUrl      || 'https://api.openai.com/v1')
+  const [embModel,   setEmbModel]   = useState(localConfig.embeddingModel        || 'text-embedding-3-small')
+  const [embDims,    setEmbDims]    = useState(localConfig.embeddingDimensions   || '')
+  const [embInstr,   setEmbInstr]   = useState(localConfig.embeddingInstruction  || '')
+  const [embHeaders, setEmbHeaders] = useState(localConfig.embeddingExtraHeaders || '')
   const [embOpen,    setEmbOpen]    = useState(!localConfig.embeddingApiKey) // 未配置时默认展开
   const [embDirty,   setEmbDirty]   = useState(false)
+  const [headersErr, setHeadersErr] = useState(false)
 
   // ── 索引状态 ──────────────────────────────────────────────────────────────
   const [status,    setStatus]    = useState<IndexStatus | null>(null)
@@ -74,11 +78,19 @@ export default function RagPage() {
   const effectiveKey = embKey || localConfig.articleApiKey || ''
   const hasKey       = !!effectiveKey
 
+  // 校验 extraHeaders JSON
+  const headersValid = !embHeaders || (() => {
+    try { JSON.parse(embHeaders); return true } catch { return false }
+  })()
+
   // 组装发给后端的 aiConfig
   const embAiConfig = {
-    embeddingApiKey:  effectiveKey,
-    embeddingBaseUrl: embUrl || 'https://api.openai.com/v1',
-    embeddingModel:   embModel || 'text-embedding-3-small',
+    embeddingApiKey:      effectiveKey,
+    embeddingBaseUrl:     embUrl         || 'https://api.openai.com/v1',
+    embeddingModel:       embModel       || 'text-embedding-3-small',
+    embeddingDimensions:  embDims        ? Number(embDims) : undefined,
+    embeddingInstruction: embInstr       || undefined,
+    embeddingExtraHeaders:embHeaders     || undefined,
   }
 
   useEffect(() => { fetchStatus() }, [])
@@ -93,12 +105,17 @@ export default function RagPage() {
   }
 
   function saveEmbConfig() {
+    if (embHeaders && !headersValid) { toast.error('Extra Headers 不是合法的 JSON'); return }
     updateLocalConfig({
-      embeddingApiKey:  embKey,
-      embeddingBaseUrl: embUrl,
-      embeddingModel:   embModel,
+      embeddingApiKey:       embKey,
+      embeddingBaseUrl:      embUrl,
+      embeddingModel:        embModel,
+      embeddingDimensions:   embDims,
+      embeddingInstruction:  embInstr,
+      embeddingExtraHeaders: embHeaders,
     })
     setEmbDirty(false)
+    setHeadersErr(false)
     toast.success('Embedding 配置已保存')
   }
 
@@ -241,6 +258,55 @@ export default function RagPage() {
                       </button>
                     ))}
                   </div>
+                </div>
+
+                {/* Dimensions */}
+                <div className="rp-field">
+                  <label className="rp-field-label">
+                    Dimensions
+                    <span className="rp-field-hint">输出向量维度，留空使用模型默认值（如 Qwen3-Embedding 填 1024）</span>
+                  </label>
+                  <input
+                    className="rp-input rp-input-mono"
+                    type="number"
+                    placeholder="留空使用默认值"
+                    value={embDims}
+                    onChange={e => { setEmbDims(e.target.value); setEmbDirty(true) }}
+                  />
+                </div>
+
+                {/* Instruction */}
+                <div className="rp-field">
+                  <label className="rp-field-label">
+                    Instruction
+                    <span className="rp-field-hint">任务指令，部分模型（如 Qwen3-Embedding）支持，用于提升检索质量</span>
+                  </label>
+                  <input
+                    className="rp-input"
+                    placeholder="如：检索与以下内容相关的往期文章"
+                    value={embInstr}
+                    onChange={e => { setEmbInstr(e.target.value); setEmbDirty(true) }}
+                  />
+                </div>
+
+                {/* Extra Headers */}
+                <div className="rp-field">
+                  <label className="rp-field-label">
+                    Extra Headers
+                    <span className="rp-field-hint">JSON 格式额外请求头，如 Gitee AI 的 X-Failover-Enabled</span>
+                  </label>
+                  <textarea
+                    className={`rp-textarea rp-input-mono${headersErr ? ' rp-textarea--error' : ''}`}
+                    placeholder={'{\n  "X-Failover-Enabled": "true"\n}'}
+                    rows={3}
+                    value={embHeaders}
+                    onChange={e => {
+                      setEmbHeaders(e.target.value)
+                      setEmbDirty(true)
+                      setHeadersErr(e.target.value !== '' && (() => { try { JSON.parse(e.target.value); return false } catch { return true } })())
+                    }}
+                  />
+                  {headersErr && <span className="rp-field-error">不是合法的 JSON</span>}
                 </div>
 
               </div>

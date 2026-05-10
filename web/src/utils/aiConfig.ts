@@ -24,9 +24,12 @@ export interface AIConfig {
   maasUserEmail: string
 
   // Embedding（向量索引）
-  embeddingApiKey: string   // 默认回落到 articleApiKey
-  embeddingBaseUrl: string  // 默认 https://api.openai.com/v1
-  embeddingModel: string    // 默认 text-embedding-3-small
+  embeddingApiKey:      string  // 默认回落到 articleApiKey
+  embeddingBaseUrl:     string  // 默认 https://api.openai.com/v1
+  embeddingModel:       string  // 默认 text-embedding-3-small
+  embeddingDimensions:  string  // 可选，输出向量维度，如 "1024"
+  embeddingInstruction: string  // 可选，任务指令（部分模型支持）
+  embeddingExtraHeaders:string  // 可选，JSON 格式额外请求头
 }
 
 export const DEFAULT_CONFIG: AIConfig = {
@@ -42,9 +45,12 @@ export const DEFAULT_CONFIG: AIConfig = {
   maasBaseUrl: 'https://maas.devops.xiaohongshu.com/v1',
   maasUserEmail: '',
 
-  embeddingApiKey: '',
-  embeddingBaseUrl: 'https://api.openai.com/v1',
-  embeddingModel: 'text-embedding-3-small',
+  embeddingApiKey:       '',
+  embeddingBaseUrl:      'https://api.openai.com/v1',
+  embeddingModel:        'text-embedding-3-small',
+  embeddingDimensions:   '',
+  embeddingInstruction:  '',
+  embeddingExtraHeaders: '',
 }
 
 export function loadAIConfig(): AIConfig {

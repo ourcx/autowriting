@@ -184,6 +184,30 @@
   color: #fff;
 }
 
+.rp-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #e5e5e5;
+  border-radius: 10px;
+  background: #fff;
+  font-size: 13px;
+  color: #0a0a0a;
+  font-family: inherit;
+  outline: none;
+  resize: vertical;
+  transition: border-color 0.12s;
+  line-height: 1.6;
+  box-sizing: border-box;
+}
+.rp-textarea:focus { border-color: #0a0a0a; }
+.rp-textarea--error { border-color: #ef4444; background: #fef2f2; }
+
+.rp-field-error {
+  font-size: 12px;
+  color: #ef4444;
+  margin-top: 2px;
+}
+
 .rp-emb-footer {
   display: flex;
   align-items: center;
