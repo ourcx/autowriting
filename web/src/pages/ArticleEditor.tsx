@@ -276,7 +276,12 @@ export default function ArticleEditor() {
 
           {activeTab === 'analysis' && (
             <div className="editor-panel">
-              <ContentStats title={articleTitle} content={data.article} />
+              <ContentStats
+                title={articleTitle}
+                content={data.article}
+                articleId={articleId}
+                task={data.task}
+              />
             </div>
           )}
 

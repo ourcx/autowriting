@@ -5,6 +5,7 @@
  * POST   /api/articles/:articleId
  * POST   /api/articles/:articleId/generate
  * POST   /api/articles/:articleId/generate/stream  ← SSE 流式
+ * POST   /api/articles/:articleId/analyze          ← AI 内容分析
  * DELETE /api/articles/:articleId
  */
 import { Router } from 'express'
@@ -427,6 +428,127 @@ ${materials}
     const msg = error.response?.data?.error?.message || error.message
     send('error', { message: msg })
     res.end()
+  }
+})
+
+// ── POST /api/articles/:articleId/analyze  (AI 内容分析) ─────────────────────
+
+router.post('/:articleId/analyze', async (req, res) => {
+  try {
+    const { articleId } = req.params
+    const { article, task, aiConfig } = req.body
+
+    if (!article || article.trim().length < 100) {
+      return res.status(400).json({ error: '文章内容太短，无法分析' })
+    }
+
+    const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
+
+    // ── 1. RAG 检索最相似往期文章（用于风格对比）────────────────────────────
+    let similarArticles = []
+    try {
+      similarArticles = await retrieveRelevant(article.slice(0, 500), {
+        topK: 3,
+        aiConfig: cfg,
+      })
+    } catch { /* 无索引时跳过 */ }
+
+    const similarContext = similarArticles.length
+      ? `\n\n# 往期相似文章片段（用于风格对比）\n` +
+        similarArticles.map((d, i) =>
+          `### 片段${i + 1}（${d.dir} · 相似度${Math.round((1 - d.score) * 100)}%）\n${d.content}`
+        ).join('\n\n')
+      : ''
+
+    // ── 2. 读取写作规范 ───────────────────────────────────────────────────────
+    let agentsContent = ''
+    if (fs.existsSync(AGENTS_FILE)) {
+      agentsContent = fs.readFileSync(AGENTS_FILE, 'utf-8')
+    }
+
+    const taskContext = task ? `\n\n# 本次写作任务\n${task}` : ''
+
+    const prompt = `你是一个专业的文章审核助手，擅长分析微信公众号文章的质量。请对以下文章进行深度分析，返回 JSON 格式结果。
+
+# 写作规范（判断依据）
+${agentsContent}
+${taskContext}
+${similarContext}
+
+# 待分析文章
+${article}
+
+---
+
+请严格按照以下 JSON 结构返回分析结果，不要有任何额外文字：
+
+{
+  "scores": {
+    "overall": <0-100整数，综合评分>,
+    "style": <0-100，风格真实度，避免 AI 腔>,
+    "structure": <0-100，结构合理性>,
+    "actionability": <0-100，实用性和可操作性>,
+    "originality": <0-100，观点独特性>
+  },
+  "wordCount": <实际字数整数>,
+  "readingMinutes": <阅读分钟数整数>,
+  "strengths": [<字符串，3-5条优点，每条20字以内>],
+  "issues": [
+    {
+      "level": <"error"|"warn"|"info">,
+      "type": <问题类型，如"AI套话"|"空话"|"结构问题"|"逻辑断层"等>,
+      "quote": <原文中的问题片段，不超过40字>,
+      "suggestion": <具体改进建议，不超过60字>
+    }
+  ],
+  "styleMatch": {
+    "score": <0-100，与往期风格一致性，无往期数据时返回-1>,
+    "note": <一句话说明，如「开头较官方，与往期直接切入的习惯有差异」>
+  },
+  "topSuggestion": <最重要的一条改进建议，不超过80字>
+}`
+
+    // ── 3. 调用 LLM ──────────────────────────────────────────────────────────
+    let requestHeaders = { 'Content-Type': 'application/json' }
+    let requestUrl = ''
+    let requestModel = ''
+
+    if (cfg.articleProvider === 'maas') {
+      requestUrl   = `${cfg.maasBaseUrl}/chat/completions`
+      requestModel = 'deepseek-v4-pro'
+      requestHeaders['api-key']           = cfg.maasApiKey
+      requestHeaders['x-maas-user-email'] = cfg.maasUserEmail
+      requestHeaders['x-maas-app-id']     = 'qs-api'
+    } else {
+      requestUrl   = `${cfg.articleBaseUrl}/chat/completions`
+      requestModel = cfg.articleModel || 'gpt-4o'
+      requestHeaders['Authorization'] = `Bearer ${cfg.articleApiKey}`
+    }
+
+    const llmRes = await axios.post(
+      requestUrl,
+      {
+        model: requestModel,
+        messages: [
+          { role: 'system', content: '你是专业的文章分析助手，只输出合法 JSON，不加任何解释或 Markdown 代码块。' },
+          { role: 'user',   content: prompt },
+        ],
+        temperature: 0.3,
+        max_tokens: 2048,
+      },
+      { headers: requestHeaders }
+    )
+
+    const raw = llmRes.data.choices[0].message.content.trim()
+    // 去掉可能的 ```json 包裹
+    const cleaned = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
+    const result  = JSON.parse(cleaned)
+
+    res.json({ ...result, ragCount: similarArticles.length })
+  } catch (error) {
+    const msg = error.response?.data?.error?.message || error.message
+    console.error('[Analyze] 分析失败:', msg)
+    res.status(500).json({ error: msg })
   }
 })
 
