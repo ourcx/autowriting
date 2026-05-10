@@ -4,7 +4,7 @@ import { Copy, Check, Minus, Plus, ExternalLink } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
-import { loadAllTemplates, TemplateItem } from '../utils/templateStore'
+import { fetchAllTemplates, BUILTIN_TEMPLATES, TemplateItem } from '../utils/templateStore'
 import './WeChatRenderer.css'
 
 interface WeChatRendererProps {
@@ -107,10 +107,10 @@ function applyInlineStylesFromCss(html: string, cssText: string): string {
 export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }) => {
   const navigate = useNavigate()
 
-  // 从 store 加载模板，监听跨组件更新
-  const [templates, setTemplates] = useState<TemplateItem[]>(() => loadAllTemplates())
+  // 从服务端加载模板，初始用内置副本保证无白屏
+  const [templates, setTemplates] = useState<TemplateItem[]>(BUILTIN_TEMPLATES)
   const [templateId, setTemplateId] = useState('default')
-  const [editedCss, setEditedCss] = useState(() => loadAllTemplates()[0]?.css ?? '')
+  const [editedCss, setEditedCss] = useState(() => BUILTIN_TEMPLATES[0]?.css ?? '')
   const [fontSize, setFontSize] = useState(16)
   const [copied, setCopied] = useState(false)
   const previewRef = useRef<HTMLDivElement>(null)
@@ -151,19 +151,28 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
     document.addEventListener('mouseup', onMouseUp)
   }, [sidebarWidth])
 
+  // 首次挂载：从服务端拉取模板（覆盖 BUILTIN_TEMPLATES 初始值）
+  useEffect(() => {
+    fetchAllTemplates().then(all => {
+      setTemplates(all)
+      const def = all.find(t => t.id === 'default') ?? all[0]
+      if (def) setEditedCss(def.css)
+    }).catch(() => {})
+  }, [])
+
   // 监听 StyleEditor 发出的模板更新事件
   useEffect(() => {
     const sync = () => {
-      const all = loadAllTemplates()
-      setTemplates(all)
-      // 若当前选中模板被删除，切回 default
-      const still = all.find(t => t.id === templateId)
-      if (still) {
-        setEditedCss(still.css)
-      } else {
-        setTemplateId('default')
-        setEditedCss(all[0]?.css ?? '')
-      }
+      fetchAllTemplates().then(all => {
+        setTemplates(all)
+        const still = all.find(t => t.id === templateId)
+        if (still) {
+          setEditedCss(still.css)
+        } else {
+          setTemplateId('default')
+          setEditedCss(all[0]?.css ?? '')
+        }
+      }).catch(() => {})
     }
     window.addEventListener('wxtemplates-updated', sync)
     return () => window.removeEventListener('wxtemplates-updated', sync)

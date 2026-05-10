@@ -8,15 +8,15 @@
  * GET    /api/cache-stats
  */
 import { Router } from 'express'
-import fs from 'fs'
 import axios from 'axios'
-import { CACHE_DIR, SERVER_AI_CONFIG } from '../config.js'
+import { SERVER_AI_CONFIG } from '../config.js'
 import {
   generateCacheKey, getCachedImage, cacheImage,
-  loadHistory, saveHistory, addToHistory,
+  loadHistory, addToHistory,
   addImageToLibrary,
   generatePrompt, generatePlaceholderCover, generateWithDallE,
 } from '../utils.js'
+import { deleteCoverHistory, clearCoverHistory, getCoverCacheCount } from '../db.js'
 
 const router = Router()
 
@@ -172,8 +172,7 @@ router.get('/cover-history', (req, res) => {
 
 router.delete('/cover-history/:id', (req, res) => {
   try {
-    const history = loadHistory().filter(item => item.id !== req.params.id)
-    saveHistory(history)
+    deleteCoverHistory(req.params.id)
     res.json({ success: true })
   } catch (error) {
     res.status(500).json({ error: error.message })
@@ -184,7 +183,7 @@ router.delete('/cover-history/:id', (req, res) => {
 
 router.delete('/cover-history', (req, res) => {
   try {
-    saveHistory([])
+    clearCoverHistory()
     res.json({ success: true })
   } catch (error) {
     res.status(500).json({ error: error.message })
@@ -196,7 +195,7 @@ router.delete('/cover-history', (req, res) => {
 router.get('/cache-stats', (req, res) => {
   try {
     const history    = loadHistory()
-    const cacheCount = fs.existsSync(CACHE_DIR) ? fs.readdirSync(CACHE_DIR).length : 0
+    const cacheCount = getCoverCacheCount()
     res.json({
       historyCount: history.length,
       cacheCount,

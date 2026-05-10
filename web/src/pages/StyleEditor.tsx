@@ -8,7 +8,7 @@ import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import {
   TemplateItem,
-  loadAllTemplates,
+  fetchAllTemplates,
   saveCustomTemplate,
   deleteCustomTemplate,
   createNewTemplate,
@@ -111,9 +111,9 @@ export default function StyleEditor() {
     document.addEventListener('mouseup', onUp)
   }, [previewWidth])
 
-  // 加载模板列表
+  // 加载模板列表（从服务端，fallback 本地）
   const reloadTemplates = useCallback(() => {
-    setTemplates(loadAllTemplates())
+    fetchAllTemplates().then(setTemplates).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -153,7 +153,7 @@ export default function StyleEditor() {
   const selectedTemplate = templates.find(t => t.id === selectedId)
 
   // 保存（自定义）
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!selectedTemplate) return
     const t: TemplateItem = {
       ...selectedTemplate,
@@ -163,14 +163,14 @@ export default function StyleEditor() {
       css: editCss,
       isBuiltin: false,
     }
-    saveCustomTemplate(t)
+    await saveCustomTemplate(t)
     setIsDirty(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
 
   // 克隆内置模板 → 新自定义模板
-  const handleClone = () => {
+  const handleClone = async () => {
     if (!selectedTemplate) return
     const t = createNewTemplate({
       name: `${selectedTemplate.name} 副本`,
@@ -178,14 +178,14 @@ export default function StyleEditor() {
       accentColor: selectedTemplate.accentColor,
       css: selectedTemplate.css,
     })
-    saveCustomTemplate(t)
+    await saveCustomTemplate(t)
     setSelectedId(t.id)
   }
 
   // 新建空模板
-  const handleNewTemplate = () => {
+  const handleNewTemplate = async () => {
     const t = createNewTemplate()
-    saveCustomTemplate(t)
+    await saveCustomTemplate(t)
     setSelectedId(t.id)
   }
 
@@ -197,8 +197,8 @@ export default function StyleEditor() {
       detail: '删除后无法恢复。',
       confirmText: '删除',
       danger: true,
-      onConfirm: () => {
-        deleteCustomTemplate(selectedId)
+      onConfirm: async () => {
+        await deleteCustomTemplate(selectedId)
         setSelectedId('default')
       },
     })

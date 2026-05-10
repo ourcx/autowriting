@@ -813,7 +813,7 @@ export const CSS_AURORA = `/* ====== 极光紫 ====== */
   background: #f8f5ff;
 }`
 
-// ── 内置模板列表 ─────────────────────────────────────────────────────────────
+// ── 内置模板列表（前端本地副本，用于离线 fallback） ──────────────────────────
 
 export const BUILTIN_TEMPLATES: TemplateItem[] = [
   { id: 'default', name: '经典蓝', desc: '清爽专业，适合大多数文章', accentColor: '#1e6bb8', css: CSS_DEFAULT, isBuiltin: true, createdAt: 0, updatedAt: 0 },
@@ -823,9 +823,72 @@ export const BUILTIN_TEMPLATES: TemplateItem[] = [
   { id: 'aurora', name: '极光紫', desc: '渐变紫调，年轻现代', accentColor: '#7c3aed', css: CSS_AURORA, isBuiltin: true, createdAt: 0, updatedAt: 0 },
 ]
 
-// ── localStorage CRUD ────────────────────────────────────────────────────────
+// ── API-based CRUD（主路径） + localStorage fallback ─────────────────────────
 
-export function loadCustomTemplates(): TemplateItem[] {
+/** 从服务端拉取所有模板（内置 + 自定义） */
+export async function fetchAllTemplates(): Promise<TemplateItem[]> {
+  try {
+    const resp = await fetch('/api/templates')
+    if (!resp.ok) throw new Error('fetch failed')
+    const data = await resp.json() as Array<Record<string, unknown>>
+    return data.map(t => ({
+      id:          String(t.id),
+      name:        String(t.name),
+      desc:        String(t.desc ?? ''),
+      accentColor: String(t.accent_color ?? t.accentColor ?? '#6366f1'),
+      css:         String(t.css ?? ''),
+      isBuiltin:   Boolean(t.is_builtin ?? t.isBuiltin),
+      createdAt:   Number(t.created_at  ?? t.createdAt  ?? 0),
+      updatedAt:   Number(t.updated_at  ?? t.updatedAt  ?? 0),
+    }))
+  } catch {
+    // fallback：内置模板 + localStorage 自定义
+    return [...BUILTIN_TEMPLATES, ...loadCustomTemplatesLocal()]
+  }
+}
+
+/** 保存自定义模板到服务端（POST 新建 / PUT 更新） */
+export async function saveCustomTemplate(t: TemplateItem): Promise<void> {
+  const payload = {
+    id:          t.id,
+    name:        t.name,
+    desc:        t.desc,
+    accentColor: t.accentColor,
+    css:         t.css,
+    isBuiltin:   false,
+  }
+  try {
+    await fetch('/api/templates', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    })
+  } catch {
+    // fallback：写 localStorage
+    const customs = loadCustomTemplatesLocal()
+    const idx = customs.findIndex(c => c.id === t.id)
+    const updated = { ...t, updatedAt: Date.now() }
+    if (idx >= 0) customs[idx] = updated
+    else customs.push(updated)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(customs))
+  }
+  window.dispatchEvent(new CustomEvent('wxtemplates-updated'))
+}
+
+/** 删除自定义模板 */
+export async function deleteCustomTemplate(id: string): Promise<void> {
+  try {
+    await fetch(`/api/templates/${id}`, { method: 'DELETE' })
+  } catch {
+    const customs = loadCustomTemplatesLocal().filter(c => c.id !== id)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(customs))
+  }
+  window.dispatchEvent(new CustomEvent('wxtemplates-updated'))
+}
+
+// ── localStorage 兼容层（仅用于 fallback） ───────────────────────────────────
+
+function loadCustomTemplatesLocal(): TemplateItem[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     return raw ? (JSON.parse(raw) as TemplateItem[]) : []
@@ -834,25 +897,14 @@ export function loadCustomTemplates(): TemplateItem[] {
   }
 }
 
+/** @deprecated 请使用 fetchAllTemplates()，此函数仅返回本地内置+localStorage */
+export function loadCustomTemplates(): TemplateItem[] {
+  return loadCustomTemplatesLocal()
+}
+
+/** @deprecated 请使用 fetchAllTemplates() */
 export function loadAllTemplates(): TemplateItem[] {
-  return [...BUILTIN_TEMPLATES, ...loadCustomTemplates()]
-}
-
-export function saveCustomTemplate(t: TemplateItem): void {
-  const customs = loadCustomTemplates()
-  const idx = customs.findIndex(c => c.id === t.id)
-  const updated = { ...t, updatedAt: Date.now() }
-  if (idx >= 0) customs[idx] = updated
-  else customs.push(updated)
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(customs))
-  // 触发 storage 事件（同页面内跨组件同步用）
-  window.dispatchEvent(new CustomEvent('wxtemplates-updated'))
-}
-
-export function deleteCustomTemplate(id: string): void {
-  const customs = loadCustomTemplates().filter(c => c.id !== id)
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(customs))
-  window.dispatchEvent(new CustomEvent('wxtemplates-updated'))
+  return [...BUILTIN_TEMPLATES, ...loadCustomTemplatesLocal()]
 }
 
 export function createNewTemplate(base?: Partial<TemplateItem>): TemplateItem {

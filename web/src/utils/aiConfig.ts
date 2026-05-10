@@ -53,6 +53,7 @@ export const DEFAULT_CONFIG: AIConfig = {
   embeddingExtraHeaders: '',
 }
 
+/** 同步读取（优先 localStorage，保证组件渲染不阻塞） */
 export function loadAIConfig(): AIConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -63,12 +64,44 @@ export function loadAIConfig(): AIConfig {
   return { ...DEFAULT_CONFIG }
 }
 
+/**
+ * 从服务端拉取 AI 配置并写入 localStorage（异步，用于初始化同步）
+ * 调用方：App 启动时 useEffect 中调用一次即可
+ */
+export async function syncAIConfigFromServer(): Promise<AIConfig | null> {
+  try {
+    const resp = await fetch('/api/settings/ai-config')
+    if (!resp.ok) return null
+    const data = await resp.json() as { value?: string | Partial<AIConfig> }
+    if (!data?.value) return null
+    // getSetting 已在服务端做了 JSON.parse，value 可能是对象也可能是字符串
+    const serverConfig: Partial<AIConfig> =
+      typeof data.value === 'string'
+        ? (JSON.parse(data.value) as Partial<AIConfig>)
+        : (data.value as Partial<AIConfig>)
+    const merged = { ...DEFAULT_CONFIG, ...serverConfig }
+    // 写回 localStorage 保证后续同步读取拿到最新值
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
+    window.dispatchEvent(new CustomEvent('ai-config-updated'))
+    return merged
+  } catch {
+    return null
+  }
+}
+
+/** 保存配置：同步写 localStorage + 异步写服务端 */
 export function saveAIConfig(config: AIConfig): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config))
-    // 通知其他组件配置已更新
     window.dispatchEvent(new CustomEvent('ai-config-updated'))
   } catch { /* ignore */ }
+
+  // 异步持久化到服务端 settings 表（setSetting 内部会做 JSON.stringify，直接传对象即可）
+  fetch('/api/settings', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ 'ai-config': config }),
+  }).catch(() => { /* 网络失败静默，localStorage 已保存 */ })
 }
 
 export function getEffectiveArticleConfig(config: AIConfig) {

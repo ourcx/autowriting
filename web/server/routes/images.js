@@ -1,5 +1,5 @@
 /**
- * 图片库路由
+ * 图片库路由（存储已迁移至 SQLite）
  * GET    /api/images
  * GET    /api/images/categories
  * GET    /api/images/tags
@@ -8,7 +8,7 @@
  * PATCH  /api/images/:id
  */
 import { Router } from 'express'
-import { loadImagesMetadata, saveImagesMetadata } from '../utils.js'
+import { listImages, deleteImage, updateImage } from '../db.js'
 
 const router = Router()
 
@@ -16,11 +16,8 @@ const router = Router()
 router.get('/', (req, res) => {
   try {
     const { category, tags } = req.query
-    const tagArray = tags ? tags.split(',') : null
-    let metadata = loadImagesMetadata()
-    if (category) metadata = metadata.filter(item => item.category === category)
-    if (tagArray?.length) metadata = metadata.filter(item => tagArray.some(t => item.tags.includes(t)))
-    res.json(metadata)
+    const tagArray = tags ? tags.split(',').filter(Boolean) : null
+    res.json(listImages({ category, tags: tagArray }))
   } catch (error) {
     res.status(500).json({ error: error.message })
   }
@@ -29,8 +26,8 @@ router.get('/', (req, res) => {
 // GET /api/images/categories
 router.get('/categories', (req, res) => {
   try {
-    const metadata = loadImagesMetadata()
-    res.json([...new Set(metadata.map(item => item.category))])
+    const images = listImages()
+    res.json([...new Set(images.map(i => i.category).filter(Boolean))])
   } catch (error) {
     res.status(500).json({ error: error.message })
   }
@@ -39,8 +36,8 @@ router.get('/categories', (req, res) => {
 // GET /api/images/tags
 router.get('/tags', (req, res) => {
   try {
-    const metadata = loadImagesMetadata()
-    res.json([...new Set(metadata.flatMap(item => item.tags))])
+    const images = listImages()
+    res.json([...new Set(images.flatMap(i => i.tags))])
   } catch (error) {
     res.status(500).json({ error: error.message })
   }
@@ -49,15 +46,15 @@ router.get('/tags', (req, res) => {
 // GET /api/images/stats
 router.get('/stats', (req, res) => {
   try {
-    const metadata  = loadImagesMetadata()
-    const categories = [...new Set(metadata.map(item => item.category))]
-    const providers  = [...new Set(metadata.map(item => item.provider))]
+    const images    = listImages()
+    const categories = [...new Set(images.map(i => i.category).filter(Boolean))]
+    const providers  = [...new Set(images.map(i => i.provider).filter(Boolean))]
     res.json({
-      totalImages: metadata.length,
-      categories:  categories.length,
-      providers:   providers.length,
-      categoryBreakdown: categories.map(cat => ({ category: cat, count: metadata.filter(i => i.category === cat).length })),
-      providerBreakdown: providers.map(prov => ({ provider: prov, count: metadata.filter(i => i.provider === prov).length })),
+      totalImages:       images.length,
+      categories:        categories.length,
+      providers:         providers.length,
+      categoryBreakdown: categories.map(cat => ({ category: cat, count: images.filter(i => i.category === cat).length })),
+      providerBreakdown: providers.map(p => ({ provider: p, count: images.filter(i => i.provider === p).length })),
     })
   } catch (error) {
     res.status(500).json({ error: error.message })
@@ -67,8 +64,7 @@ router.get('/stats', (req, res) => {
 // DELETE /api/images/:id
 router.delete('/:id', (req, res) => {
   try {
-    const filtered = loadImagesMetadata().filter(item => item.id !== req.params.id)
-    saveImagesMetadata(filtered)
+    deleteImage(req.params.id)
     res.json({ success: true })
   } catch (error) {
     res.status(500).json({ error: error.message })
@@ -78,13 +74,10 @@ router.delete('/:id', (req, res) => {
 // PATCH /api/images/:id
 router.patch('/:id', (req, res) => {
   try {
-    const metadata = loadImagesMetadata()
-    const index    = metadata.findIndex(item => item.id === req.params.id)
-    if (index === -1) return res.status(404).json({ error: '图片不存在' })
     const { title, category, tags } = req.body
-    metadata[index] = { ...metadata[index], ...{ title, category, tags }, updatedAt: new Date().toISOString() }
-    saveImagesMetadata(metadata)
-    res.json(metadata[index])
+    const updated = updateImage(req.params.id, { title, category, tags })
+    if (!updated) return res.status(404).json({ error: '图片不存在' })
+    res.json(updated)
   } catch (error) {
     res.status(500).json({ error: error.message })
   }

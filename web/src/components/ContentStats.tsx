@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   BarChart3, Clock, FileText, Eye,
   Sparkles, AlertCircle, CheckCircle2,
@@ -135,8 +135,20 @@ export default function ContentStats({ content, title, articleId, task }: Conten
   const [analyzing, setAnalyzing]   = useState(false)
   const [result, setResult]         = useState<AnalysisResult | null>(null)
   const [error, setError]           = useState<string | null>(null)
+  const [saved, setSaved]           = useState(false)
   const [tocOpen, setTocOpen]       = useState(false)
   const [checkOpen, setCheckOpen]   = useState(true)
+
+  // 挂载时加载最近一次分析结果
+  useEffect(() => {
+    if (!articleId) return
+    fetch(`/api/articles/${articleId}/analyses?limit=1`)
+      .then(r => r.ok ? r.json() : null)
+      .then((data: AnalysisResult[] | null) => {
+        if (data && data[0]) setResult(data[0])
+      })
+      .catch(() => {})
+  }, [articleId])
 
   const checks = runChecks(content, title)
 
@@ -158,6 +170,8 @@ export default function ContentStats({ content, title, articleId, task }: Conten
       const data = await resp.json()
       if (!resp.ok) throw new Error(data.error || '分析失败')
       setResult(data as AnalysisResult)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '未知错误')
     } finally {
@@ -375,16 +389,19 @@ export default function ContentStats({ content, title, articleId, task }: Conten
             AI 深度分析
             <span className="analysis-subtitle">结合写作规范 + 往期文章对比</span>
           </div>
-          <button
-            className={`btn-analyze ${analyzing ? 'loading' : ''}`}
-            onClick={handleAnalyze}
-            disabled={analyzing || content.trim().length < 100}
-          >
-            {analyzing
-              ? <><span className="spinner-sm" />分析中...</>
-              : <><Sparkles size={13} />{result ? '重新分析' : '开始分析'}</>
-            }
-          </button>
+          <div className="analysis-header-right">
+            {saved && <span className="saved-badge">已保存</span>}
+            <button
+              className={`btn-analyze ${analyzing ? 'loading' : ''}`}
+              onClick={handleAnalyze}
+              disabled={analyzing || content.trim().length < 100}
+            >
+              {analyzing
+                ? <><span className="spinner-sm" />分析中...</>
+                : <><Sparkles size={13} />{result ? '重新分析' : '开始分析'}</>
+              }
+            </button>
+          </div>
         </div>
 
         {error && (

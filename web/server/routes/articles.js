@@ -15,6 +15,7 @@ import axios from 'axios'
 import { DRAFTS_DIR, AGENTS_FILE, SERVER_AI_CONFIG } from '../config.js'
 import { ensureDir } from '../utils.js'
 import { retrieveRelevant, formatRetrievedContext } from '../rag.js'
+import { saveAnalysis, getLatestAnalysis, listAnalyses } from '../db.js'
 
 const router = Router()
 
@@ -544,11 +545,32 @@ ${article}
     const cleaned = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
     const result  = JSON.parse(cleaned)
 
-    res.json({ ...result, ragCount: similarArticles.length })
+    const fullResult = { ...result, ragCount: similarArticles.length }
+
+    // 自动保存到 SQLite
+    try { saveAnalysis(articleId, fullResult) } catch (e) { console.warn('[Analyze] 保存分析结果失败:', e.message) }
+
+    res.json(fullResult)
   } catch (error) {
     const msg = error.response?.data?.error?.message || error.message
     console.error('[Analyze] 分析失败:', msg)
     res.status(500).json({ error: msg })
+  }
+})
+
+// ── GET /api/articles/:articleId/analyses ────────────────────────────────────
+
+router.get('/:articleId/analyses', (req, res) => {
+  try {
+    const { limit = '1' } = req.query
+    if (limit === '1') {
+      const latest = getLatestAnalysis(req.params.articleId)
+      res.json(latest ? [latest] : [])
+    } else {
+      res.json(listAnalyses(req.params.articleId))
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message })
   }
 })
 

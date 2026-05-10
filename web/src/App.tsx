@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import DashboardPage from './pages/DashboardPage'
 import ArticleEditor from './pages/ArticleEditor'
@@ -6,8 +7,14 @@ import StyleEditor from './pages/StyleEditor'
 import AISettings from './pages/AISettings'
 import RagPage from './pages/RagPage'
 import ToastProvider from './components/Toast'
+import { syncAIConfigFromServer } from './utils/aiConfig'
 
 export default function App() {
+  // 启动时从服务端同步 AI 配置到 localStorage
+  useEffect(() => {
+    syncAIConfigFromServer().catch(() => {})
+  }, [])
+
   return (
     <BrowserRouter>
       <ToastProvider />
