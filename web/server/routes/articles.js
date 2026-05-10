@@ -4,6 +4,7 @@
  * GET    /api/articles/:articleId
  * POST   /api/articles/:articleId
  * POST   /api/articles/:articleId/generate
+ * POST   /api/articles/:articleId/generate/stream  ← SSE 流式
  * DELETE /api/articles/:articleId
  */
 import { Router } from 'express'
@@ -12,6 +13,7 @@ import path from 'path'
 import axios from 'axios'
 import { DRAFTS_DIR, AGENTS_FILE, SERVER_AI_CONFIG } from '../config.js'
 import { ensureDir } from '../utils.js'
+import { retrieveRelevant, formatRetrievedContext } from '../rag.js'
 
 const router = Router()
 
@@ -260,6 +262,171 @@ ${materials}
   } catch (error) {
     console.error('Error generating article:', error.response?.data || error.message)
     res.status(500).json({ error: error.response?.data?.error?.message || error.message })
+  }
+})
+
+// ── POST /api/articles/:articleId/generate/stream  (SSE) ─────────────────────
+
+router.post('/:articleId/generate/stream', async (req, res) => {
+  const { articleId } = req.params
+  const { task, materials, aiConfig } = req.body
+
+  // SSE 响应头
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
+  res.flushHeaders()
+
+  // 工具：向客户端发送一个 SSE 事件
+  const send = (event, data) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+  }
+
+  try {
+    if (!task || !materials) {
+      send('error', { message: '任务和素材不能为空' })
+      return res.end()
+    }
+
+    const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
+
+    // ── 1. RAG 检索 ───────────────────────────────────────────────────────────
+    send('status', { step: 'rag', message: '正在检索往期相关文章...' })
+    let ragContext = ''
+    let ragDocs    = []
+    try {
+      ragDocs    = await retrieveRelevant(task, { topK: 4, aiConfig: cfg })
+      ragContext  = formatRetrievedContext(ragDocs)
+      if (ragDocs.length) send('rag', { docs: ragDocs })
+    } catch (e) {
+      console.warn('[Stream] RAG 检索失败（继续生成）:', e.message)
+    }
+
+    // ── 2. 读取写作规范 ───────────────────────────────────────────────────────
+    let agentsContent = ''
+    if (fs.existsSync(AGENTS_FILE)) {
+      agentsContent = fs.readFileSync(AGENTS_FILE, 'utf-8')
+    }
+
+    const ragSection = ragContext
+      ? `\n\n# 往期相关内容参考\n${ragContext}\n`
+      : ''
+
+    const userPrompt = `你是一个专业的内容创作助手。请严格按照以下要求完成文章写作任务。
+
+# 写作规范（必须严格遵守）
+${agentsContent}
+${ragSection}
+# 本次任务要求
+${task}
+
+# 素材参考
+${materials}
+
+---
+
+现在请根据以上规范和素材，直接输出完整的文章内容（纯 Markdown 格式，不要有任何其他说明）：`
+
+    // ── 3. 构造请求参数 ───────────────────────────────────────────────────────
+    let requestHeaders = { 'Content-Type': 'application/json' }
+    let requestUrl = ''
+    let requestModel = ''
+
+    if (cfg.articleProvider === 'maas') {
+      requestUrl   = `${cfg.maasBaseUrl}/chat/completions`
+      requestModel = 'deepseek-v4-pro'
+      requestHeaders['api-key']           = cfg.maasApiKey
+      requestHeaders['x-maas-user-email'] = cfg.maasUserEmail
+      requestHeaders['x-maas-app-id']     = 'qs-api'
+    } else {
+      requestUrl   = `${cfg.articleBaseUrl}/chat/completions`
+      requestModel = cfg.articleModel || 'gpt-4o'
+      requestHeaders['Authorization'] = `Bearer ${cfg.articleApiKey}`
+    }
+
+    if (!cfg.articleApiKey && cfg.articleProvider !== 'maas') {
+      send('error', { message: '未配置 API Key，请前往「AI 配置」页面设置后重试' })
+      return res.end()
+    }
+    if (cfg.articleProvider === 'maas' && !cfg.maasApiKey) {
+      send('error', { message: '未配置 MaaS API Key，请前往「AI 配置」页面设置后重试' })
+      return res.end()
+    }
+
+    // ── 4. 流式请求上游 LLM ───────────────────────────────────────────────────
+    send('status', { step: 'generate', message: 'AI 正在生成文章...' })
+
+    const upstreamRes = await axios.post(
+      requestUrl,
+      {
+        model: requestModel,
+        messages: [
+          { role: 'system', content: '你是一个专业的内容创作助手，擅长按照规范和要求生成高质量的文章内容。' },
+          { role: 'user',   content: userPrompt },
+        ],
+        temperature: 0.9,
+        max_tokens: 4096,
+        stream: true,
+      },
+      {
+        headers: requestHeaders,
+        responseType: 'stream',
+      }
+    )
+
+    // ── 5. 逐行解析 OpenAI SSE，转发给前端 ───────────────────────────────────
+    let fullText = ''
+    let buffer   = ''
+
+    upstreamRes.data.on('data', (chunk) => {
+      buffer += chunk.toString('utf-8')
+      const lines = buffer.split('\n')
+      buffer = lines.pop() // 保留未完整的最后一行
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed || trimmed === 'data: [DONE]') continue
+        if (!trimmed.startsWith('data:')) continue
+
+        try {
+          const json    = JSON.parse(trimmed.slice(5).trim())
+          const content = json.choices?.[0]?.delta?.content
+          if (content) {
+            fullText += content
+            send('chunk', { text: content })
+          }
+        } catch {
+          // 忽略解析失败的行
+        }
+      }
+    })
+
+    upstreamRes.data.on('end', () => {
+      // ── 6. 持久化到磁盘 ───────────────────────────────────────────────────
+      try {
+        const articlePath = getArticlePath(articleId, 'article')
+        ensureDir(path.dirname(articlePath))
+        fs.writeFileSync(articlePath, fullText, 'utf-8')
+      } catch (e) {
+        console.error('[Stream] 写入文章失败:', e.message)
+      }
+
+      send('done', { article: fullText, ragCount: ragDocs.length })
+      res.end()
+    })
+
+    upstreamRes.data.on('error', (e) => {
+      console.error('[Stream] 上游流错误:', e.message)
+      send('error', { message: e.message })
+      res.end()
+    })
+
+  } catch (error) {
+    console.error('[Stream] 生成失败:', error.response?.data || error.message)
+    const msg = error.response?.data?.error?.message || error.message
+    send('error', { message: msg })
+    res.end()
   }
 })
 

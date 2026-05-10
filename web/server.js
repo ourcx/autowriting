@@ -14,6 +14,7 @@ import coversRouter   from './server/routes/covers.js'
 import imagesRouter   from './server/routes/images.js'
 import publishRouter  from './server/routes/publish.js'
 import styleRouter    from './server/routes/style.js'
+import ragRouter      from './server/routes/rag.js'
 
 const app = express()
 
@@ -28,6 +29,7 @@ app.use('/api',           coversRouter)    // covers 路由内部自带 /generat
 app.use('/api/images',    imagesRouter)
 app.use('/api/publish',   publishRouter)
 app.use('/api',           styleRouter)    // /api/generate-style
+app.use('/api/rag',       ragRouter)      // RAG 向量索引管理
 
 // ── 杂项接口 ──────────────────────────────────────────────────────────────────
 

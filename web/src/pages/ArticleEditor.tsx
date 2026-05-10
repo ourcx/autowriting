@@ -3,13 +3,14 @@ import { toast } from '../components/Toast'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Zap, Save, Edit3, Palette, Settings, AlertTriangle } from 'lucide-react'
 import { useAIReadiness, fetchServerStatus } from '../store/useConfigStore'
-import { fetchArticle, saveArticle, generateArticle, extractErrorMessage } from '../utils/apiHelpers'
+import { fetchArticle, saveArticle } from '../utils/apiHelpers'
 import CoverGenerator from '../components/CoverGenerator'
 import CoverHistory from '../components/CoverHistory'
 import BatchCoverGenerator from '../components/BatchCoverGenerator'
 import ImageLibrary from '../components/ImageLibrary'
 import MarkdownEditor from '../components/MarkdownEditor'
 import ContentStats from '../components/ContentStats'
+import GenerateModal from '../components/GenerateModal'
 import './ArticleEditor.css'
 
 interface ArticleData {
@@ -27,10 +28,10 @@ export default function ArticleEditor() {
 
   const [data, setData] = useState<ArticleData>({ task: '', materials: '', article: '', title: '' })
   const [loading, setLoading] = useState(false)
-  const [generating, setGenerating] = useState(false)
   const [generateError, setGenerateError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabId>('task')
   const [showBatchGenerator, setShowBatchGenerator] = useState(false)
+  const [showGenerateModal, setShowGenerateModal] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
 
   // 从 store 读取配置就绪状态（本地 + 服务端综合判断）
@@ -58,6 +59,9 @@ export default function ArticleEditor() {
         e.preventDefault()
         if (data.article) navigate(`/preview/${articleId}`)
       }
+      if (e.key === 'Escape') {
+        setShowGenerateModal(false)
+      }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
@@ -84,23 +88,20 @@ export default function ArticleEditor() {
     }
   }
 
-  const handleGenerate = async () => {
+  const handleGenerate = () => {
     // 前置检查：未配置 Key 时直接提示，不发请求
     if (!apiKeyReady) {
       setGenerateError('未配置 AI API Key，请先前往「AI 配置」页面填写后再生成。')
       return
     }
-    try {
-      setGenerating(true)
-      setGenerateError(null)
-      const article = await generateArticle(articleId, data.task, data.materials, aiConfig)
-      setData(prev => ({ ...prev, article }))
-      setActiveTab('article')
-    } catch (err) {
-      setGenerateError(extractErrorMessage(err, '生成失败，请检查配置后重试'))
-    } finally {
-      setGenerating(false)
-    }
+    setGenerateError(null)
+    setShowGenerateModal(true)
+  }
+
+  const handleGenerateComplete = (article: string) => {
+    setData(prev => ({ ...prev, article }))
+    setActiveTab('article')
+    toast.success('文章生成成功')
   }
 
   const articleTitle = data.title || data.article.split('\n')[0]?.replace(/^#+\s*/, '') || `文章 ${articleId}`
@@ -189,10 +190,10 @@ export default function ArticleEditor() {
           <button
             className="btn btn-primary"
             onClick={handleGenerate}
-            disabled={generating || !data.task || !data.materials}
+            disabled={!data.task || !data.materials}
           >
             <Zap size={20} />
-            {generating ? '生成中...' : '生成文章'}
+            生成文章
           </button>
           {data.article && (
             <button
@@ -316,6 +317,17 @@ export default function ArticleEditor() {
         <BatchCoverGenerator
           onClose={() => setShowBatchGenerator(false)}
           onSuccess={() => setActiveTab('history')}
+        />
+      )}
+
+      {showGenerateModal && (
+        <GenerateModal
+          articleId={articleId}
+          task={data.task}
+          materials={data.materials}
+          aiConfig={aiConfig as unknown as Record<string, unknown>}
+          onComplete={handleGenerateComplete}
+          onClose={() => setShowGenerateModal(false)}
         />
       )}
     </div>
