@@ -357,27 +357,29 @@
   overflow-y: auto;
   display: flex;
   justify-content: center;
-  padding: 32px 28px 60px;
-  background: var(--color-surface-card);
+  /* 上下 40px，左右用 clamp：最小 40px，理想 10vw，最大 120px
+     → 宽屏时两侧大留白，窄屏不挤 */
+  padding: 40px clamp(40px, 10vw, 120px) 80px;
+  background: #eee9de;   /* 比 canvas 略深一档，让白卡片浮出 */
   min-width: 0;
 }
 
 /* 滚动条 */
 .wr-preview::-webkit-scrollbar { width: 6px; }
 .wr-preview::-webkit-scrollbar-track { background: transparent; }
-.wr-preview::-webkit-scrollbar-thumb { background: var(--color-surface-strong); border-radius: 3px; }
+.wr-preview::-webkit-scrollbar-thumb { background: #c8c0b0; border-radius: 3px; }
 .wr-preview::-webkit-scrollbar-thumb:hover { background: #a4d4c5; }
 
 /* 文章卡片：纯白，带手机感边框 */
 .wr-article-card {
   width: 100%;
-  max-width: 680px;
+  max-width: 600px;       /* 接近公众号实际阅读宽度 */
   background: #ffffff;
   border-radius: 16px;
-  border: 1px solid var(--color-hairline);
+  border: 1px solid rgba(0,0,0,0.08);
   box-shadow:
     0 2px 8px rgba(0,0,0,0.06),
-    0 8px 24px rgba(0,0,0,0.08);
+    0 12px 32px rgba(0,0,0,0.1);
   overflow: hidden;
   height: fit-content;
   animation: card-in 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -398,7 +400,7 @@
 
 /* 文章标题栏 */
 .wr-article-header {
-  padding: 20px 24px 16px;
+  padding: 50px 20px;
   border-bottom: 1px solid var(--color-hairline-soft);
   display: flex;
   flex-direction: column;
@@ -422,10 +424,15 @@
   letter-spacing: -0.2px;
 }
 
-/* #wemd 由模板 CSS 控制 */
+/* #wemd 由模板 CSS 控制；用更高优先级覆盖左右 padding，上下保留模板值 */
 #wemd {
   display: block;
   min-height: 100px;
+}
+
+.wr-article-card #wemd {
+  padding-left:  60px;
+  padding-right: 60px;
 }
 
 /* ── 空状态 ──────────────────────────────────────────────────── */

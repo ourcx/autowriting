@@ -23,8 +23,8 @@ router.get('/', (req, res) => {
 router.get('/:key', (req, res) => {
   try {
     const value = getSetting(req.params.key)
-    if (value === null) return res.status(404).json({ error: '配置项不存在' })
-    res.json({ key: req.params.key, value })
+    // key 不存在时返回 200 + null，避免浏览器打印红色 404 错误
+    res.json({ key: req.params.key, value: value ?? null })
   } catch (error) {
     res.status(500).json({ error: error.message })
   }

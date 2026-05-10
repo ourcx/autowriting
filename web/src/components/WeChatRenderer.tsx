@@ -30,76 +30,119 @@ function renderMarkdown(content: string): string {
   return content?.trim() ? md.render(content) : ''
 }
 
-// ── CSS → Inline Styles（复制到公众号用）────────────────────────────────────
+// ── 复制到公众号：getComputedStyle 内联所有样式（等价于 juice，无需额外依赖）──
 
-interface ParsedRule {
-  selectors: string[]
-  props: Record<string, string>
-}
+/**
+ * WeMD 用 juice 把 CSS 文本内联到每个元素 style 属性。
+ * 我们没有 juice，但浏览器渲染后可以用 getComputedStyle 读出计算值，
+ * 手动写回 style 属性——效果完全等价，且兼容 CSS 变量、继承、权重。
+ */
 
-function parseCssRules(cssText: string): ParsedRule[] {
-  const rules: ParsedRule[] = []
-  // 跳过 @media 等 at-rules，只匹配普通规则
-  const ruleRe = /([^{@][^{]*)\{([^}]*)\}/g
-  let m: RegExpExecArray | null
-  while ((m = ruleRe.exec(cssText)) !== null) {
-    const selText = m[1].trim()
-    const propText = m[2]
-    const props: Record<string, string> = {}
-    propText.split(';').forEach(p => {
-      const ci = p.indexOf(':')
-      if (ci > 0) {
-        const k = p.slice(0, ci).trim()
-        const v = p.slice(ci + 1).trim()
-        if (k && v) props[k] = v
+// 需要内联的关键属性列表（微信编辑器会识别这些）
+// 注意：不内联 width / max-width ——这两个值是相对于隐藏容器（677px）算出的固定像素，
+// 粘到微信编辑器（~600px）后会导致子元素溢出、margin 失效。
+const INLINE_PROPS = [
+  'color', 'background-color',
+  'font-family', 'font-size', 'font-weight', 'font-style',
+  'line-height', 'letter-spacing', 'text-align', 'text-decoration',
+  'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+  'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+  'border-top-width', 'border-top-style', 'border-top-color',
+  'border-right-width', 'border-right-style', 'border-right-color',
+  'border-bottom-width', 'border-bottom-style', 'border-bottom-color',
+  'border-left-width', 'border-left-style', 'border-left-color',
+  'border-radius',
+  'display', 'word-break', 'overflow-x', 'white-space',
+] as const
+
+function inlineComputedStyles(root: HTMLElement): void {
+  const all = [root, ...Array.from(root.querySelectorAll('*'))] as HTMLElement[]
+  all.forEach(el => {
+    const computed = window.getComputedStyle(el)
+    const parts: string[] = []
+    INLINE_PROPS.forEach(prop => {
+      const val = computed.getPropertyValue(prop)
+      // 跳过空值和透明色，其他全部内联（包括 0px，防止微信覆盖默认值）
+      if (val && val !== 'rgba(0, 0, 0, 0)') {
+        parts.push(`${prop}:${val}`)
       }
     })
-    if (!Object.keys(props).length) continue
-    const selectors = selText.split(',').map(s => s.trim()).filter(Boolean)
-    rules.push({ selectors, props })
-  }
-  return rules
+    if (parts.length) el.setAttribute('style', parts.join(';'))
+  })
 }
 
-function applyInlineStylesFromCss(html: string, cssText: string): string {
-  const parser = new DOMParser()
-  const doc = parser.parseFromString(`<div id="wemd">${html}</div>`, 'text/html')
-  const root = doc.getElementById('wemd')
-  if (!root) return html
+/** 调试用：把 container innerHTML 输出到控制台，确认内联样式是否正确 */
+function debugPrintHtml(container: HTMLElement) {
+  const snippet = container.innerHTML.slice(0, 2000)
+  console.group('[WeChatRenderer] clipboard HTML preview')
+  console.log(snippet)
+  console.groupEnd()
+}
 
-  const rules = parseCssRules(cssText)
-  const allEls: Element[] = [root, ...Array.from(root.querySelectorAll('*'))]
+function copyHtmlViaExecCommand(
+  innerHtml: string,
+  css: string,
+  fontSize: number,
+): boolean {
+  const COPY_ID = `wemd-copy-${Date.now()}`
+  const scopedCss = css.replace(/#wemd\b/g, `#${COPY_ID}`)
 
-  allEls.forEach(el => {
-    const styleMap: Record<string, string> = {}
+  const container = document.createElement('div')
+  container.style.cssText = [
+    'position:fixed', 'top:0', 'left:0',
+    'width:677px', 'opacity:0', 'pointer-events:none',
+    'z-index:-9999', 'color-scheme:light', 'background:#ffffff',
+    `font-size:${fontSize}px`,
+    "font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif",
+  ].join(';')
 
-    rules.forEach(({ selectors, props }) => {
-      selectors.forEach(rawSel => {
-        // 处理根元素 #wemd
-        if (rawSel === '#wemd') {
-          if (el === root) Object.assign(styleMap, props)
-          return
-        }
-        // 处理 #wemd 后代选择器：#wemd h2 → h2，#wemd > p → p，#wemd blockquote p → blockquote p
-        if (!rawSel.startsWith('#wemd')) return
-        const childSel = rawSel
-          .replace(/^#wemd\s*>\s*/, '')  // 直接子元素
-          .replace(/^#wemd\s+/, '')       // 后代
-        if (!childSel || el === root) return
-        try {
-          if (el.matches(childSel)) Object.assign(styleMap, props)
-        } catch { /* 忽略无效选择器 */ }
-      })
+  container.innerHTML = `<style>${scopedCss}</style><section id="${COPY_ID}">${innerHtml}</section>`
+  document.body.appendChild(container)
+
+  try {
+    const section = container.querySelector(`#${COPY_ID}`) as HTMLElement | null
+    if (!section) return false
+
+    // 1. 把所有计算后样式内联到每个元素 style 属性（等价于 juice）
+    inlineComputedStyles(section)
+
+    // 2. section 根元素：白底 + 清掉左右 padding
+    //    模板 CSS 的 padding（如 24px）已被 getComputedStyle 内联进来，
+    //    但我们用子元素 margin 来实现左右缩进，所以 section 本身不需要左右 padding，
+    //    否则 padding + 子 margin 叠加会让缩进翻倍。
+    section.style.setProperty('background-color', '#ffffff')
+    section.style.setProperty('padding-left', '0px')
+    section.style.setProperty('padding-right', '0px')
+
+    // 3. 给每个直接子块加 margin-left/right，等同于容器左右 padding 60px。
+    //    用子元素 margin 而非容器 padding 的原因：
+    //    微信编辑器在粘贴时会清洗外层 <section> 的 padding，但会保留块级元素自身的 margin。
+    const SIDE = '32px'
+    ;(Array.from(section.children) as HTMLElement[]).forEach(child => {
+      child.style.setProperty('margin-left', SIDE)
+      child.style.setProperty('margin-right', SIDE)
     })
 
-    if (Object.keys(styleMap).length > 0) {
-      const existing = el.getAttribute('style') || ''
-      const newStyle = Object.entries(styleMap).map(([k, v]) => `${k}: ${v}`).join('; ')
-      el.setAttribute('style', existing ? `${existing}; ${newStyle}` : newStyle)
-    }
-  })
+    // 4. 移除 <style> 标签（样式已内联，不需要再带进剪贴板）
+    container.querySelector('style')?.remove()
 
-  return root.innerHTML
+    // 调试：确认第一个直接子元素的 margin-left 是否生效
+    debugPrintHtml(container)
+
+    // 5. selectNodeContents(container)：container 里现在只有 section，
+    //    所以 section 元素本身（含所有 style 属性）会进入剪贴板
+    const sel = window.getSelection()
+    if (!sel) return false
+    const range = document.createRange()
+    range.selectNodeContents(container)
+    sel.removeAllRanges()
+    sel.addRange(range)
+    const ok = document.execCommand('copy')
+    sel.removeAllRanges()
+    return ok
+  } finally {
+    document.body.removeChild(container)
+  }
 }
 
 // ── 主组件 ──────────────────────────────────────────────────────────────────
@@ -199,31 +242,13 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
     setEditedCss(t.css)
   }
 
-  const handleCopy = useCallback(async () => {
-    if (!previewRef.current) return
-    try {
-      const inlineHtml = applyInlineStylesFromCss(html, editedCss)
-      const wrapperHtml = `<div style="font-size:${fontSize}px;word-break:break-word;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;">${inlineHtml}</div>`
-
-      if (typeof ClipboardItem !== 'undefined') {
-        const blob = new Blob([wrapperHtml], { type: 'text/html' })
-        await navigator.clipboard.write([new ClipboardItem({ 'text/html': blob })])
-      } else {
-        const el = previewRef.current
-        const sel = window.getSelection()
-        if (sel) {
-          const range = document.createRange()
-          range.selectNodeContents(el)
-          sel.removeAllRanges()
-          sel.addRange(range)
-          document.execCommand('copy')
-          sel.removeAllRanges()
-        }
-      }
+  const handleCopy = useCallback(() => {
+    // padding 和 background 已经在 copyHtmlViaExecCommand 内部用 inline style 直接设置
+    const ok = copyHtmlViaExecCommand(html, editedCss, fontSize)
+    if (ok) {
       setCopied(true)
       setTimeout(() => setCopied(false), 2500)
-    } catch (err) {
-      console.error('复制失败', err)
+    } else {
       toast.warn('复制失败，请手动全选 (Ctrl+A) 后复制')
     }
   }, [html, editedCss, fontSize])

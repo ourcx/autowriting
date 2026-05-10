@@ -5,7 +5,7 @@
  */
 
 const CSS_DEFAULT = `/* ====== 经典蓝 ====== */
-#wemd { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; color: #333333; line-height: 1.75; word-break: break-word; padding: 24px 24px 40px; }
+#wemd { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; color: #333333; line-height: 1.75; word-break: break-word; padding: 24px 40px 40px; }
 #wemd p { margin: 16px 0; line-height: 1.75; text-align: justify; }
 #wemd h1 { margin: 32px 0 20px; text-align: center; font-size: 22px; font-weight: bold; color: #111111; padding-bottom: 14px; border-bottom: 2px solid #e5e7eb; }
 #wemd h2 { margin: 28px 0 14px; font-size: 18px; font-weight: bold; color: #1e6bb8; padding-left: 14px; position: relative; }
@@ -31,7 +31,7 @@ const CSS_DEFAULT = `/* ====== 经典蓝 ====== */
 #wemd tr:nth-child(even) td { background: #f8faff; }`
 
 const CSS_MORANDI = `/* ====== 莫兰迪 ====== */
-#wemd { font-family: "Georgia", "PingFang SC", "Microsoft YaHei", serif; color: #3A4D39; line-height: 2.0; word-break: break-word; padding: 24px 24px 40px; }
+#wemd { font-family: "Georgia", "PingFang SC", "Microsoft YaHei", serif; color: #3A4D39; line-height: 2.0; word-break: break-word; padding: 24px 40px 40px; }
 #wemd p { margin: 16px 0; line-height: 2.0; text-align: justify; letter-spacing: 0.3px; }
 #wemd h1 { margin: 32px 0 20px; text-align: center; font-size: 22px; font-weight: normal; color: #1A261D; letter-spacing: 3px; padding-bottom: 12px; position: relative; }
 #wemd h1::after { content: ""; display: block; position: absolute; bottom: 0; left: 50%; width: 40px; height: 2px; background: #4F6F52; margin-left: -20px; }
@@ -52,7 +52,7 @@ const CSS_MORANDI = `/* ====== 莫兰迪 ====== */
 #wemd tr:nth-child(even) td { background: #f4f8f4; }`
 
 const CSS_MINIMAL = `/* ====== 极简黑 ====== */
-#wemd { font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; color: #1a1a1a; line-height: 1.8; word-break: break-word; padding: 24px 24px 40px; }
+#wemd { font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; color: #1a1a1a; line-height: 1.8; word-break: break-word; padding: 24px 40px 40px; }
 #wemd p { margin: 16px 0; line-height: 1.8; text-align: justify; }
 #wemd h1 { margin: 32px 0 20px; text-align: center; font-size: 24px; font-weight: 900; color: #000000; letter-spacing: -0.5px; padding-bottom: 14px; border-bottom: 3px solid #000000; }
 #wemd h2 { margin: 28px 0 14px; font-size: 18px; font-weight: 800; color: #000000; padding-bottom: 8px; border-bottom: 1px solid #cccccc; position: relative; }
@@ -73,7 +73,7 @@ const CSS_MINIMAL = `/* ====== 极简黑 ====== */
 #wemd tr:nth-child(even) td { background: #f5f5f5; }`
 
 const CSS_SUNSET = `/* ====== 夕阳橙 ====== */
-#wemd { font-family: "Georgia", "STSong", "SimSun", serif; color: #3d2b1f; line-height: 1.9; word-break: break-word; padding: 24px 24px 40px; }
+#wemd { font-family: "Georgia", "STSong", "SimSun", serif; color: #3d2b1f; line-height: 1.9; word-break: break-word; padding: 24px 40px 40px; }
 #wemd p { margin: 16px 0; line-height: 1.9; text-align: justify; letter-spacing: 0.2px; }
 #wemd h1 { margin: 32px 0 20px; text-align: center; font-size: 22px; font-weight: bold; color: #6b1d0a; letter-spacing: 2px; padding-bottom: 14px; position: relative; }
 #wemd h1::after { content: ""; display: block; position: absolute; bottom: 0; left: 50%; width: 60px; height: 2px; background: #c8602a; margin-left: -30px; }
@@ -94,7 +94,7 @@ const CSS_SUNSET = `/* ====== 夕阳橙 ====== */
 #wemd tr:nth-child(even) td { background: #fdf6ee; }`
 
 const CSS_AURORA = `/* ====== 极光紫 ====== */
-#wemd { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; color: #2d2a3e; line-height: 1.8; word-break: break-word; padding: 24px 24px 40px; }
+#wemd { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; color: #2d2a3e; line-height: 1.8; word-break: break-word; padding: 24px 40px 40px; }
 #wemd p { margin: 16px 0; line-height: 1.8; text-align: justify; }
 #wemd h1 { margin: 32px 0 20px; text-align: center; font-size: 22px; font-weight: bold; color: #1a0d3b; padding-bottom: 14px; position: relative; }
 #wemd h1::after { content: ""; display: block; position: absolute; bottom: 0; left: 50%; width: 48px; height: 3px; background: #7c3aed; margin-left: -24px; border-radius: 2px; }

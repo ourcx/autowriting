@@ -72,8 +72,8 @@ export async function syncAIConfigFromServer(): Promise<AIConfig | null> {
   try {
     const resp = await fetch('/api/settings/ai-config')
     if (!resp.ok) return null
-    const data = await resp.json() as { value?: string | Partial<AIConfig> }
-    if (!data?.value) return null
+    const data = await resp.json() as { value?: string | Partial<AIConfig> | null }
+    if (!data?.value) return null  // key 不存在时 value 为 null，直接降级到 localStorage
     // getSetting 已在服务端做了 JSON.parse，value 可能是对象也可能是字符串
     const serverConfig: Partial<AIConfig> =
       typeof data.value === 'string'
