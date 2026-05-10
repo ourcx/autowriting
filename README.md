@@ -20,9 +20,8 @@
 
 # 目前的页面
 
+
 <img width="1501" height="803" alt="image" src="https://github.com/user-attachments/assets/61accced-c751-461a-8d42-7f7f2a3bf528" />
-<img width="1496" height="801" alt="image" src="https://github.com/user-attachments/assets/66b59c5b-73ed-4ddc-bda6-8f380f3608e1" />
-<img width="1499" height="797" alt="image" src="https://github.com/user-attachments/assets/153a2b30-221d-457d-977b-a551e20bcf04" />
 ai 配置  
 <img width="1511" height="884" alt="2b5fce749cc9e327775d7796f74ddb78" src="https://github.com/user-attachments/assets/f5899928-8713-4158-9f34-fa91c382968c" />
 公众号预览  
