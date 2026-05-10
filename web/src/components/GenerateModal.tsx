@@ -1,21 +1,21 @@
 /**
- * GenerateModal — 流式生成弹窗
+ * GenerateModal — 流式生成弹窗（Clay 设计风格）
  *
  * 三阶段 UI：
- *   1. rag      — 检索往期文章（spinner + 来源列表）
+ *   1. rag      — 检索往期文章（卡片列表，始终可见）
  *   2. generate — AI 流式输出（实时文本滚动）
- *   3. done     — 完成（显示应用 / 关闭按钮）
+ *   3. done     — 完成（应用按钮）
  */
 import { useEffect, useRef, useState } from 'react'
-import { X, ChevronDown, ChevronRight, CheckCircle, AlertCircle } from 'lucide-react'
+import { X, CheckCircle, AlertCircle, FileText, Layers, BookOpen } from 'lucide-react'
 import './GenerateModal.css'
 
 interface RagDoc {
-  content: string
-  source:  string
-  type:    string
-  dir:     string
-  score:   number
+  content:  string
+  source:   string
+  type:     string
+  dir:      string
+  score:    number
 }
 
 type Phase = 'rag' | 'generate' | 'done' | 'error'
@@ -29,20 +29,25 @@ interface Props {
   onClose:    () => void
 }
 
+const TYPE_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+  article:  { label: '往期文章', color: 'peach',   icon: <FileText  size={13} /> },
+  task:     { label: '任务参考', color: 'lavender', icon: <Layers    size={13} /> },
+  materials:{ label: '素材参考', color: 'ochre',   icon: <BookOpen  size={13} /> },
+  task_sub: { label: '任务参考', color: 'lavender', icon: <Layers    size={13} /> },
+}
+
 export default function GenerateModal({ articleId, task, materials, aiConfig, onComplete, onClose }: Props) {
   const [phase,      setPhase]      = useState<Phase>('rag')
   const [statusMsg,  setStatusMsg]  = useState('正在检索往期相关文章...')
   const [ragDocs,    setRagDocs]    = useState<RagDoc[]>([])
-  const [ragOpen,    setRagOpen]    = useState(false)
   const [streamText, setStreamText] = useState('')
   const [errorMsg,   setErrorMsg]   = useState('')
   const [ragCount,   setRagCount]   = useState(0)
 
-  const textRef  = useRef<HTMLDivElement>(null)
-  const fullText = useRef('')
-  const abortRef = useRef<AbortController | null>(null)
+  const streamRef = useRef<HTMLDivElement>(null)
+  const fullText  = useRef('')
+  const abortRef  = useRef<AbortController | null>(null)
 
-  // 挂载即开始流式请求
   useEffect(() => {
     const ctrl = new AbortController()
     abortRef.current = ctrl
@@ -52,8 +57,8 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
 
   // 自动滚动到底部
   useEffect(() => {
-    if (textRef.current) {
-      textRef.current.scrollTop = textRef.current.scrollHeight
+    if (streamRef.current) {
+      streamRef.current.scrollTop = streamRef.current.scrollHeight
     }
   }, [streamText])
 
@@ -66,45 +71,30 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
         signal,
       })
 
-      if (!resp.ok || !resp.body) {
-        throw new Error(`HTTP ${resp.status}`)
-      }
+      if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`)
 
       const reader  = resp.body.getReader()
       const decoder = new TextDecoder('utf-8')
-
-      // 用 event+data 配对解析标准 SSE
-      let lineBuf  = ''
-      let curEvent = ''
+      let   lineBuf  = ''
+      let   curEvent = ''
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
 
         lineBuf += decoder.decode(value, { stream: true })
-
-        // 按行处理
         const lines = lineBuf.split('\n')
-        lineBuf = lines.pop() ?? ''  // 末尾不完整行留到下次
+        lineBuf = lines.pop() ?? ''
 
         for (const line of lines) {
           const trimmed = line.trim()
-          if (!trimmed) {
-            curEvent = ''  // 空行是 SSE 块分隔符，重置 event
-            continue
-          }
-          if (trimmed.startsWith('event:')) {
-            curEvent = trimmed.slice(6).trim()
-            continue
-          }
+          if (!trimmed) { curEvent = ''; continue }
+          if (trimmed.startsWith('event:')) { curEvent = trimmed.slice(6).trim(); continue }
           if (trimmed.startsWith('data:')) {
-            const raw = trimmed.slice(5).trim()
             try {
-              const payload = JSON.parse(raw) as Record<string, unknown>
+              const payload = JSON.parse(trimmed.slice(5).trim()) as Record<string, unknown>
               dispatch(curEvent || inferEvent(payload), payload)
-            } catch {
-              // 忽略非 JSON
-            }
+            } catch { /* ignore */ }
           }
         }
       }
@@ -115,17 +105,15 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
     }
   }
 
-  /** 根据 payload 字段推断事件类型（兜底） */
   function inferEvent(p: Record<string, unknown>): string {
-    if (p.step)                       return 'status'
-    if (p.docs !== undefined)         return 'rag'
-    if (p.text !== undefined)         return 'chunk'
-    if (p.article !== undefined)      return 'done'
-    if (p.message !== undefined)      return 'error'
+    if (p.step !== undefined)    return 'status'
+    if (p.docs !== undefined)    return 'rag'
+    if (p.text !== undefined)    return 'chunk'
+    if (p.article !== undefined) return 'done'
+    if (p.message !== undefined) return 'error'
     return ''
   }
 
-  /** 派发 SSE 事件到状态更新 */
   function dispatch(event: string, payload: Record<string, unknown>) {
     switch (event) {
       case 'status':
@@ -152,25 +140,11 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
     }
   }
 
-  const handleApply = () => {
-    onComplete(fullText.current)
-    onClose()
-  }
-
-  const handleClose = () => {
-    abortRef.current?.abort()
-    onClose()
-  }
-
-  const typeLabel: Record<string, string> = {
-    article:  '往期文章',
-    task:     '任务参考',
-    materials:'素材',
-    task_sub: '任务参考',
-  }
+  const handleApply = () => { onComplete(fullText.current); onClose() }
+  const handleClose = () => { abortRef.current?.abort(); onClose() }
 
   return (
-    <div className="gm-overlay" onClick={(e) => { if (e.target === e.currentTarget) handleClose() }}>
+    <div className="gm-overlay" onClick={e => { if (e.target === e.currentTarget) handleClose() }}>
       <div className="gm-modal">
 
         {/* ── Header ── */}
@@ -178,80 +152,109 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
           <div className="gm-header-left">
             <span className="gm-title">AI 生成文章</span>
             {phase !== 'error' && (
-              <span className={`gm-badge gm-badge-${phase}`}>
+              <span className={`gm-pill gm-pill-${phase}`}>
                 {phase === 'rag'      && '检索中'}
                 {phase === 'generate' && '生成中'}
                 {phase === 'done'     && '已完成'}
               </span>
             )}
           </div>
-          <button className="gm-close" onClick={handleClose} title="关闭">
+          <button className="gm-icon-btn" onClick={handleClose} title="关闭">
             <X size={18} />
           </button>
         </div>
 
-        {/* ── Status bar ── */}
-        {(phase === 'rag' || phase === 'generate') && (
-          <div className="gm-status">
-            <span className="gm-spinner" />
-            <span>{statusMsg}</span>
-          </div>
-        )}
-        {phase === 'done' && (
-          <div className="gm-status gm-status-done">
-            <CheckCircle size={15} />
-            <span>生成完成{ragCount > 0 ? `，参考了 ${ragCount} 段往期内容` : ''}</span>
-          </div>
-        )}
-        {phase === 'error' && (
-          <div className="gm-status gm-status-error">
-            <AlertCircle size={15} />
-            <span>{errorMsg}</span>
-          </div>
-        )}
+        <div className="gm-body">
 
-        {/* ── RAG 来源（可折叠）── */}
-        {ragDocs.length > 0 && (
-          <div className="gm-rag">
-            <button className="gm-rag-toggle" onClick={() => setRagOpen(v => !v)}>
-              {ragOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              召回 {ragDocs.length} 段往期内容作为参考
-            </button>
-            {ragOpen && (
+          {/* ── 左栏：RAG 召回区 ── */}
+          <div className="gm-left">
+            <div className="gm-section-label">
+              参考往期内容
+              {ragDocs.length > 0 && <span className="gm-count">{ragDocs.length}</span>}
+            </div>
+
+            {/* 检索中状态 */}
+            {phase === 'rag' && ragDocs.length === 0 && (
+              <div className="gm-searching">
+                <span className="gm-spinner" />
+                <span>正在向量检索...</span>
+              </div>
+            )}
+
+            {/* 无召回结果 */}
+            {phase !== 'rag' && ragDocs.length === 0 && (
+              <div className="gm-no-rag">
+                未找到相关往期文章
+                <span>（可先建立向量索引）</span>
+              </div>
+            )}
+
+            {/* 召回卡片列表 */}
+            {ragDocs.length > 0 && (
               <div className="gm-rag-list">
-                {ragDocs.map((d, i) => (
-                  <div key={i} className="gm-rag-item">
-                    <div className="gm-rag-meta">
-                      <span className="gm-rag-type">{typeLabel[d.type] || d.type}</span>
-                      <span className="gm-rag-dir">{d.dir}</span>
-                      <span className="gm-rag-score">相似度 {(1 - d.score).toFixed(2)}</span>
+                {ragDocs.map((d, i) => {
+                  const cfg = TYPE_CONFIG[d.type] || { label: d.type, color: 'cream', icon: <FileText size={13} /> }
+                  return (
+                    <div key={i} className={`gm-rag-card gm-rag-card-${cfg.color}`}>
+                      <div className="gm-rag-card-header">
+                        <span className="gm-rag-type-badge">
+                          {cfg.icon}
+                          {cfg.label}
+                        </span>
+                        <span className="gm-rag-dir">{d.dir}</span>
+                        <span className="gm-rag-sim">{Math.round((1 - d.score) * 100)}%</span>
+                      </div>
+                      <p className="gm-rag-snippet">{d.content.slice(0, 100)}…</p>
                     </div>
-                    <p className="gm-rag-content">{d.content.slice(0, 120)}…</p>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
-        )}
 
-        {/* ── 流式输出区 ── */}
-        <div className="gm-stream" ref={textRef}>
-          {streamText
-            ? <pre className="gm-stream-text">{streamText}</pre>
-            : phase !== 'error' && <p className="gm-stream-placeholder">等待 AI 输出...</p>
-          }
+          {/* ── 右栏：流式输出区 ── */}
+          <div className="gm-right">
+            <div className="gm-section-label">
+              生成内容
+              {(phase === 'rag' || phase === 'generate') && <span className="gm-spinner gm-spinner-sm" />}
+              {phase === 'done'  && <CheckCircle size={13} className="gm-icon-ok" />}
+              {phase === 'error' && <AlertCircle size={13} className="gm-icon-err" />}
+            </div>
+
+            <div className="gm-stream" ref={streamRef}>
+              {phase === 'error' ? (
+                <div className="gm-error-msg">
+                  <AlertCircle size={16} />
+                  {errorMsg}
+                </div>
+              ) : streamText ? (
+                <pre className="gm-stream-text">{streamText}</pre>
+              ) : (
+                <div className="gm-stream-empty">
+                  <span className="gm-spinner" />
+                  <p>{statusMsg}</p>
+                </div>
+              )}
+            </div>
+          </div>
+
         </div>
 
         {/* ── Footer ── */}
         <div className="gm-footer">
-          <button className="gm-btn gm-btn-ghost" onClick={handleClose}>
-            {phase === 'done' ? '关闭' : '取消'}
-          </button>
-          {phase === 'done' && (
-            <button className="gm-btn gm-btn-primary" onClick={handleApply}>
-              应用到编辑器
-            </button>
+          {phase === 'done' && ragCount > 0 && (
+            <span className="gm-footer-note">参考了 {ragCount} 段往期内容</span>
           )}
+          <div className="gm-footer-actions">
+            <button className="gm-btn-secondary" onClick={handleClose}>
+              {phase === 'done' ? '关闭' : '取消'}
+            </button>
+            {phase === 'done' && (
+              <button className="gm-btn-primary" onClick={handleApply}>
+                应用到编辑器
+              </button>
+            )}
+          </div>
         </div>
 
       </div>

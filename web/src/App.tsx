@@ -4,6 +4,7 @@ import ArticleEditor from './pages/ArticleEditor'
 import WeChatPreview from './pages/WeChatPreview'
 import StyleEditor from './pages/StyleEditor'
 import AISettings from './pages/AISettings'
+import RagPage from './pages/RagPage'
 import ToastProvider from './components/Toast'
 
 export default function App() {
@@ -16,6 +17,7 @@ export default function App() {
         <Route path="/preview/:articleId" element={<WeChatPreview />} />
         <Route path="/styles" element={<StyleEditor />} />
         <Route path="/settings" element={<AISettings />} />
+        <Route path="/rag" element={<RagPage />} />
         {/* 404 兜底：重定向回首页 */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings, Palette, AlertTriangle, PenLine } from 'lucide-react'
+import { Settings, Palette, AlertTriangle, PenLine, Database } from 'lucide-react'
 import Dashboard from './Dashboard'
 import { useAIReadiness, fetchServerStatus } from '../store/useConfigStore'
 import './DashboardPage.css'
@@ -32,6 +32,10 @@ export default function DashboardPage() {
               配置 AI Key
             </button>
           )}
+          <button className="dp-nav-btn" onClick={() => navigate('/rag')}>
+            <Database size={14} />
+            知识库
+          </button>
           <button className="dp-nav-btn" onClick={() => navigate('/settings')}>
             <Settings size={14} />
             AI 配置
