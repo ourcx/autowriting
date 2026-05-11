@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { toast } from './Toast'
-import { Copy, Check, Minus, Plus, ExternalLink } from 'lucide-react'
+import { Copy, Check, Minus, Plus, ExternalLink, Send, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
@@ -43,17 +43,31 @@ function renderMarkdown(content: string): string {
 // 粘到微信编辑器（~600px）后会导致子元素溢出、margin 失效。
 const INLINE_PROPS = [
   'color', 'background-color',
-  'font-family', 'font-size', 'font-weight', 'font-style',
+  'font-size', 'font-weight', 'font-style',
   'line-height', 'letter-spacing', 'text-align', 'text-decoration',
   'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
   'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
   'border-top-width', 'border-top-style', 'border-top-color',
-  'border-right-width', 'border-right-style', 'border-right-color',
-  'border-bottom-width', 'border-bottom-style', 'border-bottom-color',
   'border-left-width', 'border-left-style', 'border-left-color',
   'border-radius',
-  'display', 'word-break', 'overflow-x', 'white-space',
+  'display',
 ] as const
+
+// 常见默认值集合，命中则跳过内联（减少 HTML 体积）
+const DEFAULT_VALUES = new Set([
+  'rgba(0, 0, 0, 0)',   // transparent
+  'normal',             // font-weight / font-style / line-height / letter-spacing
+  'none',               // text-decoration / display:none 排除
+  '0px',                // margin / padding / border-width
+  'medium',             // border-width 默认
+  'currentcolor',       // border-color 默认
+  'auto',               // margin auto
+  'visible',            // overflow
+  'nowrap',             // white-space（仅当与父级一致时跳过）
+  'initial',
+  'inherit',
+  'start',              // text-align start = left in LTR，微信默认
+])
 
 function inlineComputedStyles(root: HTMLElement): void {
   const all = [root, ...Array.from(root.querySelectorAll('*'))] as HTMLElement[]
@@ -61,11 +75,17 @@ function inlineComputedStyles(root: HTMLElement): void {
     const computed = window.getComputedStyle(el)
     const parts: string[] = []
     INLINE_PROPS.forEach(prop => {
-      const val = computed.getPropertyValue(prop)
-      // 跳过空值和透明色，其他全部内联（包括 0px，防止微信覆盖默认值）
-      if (val && val !== 'rgba(0, 0, 0, 0)') {
-        parts.push(`${prop}:${val}`)
-      }
+      const val = computed.getPropertyValue(prop)?.trim()
+      if (!val) return
+      if (DEFAULT_VALUES.has(val)) return
+      // 跳过透明背景
+      if (prop === 'background-color' && val === 'rgba(0, 0, 0, 0)') return
+      // border-style 为 none 时跳过 border-width/color
+      if (
+        (prop === 'border-top-width' || prop === 'border-left-width') &&
+        val === '0px'
+      ) return
+      parts.push(`${prop}:${val}`)
     })
     if (parts.length) el.setAttribute('style', parts.join(';'))
   })
@@ -77,6 +97,41 @@ function debugPrintHtml(container: HTMLElement) {
   console.group('[WeChatRenderer] clipboard HTML preview')
   console.log(snippet)
   console.groupEnd()
+}
+
+/**
+ * 构建内联样式的 HTML 字符串，用于推送到微信草稿箱。
+ * 微信草稿箱内容不支持 <style> 标签，必须把样式内联到每个元素。
+ */
+function buildInlinedHtml(innerHtml: string, css: string, fontSize: number): string {
+  const COPY_ID = `wemd-draft-${Date.now()}`
+  const scopedCss = css.replace(/#wemd\b/g, `#${COPY_ID}`)
+
+  const container = document.createElement('div')
+  container.style.cssText = [
+    'position:fixed', 'top:0', 'left:0',
+    'width:677px', 'opacity:0', 'pointer-events:none',
+    'z-index:-9999', 'color-scheme:light', 'background:#ffffff',
+    `font-size:${fontSize}px`,
+    "font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif",
+  ].join(';')
+
+  container.innerHTML = `<style>${scopedCss}</style><section id="${COPY_ID}">${innerHtml}</section>`
+  document.body.appendChild(container)
+
+  try {
+    const section = container.querySelector(`#${COPY_ID}`) as HTMLElement | null
+    if (!section) return innerHtml   // fallback：原始 html
+
+    inlineComputedStyles(section)
+
+    // 移除 <style>
+    container.querySelector('style')?.remove()
+
+    return section.outerHTML
+  } finally {
+    document.body.removeChild(container)
+  }
 }
 
 function copyHtmlViaExecCommand(
@@ -158,6 +213,11 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
   const [copied, setCopied] = useState(false)
   const previewRef = useRef<HTMLDivElement>(null)
 
+  // 推送草稿状态
+  const [wxBound, setWxBound]       = useState(false)
+  const [pushing, setPushing]       = useState(false)
+  const [pushDone, setPushDone]     = useState(false)
+
   // 拖拽分栏宽度
   const [sidebarWidth, setSidebarWidth] = useState(260)
   const resizerRef = useRef<HTMLDivElement>(null)
@@ -194,7 +254,14 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
     document.addEventListener('mouseup', onMouseUp)
   }, [sidebarWidth])
 
-  // 首次挂载：从服务端拉取模板（覆盖 BUILTIN_TEMPLATES 初始值）
+  // 首次挂载：检查公众号绑定状态 + 拉取模板
+  useEffect(() => {
+    fetch('/api/wechat/status')
+      .then(r => r.json())
+      .then(d => setWxBound(d.bound))
+      .catch(() => {})
+  }, [])
+
   useEffect(() => {
     fetchAllTemplates().then(all => {
       setTemplates(all)
@@ -253,6 +320,72 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
     }
   }, [html, editedCss, fontSize])
 
+  // 从 HTML 字符串提取第一张图片的 src
+  function extractFirstImageSrc(htmlStr: string): string | null {
+    const match = htmlStr.match(/<img[^>]+src=["']([^"']+)["']/i)
+    return match ? match[1] : null
+  }
+
+  // 推送草稿到公众号草稿箱
+  const handlePushDraft = useCallback(async () => {
+    if (!title?.trim() || !html?.trim()) {
+      toast.warn('标题或内容为空，无法推送草稿')
+      return
+    }
+    setPushing(true)
+    try {
+      // 用内联样式版本作为草稿内容（微信支持 HTML，但不支持 <style>，需内联）
+      const inlinedHtml = buildInlinedHtml(html, editedCss, fontSize)
+      const digest = content?.replace(/\s+/g, ' ').slice(0, 120) ?? ''
+
+      // 简单估算 UTF-8 字节数（中文 3 字节，ASCII 1 字节）
+      const byteLen = new Blob([inlinedHtml]).size
+      if (byteLen > 600_000) {
+        toast.warn(`内联样式后 HTML 约 ${Math.round(byteLen / 1024)}KB，可能超出微信限制，仍尝试推送…`)
+      }
+
+      // 尝试提取封面图并上传为微信永久素材（draft/add 需要 thumb_media_id）
+      let thumb_media_id: string | undefined
+      const firstImgSrc = extractFirstImageSrc(html)
+      if (firstImgSrc) {
+        try {
+          const upR = await fetch('/api/wechat/upload-thumb', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: firstImgSrc }),
+          })
+          const upD = await upR.json()
+          if (upR.ok && upD.media_id) {
+            thumb_media_id = upD.media_id
+          } else {
+            // 封面上传失败时给 warn，但继续尝试推送（不中断）
+            toast.warn(`封面图上传失败，将尝试无封面推送：${upD.error ?? ''}`)
+          }
+        } catch {
+          toast.warn('封面图上传出错，将尝试无封面推送')
+        }
+      }
+
+      const r = await fetch('/api/wechat/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title.trim(), content: inlinedHtml, digest, thumb_media_id }),
+      })
+      const d = await r.json()
+      if (!r.ok) {
+        toast.error(d.error ?? '推送失败')
+        return
+      }
+      setPushDone(true)
+      toast.success('已推送到草稿箱！在微信公众平台草稿箱中可见')
+      setTimeout(() => setPushDone(false), 4000)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '推送失败')
+    } finally {
+      setPushing(false)
+    }
+  }, [html, editedCss, fontSize, title, content])
+
   // 空状态
   if (!content?.trim()) {
     return (
@@ -302,6 +435,24 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
             {copied ? <Check size={15} /> : <Copy size={15} />}
             {copied ? '已复制！' : '复制内容'}
           </button>
+
+          {/* 推送草稿按钮：已绑定公众号才显示 */}
+          {wxBound && (
+            <button
+              className={`wr-push-btn ${pushDone ? 'success' : ''}`}
+              onClick={handlePushDraft}
+              disabled={pushing || pushDone}
+              title="将文章以 HTML 格式推送到公众号草稿箱"
+            >
+              {pushing
+                ? <Loader2 size={15} className="wr-spin" />
+                : pushDone
+                  ? <Check size={15} />
+                  : <Send size={15} />
+              }
+              {pushing ? '推送中...' : pushDone ? '已推送！' : '推送草稿'}
+            </button>
+          )}
         </div>
       </div>
 

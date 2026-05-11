@@ -580,3 +580,216 @@
 
 .as-test-msg--ok  { color: #15803d; }
 .as-test-msg--err { color: #dc2626; }
+
+/* ── 微信公众号绑定 Panel ────────────────────────────────────────── */
+
+/* 已绑定：头像 + 信息行 */
+.as-wx-bound-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.as-wx-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--color-surface-soft, #faf5e8);
+  border: 1px solid var(--color-hairline, #e5e5e5);
+}
+
+.as-wx-avatar--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-muted, #6a6a6a);
+}
+
+.as-wx-bound-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.as-wx-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-ink, #0a0a0a);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.as-wx-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.as-wx-type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.as-wx-type-badge--service {
+  background: var(--color-brand-teal, #1a3a3a);
+  color: #fff;
+}
+
+.as-wx-type-badge--subscription {
+  background: var(--color-surface-strong, #ebe6d6);
+  color: var(--color-body, #3a3a3a);
+}
+
+.as-wx-principal {
+  font-size: 12px;
+  color: var(--color-muted, #6a6a6a);
+}
+
+.as-wx-loading {
+  font-size: 13px;
+  color: var(--color-muted, #6a6a6a);
+}
+
+/* 已绑定右侧操作按钮 */
+.as-wx-bound-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.as-btn-ghost {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--color-hairline, #e5e5e5);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-muted, #6a6a6a);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.as-btn-ghost:hover:not(:disabled) {
+  background: var(--color-surface-soft, #faf5e8);
+  border-color: var(--color-surface-strong, #ebe6d6);
+  color: var(--color-ink, #0a0a0a);
+}
+
+.as-btn-ghost:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.as-btn-danger-ghost {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  background: transparent;
+  color: #dc2626;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: background 0.12s;
+}
+
+.as-btn-danger-ghost:hover {
+  background: #fff2f2;
+}
+
+/* 数据摘要行 */
+.as-wx-stats {
+  padding: 14px 0 4px;
+  border-top: 1px solid var(--color-hairline, #e5e5e5);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.as-wx-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+  color: var(--color-body, #3a3a3a);
+}
+
+.as-wx-stat-value {
+  font-weight: 700;
+  color: var(--color-ink, #0a0a0a);
+  font-size: 15px;
+}
+
+.as-wx-stat-label {
+  color: var(--color-muted, #6a6a6a);
+  font-size: 13px;
+}
+
+.as-wx-limited-tip {
+  font-size: 12px;
+  color: var(--color-muted, #6a6a6a);
+  margin: 0;
+  padding: 8px 12px;
+  background: var(--color-surface-soft, #faf5e8);
+  border-radius: 8px;
+  line-height: 1.55;
+}
+
+/* AppID 展示行 */
+.as-wx-appid-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-hairline, #e5e5e5);
+  margin-top: 12px;
+}
+
+.as-wx-appid {
+  font-family: 'Space Mono', 'Menlo', monospace;
+  font-size: 12px;
+  color: var(--color-body, #3a3a3a);
+  background: var(--color-surface-card, #f5f0e0);
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+/* 绑定失败错误提示 */
+.as-wx-bind-err {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 10px 12px;
+  background: #fff2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #dc2626;
+  line-height: 1.5;
+}
+
+/* 刷新按钮旋转动画 */
+.as-spin {
+  animation: as-rotate 0.8s linear infinite;
+}
+
+@keyframes as-rotate { to { transform: rotate(360deg); } }
+
+/* as-btn-test 补充 flex 用于包含图标 */
+.as-btn-test {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

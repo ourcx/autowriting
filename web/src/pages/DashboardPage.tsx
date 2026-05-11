@@ -1,6 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings, Palette, AlertTriangle, PenLine, Database } from 'lucide-react'
+import { Settings, Palette, AlertTriangle, PenLine, Database, BookOpen } from 'lucide-react'
 import Dashboard from './Dashboard'
 import { useAIReadiness, fetchServerStatus } from '../store/useConfigStore'
 import './DashboardPage.css'
@@ -8,8 +8,15 @@ import './DashboardPage.css'
 export default function DashboardPage() {
   const navigate = useNavigate()
   const { articleReady: apiKeyReady } = useAIReadiness()
+  const [wxBound, setWxBound] = useState(false)
 
-  useEffect(() => { fetchServerStatus() }, [])
+  useEffect(() => {
+    fetchServerStatus()
+    fetch('/api/wechat/status')
+      .then(r => r.json())
+      .then(d => setWxBound(d.bound))
+      .catch(() => {})
+  }, [])
 
   return (
     <div className="dp-root">
@@ -30,6 +37,12 @@ export default function DashboardPage() {
             >
               <AlertTriangle size={13} />
               配置 AI Key
+            </button>
+          )}
+          {wxBound && (
+            <button className="dp-nav-btn" onClick={() => navigate('/drafts')}>
+              <BookOpen size={14} />
+              草稿箱
             </button>
           )}
           <button className="dp-nav-btn" onClick={() => navigate('/rag')}>

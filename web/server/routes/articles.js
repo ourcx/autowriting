@@ -51,7 +51,8 @@ router.get('/', (req, res) => {
   try {
     if (!fs.existsSync(DRAFTS_DIR)) return res.json([])
 
-    const articles = []
+    // 用 Map 收集，id 相同时后写的覆盖先写的（去重）
+    const articleMap = new Map()
     const dateDirs = fs.readdirSync(DRAFTS_DIR)
       .filter(f => /^\d{8}/.test(f))
       .sort((a, b) => {
@@ -59,8 +60,6 @@ router.get('/', (req, res) => {
         const dateB = b.substring(0, 8)
         return dateA !== dateB ? dateB.localeCompare(dateA) : b.localeCompare(a)
       })
-
-    console.log('[API] Found directories:', dateDirs)
 
     for (const dateDir of dateDirs) {
       const promptDir = path.join(DRAFTS_DIR, dateDir, 'prompt')
@@ -88,7 +87,7 @@ router.get('/', (req, res) => {
           }
         }
         if (!title) title = `文章 ${articleId}`
-        articles.push({ id: articleId, date: dateDir, title, status: 'draft', createdAt: new Date().toISOString() })
+        articleMap.set(articleId, { id: articleId, date: dateDir, title, status: 'draft', createdAt: new Date().toISOString() })
         continue
       }
 
@@ -119,11 +118,14 @@ router.get('/', (req, res) => {
         if (!title) title = `文章 ${articleId}`
         if (fs.existsSync(articlePath)) status = 'generated'
 
-        articles.push({ id: articleId, date: dateDir, title, status, createdAt: new Date().toISOString() })
+        // 同一 id 已存在（独立目录 + 多任务文件冲突）时保留独立目录版本（跳过覆盖）
+        if (!articleMap.has(articleId)) {
+          articleMap.set(articleId, { id: articleId, date: dateDir, title, status, createdAt: new Date().toISOString() })
+        }
       }
     }
 
-    res.json(articles)
+    res.json([...articleMap.values()])
   } catch (error) {
     console.error('Error fetching articles:', error)
     res.status(500).json({ error: error.message })

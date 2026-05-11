@@ -18,6 +18,7 @@ import ragRouter        from './server/routes/rag.js'
 import templatesRouter  from './server/routes/templates.js'
 import settingsRouter   from './server/routes/settings.js'
 import materialsRouter  from './server/routes/materials.js'
+import wechatRouter     from './server/routes/wechat.js'
 
 // 数据库初始化（建表 + 迁移旧数据 + 内置模板 seed）
 import { upsertTemplate, listTemplates } from './server/db.js'
@@ -40,6 +41,7 @@ app.use('/api/rag',        ragRouter)       // RAG 向量索引管理
 app.use('/api/templates',  templatesRouter)
 app.use('/api/settings',   settingsRouter)
 app.use('/api/materials',  materialsRouter) // 素材采集
+app.use('/api/wechat',     wechatRouter)    // 微信公众号绑定
 
 // ── 杂项接口 ──────────────────────────────────────────────────────────────────
 

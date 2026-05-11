@@ -133,6 +133,54 @@
   box-shadow: 0 4px 12px rgba(45, 106, 79, 0.3);
 }
 
+/* 推送草稿按钮 — 深蓝调 */
+.wr-push-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 16px;
+  background: #3a5a8a;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+  letter-spacing: -0.1px;
+}
+
+.wr-push-btn:hover:not(:disabled) {
+  background: #2d4a7a;
+  box-shadow: 0 4px 12px rgba(58, 90, 138, 0.25);
+  transform: translateY(-1px);
+}
+
+.wr-push-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.wr-push-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.wr-push-btn.success {
+  background: #2d4a7a;
+  box-shadow: 0 4px 12px rgba(45, 74, 122, 0.3);
+}
+
+@keyframes wr-spin {
+  to { transform: rotate(360deg); }
+}
+
+.wr-spin {
+  animation: wr-spin 0.8s linear infinite;
+}
+
 /* ── 主体布局：左 sidebar + 拖拽条 + 右 preview ─────────────── */
 .wr-main {
   flex: 1;
