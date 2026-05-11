@@ -89,15 +89,17 @@ export default function AISettings() {
       <div className="as-body">
         {/* ── 配置状态总览（合并本地浏览器 + 服务端 .env 两个来源） ── */}
         {(() => {
-          const localMaas    = config.articleProvider === 'maas' && !!config.maasApiKey
-          const localOpenai  = config.articleProvider !== 'maas' && !!config.articleApiKey
-          const localDalle   = config.coverProvider === 'openai' && !!config.coverApiKey
-          const localStab    = config.coverProvider === 'stability' && !!config.coverApiKey
-          const maasOk       = localMaas    || !!serverStatus?.maasReady
-          const openaiOk     = localOpenai  || !!serverStatus?.openaiReady
-          const dalleOk      = localDalle   || !!serverStatus?.dalleReady
-          const stabilityOk  = localStab    || !!serverStatus?.stabilityReady
-          const anyOk        = maasOk || openaiOk || dalleOk || stabilityOk
+          const localMaas       = config.articleProvider === 'maas' && !!config.maasApiKey
+          const localOpenai     = config.articleProvider !== 'maas' && !!config.articleApiKey
+          const localDalle      = config.coverProvider === 'openai' && !!config.coverApiKey
+          const localStab       = config.coverProvider === 'stability' && !!config.coverApiKey
+          const localSiliconflow = !!config.siliconflowApiKey
+          const maasOk          = localMaas    || !!serverStatus?.maasReady
+          const openaiOk        = localOpenai  || !!serverStatus?.openaiReady
+          const dalleOk         = localDalle   || !!serverStatus?.dalleReady
+          const stabilityOk     = localStab    || !!serverStatus?.stabilityReady
+          const siliconflowOk   = localSiliconflow || !!serverStatus?.siliconflowReady
+          const anyOk           = maasOk || openaiOk || dalleOk || stabilityOk || siliconflowOk
           return (
             <div className="as-server-status">
               <div className="as-server-status-title">
@@ -122,6 +124,10 @@ export default function AISettings() {
                 <span className={`as-pill ${stabilityOk ? 'ok' : 'off'}`}>
                   {stabilityOk ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
                   Stability {stabilityOk ? (localStab ? '已配置（本地）' : '已配置（服务端）') : '未配置'}
+                </span>
+                <span className={`as-pill ${siliconflowOk ? 'ok' : 'off'}`}>
+                  {siliconflowOk ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
+                  Kolors {siliconflowOk ? (localSiliconflow ? '已配置（本地）' : '已配置（服务端）') : '未配置'}
                 </span>
               </div>
               {anyOk && (
@@ -263,11 +269,12 @@ export default function AISettings() {
         <section className="as-section">
           <div className="as-section-header">
             <h2 className="as-section-title">封面生成</h2>
-            <p className="as-section-desc">用于 AI 生成文章封面图片</p>
+            <p className="as-section-desc">选择默认生图服务并填写对应 API Key，封面生成器可随时切换</p>
           </div>
 
+          {/* 默认 provider 选择 — 保存到 config.coverProvider */}
           <div className="as-field-group">
-            <label className="as-label">图片生成服务</label>
+            <label className="as-label">默认图片生成服务</label>
             <div className="as-provider-cards">
               {COVER_PROVIDER_PRESETS.map(p => (
                 <button
@@ -282,36 +289,69 @@ export default function AISettings() {
             </div>
           </div>
 
-          {config.coverProvider !== 'local' && (
-            <div className="as-field">
-              <label className="as-label">
-                {config.coverProvider === 'openai' ? 'OpenAI API Key' : 'Stability API Key'}
-              </label>
-              <div className="as-key-wrap">
-                <input
-                  className="as-input as-input-key"
-                  type={showKeys['cover'] ? 'text' : 'password'}
-                  value={config.coverApiKey}
-                  onChange={e => set({ coverApiKey: e.target.value })}
-                  placeholder="sk-..."
-                />
-                <button className="as-eye-btn" onClick={() => toggleKey('cover')}>
-                  {showKeys['cover'] ? <EyeOff size={15} /> : <Eye size={15} />}
-                </button>
-              </div>
-              {config.coverProvider === 'openai' && (
-                <p className="as-field-hint">
-                  使用 DALL-E 3 生成封面。如果文章生成也用 OpenAI，同一个 Key 即可，复制填入这里。
-                </p>
-              )}
+          {/* ── SiliconFlow（Kolors / Z-Image / Qwen 图编共用） ── */}
+          <div className="as-field">
+            <label className="as-label">SiliconFlow API Key</label>
+            <div className="as-key-wrap">
+              <input
+                className="as-input as-input-key"
+                type={showKeys['siliconflow'] ? 'text' : 'password'}
+                value={config.siliconflowApiKey}
+                onChange={e => set({ siliconflowApiKey: e.target.value })}
+                placeholder="sk-nf..."
+              />
+              <button className="as-eye-btn" onClick={() => toggleKey('siliconflow')}>
+                {showKeys['siliconflow'] ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
             </div>
-          )}
+            <p className="as-field-hint">
+              Kolors / Z-Image / Qwen 图片编辑共用此 Key。前往{' '}
+              <a href="https://cloud.siliconflow.cn/account/ak" target="_blank" rel="noreferrer">
+                cloud.siliconflow.cn
+              </a>{' '}
+              获取，注册即送免费额度。
+            </p>
+          </div>
 
-          {config.coverProvider === 'local' && (
-            <div className="as-notice">
-              SVG 占位模式无需 API Key，免费使用。封面为矢量图，可在公众号编辑器中替换。
+          <div className="as-field">
+            <label className="as-label">Kolors 模型 <span className="as-label-opt">选填，默认 Kwai-Kolors/Kolors</span></label>
+            <input
+              className="as-input"
+              list="as-siliconflow-models"
+              value={config.siliconflowModel}
+              onChange={e => set({ siliconflowModel: e.target.value })}
+              placeholder="Kwai-Kolors/Kolors"
+            />
+            <datalist id="as-siliconflow-models">
+              <option value="Kwai-Kolors/Kolors" />
+              <option value="Tongyi-MAI/Z-Image" />
+              <option value="Tongyi-MAI/Z-Image-Turbo" />
+              <option value="black-forest-labs/FLUX.1-schnell" />
+            </datalist>
+            <p className="as-field-hint">仅对「Kolors 可图」provider 生效，Z-Image / Qwen 图编使用固定模型。</p>
+          </div>
+
+          <div className="as-divider-sm" />
+
+          {/* ── DALL-E 3 / Stability（共用 coverApiKey） ── */}
+          <div className="as-field">
+            <label className="as-label">OpenAI / Stability API Key <span className="as-label-opt">DALL-E 3 或 Stability AI</span></label>
+            <div className="as-key-wrap">
+              <input
+                className="as-input as-input-key"
+                type={showKeys['cover'] ? 'text' : 'password'}
+                value={config.coverApiKey}
+                onChange={e => set({ coverApiKey: e.target.value })}
+                placeholder="sk-..."
+              />
+              <button className="as-eye-btn" onClick={() => toggleKey('cover')}>
+                {showKeys['cover'] ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
             </div>
-          )}
+            <p className="as-field-hint">
+              选择 DALL-E 3 时填 OpenAI Key；选 Stability AI 时填 Stability Key。如果文章生成也用 OpenAI，同一个 Key 复制过来即可。
+            </p>
+          </div>
         </section>
 
         {/* ── 说明 ── */}
@@ -321,7 +361,7 @@ export default function AISettings() {
           <ul className="as-tips-list">
             <li>配置保存在本地浏览器，不会上传到任何服务器</li>
             <li>「自定义（OpenAI 兼容）」支持 Claude / DeepSeek / Gemini / 本地 Ollama 等兼容 OpenAI 接口的服务</li>
-            <li>封面生成如果 API 调用失败，会自动降级为 SVG 占位图</li>
+            <li>封面生成器里可随时切换模型，此处设置的是默认值</li>
             <li>修改配置后点击「保存配置」才会生效</li>
           </ul>
         </section>

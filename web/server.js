@@ -46,28 +46,30 @@ app.get('/health', (_req, res) => {
 })
 
 app.get('/api/config/status', (_req, res) => {
-  const hasMaasKey      = !!SERVER_AI_CONFIG.maasApiKey
-  const hasOpenaiKey    = !!SERVER_AI_CONFIG.articleApiKey
-  const hasCoverKey     = !!SERVER_AI_CONFIG.coverApiKey
-  const hasStabilityKey = !!SERVER_AI_CONFIG.stabilityApiKey
+  const hasMaasKey          = !!SERVER_AI_CONFIG.maasApiKey
+  const hasOpenaiKey        = !!SERVER_AI_CONFIG.articleApiKey
+  const hasCoverKey         = !!SERVER_AI_CONFIG.coverApiKey
+  const hasStabilityKey     = !!SERVER_AI_CONFIG.stabilityApiKey
+  const hasSiliconflowKey   = !!SERVER_AI_CONFIG.siliconflowApiKey
 
   let serverArticleProvider = SERVER_AI_CONFIG.articleProvider
   if (!serverArticleProvider || serverArticleProvider === 'openai') {
-    if (hasMaasKey)     serverArticleProvider = 'maas'
+    if (hasMaasKey)        serverArticleProvider = 'maas'
     else if (hasOpenaiKey) serverArticleProvider = 'openai'
-    else serverArticleProvider = null
+    else                   serverArticleProvider = null
   }
 
   res.json({
-    articleProvider: serverArticleProvider,
-    articleReady:    hasMaasKey || hasOpenaiKey,
-    maasReady:       hasMaasKey,
-    maasEmail:       hasMaasKey ? SERVER_AI_CONFIG.maasUserEmail : null,
-    openaiReady:     hasOpenaiKey,
-    coverProvider:   SERVER_AI_CONFIG.coverProvider || 'local',
-    coverReady:      hasCoverKey || hasStabilityKey || SERVER_AI_CONFIG.coverProvider === 'local',
-    dalleReady:      hasCoverKey,
-    stabilityReady:  hasStabilityKey,
+    articleProvider:  serverArticleProvider,
+    articleReady:     hasMaasKey || hasOpenaiKey,
+    maasReady:        hasMaasKey,
+    maasEmail:        hasMaasKey ? SERVER_AI_CONFIG.maasUserEmail : null,
+    openaiReady:      hasOpenaiKey,
+    coverProvider:    SERVER_AI_CONFIG.coverProvider || 'local',
+    coverReady:       hasCoverKey || hasStabilityKey || hasSiliconflowKey || SERVER_AI_CONFIG.coverProvider === 'local',
+    dalleReady:       hasCoverKey,
+    stabilityReady:   hasStabilityKey,
+    siliconflowReady: hasSiliconflowKey,
   })
 })
 

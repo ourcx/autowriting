@@ -66,9 +66,13 @@ export const SERVER_AI_CONFIG = {
   maasBaseUrl:     process.env.MAAS_BASE_URL || 'https://maas.devops.xiaohongshu.com/v1',
   maasUserEmail:   process.env.MAAS_USER_EMAIL || '',
   // 封面
-  coverProvider:   process.env.COVER_PROVIDER || 'local',
-  coverApiKey:     process.env.COVER_API_KEY || process.env.OPENAI_API_KEY || '',
+  coverProvider:      process.env.COVER_PROVIDER || 'local',
+  coverApiKey:        process.env.COVER_API_KEY || process.env.OPENAI_API_KEY || '',
   // Stability（保留兼容）
-  stabilityApiKey: process.env.STABILITY_API_KEY || '',
-  stabilityBaseUrl:process.env.STABILITY_BASE_URL || 'https://api.stability.ai/v1',
+  stabilityApiKey:    process.env.STABILITY_API_KEY || '',
+  stabilityBaseUrl:   process.env.STABILITY_BASE_URL || 'https://api.stability.ai/v1',
+  // SiliconFlow / Kolors
+  siliconflowApiKey:  process.env.SILICONFLOW_API_KEY || '',
+  siliconflowBaseUrl: process.env.SILICONFLOW_BASE_URL || 'https://api.siliconflow.cn/v1',
+  siliconflowModel:   process.env.SILICONFLOW_MODEL || 'Kwai-Kolors/Kolors',
 }

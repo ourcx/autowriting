@@ -179,6 +179,23 @@
   margin: 28px 24px;
 }
 
+.as-divider-sm {
+  width: 100%;
+  max-width: 720px;
+  height: 1px;
+  background: var(--color-hairline-soft);
+  margin: 12px 0;
+}
+
+.as-label-opt {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--color-muted-soft);
+  margin-left: 4px;
+}
+
 /* ── Field ──────────────────────────────────────────────────────── */
 .as-field-group {
   margin-bottom: 18px;

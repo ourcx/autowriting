@@ -5,7 +5,7 @@
 const STORAGE_KEY = 'wx-ai-config-v1'
 
 export type ArticleProvider = 'maas' | 'openai' | 'openai-compat'
-export type CoverProvider = 'local' | 'openai' | 'stability'
+export type CoverProvider = 'local' | 'openai' | 'stability' | 'siliconflow' | 'z-image' | 'qwen-edit'
 
 export interface AIConfig {
   // 文章生成
@@ -17,6 +17,10 @@ export interface AIConfig {
   // 封面生成
   coverProvider: CoverProvider
   coverApiKey: string
+
+  // SiliconFlow / Kolors
+  siliconflowApiKey: string
+  siliconflowModel: string
 
   // MaaS 专用（内部用，外部用户不填）
   maasApiKey: string
@@ -40,6 +44,9 @@ export const DEFAULT_CONFIG: AIConfig = {
 
   coverProvider: 'local',
   coverApiKey: '',
+
+  siliconflowApiKey: '',
+  siliconflowModel: 'Kwai-Kolors/Kolors',
 
   maasApiKey: '',
   maasBaseUrl: 'https://maas.devops.xiaohongshu.com/v1',
@@ -164,7 +171,10 @@ export const PROVIDER_PRESETS: Array<{
 ]
 
 export const COVER_PROVIDER_PRESETS = [
-  { id: 'local' as CoverProvider, name: 'SVG 占位（免费）', desc: '无需 API，直接生成矢量占位图' },
-  { id: 'openai' as CoverProvider, name: 'DALL-E 3（OpenAI）', desc: '需要 OpenAI API Key' },
-  { id: 'stability' as CoverProvider, name: 'Stability AI', desc: '需要 Stability API Key' },
+  { id: 'local'       as CoverProvider, name: 'SVG 占位',      desc: '无需 API，免费即时生成' },
+  { id: 'siliconflow' as CoverProvider, name: 'Kolors 可图',   desc: 'SiliconFlow，性价比高' },
+  { id: 'z-image'     as CoverProvider, name: 'Z-Image 造相',  desc: 'SiliconFlow，支持复杂提示词' },
+  { id: 'qwen-edit'   as CoverProvider, name: 'Qwen 图片编辑', desc: 'SiliconFlow，对已有封面精修' },
+  { id: 'openai'      as CoverProvider, name: 'DALL-E 3',      desc: '需要 OpenAI API Key' },
+  { id: 'stability'   as CoverProvider, name: 'Stability AI',  desc: '需要 Stability API Key' },
 ]

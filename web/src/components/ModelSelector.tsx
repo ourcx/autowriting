@@ -39,6 +39,14 @@ const AVAILABLE_MODELS: Model[] = [
     description: '最先进的图片生成模型，需要 API 密钥',
     icon: '✨',
     available: true
+  },
+  {
+    id: 'siliconflow',
+    name: 'Kolors（可图）',
+    provider: 'siliconflow',
+    description: '快手可图大模型，性价比高，国内速度快',
+    icon: '🖌️',
+    available: true
   }
 ]
 
