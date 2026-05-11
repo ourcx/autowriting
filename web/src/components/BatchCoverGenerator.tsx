@@ -3,7 +3,7 @@ import { toast } from './Toast'
 import { X, Plus, Trash2, Zap } from 'lucide-react'
 import axios from 'axios'
 import './BatchCoverGenerator.css'
-
+// 暂时停止使用
 interface CoverConfig {
   id: string
   title: string

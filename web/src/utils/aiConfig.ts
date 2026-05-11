@@ -34,6 +34,11 @@ export interface AIConfig {
   embeddingDimensions:  string  // 可选，输出向量维度，如 "1024"
   embeddingInstruction: string  // 可选，任务指令（部分模型支持）
   embeddingExtraHeaders:string  // 可选，JSON 格式额外请求头
+
+  // 素材搜索
+  searchProvider: 'serper' | 'bing'  // 搜索引擎服务商
+  searchApiKey:   string             // 搜索 API Key
+  searchEngine:   string             // serper engine：google / baidu / bing
 }
 
 export const DEFAULT_CONFIG: AIConfig = {
@@ -58,6 +63,10 @@ export const DEFAULT_CONFIG: AIConfig = {
   embeddingDimensions:   '',
   embeddingInstruction:  '',
   embeddingExtraHeaders: '',
+
+  searchProvider: 'serper',
+  searchApiKey:   '',
+  searchEngine:   'google',
 }
 
 /** 同步读取（优先 localStorage，保证组件渲染不阻塞） */

@@ -9,6 +9,194 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
+/* ── AI 内联助手浮窗（fixed 定位，跟随选区末尾）────────────────── */
+.ai-float-menu {
+  position: fixed;
+  z-index: 9999;
+  /* Clay: canvas 底色 + ink 描边，轻盈而非黑底 */
+  background: var(--color-surface-dark, #0a1a1a);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 12px;
+  padding: 6px 8px;
+  box-shadow:
+    0 4px 6px rgba(0,0,0,0.12),
+    0 12px 32px rgba(0,0,0,0.28),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* 操作行固定高度 */
+  height: 40px;
+  white-space: nowrap;
+  /* 入场动画 */
+  animation: float-in 0.14s cubic-bezier(0.22, 1, 0.36, 1) both;
+  pointer-events: auto;
+}
+
+/* 结果展示时撑高 */
+.ai-float-menu--result {
+  height: auto;
+  max-width: 380px;
+  align-items: flex-start;
+  padding: 10px 12px;
+}
+
+@keyframes float-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+
+/* ── 左侧 "AI" 标签 ── */
+.ai-float-label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-brand-ochre, #e8b94a);
+  white-space: nowrap;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+/* 分隔线 */
+.ai-float-divider {
+  width: 1px;
+  height: 18px;
+  background: rgba(255,255,255,0.12);
+  flex-shrink: 0;
+}
+
+/* ── 操作按钮组 ── */
+.ai-float-actions {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+
+.ai-float-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.07);
+  color: rgba(255,255,255,0.88);
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+  white-space: nowrap;
+}
+
+.ai-float-btn:hover:not(:disabled) {
+  background: rgba(255,255,255,0.15);
+  border-color: rgba(255,255,255,0.28);
+  color: #fff;
+}
+
+.ai-float-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ai-float-btn--loading {
+  background: rgba(255,255,255,0.04) !important;
+  color: rgba(255,255,255,0.5) !important;
+}
+
+/* loading 小转圈 */
+.ai-spin {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid rgba(255,255,255,0.25);
+  border-top-color: var(--color-brand-ochre, #e8b94a);
+  border-radius: 50%;
+  animation: ai-spin 0.55s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes ai-spin { to { transform: rotate(360deg); } }
+
+/* ── 结果展示区 ── */
+.ai-float-result {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.ai-float-result-text {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  line-height: 1.65;
+  color: rgba(255,255,255,0.88);
+  white-space: pre-wrap;
+  max-height: 160px;
+  overflow-y: auto;
+  /* 细滚动条 */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.15) transparent;
+}
+
+.ai-float-result-text::-webkit-scrollbar { width: 4px; }
+.ai-float-result-text::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.15);
+  border-radius: 2px;
+}
+
+.ai-float-result-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 应用按钮 —— Clay brand-mint 底色 */
+.ai-float-apply {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 8px;
+  background: var(--color-brand-mint, #a4d4c5);
+  color: var(--color-ink, #0a0a0a);
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 0.12s;
+  letter-spacing: 0.1px;
+}
+
+.ai-float-apply:hover { filter: brightness(1.08); }
+
+/* 重试 / 关闭图标按钮 */
+.ai-float-retry,
+.ai-float-cancel {
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.07);
+  color: rgba(255,255,255,0.55);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s, color 0.1s;
+  flex-shrink: 0;
+}
+
+.ai-float-retry:hover { background: rgba(255,255,255,0.14); color: #fff; }
+.ai-float-cancel:hover { background: rgba(239,68,68,0.18); color: #fca5a5; border-color: rgba(239,68,68,0.3); }
+
 .editor-toolbar {
   display: flex;
   justify-content: space-between;

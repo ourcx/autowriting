@@ -14,9 +14,10 @@ import coversRouter    from './server/routes/covers.js'
 import imagesRouter    from './server/routes/images.js'
 import publishRouter   from './server/routes/publish.js'
 import styleRouter     from './server/routes/style.js'
-import ragRouter       from './server/routes/rag.js'
-import templatesRouter from './server/routes/templates.js'
-import settingsRouter  from './server/routes/settings.js'
+import ragRouter        from './server/routes/rag.js'
+import templatesRouter  from './server/routes/templates.js'
+import settingsRouter   from './server/routes/settings.js'
+import materialsRouter  from './server/routes/materials.js'
 
 // 数据库初始化（建表 + 迁移旧数据 + 内置模板 seed）
 import { upsertTemplate, listTemplates } from './server/db.js'
@@ -35,9 +36,10 @@ app.use('/api',            coversRouter)    // covers 路由内部自带 /genera
 app.use('/api/images',     imagesRouter)
 app.use('/api/publish',    publishRouter)
 app.use('/api',            styleRouter)    // /api/generate-style
-app.use('/api/rag',        ragRouter)      // RAG 向量索引管理
+app.use('/api/rag',        ragRouter)       // RAG 向量索引管理
 app.use('/api/templates',  templatesRouter)
 app.use('/api/settings',   settingsRouter)
+app.use('/api/materials',  materialsRouter) // 素材采集
 
 // ── 杂项接口 ──────────────────────────────────────────────────────────────────
 

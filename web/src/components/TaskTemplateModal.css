@@ -1,0 +1,200 @@
+/* ── TaskTemplateModal — Clay Design System ──────────────────── */
+
+.ttm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 10, 10, 0.45);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 24px;
+}
+
+.ttm-dialog {
+  width: 100%;
+  max-width: 640px;
+  background: var(--color-canvas, #fffaf0);
+  border-radius: 20px;
+  border: 1px solid var(--color-hairline, #e5e5e5);
+  box-shadow: 0 24px 60px rgba(10, 10, 10, 0.18);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Header */
+.ttm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--color-hairline, #e5e5e5);
+}
+
+.ttm-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-ink, #0a0a0a);
+  letter-spacing: -0.2px;
+}
+
+.ttm-close {
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: var(--color-surface-card, #f5f0e0);
+  border-radius: 9px;
+  color: var(--color-muted, #6a6a6a);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s;
+}
+
+.ttm-close:hover {
+  background: var(--color-surface-strong, #ebe6d6);
+  color: var(--color-ink, #0a0a0a);
+}
+
+/* Body */
+.ttm-body {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ttm-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1.6fr;
+  gap: 12px;
+}
+
+.ttm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.ttm-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--color-muted, #6a6a6a);
+}
+
+.ttm-opt {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--color-muted-soft, #9a9a9a);
+  font-size: 11px;
+  margin-left: 3px;
+}
+
+.ttm-input {
+  height: 42px;
+  padding: 0 14px;
+  border: 1px solid var(--color-hairline, #e5e5e5);
+  border-radius: 12px;
+  background: var(--color-canvas, #fffaf0);
+  color: var(--color-ink, #0a0a0a);
+  font-size: 14px;
+  font-family: 'Inter', sans-serif;
+  outline: none;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+
+.ttm-input:focus {
+  border-color: var(--color-ink, #0a0a0a);
+  box-shadow: 0 0 0 3px rgba(10, 10, 10, 0.07);
+}
+
+.ttm-hint {
+  font-size: 12px;
+  color: var(--color-muted-soft, #9a9a9a);
+  margin: -3px 0 0;
+  line-height: 1.5;
+}
+
+.ttm-textarea {
+  height: 340px;
+  padding: 14px;
+  border: 1px solid var(--color-hairline, #e5e5e5);
+  border-radius: 12px;
+  background: var(--color-surface-soft, #faf5e8);
+  color: var(--color-ink, #0a0a0a);
+  font-size: 13px;
+  font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
+  line-height: 1.7;
+  resize: none;
+  outline: none;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+
+.ttm-textarea:focus {
+  border-color: var(--color-ink, #0a0a0a);
+  box-shadow: 0 0 0 3px rgba(10, 10, 10, 0.07);
+  background: var(--color-canvas, #fffaf0);
+}
+
+/* Footer */
+.ttm-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--color-hairline, #e5e5e5);
+  background: var(--color-surface-soft, #faf5e8);
+}
+
+.ttm-btn-cancel {
+  height: 38px;
+  padding: 0 18px;
+  border: 1px solid var(--color-hairline, #e5e5e5);
+  border-radius: 12px;
+  background: var(--color-canvas, #fffaf0);
+  color: var(--color-body, #3a3a3a);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.ttm-btn-cancel:hover {
+  background: var(--color-surface-card, #f5f0e0);
+}
+
+.ttm-btn-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 20px;
+  border: none;
+  border-radius: 12px;
+  background: var(--color-ink, #0a0a0a);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, transform 0.1s;
+}
+
+.ttm-btn-save:hover:not(:disabled) {
+  background: #1f1f1f;
+}
+
+.ttm-btn-save:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.ttm-btn-save:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

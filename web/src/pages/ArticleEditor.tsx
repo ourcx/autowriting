@@ -1,16 +1,22 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { toast } from '../components/Toast'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Zap, Save, Edit3, Palette, Settings, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Zap, Save, Edit3, Palette, Settings, AlertTriangle, Plus, Trash2, Pencil, Sparkles, LayoutList } from 'lucide-react'
 import { useAIReadiness, fetchServerStatus } from '../store/useConfigStore'
 import { fetchArticle, saveArticle } from '../utils/apiHelpers'
 import CoverGenerator from '../components/CoverGenerator'
 import CoverHistory from '../components/CoverHistory'
-import BatchCoverGenerator from '../components/BatchCoverGenerator'
 import ImageLibrary from '../components/ImageLibrary'
 import MarkdownEditor from '../components/MarkdownEditor'
 import ContentStats from '../components/ContentStats'
 import GenerateModal from '../components/GenerateModal'
+import MaterialsCollector from '../components/MaterialsCollector'
+import TaskTemplateModal from '../components/TaskTemplateModal'
+import {
+  TaskTemplate,
+  loadAllTaskTemplates,
+  deleteCustomTaskTemplate,
+} from '../utils/taskTemplateStore'
 import './ArticleEditor.css'
 
 interface ArticleData {
@@ -20,7 +26,7 @@ interface ArticleData {
   title: string
 }
 
-type TabId = 'task' | 'materials' | 'article' | 'analysis' | 'cover' | 'history' | 'batch' | 'library'
+type TabId = 'task' | 'materials' | 'article' | 'analysis' | 'cover' | 'history' | 'library'
 
 export default function ArticleEditor() {
   const { articleId = '' } = useParams<{ articleId: string }>()
@@ -30,9 +36,28 @@ export default function ArticleEditor() {
   const [loading, setLoading] = useState(false)
   const [generateError, setGenerateError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabId>('task')
-  const [showBatchGenerator, setShowBatchGenerator] = useState(false)
   const [showGenerateModal, setShowGenerateModal] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
+
+  // 写作任务模板
+  const [taskTemplates, setTaskTemplates] = useState<TaskTemplate[]>(() => loadAllTaskTemplates())
+  const [showTemplateModal, setShowTemplateModal] = useState(false)
+  const [editingTemplate, setEditingTemplate] = useState<TaskTemplate | undefined>(undefined)
+
+  // AI 生成大纲
+  const [generatingOutline, setGeneratingOutline] = useState(false)
+
+  // AI 整理素材
+  const [refiningMaterials, setRefiningMaterials] = useState(false)
+
+  const reloadTemplates = useCallback(() => {
+    setTaskTemplates(loadAllTaskTemplates())
+  }, [])
+
+  useEffect(() => {
+    window.addEventListener('wx-task-templates-updated', reloadTemplates)
+    return () => window.removeEventListener('wx-task-templates-updated', reloadTemplates)
+  }, [reloadTemplates])
 
   // 从 store 读取配置就绪状态（本地 + 服务端综合判断）
   const { localConfig: aiConfig, articleReady: apiKeyReady } = useAIReadiness()
@@ -79,6 +104,54 @@ export default function ArticleEditor() {
     }
   }
 
+  // ── AI：生成大纲 → 追加到 materials ─────────────────────────────────────
+  const handleGenerateOutline = async () => {
+    if (!data.task || data.task.trim().length < 20) {
+      toast.warn('请先填写任务要求（至少 20 字）')
+      return
+    }
+    setGeneratingOutline(true)
+    try {
+      const resp = await fetch(`/api/articles/${articleId}/outline`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task: data.task, aiConfig }),
+      })
+      const d = await resp.json()
+      if (!resp.ok) throw new Error(d.error || '生成失败')
+      const outlineBlock = `\n\n---\n\n## AI 生成大纲\n\n${d.outline}`
+      setData(prev => ({ ...prev, materials: prev.materials + outlineBlock }))
+      setActiveTab('materials')
+      toast.success('大纲已追加到素材库')
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : '生成大纲失败')
+    }
+    setGeneratingOutline(false)
+  }
+
+  // ── AI：整理素材 ──────────────────────────────────────────────────────────
+  const handleRefineMaterials = async () => {
+    if (!data.materials || data.materials.trim().length < 30) {
+      toast.warn('素材库内容太少，请先采集一些素材')
+      return
+    }
+    setRefiningMaterials(true)
+    try {
+      const resp = await fetch(`/api/articles/${articleId}/refine-materials`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ materials: data.materials, task: data.task, aiConfig }),
+      })
+      const d = await resp.json()
+      if (!resp.ok) throw new Error(d.error || '整理失败')
+      setData(prev => ({ ...prev, materials: d.refined }))
+      toast.success('素材已整理完毕')
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : '整理素材失败')
+    }
+    setRefiningMaterials(false)
+  }
+
   const handleSave = async () => {
     try {
       await saveArticle(articleId, data)
@@ -89,7 +162,6 @@ export default function ArticleEditor() {
   }
 
   const handleGenerate = () => {
-    // 前置检查：未配置 Key 时直接提示，不发请求
     if (!apiKeyReady) {
       setGenerateError('未配置 AI API Key，请先前往「AI 配置」页面填写后再生成。')
       return
@@ -212,14 +284,13 @@ export default function ArticleEditor() {
         <div className="editor-tabs">
           {(
             [
-              ['task', '任务要求'],
-              ['materials', '素材整理'],
-              ['article', '文章内容'],
-              ['analysis', '内容分析'],
-              ['cover', '生成封面'],
-              ['history', '生成历史'],
-              ['batch', '批量生成'],
-              ['library', '图片库'],
+              ['task',      '任务要求'],
+              ['materials', '素材采集'],
+              ['article',   '文章内容'],
+              ['analysis',  '内容分析'],
+              ['cover',     '生成封面'],
+              ['history',   '生成历史'],
+              ['library',   '图片库'],
             ] as [TabId, string][]
           ).map(([id, label]) => (
             <button
@@ -234,11 +305,68 @@ export default function ArticleEditor() {
 
         <div className="editor-content">
           {activeTab === 'task' && (
-            <div className="editor-panel">
-              <div className="panel-header">
-                <h3>写作任务要求</h3>
-                <p>定义文章的主题、结构和风格要求</p>
+            <div className="editor-panel editor-panel--task">
+              {/* 模板选择栏 */}
+              <div className="task-template-bar">
+                <div className="task-template-list">
+                  {taskTemplates.map(t => (
+                    <div
+                      key={t.id}
+                      className="task-tmpl-chip"
+                      title={t.desc}
+                    >
+                      <button
+                        className="task-tmpl-chip-btn"
+                        onClick={() => setData(prev => ({ ...prev, task: t.content }))}
+                      >
+                        {t.name}
+                      </button>
+                      {!t.isBuiltin && (
+                        <span className="task-tmpl-chip-actions">
+                          <button
+                            className="task-tmpl-icon-btn"
+                            title="编辑"
+                            onClick={() => { setEditingTemplate(t); setShowTemplateModal(true) }}
+                          >
+                            <Pencil size={11} />
+                          </button>
+                          <button
+                            className="task-tmpl-icon-btn task-tmpl-icon-btn--del"
+                            title="删除"
+                            onClick={() => {
+                              if (confirm(`删除模板「${t.name}」？`)) {
+                                deleteCustomTaskTemplate(t.id)
+                                reloadTemplates()
+                              }
+                            }}
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <button
+                  className="task-tmpl-new-btn"
+                  onClick={() => { setEditingTemplate(undefined); setShowTemplateModal(true) }}
+                >
+                  <Plus size={13} />
+                  新建模板
+                </button>
+                <button
+                  className="task-tmpl-outline-btn"
+                  onClick={handleGenerateOutline}
+                  disabled={generatingOutline || !data.task}
+                  title="根据任务要求生成写作大纲，追加到素材库"
+                >
+                  {generatingOutline
+                    ? <><span className="task-outline-spin" />生成中...</>
+                    : <><LayoutList size={13} />生成大纲</>}
+                </button>
               </div>
+
+              {/* 编辑区 */}
               <textarea
                 value={data.task}
                 onChange={e => setData(prev => ({ ...prev, task: e.target.value }))}
@@ -249,17 +377,47 @@ export default function ArticleEditor() {
           )}
 
           {activeTab === 'materials' && (
-            <div className="editor-panel">
-              <div className="panel-header">
-                <h3>素材整理</h3>
-                <p>收集和整理文章所需的数据、案例和观点</p>
+            <div className="editor-panel editor-panel--materials">
+              {/* 左侧：素材采集 */}
+              <div className="materials-collector-pane">
+                <div className="panel-header materials-panel-header">
+                  <h3>素材采集</h3>
+                  <p>搜索 / 解析 URL / 粘贴，采集后自动写入右侧素材库</p>
+                </div>
+                <MaterialsCollector
+                  articleId={articleId}
+                  searchApiKey={aiConfig.searchApiKey || ''}
+                  searchProvider={(aiConfig.searchProvider as 'serper' | 'bing') || 'serper'}
+                  searchEngine={aiConfig.searchEngine || 'google'}
+                  onSaved={fetchArticleData}
+                />
               </div>
-              <textarea
-                value={data.materials}
-                onChange={e => setData(prev => ({ ...prev, materials: e.target.value }))}
-                placeholder={`# 素材整理\n\n## 核心数据\n- [数据点 1]\n\n## 踩过的坑\n### 坑1：[问题描述]\n- **问题**：\n- **原因**：\n- **解决**：\n\n## 个人观点\n- [观点 1]`}
-                className="editor-textarea"
-              />
+
+              {/* 右侧：素材库编辑器 */}
+              <div className="materials-editor-pane">
+                <div className="panel-header materials-panel-header">
+                  <div className="materials-header-top">
+                    <h3>素材库</h3>
+                    <button
+                      className="materials-refine-btn"
+                      onClick={handleRefineMaterials}
+                      disabled={refiningMaterials || !data.materials}
+                      title="AI 读取当前素材，整理为结构化格式"
+                    >
+                      {refiningMaterials
+                        ? <><span className="task-outline-spin" />整理中...</>
+                        : <><Sparkles size={12} />AI 整理</>}
+                    </button>
+                  </div>
+                  <p>materials.md — 可直接编辑，也可从左侧采集后写入</p>
+                </div>
+                <textarea
+                  value={data.materials}
+                  onChange={e => setData(prev => ({ ...prev, materials: e.target.value }))}
+                  placeholder={`# 素材整理\n\n## 核心数据\n- [数据点 1]\n\n## 踩过的坑\n### 坑1：[问题描述]\n- **问题**：\n- **原因**：\n- **解决**：\n\n## 个人观点\n- [观点 1]`}
+                  className="editor-textarea"
+                />
+              </div>
             </div>
           )}
 
@@ -270,6 +428,7 @@ export default function ArticleEditor() {
                 onChange={value => setData(prev => ({ ...prev, article: value }))}
                 placeholder="文章将在这里显示..."
                 height="600px"
+                articleId={articleId}
               />
             </div>
           )}
@@ -297,19 +456,6 @@ export default function ArticleEditor() {
             </div>
           )}
 
-          {activeTab === 'batch' && (
-            <div className="editor-panel">
-              <div className="batch-generator-placeholder">
-                <h3>批量生成封面</h3>
-                <p>一次生成多个不同风格和颜色的封面</p>
-                <button className="btn btn-primary" onClick={() => setShowBatchGenerator(true)}>
-                  <Zap size={20} />
-                  打开批量生成器
-                </button>
-              </div>
-            </div>
-          )}
-
           {activeTab === 'library' && (
             <div className="editor-panel">
               <ImageLibrary />
@@ -317,13 +463,6 @@ export default function ArticleEditor() {
           )}
         </div>
       </div>
-
-      {showBatchGenerator && (
-        <BatchCoverGenerator
-          onClose={() => setShowBatchGenerator(false)}
-          onSuccess={() => setActiveTab('history')}
-        />
-      )}
 
       {showGenerateModal && (
         <GenerateModal
@@ -333,6 +472,14 @@ export default function ArticleEditor() {
           aiConfig={aiConfig as unknown as Record<string, unknown>}
           onComplete={handleGenerateComplete}
           onClose={() => setShowGenerateModal(false)}
+        />
+      )}
+
+      {showTemplateModal && (
+        <TaskTemplateModal
+          initial={editingTemplate}
+          onClose={() => setShowTemplateModal(false)}
+          onSaved={() => reloadTemplates()}
         />
       )}
     </div>

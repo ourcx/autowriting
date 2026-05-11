@@ -558,6 +558,215 @@ ${article}
   }
 })
 
+// ── 公共工具：构造 LLM 请求参数 ──────────────────────────────────────────────
+
+function buildLLMRequest(cfg) {
+  const headers = { 'Content-Type': 'application/json' }
+  let url = '', model = ''
+  if (cfg.articleProvider === 'maas') {
+    url   = `${cfg.maasBaseUrl}/chat/completions`
+    model = 'deepseek-v4-pro'
+    headers['api-key']           = cfg.maasApiKey
+    headers['x-maas-user-email'] = cfg.maasUserEmail
+    headers['x-maas-app-id']     = 'qs-api'
+  } else {
+    url   = `${cfg.articleBaseUrl}/chat/completions`
+    model = cfg.articleModel || 'gpt-4o'
+    headers['Authorization'] = `Bearer ${cfg.articleApiKey}`
+  }
+  return { url, model, headers }
+}
+
+// ── POST /api/articles/:articleId/inline-edit  (AI 内联编辑) ─────────────────
+// body: { selected: string, action: 'polish'|'shorten'|'expand'|'rewrite-lead', aiConfig }
+// 返回: { result: string }
+
+router.post('/:articleId/inline-edit', async (req, res) => {
+  try {
+    const { selected, fullArticle, action, aiConfig } = req.body
+    if (!selected || selected.trim().length < 5) {
+      return res.status(400).json({ error: '选中内容太短' })
+    }
+
+    const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
+    const { url, model, headers } = buildLLMRequest(cfg)
+
+    // 全文上下文块（截断到 3000 字，避免超 token）
+    const articleCtx = fullArticle
+      ? `\n\n# 全文上下文（仅供参考，不要重复输出）\n${fullArticle.slice(0, 3000)}${fullArticle.length > 3000 ? '\n…（以下省略）' : ''}`
+      : ''
+
+    const ACTION_PROMPTS = {
+      'polish': `你是专业的文字编辑。请对【待润色片段】进行润色：
+- 去掉 AI 感、套话、被动句
+- 保持第一人称「我」
+- 保持与全文风格一致（真诚、实用、像朋友聊天）
+- 只输出润色后的文字，不要解释、不要引号${articleCtx}
+
+# 待润色片段
+${selected}`,
+
+      'shorten': `你是专业的文字编辑。请将【待精简片段】精简到原来的 60% 以内：
+- 去掉废话、重复和空话
+- 保留核心意思和关键数据
+- 保持与全文语气一致
+- 只输出精简后的文字，不要解释${articleCtx}
+
+# 待精简片段
+${selected}`,
+
+      'expand': `你是专业的文字编辑。请将【待扩写片段】扩写：
+- 补充一个具体案例、真实数据或操作细节，让观点更有说服力
+- 扩写后不超过原来的 2 倍
+- 保持与全文风格一致，不用"此外""值得注意"等套话
+- 只输出扩写后的文字，不要解释${articleCtx}
+
+# 待扩写片段
+${selected}`,
+
+      'rewrite-lead': `你是专业的文字编辑。请重写【待改写片段】的开头：
+- 直接切入核心场景或痛点，不要铺垫和废话
+- 像朋友聊天一样，不用"在当今时代""大家好"等套话
+- 保持与全文的叙事风格和第一人称一致
+- 只输出改写后的完整段落，不要解释${articleCtx}
+
+# 待改写片段
+${selected}`,
+    }
+
+    const prompt = ACTION_PROMPTS[action]
+    if (!prompt) return res.status(400).json({ error: '不支持的操作类型' })
+
+    const llmRes = await axios.post(url, {
+      model,
+      messages: [
+        {
+          role: 'system',
+          content: '你是专业的文字编辑。严格按要求处理文字，只输出处理后的内容，不加任何解释、前缀或引号。风格规范：真诚、实用、人性化，像朋友聊天，不用 AI 套话。',
+        },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.65,
+      max_tokens: 1200,
+    }, { headers })
+
+    res.json({ result: llmRes.data.choices[0].message.content.trim() })
+  } catch (error) {
+    const msg = error.response?.data?.error?.message || error.message
+    console.error('[InlineEdit] 失败:', msg)
+    res.status(500).json({ error: msg })
+  }
+})
+
+// ── POST /api/articles/:articleId/outline  (AI 生成写作大纲) ─────────────────
+// body: { task: string, aiConfig }
+// 返回: { outline: string }   Markdown 格式大纲
+
+router.post('/:articleId/outline', async (req, res) => {
+  try {
+    const { task, aiConfig } = req.body
+    if (!task || task.trim().length < 20) {
+      return res.status(400).json({ error: '任务要求内容太短，请先填写任务要求' })
+    }
+
+    const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
+    const { url, model, headers } = buildLLMRequest(cfg)
+
+    let agentsContent = ''
+    if (fs.existsSync(AGENTS_FILE)) agentsContent = fs.readFileSync(AGENTS_FILE, 'utf-8')
+
+    const prompt = `你是一个专业的内容策划助手。根据以下写作任务要求，生成一份清晰的文章写作大纲。
+
+# 写作规范参考
+${agentsContent}
+
+# 写作任务要求
+${task}
+
+---
+
+请生成一份写作大纲，要求：
+1. 用 Markdown 格式输出，H2 为主章节，H3 为小节
+2. 每个章节标题后用 1-2 句话说明该节要写什么、核心论点是什么
+3. 总共 3-5 个主章节，结构符合任务要求
+4. 不要写"大纲如下"等废话，直接输出大纲内容`
+
+    const llmRes = await axios.post(url, {
+      model,
+      messages: [
+        { role: 'system', content: '你是专业的内容策划助手，只输出大纲内容，Markdown 格式。' },
+        { role: 'user',   content: prompt },
+      ],
+      temperature: 0.8,
+      max_tokens: 1024,
+    }, { headers })
+
+    res.json({ outline: llmRes.data.choices[0].message.content.trim() })
+  } catch (error) {
+    const msg = error.response?.data?.error?.message || error.message
+    console.error('[Outline] 失败:', msg)
+    res.status(500).json({ error: msg })
+  }
+})
+
+// ── POST /api/articles/:articleId/refine-materials  (AI 整理素材) ─────────────
+// body: { materials: string, task: string, aiConfig }
+// 返回: { refined: string }
+
+router.post('/:articleId/refine-materials', async (req, res) => {
+  try {
+    const { materials, task, aiConfig } = req.body
+    if (!materials || materials.trim().length < 30) {
+      return res.status(400).json({ error: '素材内容太少，无法整理' })
+    }
+
+    const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
+    const { url, model, headers } = buildLLMRequest(cfg)
+
+    const taskContext = task ? `\n\n# 写作任务（整理方向参考）\n${task}` : ''
+
+    const prompt = `你是一个专业的素材整理助手。请把以下原始素材整理成结构化的写作参考，方便作者按图索骥写文章。${taskContext}
+
+# 原始素材
+${materials}
+
+---
+
+请整理成以下结构（Markdown 格式，直接输出，不要解释）：
+
+## 核心数据与事实
+（列出所有可引用的数据、时间、数字、具体事实）
+
+## 关键观点
+（提炼出 3-5 个核心论点，每条一句话）
+
+## 可用案例
+（整理出具体的案例、场景、故事，每条说明来源）
+
+## 踩坑与注意
+（整理出实际问题、风险、注意事项）
+
+## 写作角度建议
+（根据素材，建议 2-3 个差异化的写作切入角度）`
+
+    const llmRes = await axios.post(url, {
+      model,
+      messages: [
+        { role: 'system', content: '你是专业的素材整理助手，只输出整理后的 Markdown 内容，不加任何解释。' },
+        { role: 'user',   content: prompt },
+      ],
+      temperature: 0.5,
+      max_tokens: 2048,
+    }, { headers })
+
+    res.json({ refined: llmRes.data.choices[0].message.content.trim() })
+  } catch (error) {
+    const msg = error.response?.data?.error?.message || error.message
+    console.error('[RefineMaterials] 失败:', msg)
+    res.status(500).json({ error: msg })
+  }
+})
+
 // ── GET /api/articles/:articleId/analyses ────────────────────────────────────
 
 router.get('/:articleId/analyses', (req, res) => {

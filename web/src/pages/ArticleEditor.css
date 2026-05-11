@@ -182,6 +182,7 @@
   flex-direction: column;
   flex: 1;
   overflow: hidden;
+  min-height: 0;
 }
 
 .editor-tabs {
@@ -241,8 +242,10 @@
 
 .editor-content {
   flex: 1;
-  overflow-y: auto;
+  overflow: hidden;
   padding: var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
 }
 
 .editor-panel {
@@ -250,6 +253,66 @@
   flex-direction: column;
   gap: var(--spacing-md);
   height: 100%;
+  overflow-y: auto;
+}
+
+/* ── 素材面板：左右分栏 ── */
+.editor-panel--materials {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-lg);
+  background: var(--color-canvas);
+}
+
+.materials-collector-pane {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--color-hairline);
+}
+
+.materials-editor-pane {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.materials-panel-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-hairline);
+  background: var(--color-surface-soft);
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.materials-panel-header h3 {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+}
+
+.materials-panel-header p {
+  font-size: 12px !important;
+}
+
+.materials-editor-pane .editor-textarea {
+  flex: 1;
+  border: none;
+  border-radius: 0;
+  resize: none;
+  height: 100%;
+  font-size: 13px;
+}
+
+.materials-editor-pane .editor-textarea:focus {
+  box-shadow: none;
+  border-color: transparent;
+  outline: 2px solid var(--color-brand-teal);
+  outline-offset: -2px;
 }
 
 .editor-panel iframe {
@@ -464,39 +527,6 @@
   text-decoration: underline;
 }
 
-/* 批量生成占位符 */
-.batch-generator-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-md);
-  padding: 60px 40px;
-  text-align: center;
-  background: var(--color-canvas);
-  border: 2px dashed var(--color-hairline);
-  border-radius: var(--rounded-xl);
-  height: 100%;
-}
-
-.batch-generator-placeholder h3 {
-  margin: 0;
-  font-family: 'Inter', sans-serif;
-  font-size: 28px;
-  font-weight: 600;
-  color: var(--color-ink);
-  letter-spacing: -0.56px;
-}
-
-.batch-generator-placeholder p {
-  margin: 0;
-  font-size: 16px;
-  color: var(--color-muted);
-}
-
-.batch-generator-placeholder .btn {
-  margin-top: var(--spacing-md);
-}
 
 /* ── 新用户引导横幅 ── */
 .editor-setup-banner {
@@ -567,6 +597,213 @@
 .editor-error-close:hover {
   opacity: 1;
   background: transparent !important;
+}
+
+/* ── 任务要求面板 ── */
+.editor-panel--task {
+  gap: 0;
+}
+
+/* 模板选择栏 */
+.task-template-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--color-hairline);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.task-template-list {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.task-template-list::-webkit-scrollbar { height: 3px; }
+.task-template-list::-webkit-scrollbar-track { background: transparent; }
+.task-template-list::-webkit-scrollbar-thumb {
+  background: var(--color-surface-strong, #ebe6d6);
+  border-radius: 2px;
+}
+
+.task-tmpl-chip {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  border: 1px solid var(--color-hairline);
+  border-radius: 20px;
+  background: var(--color-canvas);
+  overflow: hidden;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.task-tmpl-chip:hover {
+  border-color: var(--color-surface-strong, #ebe6d6);
+  background: var(--color-surface-soft);
+}
+
+.task-tmpl-chip-btn {
+  padding: 5px 12px;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-body, #3a3a3a);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.task-tmpl-chip-btn:hover {
+  color: var(--color-ink);
+}
+
+.task-tmpl-chip-actions {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding-right: 6px;
+}
+
+.task-tmpl-icon-btn {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--color-muted-soft, #9a9a9a);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.1s, background 0.1s;
+  padding: 0;
+}
+
+.task-tmpl-icon-btn:hover {
+  color: var(--color-ink);
+  background: var(--color-surface-card);
+}
+
+.task-tmpl-icon-btn--del:hover {
+  color: #dc2626;
+  background: #fff2f2;
+}
+
+.task-tmpl-new-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 12px;
+  flex-shrink: 0;
+  border: 1px dashed var(--color-hairline);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--color-muted, #6a6a6a);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+
+.task-tmpl-new-btn:hover {
+  border-color: var(--color-ink);
+  color: var(--color-ink);
+  background: var(--color-surface-soft);
+}
+
+/* ── 生成大纲按钮 ── */
+.task-tmpl-outline-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 12px;
+  flex-shrink: 0;
+  border: 1px solid var(--color-ink);
+  border-radius: 20px;
+  background: var(--color-ink);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.12s;
+}
+
+.task-tmpl-outline-btn:hover:not(:disabled) {
+  opacity: 0.82;
+}
+
+.task-tmpl-outline-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── 素材库 header 顶部行（标题 + AI整理按钮） ── */
+.materials-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.materials-refine-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  flex-shrink: 0;
+  border: 1px solid var(--color-hairline);
+  border-radius: 20px;
+  background: var(--color-canvas);
+  color: var(--color-body);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.materials-refine-btn:hover:not(:disabled) {
+  background: var(--color-surface-card);
+  border-color: var(--color-ink);
+  color: var(--color-ink);
+}
+
+.materials-refine-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── AI loading 小转圈（用于「生成中…」/ 「整理中…」） ── */
+.task-outline-spin {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: ai-spin 0.6s linear infinite;
+  flex-shrink: 0;
+}
+
+/* materials-refine-btn 里的转圈颜色要跟随按钮前景色 */
+.materials-refine-btn .task-outline-spin {
+  border-color: rgba(58, 58, 58, 0.25);
+  border-top-color: var(--color-body);
+}
+
+@keyframes ai-spin {
+  to { transform: rotate(360deg); }
 }
 
 /* ── 响应式设计 ── */
