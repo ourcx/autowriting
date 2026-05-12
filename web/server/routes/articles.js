@@ -16,14 +16,25 @@ import { DRAFTS_DIR, AGENTS_FILE, SERVER_AI_CONFIG } from '../config.js'
 import { ensureDir } from '../utils.js'
 import { retrieveRelevant, formatRetrievedContext } from '../rag.js'
 import { saveAnalysis, getLatestAnalysis, listAnalyses } from '../db.js'
+import { authMiddleware } from '../authMiddleware.js'
 
 const router = Router()
 
-// ── 工具：根据 articleId 解析各类文件路径 ──────────────────────────────────────
+// 所有文章路由都需要登录
+router.use(authMiddleware)
 
-function getArticlePath(articleId, type) {
-  // 优先尝试直接在 DRAFTS_DIR 找完整目录（如 20260430-广州五月旅游指南）
-  const directPath = path.join(DRAFTS_DIR, articleId)
+// ── 工具：根据 userId + articleId 解析各类文件路径 ───────────────────────────
+// 用户文章存在 DRAFTS_DIR/{userId}/ 子目录下，实现多用户隔离
+
+function getUserDraftsDir(userId) {
+  return path.join(DRAFTS_DIR, userId)
+}
+
+function getArticlePath(articleId, type, userId) {
+  const baseDir = userId ? getUserDraftsDir(userId) : DRAFTS_DIR
+
+  // 优先尝试直接在 baseDir 找完整目录（如 20260430-广州五月旅游指南）
+  const directPath = path.join(baseDir, articleId)
   if (fs.existsSync(directPath)) {
     return {
       task:      path.join(directPath, 'prompt', 'task.md'),
@@ -38,94 +49,91 @@ function getArticlePath(articleId, type) {
   const dateDir = parts[0]
   const suffix = parts.length > 1 ? `-${parts.slice(1).join('-')}` : ''
   return {
-    task:      path.join(DRAFTS_DIR, dateDir, 'prompt', `task${suffix}.md`),
-    materials: path.join(DRAFTS_DIR, dateDir, 'prompt', `materials${suffix}.md`),
-    article:   path.join(DRAFTS_DIR, dateDir, 'raw', `article_raw${suffix}.md`),
-    title:     path.join(DRAFTS_DIR, dateDir, `title${suffix}.txt`),
+    task:      path.join(baseDir, dateDir, 'prompt', `task${suffix}.md`),
+    materials: path.join(baseDir, dateDir, 'prompt', `materials${suffix}.md`),
+    article:   path.join(baseDir, dateDir, 'raw', `article_raw${suffix}.md`),
+    title:     path.join(baseDir, dateDir, `title${suffix}.txt`),
   }[type]
+}
+
+// ── 工具：扫描某个 drafts 目录，返回文章列表 ─────────────────────────────────
+function scanArticlesInDir(draftsDir) {
+  if (!fs.existsSync(draftsDir)) return []
+  const articleMap = new Map()
+  const dateDirs = fs.readdirSync(draftsDir)
+    .filter(f => /^\d{8}/.test(f))
+    .sort((a, b) => {
+      const dateA = a.substring(0, 8)
+      const dateB = b.substring(0, 8)
+      return dateA !== dateB ? dateB.localeCompare(dateA) : b.localeCompare(a)
+    })
+
+  for (const dateDir of dateDirs) {
+    const promptDir = path.join(draftsDir, dateDir, 'prompt')
+    const rawDir    = path.join(draftsDir, dateDir, 'raw')
+    const hasPromptDir = fs.existsSync(promptDir)
+    const hasRawDir    = fs.existsSync(rawDir)
+    if (!hasPromptDir && !hasRawDir) continue
+
+    const taskFiles = hasPromptDir
+      ? fs.readdirSync(promptDir).filter(f => f.startsWith('task') && f.endsWith('.md'))
+      : []
+
+    if (taskFiles.length === 0) {
+      const articleId = dateDir
+      let title = ''
+      const titlePath = path.join(draftsDir, dateDir, 'title.txt')
+      if (fs.existsSync(titlePath)) title = fs.readFileSync(titlePath, 'utf-8').trim()
+      if (!title) {
+        const defaultArticlePath = path.join(rawDir, 'article_raw.md')
+        if (fs.existsSync(defaultArticlePath)) {
+          const firstLine = fs.readFileSync(defaultArticlePath, 'utf-8').split('\n')[0]?.replace(/^#+\s*/, '').trim()
+          if (firstLine) title = firstLine
+        }
+      }
+      if (!title) title = `文章 ${articleId}`
+      articleMap.set(articleId, { id: articleId, date: dateDir, title, status: 'draft', createdAt: new Date().toISOString() })
+      continue
+    }
+
+    for (const taskFile of taskFiles) {
+      let articleId = dateDir
+      if (taskFile !== 'task.md') {
+        const suffix = taskFile.replace('task', '').replace('.md', '')
+        articleId = `${dateDir}${suffix}`
+      }
+      const taskPath    = path.join(promptDir, taskFile)
+      const articlePath = path.join(rawDir, taskFile.replace('task', 'article_raw'))
+      const titlePath   = path.join(draftsDir, dateDir, `title${taskFile.replace('task.md', '')}.txt`)
+
+      let title = ''
+      let status = 'draft'
+      if (fs.existsSync(titlePath)) {
+        title = fs.readFileSync(titlePath, 'utf-8').trim()
+      } else if (fs.existsSync(articlePath)) {
+        const firstLine = fs.readFileSync(articlePath, 'utf-8').split('\n')[0]?.replace(/^#+\s*/, '').trim()
+        if (firstLine) title = firstLine
+      } else if (fs.existsSync(taskPath)) {
+        const match = fs.readFileSync(taskPath, 'utf-8').match(/文章主题[：:]\s*(.+)/i)
+        if (match) title = match[1].trim()
+      }
+      if (!title) title = `文章 ${articleId}`
+      if (fs.existsSync(articlePath)) status = 'generated'
+      if (!articleMap.has(articleId)) {
+        articleMap.set(articleId, { id: articleId, date: dateDir, title, status, createdAt: new Date().toISOString() })
+      }
+    }
+  }
+  return [...articleMap.values()]
 }
 
 // ── GET /api/articles ─────────────────────────────────────────────────────────
 
 router.get('/', (req, res) => {
   try {
-    if (!fs.existsSync(DRAFTS_DIR)) return res.json([])
-
-    // 用 Map 收集，id 相同时后写的覆盖先写的（去重）
-    const articleMap = new Map()
-    const dateDirs = fs.readdirSync(DRAFTS_DIR)
-      .filter(f => /^\d{8}/.test(f))
-      .sort((a, b) => {
-        const dateA = a.substring(0, 8)
-        const dateB = b.substring(0, 8)
-        return dateA !== dateB ? dateB.localeCompare(dateA) : b.localeCompare(a)
-      })
-
-    for (const dateDir of dateDirs) {
-      const promptDir = path.join(DRAFTS_DIR, dateDir, 'prompt')
-      const rawDir    = path.join(DRAFTS_DIR, dateDir, 'raw')
-      const hasPromptDir = fs.existsSync(promptDir)
-      const hasRawDir    = fs.existsSync(rawDir)
-
-      if (!hasPromptDir && !hasRawDir) continue
-
-      const taskFiles = hasPromptDir
-        ? fs.readdirSync(promptDir).filter(f => f.startsWith('task') && f.endsWith('.md'))
-        : []
-
-      if (taskFiles.length === 0) {
-        // 没有 task 文件，当作单篇兜底
-        const articleId = dateDir
-        let title = ''
-        const titlePath = path.join(DRAFTS_DIR, dateDir, 'title.txt')
-        if (fs.existsSync(titlePath)) title = fs.readFileSync(titlePath, 'utf-8').trim()
-        if (!title) {
-          const defaultArticlePath = path.join(rawDir, 'article_raw.md')
-          if (fs.existsSync(defaultArticlePath)) {
-            const firstLine = fs.readFileSync(defaultArticlePath, 'utf-8').split('\n')[0]?.replace(/^#+\s*/, '').trim()
-            if (firstLine) title = firstLine
-          }
-        }
-        if (!title) title = `文章 ${articleId}`
-        articleMap.set(articleId, { id: articleId, date: dateDir, title, status: 'draft', createdAt: new Date().toISOString() })
-        continue
-      }
-
-      for (const taskFile of taskFiles) {
-        let articleId = dateDir
-        if (taskFile !== 'task.md') {
-          const suffix = taskFile.replace('task', '').replace('.md', '')
-          articleId = `${dateDir}${suffix}`
-        }
-
-        const taskPath    = path.join(promptDir, taskFile)
-        const articlePath = path.join(rawDir, taskFile.replace('task', 'article_raw'))
-        const titlePath   = path.join(DRAFTS_DIR, dateDir, `title${taskFile.replace('task.md', '')}.txt`)
-
-        let title = ''
-        let status = 'draft'
-
-        if (fs.existsSync(titlePath)) {
-          title = fs.readFileSync(titlePath, 'utf-8').trim()
-        } else if (fs.existsSync(articlePath)) {
-          const firstLine = fs.readFileSync(articlePath, 'utf-8').split('\n')[0]?.replace(/^#+\s*/, '').trim()
-          if (firstLine) title = firstLine
-        } else if (fs.existsSync(taskPath)) {
-          const match = fs.readFileSync(taskPath, 'utf-8').match(/文章主题[：:]\s*(.+)/i)
-          if (match) title = match[1].trim()
-        }
-
-        if (!title) title = `文章 ${articleId}`
-        if (fs.existsSync(articlePath)) status = 'generated'
-
-        // 同一 id 已存在（独立目录 + 多任务文件冲突）时保留独立目录版本（跳过覆盖）
-        if (!articleMap.has(articleId)) {
-          articleMap.set(articleId, { id: articleId, date: dateDir, title, status, createdAt: new Date().toISOString() })
-        }
-      }
-    }
-
-    res.json([...articleMap.values()])
+    const userDir = getUserDraftsDir(req.user.id)
+    const articles = scanArticlesInDir(userDir)
+    res.json(articles)
   } catch (error) {
     console.error('Error fetching articles:', error)
     res.status(500).json({ error: error.message })
@@ -137,10 +145,11 @@ router.get('/', (req, res) => {
 router.get('/:articleId', (req, res) => {
   try {
     const { articleId } = req.params
-    const taskPath      = getArticlePath(articleId, 'task')
-    const materialsPath = getArticlePath(articleId, 'materials')
-    const articlePath   = getArticlePath(articleId, 'article')
-    const titlePath     = getArticlePath(articleId, 'title')
+    const uid           = req.user.id
+    const taskPath      = getArticlePath(articleId, 'task',      uid)
+    const materialsPath = getArticlePath(articleId, 'materials', uid)
+    const articlePath   = getArticlePath(articleId, 'article',   uid)
+    const titlePath     = getArticlePath(articleId, 'title',     uid)
 
     ensureDir(path.dirname(taskPath))
     ensureDir(path.dirname(materialsPath))
@@ -164,11 +173,12 @@ router.post('/:articleId', (req, res) => {
   try {
     const { articleId } = req.params
     const { task, materials, article, title } = req.body
+    const uid = req.user.id
 
-    const taskPath      = getArticlePath(articleId, 'task')
-    const materialsPath = getArticlePath(articleId, 'materials')
-    const articlePath   = getArticlePath(articleId, 'article')
-    const titlePath     = getArticlePath(articleId, 'title')
+    const taskPath      = getArticlePath(articleId, 'task',      uid)
+    const materialsPath = getArticlePath(articleId, 'materials', uid)
+    const articlePath   = getArticlePath(articleId, 'article',   uid)
+    const titlePath     = getArticlePath(articleId, 'title',     uid)
 
     ensureDir(path.dirname(taskPath))
     ensureDir(path.dirname(materialsPath))
@@ -258,7 +268,7 @@ ${materials}
     )
 
     const article = response.data.choices[0].message.content
-    const articlePath = getArticlePath(articleId, 'article')
+    const articlePath = getArticlePath(articleId, 'article', req.user.id)
     ensureDir(path.dirname(articlePath))
     fs.writeFileSync(articlePath, article, 'utf-8')
 
@@ -409,7 +419,7 @@ ${materials}
     upstreamRes.data.on('end', () => {
       // ── 6. 持久化到磁盘 ───────────────────────────────────────────────────
       try {
-        const articlePath = getArticlePath(articleId, 'article')
+        const articlePath = getArticlePath(articleId, 'article', req.user.id)
         ensureDir(path.dirname(articlePath))
         fs.writeFileSync(articlePath, fullText, 'utf-8')
       } catch (e) {
@@ -790,8 +800,9 @@ router.get('/:articleId/analyses', (req, res) => {
 router.delete('/:articleId', (req, res) => {
   try {
     const { articleId } = req.params
+    const userDir = getUserDraftsDir(req.user.id)
 
-    const directPath = path.join(DRAFTS_DIR, articleId)
+    const directPath = path.join(userDir, articleId)
     if (fs.existsSync(directPath)) {
       for (const sub of ['prompt', 'raw', 'final']) {
         const subDir = path.join(directPath, sub)
@@ -808,19 +819,19 @@ router.delete('/:articleId', (req, res) => {
     const parts = articleId.split('-')
     const dateDir = parts[0]
     const suffix  = parts.length > 1 ? `-${parts.slice(1).join('-')}` : ''
-    const promptDir = path.join(DRAFTS_DIR, dateDir, 'prompt')
-    const rawDir    = path.join(DRAFTS_DIR, dateDir, 'raw')
+    const promptDir = path.join(userDir, dateDir, 'prompt')
+    const rawDir    = path.join(userDir, dateDir, 'raw')
 
     for (const fp of [
       path.join(promptDir, `task${suffix}.md`),
       path.join(promptDir, `materials${suffix}.md`),
       path.join(rawDir,    `article_raw${suffix}.md`),
-      path.join(DRAFTS_DIR, dateDir, `title${suffix}.txt`),
+      path.join(userDir, dateDir, `title${suffix}.txt`),
     ]) {
       if (fs.existsSync(fp)) fs.unlinkSync(fp)
     }
 
-    for (const dir of [promptDir, rawDir, path.join(DRAFTS_DIR, dateDir)]) {
+    for (const dir of [promptDir, rawDir, path.join(userDir, dateDir)]) {
       if (fs.existsSync(dir) && fs.readdirSync(dir).length === 0) fs.rmdirSync(dir)
     }
 

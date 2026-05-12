@@ -142,7 +142,10 @@ export default function ContentStats({ content, title, articleId, task }: Conten
   // 挂载时加载最近一次分析结果
   useEffect(() => {
     if (!articleId) return
-    fetch(`/api/articles/${articleId}/analyses?limit=1`)
+    const token = localStorage.getItem('auth_token')
+    fetch(`/api/articles/${articleId}/analyses?limit=1`, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    })
       .then(r => r.ok ? r.json() : null)
       .then((data: AnalysisResult[] | null) => {
         if (data && data[0]) setResult(data[0])
@@ -162,9 +165,13 @@ export default function ContentStats({ content, title, articleId, task }: Conten
     setResult(null)
     try {
       const aiConfig = loadAIConfig()
+      const token = localStorage.getItem('auth_token')
       const resp = await fetch(`/api/articles/${articleId}/analyze`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ article: content, task, aiConfig }),
       })
       const data = await resp.json()

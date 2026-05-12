@@ -231,6 +231,56 @@
   margin: 0;
 }
 
+/* ── 存储位置切换 ───────────────────────────────────────────────── */
+.dash-storage-toggle {
+  display: flex;
+  gap: 6px;
+  background: var(--color-surface-strong);
+  border-radius: var(--rounded-sm);
+  padding: 4px;
+}
+
+.dash-storage-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: var(--rounded-xs);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  background: transparent;
+  color: var(--color-muted);
+  transition: all .15s;
+}
+
+.dash-storage-btn.active {
+  background: var(--color-canvas);
+  color: var(--color-brand-teal);
+  box-shadow: 0 1px 4px rgba(0,0,0,.08);
+}
+
+.dash-storage-btn:hover:not(.active) {
+  color: var(--color-body);
+}
+
+/* ── 本地标签 ───────────────────────────────────────────────────── */
+.dash-local-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  background: #ede9fe;
+  color: #5b21b6;
+  border-radius: 99px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
 /* ── 右栏 main ──────────────────────────────────────────────────── */
 .dash-main {
   display: flex;

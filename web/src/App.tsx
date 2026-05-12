@@ -7,27 +7,43 @@ import WeChatDrafts from './pages/WeChatDrafts'
 import StyleEditor from './pages/StyleEditor'
 import AISettings from './pages/AISettings'
 import RagPage from './pages/RagPage'
+import LoginPage from './pages/LoginPage'
+import RegisterPage from './pages/RegisterPage'
+import AdminPage from './pages/AdminPage'
+import PrivateRoute from './components/PrivateRoute'
 import ToastProvider from './components/Toast'
 import { syncAIConfigFromServer } from './utils/aiConfig'
+import { initAuth } from './store/useAuth'
 
 export default function App() {
-  // 启动时从服务端同步 AI 配置到 localStorage
   useEffect(() => {
-    syncAIConfigFromServer().catch(() => {})
+    // 先恢复登录态，再同步 AI 配置
+    initAuth().then(() => {
+      syncAIConfigFromServer().catch(() => {})
+    })
   }, [])
 
   return (
     <BrowserRouter>
       <ToastProvider />
       <Routes>
-        <Route path="/" element={<DashboardPage />} />
-        <Route path="/editor/:articleId" element={<ArticleEditor />} />
-        <Route path="/preview/:articleId" element={<WeChatPreview />} />
-        <Route path="/drafts" element={<WeChatDrafts />} />
-        <Route path="/styles" element={<StyleEditor />} />
-        <Route path="/settings" element={<AISettings />} />
-        <Route path="/rag" element={<RagPage />} />
-        {/* 404 兜底：重定向回首页 */}
+        {/* 公开路由 */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+
+        {/* 登录保护路由 */}
+        <Route path="/" element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
+        <Route path="/editor/:articleId" element={<PrivateRoute><ArticleEditor /></PrivateRoute>} />
+        <Route path="/preview/:articleId" element={<PrivateRoute><WeChatPreview /></PrivateRoute>} />
+        <Route path="/drafts" element={<PrivateRoute><WeChatDrafts /></PrivateRoute>} />
+        <Route path="/styles" element={<PrivateRoute><StyleEditor /></PrivateRoute>} />
+        <Route path="/settings" element={<PrivateRoute><AISettings /></PrivateRoute>} />
+        <Route path="/rag" element={<PrivateRoute><RagPage /></PrivateRoute>} />
+
+        {/* 管理员路由 */}
+        <Route path="/admin" element={<PrivateRoute requireAdmin><AdminPage /></PrivateRoute>} />
+
+        {/* 404 兜底 */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

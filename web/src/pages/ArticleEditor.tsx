@@ -92,11 +92,38 @@ export default function ArticleEditor() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [data.task, data.materials, data.article, articleId])
 
+  // ── 本地文章读写（local: 前缀） ───────────────────────────────────────────
+  const isLocalArticle = articleId.startsWith('local:')
+  const localStorageKey = `local_article_data_${articleId}`
+
+  function loadLocalData(): ArticleData {
+    try {
+      return JSON.parse(localStorage.getItem(localStorageKey) || 'null') || { task: '', materials: '', article: '', title: '' }
+    } catch {
+      return { task: '', materials: '', article: '', title: '' }
+    }
+  }
+
+  function saveLocalData(d: ArticleData) {
+    localStorage.setItem(localStorageKey, JSON.stringify(d))
+    // 同步更新本地文章列表中的标题
+    const title = d.title || d.article.split('\n')[0]?.replace(/^#+\s*/, '') || ''
+    if (title) {
+      const articles: Array<{ id: string; title: string }> = JSON.parse(localStorage.getItem('local_articles') || '[]')
+      const updated = articles.map(a => a.id === articleId ? { ...a, title, status: d.article ? 'generated' : 'draft' } : a)
+      localStorage.setItem('local_articles', JSON.stringify(updated))
+    }
+  }
+
   const fetchArticleData = async () => {
     try {
       setLoading(true)
-      const d = await fetchArticle(articleId)
-      setData(d)
+      if (isLocalArticle) {
+        setData(loadLocalData())
+      } else {
+        const d = await fetchArticle(articleId)
+        setData(d)
+      }
     } catch (err) {
       console.error('加载文章失败', err)
     } finally {
@@ -112,9 +139,14 @@ export default function ArticleEditor() {
     }
     setGeneratingOutline(true)
     try {
-      const resp = await fetch(`/api/articles/${articleId}/outline`, {
+      const apiId = isLocalArticle ? articleId.slice(6) : articleId
+      const token = localStorage.getItem('auth_token')
+      const resp = await fetch(`/api/articles/${apiId}/outline`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ task: data.task, aiConfig }),
       })
       const d = await resp.json()
@@ -137,9 +169,14 @@ export default function ArticleEditor() {
     }
     setRefiningMaterials(true)
     try {
-      const resp = await fetch(`/api/articles/${articleId}/refine-materials`, {
+      const apiId = isLocalArticle ? articleId.slice(6) : articleId
+      const token = localStorage.getItem('auth_token')
+      const resp = await fetch(`/api/articles/${apiId}/refine-materials`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ materials: data.materials, task: data.task, aiConfig }),
       })
       const d = await resp.json()
@@ -154,8 +191,13 @@ export default function ArticleEditor() {
 
   const handleSave = async () => {
     try {
-      await saveArticle(articleId, data)
-      toast.success('保存成功')
+      if (isLocalArticle) {
+        saveLocalData(data)
+        toast.success('已保存到本地')
+      } else {
+        await saveArticle(articleId, data)
+        toast.success('保存成功')
+      }
     } catch {
       toast.error('保存失败，请重试')
     }
@@ -171,7 +213,12 @@ export default function ArticleEditor() {
   }
 
   const handleGenerateComplete = (article: string) => {
-    setData(prev => ({ ...prev, article }))
+    setData(prev => {
+      const next = { ...prev, article }
+      // 本地模式下生成完成后自动存到 localStorage
+      if (isLocalArticle) saveLocalData(next)
+      return next
+    })
     setActiveTab('article')
     toast.success('文章生成成功')
   }
@@ -466,7 +513,7 @@ export default function ArticleEditor() {
 
       {showGenerateModal && (
         <GenerateModal
-          articleId={articleId}
+          articleId={isLocalArticle ? articleId.slice(6) : articleId}
           task={data.task}
           materials={data.materials}
           aiConfig={aiConfig as unknown as Record<string, unknown>}

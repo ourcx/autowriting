@@ -64,9 +64,13 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
 
   async function startStream(signal: AbortSignal) {
     try {
+      const token = localStorage.getItem('auth_token')
       const resp = await fetch(`/api/articles/${articleId}/generate/stream`, {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
         body:    JSON.stringify({ task, materials, aiConfig }),
         signal,
       })

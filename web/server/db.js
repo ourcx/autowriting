@@ -3,6 +3,7 @@
  * 替代 .cache/*.json 文件存储
  *
  * 表：
+ *   users           用户账号（id/username/password_hash/role/disabled/created_at）
  *   cover_cache     封面缓存（替代 .cache/covers/*.json）
  *   cover_history   封面生成历史（替代 cover_history.json）
  *   image_library   图片库元数据（替代 images_metadata.json）
@@ -12,6 +13,7 @@
  *   settings        键值配置（替代 localStorage wx-ai-config-v1）
  */
 import Database from 'better-sqlite3'
+import bcrypt from 'bcryptjs'
 import fs from 'fs'
 import path from 'path'
 import { DATA_DIR } from './config.js'
@@ -30,6 +32,15 @@ db.pragma('foreign_keys = ON')
 // ── 建表 ──────────────────────────────────────────────────────────────────────
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id           TEXT PRIMARY KEY,
+    username     TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    role         TEXT NOT NULL DEFAULT 'user',  -- 'admin' | 'user'
+    disabled     INTEGER NOT NULL DEFAULT 0,
+    created_at   TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS cover_cache (
     cache_key   TEXT PRIMARY KEY,
     image_url   TEXT NOT NULL,
@@ -222,6 +233,50 @@ function migrateIfNeeded() {
 }
 
 migrateIfNeeded()
+
+// ── 初始化 admin 账号（首次启动时创建） ──────────────────────────────────────
+function seedAdminUser() {
+  const existing = db.prepare("SELECT id FROM users WHERE role='admin' LIMIT 1").get()
+  if (existing) return
+
+  const hash = bcrypt.hashSync('admin123', 10)
+  db.prepare(`
+    INSERT OR IGNORE INTO users (id, username, password_hash, role, disabled, created_at)
+    VALUES (?, ?, ?, 'admin', 0, ?)
+  `).run('admin', 'admin', hash, new Date().toISOString())
+  console.log('[DB] 已创建默认管理员账号 admin / admin123，请登录后立即修改密码')
+}
+
+seedAdminUser()
+
+// ── Users API ─────────────────────────────────────────────────────────────────
+
+export function findUserByUsername(username) {
+  return db.prepare('SELECT * FROM users WHERE username = ?').get(username) || null
+}
+
+export function findUserById(id) {
+  return db.prepare('SELECT id, username, role, disabled, created_at FROM users WHERE id = ?').get(id) || null
+}
+
+export function createUser(id, username, passwordHash) {
+  db.prepare(`
+    INSERT INTO users (id, username, password_hash, role, disabled, created_at)
+    VALUES (?, ?, ?, 'user', 0, ?)
+  `).run(id, username, passwordHash, new Date().toISOString())
+}
+
+export function listUsers() {
+  return db.prepare('SELECT id, username, role, disabled, created_at FROM users ORDER BY created_at ASC').all()
+}
+
+export function setUserDisabled(id, disabled) {
+  db.prepare('UPDATE users SET disabled=? WHERE id=?').run(disabled ? 1 : 0, id)
+}
+
+export function updateUserPassword(id, passwordHash) {
+  db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(passwordHash, id)
+}
 
 // ── 封面缓存 API ──────────────────────────────────────────────────────────────
 

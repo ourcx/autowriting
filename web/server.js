@@ -19,6 +19,8 @@ import templatesRouter  from './server/routes/templates.js'
 import settingsRouter   from './server/routes/settings.js'
 import materialsRouter  from './server/routes/materials.js'
 import wechatRouter     from './server/routes/wechat.js'
+import authRouter       from './server/routes/auth.js'
+import adminRouter      from './server/routes/admin.js'
 
 // 数据库初始化（建表 + 迁移旧数据 + 内置模板 seed）
 import { upsertTemplate, listTemplates } from './server/db.js'
@@ -32,6 +34,8 @@ app.use(express.json({ limit: '50mb' }))
 app.use(express.urlencoded({ limit: '50mb', extended: true }))
 
 // ── 路由挂载 ──────────────────────────────────────────────────────────────────
+app.use('/api/auth',       authRouter)
+app.use('/api/admin',      adminRouter)
 app.use('/api/articles',   articlesRouter)
 app.use('/api',            coversRouter)    // covers 路由内部自带 /generate-cover 等路径
 app.use('/api/images',     imagesRouter)

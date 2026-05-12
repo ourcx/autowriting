@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings, Palette, AlertTriangle, PenLine, Database, BookOpen } from 'lucide-react'
+import { Settings, Palette, AlertTriangle, Database, BookOpen, LogOut, Shield } from 'lucide-react'
 import Dashboard from './Dashboard'
 import { useAIReadiness, fetchServerStatus } from '../store/useConfigStore'
+import { useAuth, logout } from '../store/useAuth'
 import './DashboardPage.css'
 
 export default function DashboardPage() {
   const navigate = useNavigate()
   const { articleReady: apiKeyReady } = useAIReadiness()
+  const { user, isAdmin } = useAuth()
   const [wxBound, setWxBound] = useState(false)
 
   useEffect(() => {
@@ -23,10 +25,8 @@ export default function DashboardPage() {
       {/* ── Header ── */}
       <header className="dp-header">
         <div className="dp-logo" onClick={() => navigate('/')}>
-          <div className="dp-logo-mark">
-            <PenLine size={16} />
-          </div>
-          <span>公众号写作</span>
+          <div className="dp-logo-mark">D</div>
+          <span>Dashy</span>
         </div>
 
         <nav className="dp-nav">
@@ -56,6 +56,19 @@ export default function DashboardPage() {
           <button className="dp-nav-btn" onClick={() => navigate('/styles')}>
             <Palette size={14} />
             样式
+          </button>
+          {isAdmin && (
+            <button className="dp-nav-btn" onClick={() => navigate('/admin')}>
+              <Shield size={14} />
+              管理
+            </button>
+          )}
+          <span className="dp-nav-user" title={user?.username}>
+            {user?.username}
+          </span>
+          <button className="dp-nav-btn dp-nav-btn--ghost" onClick={() => { logout(); navigate('/login') }}>
+            <LogOut size={14} />
+            登出
           </button>
         </nav>
       </header>

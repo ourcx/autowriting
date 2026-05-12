@@ -134,9 +134,13 @@ export default function MarkdownEditor({
     setAiResult(null)
     try {
       const aiConfig = loadAIConfig()
+      const token = localStorage.getItem('auth_token')
       const resp = await fetch(`/api/articles/${articleId}/inline-edit`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           selected:    floatMenu.selectedText,
           fullArticle: value,           // 整篇文章，供后端做上下文感知

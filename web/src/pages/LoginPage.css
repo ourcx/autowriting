@@ -1,0 +1,278 @@
+/* ===== Auth Pages — Clay Design System ===== */
+
+.auth-root {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--color-canvas);
+}
+
+/* ---- Left branding panel ---- */
+.auth-brand {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 48px 56px;
+  background: var(--color-brand-teal);
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-brand-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.auth-brand-logo {
+  width: 36px;
+  height: 36px;
+  background: var(--color-brand-ochre);
+  border-radius: var(--rounded-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-brand-teal);
+  flex-shrink: 0;
+}
+
+.auth-brand-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-on-dark);
+  letter-spacing: -0.2px;
+}
+
+.auth-brand-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 48px 0 32px;
+}
+
+.auth-brand-title {
+  font-size: 42px;
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -1.5px;
+  color: var(--color-on-dark);
+  margin-bottom: 20px;
+}
+
+.auth-brand-desc {
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.6);
+  max-width: 320px;
+}
+
+.auth-brand-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 32px;
+}
+
+.auth-brand-pill {
+  padding: 5px 14px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--rounded-pill);
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.8);
+  letter-spacing: 0.2px;
+}
+
+.auth-brand-footer {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+/* decorative accent circles */
+.auth-brand::before {
+  content: '';
+  position: absolute;
+  width: 320px;
+  height: 320px;
+  border-radius: 50%;
+  background: rgba(232, 185, 74, 0.08);
+  top: -80px;
+  right: -80px;
+  pointer-events: none;
+}
+.auth-brand::after {
+  content: '';
+  position: absolute;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: rgba(184, 164, 237, 0.1);
+  bottom: 60px;
+  left: -60px;
+  pointer-events: none;
+}
+
+/* ---- Right form panel ---- */
+.auth-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 56px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+}
+
+.auth-card-head {
+  margin-bottom: 32px;
+}
+
+.auth-card-head h2 {
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.5px;
+  color: var(--color-ink);
+  margin-bottom: 6px;
+}
+
+.auth-card-head p {
+  font-size: 14px;
+  color: var(--color-muted);
+  line-height: 1.5;
+}
+
+/* ---- Form ---- */
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.auth-field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-body-strong);
+  letter-spacing: 0;
+}
+
+.auth-field input {
+  padding: 12px 16px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-md);
+  background: var(--color-canvas);
+  font-size: 14px;
+  color: var(--color-ink);
+  outline: none;
+  transition: border-color 0.15s;
+  height: 44px;
+}
+
+.auth-field input::placeholder {
+  color: var(--color-muted-soft);
+}
+
+.auth-field input:focus {
+  border-color: var(--color-ink);
+}
+
+.auth-submit {
+  margin-top: 4px;
+  padding: 12px 20px;
+  height: 44px;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border: none;
+  border-radius: var(--rounded-md);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  width: 100%;
+}
+
+.auth-submit:hover:not(:disabled) {
+  background: var(--color-primary-active);
+}
+
+.auth-submit:disabled {
+  background: var(--color-primary-disabled);
+  color: var(--color-muted);
+  cursor: not-allowed;
+}
+
+/* ---- Error ---- */
+.auth-error {
+  padding: 10px 14px;
+  background: #fff2f2;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: var(--rounded-md);
+  font-size: 13px;
+  color: var(--color-error);
+  line-height: 1.5;
+}
+
+/* ---- Footer link ---- */
+.auth-footer {
+  margin-top: 24px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.auth-footer a {
+  color: var(--color-ink);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.auth-footer a:hover {
+  color: var(--color-body);
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+  .auth-root {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-brand {
+    padding: 32px 28px;
+    min-height: 200px;
+  }
+
+  .auth-brand-title {
+    font-size: 28px;
+  }
+
+  .auth-brand-body {
+    padding: 24px 0 16px;
+  }
+
+  .auth-brand-desc,
+  .auth-brand-pills,
+  .auth-brand-footer {
+    display: none;
+  }
+
+  .auth-panel {
+    padding: 40px 24px;
+  }
+
+  .auth-card {
+    max-width: 100%;
+  }
+}

@@ -1,8 +1,37 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Calendar, FileText, Trash2, ArrowRight, RefreshCw, Zap } from 'lucide-react'
+import { Plus, Calendar, FileText, Trash2, ArrowRight, RefreshCw, Zap, Server, HardDrive } from 'lucide-react'
 import { fetchArticleList, deleteArticle } from '../utils/apiHelpers'
 import { showConfirm } from '../components/Toast'
 import './Dashboard.css'
+
+// ── 本地文章（localStorage）工具 ─────────────────────────────────────────────
+const LOCAL_ARTICLES_KEY = 'local_articles'
+
+function loadLocalArticles(): Article[] {
+  try {
+    return JSON.parse(localStorage.getItem(LOCAL_ARTICLES_KEY) || '[]')
+  } catch {
+    return []
+  }
+}
+
+function saveLocalArticles(articles: Article[]) {
+  localStorage.setItem(LOCAL_ARTICLES_KEY, JSON.stringify(articles))
+}
+
+function deleteLocalArticle(articleId: string) {
+  const articles = loadLocalArticles().filter(a => a.id !== articleId)
+  saveLocalArticles(articles)
+}
+
+function addLocalArticle(article: Article) {
+  const articles = loadLocalArticles()
+  // 不重复添加
+  if (!articles.find(a => a.id === article.id)) {
+    articles.unshift(article)
+    saveLocalArticles(articles)
+  }
+}
 
 interface Article {
   id: string
@@ -23,14 +52,22 @@ const STATUS_META: Record<string, { label: string; className: string }> = {
   published: { label: '已发布', className: 'status-published' },
 }
 
+// 存储位置类型
+type StorageMode = 'server' | 'local'
+
 export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardProps) {
   const [articles, setArticles] = useState<Article[]>([])
+  const [localArticles, setLocalArticles] = useState<Article[]>([])
   const [loading, setLoading] = useState(true)
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0])
   const [creating, setCreating] = useState(false)
+  const [storageMode, setStorageMode] = useState<StorageMode>('server')
   const titleRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => { loadArticles() }, [])
+  useEffect(() => {
+    loadArticles()
+    setLocalArticles(loadLocalArticles())
+  }, [])
 
   const loadArticles = async () => {
     try {
@@ -51,17 +88,36 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
     if (title) {
       const slug = title.replace(/[^\w\u4e00-\u9fff]/g, '').substring(0, 20)
       articleId = `${dateStr}-${slug}`
-      localStorage.setItem(`article_title_${articleId}`, title)
     } else {
       articleId = `${dateStr}-${Date.now()}`
     }
 
-    setCreating(true)
-    onCreateArticle(articleId)
+    if (storageMode === 'local') {
+      // 本地存储：articleId 加 local: 前缀
+      const localId = `local:${articleId}`
+      const newArticle: Article = {
+        id: localId,
+        date: dateStr,
+        title: title || `文章 ${dateStr}`,
+        status: 'draft',
+        createdAt: new Date().toISOString(),
+      }
+      addLocalArticle(newArticle)
+      setLocalArticles(loadLocalArticles())
+      setCreating(true)
+      onCreateArticle(localId)
+    } else {
+      if (title) {
+        localStorage.setItem(`article_title_${articleId}`, title)
+      }
+      setCreating(true)
+      onCreateArticle(articleId)
+    }
   }
 
   const handleDelete = (articleId: string, e: React.MouseEvent) => {
     e.stopPropagation()
+    const isLocal = articleId.startsWith('local:')
     showConfirm({
       message: '确定删除这篇文章？',
       detail: '删除后无法恢复。',
@@ -69,8 +125,13 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
       danger: true,
       onConfirm: async () => {
         try {
-          await deleteArticle(articleId)
-          loadArticles()
+          if (isLocal) {
+            deleteLocalArticle(articleId)
+            setLocalArticles(loadLocalArticles())
+          } else {
+            await deleteArticle(articleId)
+            loadArticles()
+          }
         } catch (err) {
           console.error('删除失败', err)
         }
@@ -82,6 +143,65 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
     total: articles.length,
     generated: articles.filter(a => a.status === 'generated' || a.status === 'published').length,
     draft: articles.filter(a => a.status === 'draft').length,
+  }
+
+  // 合并列表（服务端在前，本地在后，并标记来源）
+  const allArticles = [
+    ...articles.map(a => ({ ...a, _local: false })),
+    ...localArticles.map(a => ({ ...a, _local: true })),
+  ]
+
+  function renderArticleList(list: typeof allArticles, empty: string) {
+    if (list.length === 0) return (
+      <div className="dash-empty">
+        <div className="dash-empty-icon"><FileText size={32} /></div>
+        <p>{empty}</p>
+        <span>从左边创建第一篇开始</span>
+      </div>
+    )
+    return (
+      <ul className="dash-article-list">
+        {list.map(article => {
+          const meta = STATUS_META[article.status] || STATUS_META.draft
+          return (
+            <li
+              key={article.id}
+              className="dash-article-item"
+              onClick={() => onEditArticle?.(article.id)}
+            >
+              <div className="dash-article-left">
+                <div className="dash-article-dot" data-status={article.status} />
+                <div>
+                  <p className="dash-article-title">
+                    {article.title || '未命名文章'}
+                  </p>
+                  <div className="dash-article-meta">
+                    <span className={`dash-status-tag ${meta.className}`}>
+                      {meta.label}
+                    </span>
+                    {article._local && (
+                      <span className="dash-local-tag">
+                        <HardDrive size={10} />本地
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="dash-article-right">
+                <ArrowRight size={15} className="dash-article-arrow" />
+                <button
+                  className="dash-delete-btn"
+                  onClick={e => handleDelete(article.id, e)}
+                  title="删除"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+    )
   }
 
   return (
@@ -113,6 +233,24 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
               <Plus size={18} />
             </div>
             <h2>新建文章</h2>
+          </div>
+
+          {/* 存储位置选择 */}
+          <div className="dash-storage-toggle">
+            <button
+              className={`dash-storage-btn ${storageMode === 'server' ? 'active' : ''}`}
+              onClick={() => setStorageMode('server')}
+            >
+              <Server size={12} />
+              存服务端
+            </button>
+            <button
+              className={`dash-storage-btn ${storageMode === 'local' ? 'active' : ''}`}
+              onClick={() => setStorageMode('local')}
+            >
+              <HardDrive size={12} />
+              存本地
+            </button>
           </div>
 
           <div className="dash-create-fields">
@@ -164,7 +302,9 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
           </button>
 
           <p className="dash-create-hint">
-            创建后进入编辑器，填写任务要求和素材，一键生成文章
+            {storageMode === 'local'
+              ? '本地模式：数据仅存浏览器，换设备后不可见'
+              : '创建后进入编辑器，填写任务要求和素材，一键生成文章'}
           </p>
         </div>
       </aside>
@@ -188,51 +328,8 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
             <RefreshCw size={20} className="dash-spin" />
             <span>加载中...</span>
           </div>
-        ) : articles.length === 0 ? (
-          <div className="dash-empty">
-            <div className="dash-empty-icon">
-              <FileText size={32} />
-            </div>
-            <p>还没有文章</p>
-            <span>从左边创建第一篇开始</span>
-          </div>
         ) : (
-          <ul className="dash-article-list">
-            {articles.map(article => {
-              const meta = STATUS_META[article.status] || STATUS_META.draft
-              return (
-                <li
-                  key={article.id}
-                  className="dash-article-item"
-                  onClick={() => onEditArticle?.(article.id)}
-                >
-                  <div className="dash-article-left">
-                    <div className="dash-article-dot" data-status={article.status} />
-                    <div>
-                      <p className="dash-article-title">
-                        {article.title || '未命名文章'}
-                      </p>
-                      <div className="dash-article-meta">
-                        <span className={`dash-status-tag ${meta.className}`}>
-                          {meta.label}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="dash-article-right">
-                    <ArrowRight size={15} className="dash-article-arrow" />
-                    <button
-                      className="dash-delete-btn"
-                      onClick={e => handleDelete(article.id, e)}
-                      title="删除"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
+          renderArticleList(allArticles, '还没有文章')
         )}
       </main>
     </div>

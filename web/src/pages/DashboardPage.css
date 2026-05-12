@@ -34,18 +34,20 @@
 .dp-logo-mark {
   width: 30px;
   height: 30px;
-  background: #1a3a3a;
-  color: #fff;
-  border-radius: 8px;
+  background: var(--color-brand-teal);
+  color: var(--color-brand-ochre);
+  border-radius: var(--rounded-sm);
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
   flex-shrink: 0;
-  transition: background 0.15s;
+  transition: opacity 0.15s;
 }
 
 .dp-logo:hover .dp-logo-mark {
-  background: #2d6a4f;
+  opacity: 0.85;
 }
 
 .dp-logo span {
@@ -97,6 +99,30 @@
   background: #fff8d6;
   border-color: #e8b900;
   color: #5a4000;
+}
+
+/* 幽灵登出按钮 */
+.dp-nav-btn--ghost {
+  border-color: transparent;
+  color: var(--color-muted-soft);
+}
+
+.dp-nav-btn--ghost:hover {
+  background: #fff2f2;
+  border-color: #fcc;
+  color: var(--color-error);
+}
+
+/* 用户名显示 */
+.dp-nav-user {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-muted);
+  padding: 0 6px;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ── 主体 ───────────────────────────────────────────────────────── */
