@@ -1,17 +1,23 @@
 /**
  * 管理员路由（仅 admin 角色可访问）
- * GET   /api/admin/users                    → 用户列表
- * PATCH /api/admin/users/:id/disable        → 禁用/启用用户
- * GET   /api/admin/users/:id/articles       → 查看某用户的文章列表
+ * GET    /api/admin/users                    → 用户列表（含文章数）
+ * POST   /api/admin/users                    → 创建用户
+ * PATCH  /api/admin/users/:id/disable        → 禁用/启用用户
+ * PATCH  /api/admin/users/:id/reset-password → 重置用户密码
+ * DELETE /api/admin/users/:id                → 删除用户
+ * GET    /api/admin/users/:id/articles       → 查看某用户的文章列表
  */
 import { Router } from 'express'
 import path from 'path'
+import { randomUUID } from 'crypto'
+import bcrypt from 'bcryptjs'
+import fs from 'fs'
 import { DRAFTS_DIR } from '../config.js'
 import { adminMiddleware } from '../authMiddleware.js'
-import { listUsers, setUserDisabled, findUserById } from '../db.js'
-
-// 复用 articles.js 里的扫描逻辑（这里直接内联，避免循环依赖）
-import fs from 'fs'
+import {
+  listUsers, setUserDisabled, findUserById,
+  createUser, findUserByUsername, updateUserPassword, deleteUser,
+} from '../db.js'
 
 function getUserDraftsDir(userId) {
   return path.join(DRAFTS_DIR, userId)
@@ -96,10 +102,9 @@ router.use(adminMiddleware)
 
 // ── GET /api/admin/users ──────────────────────────────────────────────────────
 
-router.get('/users', (req, res) => {
+router.get('/users', (_req, res) => {
   try {
     const users = listUsers()
-    // 附带每个用户的文章数
     const result = users.map(u => ({
       ...u,
       articleCount: scanArticlesInDir(getUserDraftsDir(u.id)).length,
@@ -107,6 +112,39 @@ router.get('/users', (req, res) => {
     res.json(result)
   } catch (error) {
     console.error('[Admin] 获取用户列表失败:', error)
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// ── POST /api/admin/users（创建用户）─────────────────────────────────────────
+
+router.post('/users', async (req, res) => {
+  try {
+    const { username, password, role = 'user' } = req.body
+    if (!username || !password) {
+      return res.status(400).json({ error: '用户名和密码不能为空' })
+    }
+    if (username.length < 3 || username.length > 20) {
+      return res.status(400).json({ error: '用户名长度需在 3-20 个字符之间' })
+    }
+    if (!/^[a-zA-Z0-9_\u4e00-\u9fa5]+$/.test(username)) {
+      return res.status(400).json({ error: '用户名只能包含字母、数字、下划线或中文' })
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: '密码长度至少 6 位' })
+    }
+    if (!['user', 'admin'].includes(role)) {
+      return res.status(400).json({ error: '角色必须为 user 或 admin' })
+    }
+    const existing = findUserByUsername(username)
+    if (existing) return res.status(409).json({ error: '用户名已存在' })
+
+    const id = randomUUID()
+    const hash = await bcrypt.hash(password, 10)
+    createUser(id, username, hash, role)
+    res.json({ success: true, id, username, role })
+  } catch (error) {
+    console.error('[Admin] 创建用户失败:', error)
     res.status(500).json({ error: error.message })
   }
 })
@@ -125,7 +163,6 @@ router.patch('/users/:id/disable', (req, res) => {
     const user = findUserById(id)
     if (!user) return res.status(404).json({ error: '用户不存在' })
 
-    // 不允许禁用自己（防止把唯一 admin 锁死）
     if (id === req.user.id) {
       return res.status(400).json({ error: '不能禁用自己的账号' })
     }
@@ -134,6 +171,46 @@ router.patch('/users/:id/disable', (req, res) => {
     res.json({ success: true, id, disabled })
   } catch (error) {
     console.error('[Admin] 修改用户状态失败:', error)
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// ── PATCH /api/admin/users/:id/reset-password（重置密码）─────────────────────
+
+router.patch('/users/:id/reset-password', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { password } = req.body
+    if (!password || password.length < 6) {
+      return res.status(400).json({ error: '新密码至少 6 位' })
+    }
+    const user = findUserById(id)
+    if (!user) return res.status(404).json({ error: '用户不存在' })
+
+    const hash = await bcrypt.hash(password, 10)
+    updateUserPassword(id, hash)
+    res.json({ success: true })
+  } catch (error) {
+    console.error('[Admin] 重置密码失败:', error)
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// ── DELETE /api/admin/users/:id（删除用户）───────────────────────────────────
+
+router.delete('/users/:id', (req, res) => {
+  try {
+    const { id } = req.params
+    if (id === req.user.id) {
+      return res.status(400).json({ error: '不能删除自己的账号' })
+    }
+    const user = findUserById(id)
+    if (!user) return res.status(404).json({ error: '用户不存在' })
+
+    deleteUser(id)
+    res.json({ success: true })
+  } catch (error) {
+    console.error('[Admin] 删除用户失败:', error)
     res.status(500).json({ error: error.message })
   }
 })

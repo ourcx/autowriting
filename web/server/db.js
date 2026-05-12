@@ -259,11 +259,11 @@ export function findUserById(id) {
   return db.prepare('SELECT id, username, role, disabled, created_at FROM users WHERE id = ?').get(id) || null
 }
 
-export function createUser(id, username, passwordHash) {
+export function createUser(id, username, passwordHash, role = 'user') {
   db.prepare(`
     INSERT INTO users (id, username, password_hash, role, disabled, created_at)
-    VALUES (?, ?, ?, 'user', 0, ?)
-  `).run(id, username, passwordHash, new Date().toISOString())
+    VALUES (?, ?, ?, ?, 0, ?)
+  `).run(id, username, passwordHash, role, new Date().toISOString())
 }
 
 export function listUsers() {
@@ -276,6 +276,10 @@ export function setUserDisabled(id, disabled) {
 
 export function updateUserPassword(id, passwordHash) {
   db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(passwordHash, id)
+}
+
+export function deleteUser(id) {
+  db.prepare('DELETE FROM users WHERE id=?').run(id)
 }
 
 // ── 封面缓存 API ──────────────────────────────────────────────────────────────
