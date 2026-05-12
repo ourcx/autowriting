@@ -310,7 +310,7 @@ router.post('/:articleId/generate/stream', async (req, res) => {
     let ragContext = ''
     let ragDocs    = []
     try {
-      ragDocs    = await retrieveRelevant(task, { topK: 4, aiConfig: cfg })
+      ragDocs    = await retrieveRelevant(task, { topK: 4, aiConfig: cfg, userId: req.user.id })
       ragContext  = formatRetrievedContext(ragDocs)
       if (ragDocs.length) send('rag', { docs: ragDocs })
     } catch (e) {
@@ -463,6 +463,7 @@ router.post('/:articleId/analyze', async (req, res) => {
       similarArticles = await retrieveRelevant(article.slice(0, 500), {
         topK: 3,
         aiConfig: cfg,
+        userId: req.user.id,
       })
     } catch { /* 无索引时跳过 */ }
 

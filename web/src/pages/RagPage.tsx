@@ -95,9 +95,15 @@ export default function RagPage() {
 
   useEffect(() => { fetchStatus() }, [])
 
+  function authHeaders(): Record<string, string> {
+    const token = localStorage.getItem('auth_token')
+    return token ? { Authorization: `Bearer ${token}` } : {}
+  }
+
   async function fetchStatus() {
     try {
-      const res = await fetch('/api/rag/status')
+      const res = await fetch('/api/rag/status', { headers: authHeaders() })
+      if (res.status === 401) { setStatus({ indexed: false }); return }
       setStatus(await res.json())
     } catch {
       setStatus({ indexed: false })
@@ -127,7 +133,7 @@ export default function RagPage() {
     try {
       const res  = await fetch('/api/rag/index', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body:    JSON.stringify({ aiConfig: embAiConfig }),
       })
       const data = await res.json()
@@ -152,7 +158,7 @@ export default function RagPage() {
     try {
       const res  = await fetch('/api/rag/search', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body:    JSON.stringify({ query: query.trim(), topK: 6, aiConfig: embAiConfig }),
       })
       const data = await res.json()
@@ -329,6 +335,12 @@ export default function RagPage() {
           )}
         </section>
 
+        {/* ══ 索引范围说明 ══ */}
+        <div className="rp-scope-notice">
+          <span className="rp-scope-notice-icon">ⓘ</span>
+          <span>知识库只索引<strong>服务端存储</strong>的文章。新建文章时选择「本地存储」的草稿不会被收录——如需参考历史风格，请改用服务端模式生成。</span>
+        </div>
+
         {/* ══ 索引状态 ══ */}
         <section className="rp-section">
           <div className="rp-section-label">索引状态</div>
@@ -435,7 +447,7 @@ export default function RagPage() {
             <div className="rp-guide-card rp-guide-card--peach">
               <div className="rp-guide-step">02</div>
               <div className="rp-guide-title">构建索引</div>
-              <p>扫描所有草稿的 <code>article_raw.md</code> / <code>task.md</code> / <code>materials.md</code>，切片向量化，存入本地 HNSWLib。</p>
+              <p>扫描服务端保存的草稿（<code>article_raw.md</code> / <code>task.md</code> / <code>materials.md</code>），切片向量化存入 HNSWLib。本地草稿不在范围内。</p>
             </div>
             <div className="rp-guide-card rp-guide-card--lavender">
               <div className="rp-guide-step">03</div>

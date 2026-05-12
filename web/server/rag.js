@@ -15,7 +15,22 @@ import { Document } from '@langchain/core/documents'
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters'
 import { DATA_DIR, DRAFTS_DIR, SERVER_AI_CONFIG } from './config.js'
 
+// 全局共享索引（无 userId 时的回落）
 const INDEX_DIR = path.join(DATA_DIR, 'rag_index')
+
+// 按用户隔离的索引目录
+function getUserIndexDir(userId) {
+  return userId
+    ? path.join(DATA_DIR, 'rag_index_users', String(userId))
+    : INDEX_DIR
+}
+
+// 按用户隔离的草稿目录
+function getUserDraftsDir(userId) {
+  return userId
+    ? path.join(DRAFTS_DIR, String(userId))
+    : DRAFTS_DIR
+}
 
 // ── 自定义 Embeddings 类（直接 fetch，不依赖 LangChain OpenAI 封装）─────────
 // 好处：
@@ -126,13 +141,14 @@ const splitter = new RecursiveCharacterTextSplitter({
 
 // ── 扫描草稿目录，收集所有文档 ────────────────────────────────────────────────
 
-function collectDocs() {
+function collectDocs(userId) {
   const docs = []
-  if (!fs.existsSync(DRAFTS_DIR)) return docs
+  const draftsDir = getUserDraftsDir(userId)
+  if (!fs.existsSync(draftsDir)) return docs
 
-  const dirs = fs.readdirSync(DRAFTS_DIR).filter(f => /^\d{8}/.test(f))
+  const dirs = fs.readdirSync(draftsDir).filter(f => /^\d{8}/.test(f))
   for (const dir of dirs) {
-    const base = path.join(DRAFTS_DIR, dir)
+    const base = path.join(draftsDir, dir)
     const files = [
       { file: path.join(base, 'raw', 'article_raw.md'), type: 'article' },
       { file: path.join(base, 'prompt', 'task.md'),     type: 'task' },
@@ -165,9 +181,9 @@ function collectDocs() {
 
 // ── 构建/更新索引 ─────────────────────────────────────────────────────────────
 
-export async function buildIndex(aiConfig = {}) {
+export async function buildIndex(aiConfig = {}, userId) {
   const embeddings = getEmbeddings(aiConfig)
-  const rawDocs    = collectDocs()
+  const rawDocs    = collectDocs(userId)
   if (rawDocs.length === 0) return { indexed: 0, chunks: 0 }
 
   const langchainDocs = []
@@ -178,22 +194,24 @@ export async function buildIndex(aiConfig = {}) {
     }
   }
 
-  fs.mkdirSync(INDEX_DIR, { recursive: true })
+  const indexDir = getUserIndexDir(userId)
+  fs.mkdirSync(indexDir, { recursive: true })
   const vectorStore = await HNSWLib.fromDocuments(langchainDocs, embeddings)
-  await vectorStore.save(INDEX_DIR)
+  await vectorStore.save(indexDir)
 
   return { indexed: rawDocs.length, chunks: langchainDocs.length }
 }
 
 // ── 检索相关文档 ──────────────────────────────────────────────────────────────
 
-export async function retrieveRelevant(query, { topK = 5, aiConfig = {} } = {}) {
-  if (!fs.existsSync(path.join(INDEX_DIR, 'hnswlib.index'))) {
+export async function retrieveRelevant(query, { topK = 5, aiConfig = {}, userId } = {}) {
+  const indexDir = getUserIndexDir(userId)
+  if (!fs.existsSync(path.join(indexDir, 'hnswlib.index'))) {
     return []  // 未索引，静默返回空
   }
   try {
     const embeddings = getEmbeddings(aiConfig)
-    const vectorStore = await HNSWLib.load(INDEX_DIR, embeddings)
+    const vectorStore = await HNSWLib.load(indexDir, embeddings)
     const results = await vectorStore.similaritySearchWithScore(query, topK)
     // 过滤掉相似度太低的（score < 0.3 in cosine distance）
     return results
@@ -224,14 +242,15 @@ export function formatRetrievedContext(docs) {
 
 // ── 索引状态 ──────────────────────────────────────────────────────────────────
 
-export function getIndexStatus() {
-  const indexFile = path.join(INDEX_DIR, 'hnswlib.index')
+export function getIndexStatus(userId) {
+  const indexDir  = getUserIndexDir(userId)
+  const indexFile = path.join(indexDir, 'hnswlib.index')
   if (!fs.existsSync(indexFile)) return { indexed: false, size: 0 }
   const stat = fs.statSync(indexFile)
   return {
-    indexed: true,
-    size: stat.size,
+    indexed:   true,
+    size:      stat.size,
     updatedAt: stat.mtime.toISOString(),
-    indexDir: INDEX_DIR,
+    indexDir,
   }
 }
