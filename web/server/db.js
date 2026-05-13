@@ -108,6 +108,20 @@ db.exec(`
     value       TEXT NOT NULL,
     updated_at  TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS token_usage (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    article_id     TEXT,
+    user_id        TEXT,
+    operation      TEXT NOT NULL,   -- 'generate' | 'analyze' | 'edit' | 'outline' | 'refine' | 'style'
+    model          TEXT NOT NULL,
+    input_tokens   INTEGER NOT NULL DEFAULT 0,
+    output_tokens  INTEGER NOT NULL DEFAULT 0,
+    total_tokens   INTEGER NOT NULL DEFAULT 0,
+    created_at     TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_token_usage_user ON token_usage(user_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_token_usage_article ON token_usage(article_id, created_at DESC);
 `)
 
 // ── 迁移旧 JSON 文件数据（首次运行时执行一次） ───────────────────────────────
@@ -534,6 +548,58 @@ export function getAllSettings() {
   return Object.fromEntries(rows.map(r => {
     try { return [r.key, JSON.parse(r.value)] } catch { return [r.key, r.value] }
   }))
+}
+
+// ── Token 使用统计 ────────────────────────────────────────────────────────────
+
+/**
+ * 记录一次 LLM 调用的 token 消耗
+ * @param {object} opts
+ * @param {string} [opts.articleId]
+ * @param {string} [opts.userId]
+ * @param {string}  opts.operation  - 'generate'|'analyze'|'edit'|'outline'|'refine'|'style'
+ * @param {string}  opts.model
+ * @param {number} [opts.inputTokens]
+ * @param {number} [opts.outputTokens]
+ * @param {number} [opts.totalTokens]
+ */
+export function recordTokenUsage({ articleId, userId, operation, model, inputTokens = 0, outputTokens = 0, totalTokens = 0 }) {
+  try {
+    db.prepare(`
+      INSERT INTO token_usage (article_id, user_id, operation, model, input_tokens, output_tokens, total_tokens, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      articleId || null,
+      userId    || null,
+      operation,
+      model,
+      inputTokens,
+      outputTokens,
+      totalTokens || (inputTokens + outputTokens),
+      new Date().toISOString(),
+    )
+  } catch (e) {
+    console.warn('[DB] token_usage 写入失败:', e.message)
+  }
+}
+
+/**
+ * 查询用户的 token 使用汇总
+ */
+export function getTokenUsageSummary(userId, days = 30) {
+  const rows = db.prepare(`
+    SELECT operation, model,
+           SUM(input_tokens) AS input_tokens,
+           SUM(output_tokens) AS output_tokens,
+           SUM(total_tokens) AS total_tokens,
+           COUNT(*) AS call_count
+    FROM token_usage
+    WHERE user_id = ?
+      AND created_at >= datetime('now', ? || ' days')
+    GROUP BY operation, model
+    ORDER BY total_tokens DESC
+  `).all(userId, `-${days}`)
+  return rows
 }
 
 console.log(`[DB] SQLite 已连接：${DB_PATH}`)

@@ -15,6 +15,7 @@ import {
   loadHistory, addToHistory,
   addImageToLibrary,
   generatePrompt, generatePlaceholderCover, generateWithDallE, generateWithSiliconFlow, generateWithQwenEdit,
+  maskApiKey,
 } from '../utils.js'
 import { deleteCoverHistory, clearCoverHistory, getCoverCacheCount } from '../db.js'
 
@@ -34,18 +35,14 @@ router.post('/generate-cover', async (req, res) => {
     const sfModel     = cfg.siliconflowModel  || 'Kwai-Kolors/Kolors'
     const coverApiKey = cfg.coverApiKey || cfg.stabilityApiKey || ''
 
-    // ── 诊断日志 ─────────────────────────────────────────────────────────────
+    // ── 诊断日志（已脱敏） ───────────────────────────────────────────────────
     console.log('[cover] ─────────────────────────────────')
     console.log('[cover] provider (req)    :', reqProvider)
     console.log('[cover] provider (final)  :', provider)
     console.log('[cover] sfKey             :', sfKey ? `sk-...${sfKey.slice(-6)} (len=${sfKey.length})` : '❌ 空')
     console.log('[cover] sfModel           :', sfModel)
     console.log('[cover] coverApiKey       :', coverApiKey ? `sk-...${coverApiKey.slice(-6)}` : '❌ 空')
-    console.log('[cover] aiConfig received :', JSON.stringify(aiConfig || {}, (k, v) =>
-      (k.toLowerCase().includes('key') || k.toLowerCase().includes('api')) && typeof v === 'string' && v.length > 8
-        ? `sk-...${v.slice(-6)}`
-        : v
-    ))
+    console.log('[cover] aiConfig received :', JSON.stringify(maskApiKey(aiConfig || {})))
     console.log('[cover] ─────────────────────────────────')
 
     // ── 本地 SVG 占位（不需要 API） ─────────────────────────────────────────

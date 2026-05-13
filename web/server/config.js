@@ -53,6 +53,29 @@ export const PUBLISH_HISTORY_FILE = path.join(DATA_DIR, 'publish_history.json')
 
 export const PORT = process.env.PORT || 3000
 
+// ── AGENTS.md 内容缓存 ────────────────────────────────────────────────────────
+
+let _agentsCache = null
+
+/**
+ * 读取 AGENTS.md 写作规范，带内存缓存。
+ * 文件发生变化时自动清除缓存，下次调用时重新读取。
+ */
+export function getAgentsContent() {
+  if (_agentsCache !== null) return _agentsCache
+  if (!fs.existsSync(AGENTS_FILE)) {
+    _agentsCache = ''
+    return ''
+  }
+  _agentsCache = fs.readFileSync(AGENTS_FILE, 'utf-8')
+  // 监听文件变动，自动失效缓存（只注册一次）
+  fs.watchFile(AGENTS_FILE, { interval: 5000 }, () => {
+    console.log('[Config] AGENTS.md 已变化，清除写作规范缓存')
+    _agentsCache = null
+  })
+  return _agentsCache
+}
+
 // ── 服务端 AI 配置 ───────────────────────────────────────────────────────────
 
 export const SERVER_AI_CONFIG = {

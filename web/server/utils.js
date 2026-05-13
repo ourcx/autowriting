@@ -14,6 +14,75 @@ import {
   addPublishHistory,
 } from './db.js'
 
+// ── LLM 请求构建（统一入口）────────────────────────────────────────────────────
+
+/**
+ * 根据 cfg 构造 LLM 请求所需的 url、model、headers
+ * 支持 maas / openai / openai-compat 三种 provider
+ */
+export function buildLLMRequest(cfg) {
+  const headers = { 'Content-Type': 'application/json' }
+  let url = '', model = ''
+
+  if (cfg.articleProvider === 'maas') {
+    url   = `${cfg.maasBaseUrl}/chat/completions`
+    model = cfg.maasModel || 'deepseek-v4-pro'
+    headers['api-key']           = cfg.maasApiKey
+    headers['x-maas-user-email'] = cfg.maasUserEmail
+    headers['x-maas-app-id']     = 'qs-api'
+  } else {
+    url   = `${cfg.articleBaseUrl}/chat/completions`
+    model = cfg.articleModel || 'gpt-4o'
+    headers['Authorization'] = `Bearer ${cfg.articleApiKey}`
+  }
+
+  return { url, model, headers }
+}
+
+/**
+ * 带指数退避重试的 LLM 调用（非流式）
+ * 只重试网络错误和 5xx，4xx 直接抛出
+ */
+export async function callLLMWithRetry(url, body, headers, maxRetries = 3) {
+  let lastErr
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await axios.post(url, body, { headers, timeout: 90000 })
+    } catch (err) {
+      lastErr = err
+      const status = err.response?.status
+      // 4xx 客户端错误（如鉴权失败、参数错误）不重试
+      if (status && status >= 400 && status < 500) throw err
+      if (i < maxRetries - 1) {
+        const delay = Math.min(1000 * Math.pow(2, i), 8000)
+        console.warn(`[LLM] 第 ${i + 1} 次请求失败，${delay}ms 后重试:`, err.message)
+        await new Promise(r => setTimeout(r, delay))
+      }
+    }
+  }
+  throw lastErr
+}
+
+/**
+ * 日志脱敏：将对象中的 apiKey / api_key / key 字段打码
+ */
+export function maskApiKey(obj) {
+  if (!obj || typeof obj !== 'object') return obj
+  const result = {}
+  for (const [k, v] of Object.entries(obj)) {
+    const lk = k.toLowerCase()
+    if ((lk.includes('key') || lk.includes('api') || lk.includes('secret')) &&
+        typeof v === 'string' && v.length > 8) {
+      result[k] = `sk-...${v.slice(-6)}`
+    } else if (v && typeof v === 'object') {
+      result[k] = maskApiKey(v)
+    } else {
+      result[k] = v
+    }
+  }
+  return result
+}
+
 // ── 文件系统工具 ──────────────────────────────────────────────────────────────
 
 export function ensureDir(dir) {

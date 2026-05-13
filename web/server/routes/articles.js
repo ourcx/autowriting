@@ -12,10 +12,10 @@ import { Router } from 'express'
 import fs from 'fs'
 import path from 'path'
 import axios from 'axios'
-import { DRAFTS_DIR, AGENTS_FILE, SERVER_AI_CONFIG } from '../config.js'
-import { ensureDir } from '../utils.js'
+import { DRAFTS_DIR, SERVER_AI_CONFIG, getAgentsContent } from '../config.js'
+import { ensureDir, buildLLMRequest, callLLMWithRetry } from '../utils.js'
 import { retrieveRelevant, formatRetrievedContext } from '../rag.js'
-import { saveAnalysis, getLatestAnalysis, listAnalyses } from '../db.js'
+import { saveAnalysis, getLatestAnalysis, listAnalyses, recordTokenUsage } from '../db.js'
 import { authMiddleware } from '../authMiddleware.js'
 
 const router = Router()
@@ -209,10 +209,14 @@ router.post('/:articleId/generate', async (req, res) => {
 
     const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
 
-    let agentsContent = ''
-    if (fs.existsSync(AGENTS_FILE)) {
-      agentsContent = fs.readFileSync(AGENTS_FILE, 'utf-8')
+    if (!cfg.articleApiKey && cfg.articleProvider !== 'maas') {
+      return res.status(400).json({ error: '未配置 API Key，请前往「AI 配置」页面设置后重试' })
     }
+    if (cfg.articleProvider === 'maas' && !cfg.maasApiKey) {
+      return res.status(400).json({ error: '未配置 MaaS API Key，请前往「AI 配置」页面设置后重试' })
+    }
+
+    const agentsContent = getAgentsContent()
 
     const userPrompt = `你是一个专业的内容创作助手。请严格按照以下要求完成文章写作任务。
 
@@ -229,48 +233,33 @@ ${materials}
 
 现在请根据以上规范和素材，直接输出完整的文章内容（纯 Markdown 格式，不要有任何其他说明）：`
 
-    let requestHeaders = { 'Content-Type': 'application/json' }
-    let requestUrl = ''
-    let requestModel = ''
+    const { url, model, headers } = buildLLMRequest(cfg)
 
-    if (cfg.articleProvider === 'maas') {
-      requestUrl   = `${cfg.maasBaseUrl}/chat/completions`
-      requestModel = 'deepseek-v4-pro'
-      requestHeaders['api-key']           = cfg.maasApiKey
-      requestHeaders['x-maas-user-email'] = cfg.maasUserEmail
-      requestHeaders['x-maas-app-id']     = 'qs-api'
-    } else {
-      requestUrl   = `${cfg.articleBaseUrl}/chat/completions`
-      requestModel = cfg.articleModel || 'gpt-4o'
-      requestHeaders['Authorization'] = `Bearer ${cfg.articleApiKey}`
-    }
-
-    if (!cfg.articleApiKey && cfg.articleProvider !== 'maas') {
-      return res.status(400).json({ error: '未配置 API Key，请前往「AI 配置」页面设置后重试' })
-    }
-    if (cfg.articleProvider === 'maas' && !cfg.maasApiKey) {
-      return res.status(400).json({ error: '未配置 MaaS API Key，请前往「AI 配置」页面设置后重试' })
-    }
-
-    const response = await axios.post(
-      requestUrl,
-      {
-        model: requestModel,
-        messages: [
-          { role: 'system', content: '你是一个专业的内容创作助手，擅长按照规范和要求生成高质量的文章内容。' },
-          { role: 'user',   content: userPrompt },
-        ],
-        temperature: 0.9,
-        max_tokens: 4096,
-        stream: false,
-      },
-      { headers: requestHeaders }
-    )
+    const response = await callLLMWithRetry(url, {
+      model,
+      messages: [
+        { role: 'system', content: '你是一个专业的内容创作助手，擅长按照规范和要求生成高质量的文章内容。' },
+        { role: 'user',   content: userPrompt },
+      ],
+      temperature: 0.9,
+      max_tokens: 4096,
+      stream: false,
+    }, headers)
 
     const article = response.data.choices[0].message.content
     const articlePath = getArticlePath(articleId, 'article', req.user.id)
     ensureDir(path.dirname(articlePath))
     fs.writeFileSync(articlePath, article, 'utf-8')
+
+    // 记录 token 使用
+    const usage = response.data.usage
+    if (usage) {
+      recordTokenUsage({
+        articleId, userId: req.user.id, operation: 'generate', model,
+        inputTokens: usage.prompt_tokens, outputTokens: usage.completion_tokens,
+        totalTokens: usage.total_tokens,
+      })
+    }
 
     res.json({ article })
   } catch (error) {
@@ -297,6 +286,21 @@ router.post('/:articleId/generate/stream', async (req, res) => {
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
   }
 
+  // 已生成内容（用于中断时恢复）
+  let fullText = ''
+
+  // 中断时将已生成内容持久化到磁盘
+  const savePartial = () => {
+    if (fullText.length < 50) return
+    try {
+      const articlePath = getArticlePath(articleId, 'article', req.user.id)
+      ensureDir(path.dirname(articlePath))
+      fs.writeFileSync(articlePath, fullText, 'utf-8')
+    } catch (e) {
+      console.warn('[Stream] 中断时保存部分内容失败:', e.message)
+    }
+  }
+
   try {
     if (!task || !materials) {
       send('error', { message: '任务和素材不能为空' })
@@ -305,27 +309,30 @@ router.post('/:articleId/generate/stream', async (req, res) => {
 
     const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
 
+    if (!cfg.articleApiKey && cfg.articleProvider !== 'maas') {
+      send('error', { message: '未配置 API Key，请前往「AI 配置」页面设置后重试' })
+      return res.end()
+    }
+    if (cfg.articleProvider === 'maas' && !cfg.maasApiKey) {
+      send('error', { message: '未配置 MaaS API Key，请前往「AI 配置」页面设置后重试' })
+      return res.end()
+    }
+
     // ── 1. RAG 检索 ───────────────────────────────────────────────────────────
     send('status', { step: 'rag', message: '正在检索往期相关文章...' })
-    let ragContext = ''
-    let ragDocs    = []
+    let ragDocs = []
     try {
-      ragDocs    = await retrieveRelevant(task, { topK: 4, aiConfig: cfg, userId: req.user.id })
-      ragContext  = formatRetrievedContext(ragDocs)
+      ragDocs = await retrieveRelevant(task, { topK: 4, aiConfig: cfg, userId: req.user.id })
+      const ragContext = formatRetrievedContext(ragDocs)
       if (ragDocs.length) send('rag', { docs: ragDocs })
+      var ragSection = ragContext ? `\n\n# 往期相关内容参考\n${ragContext}\n` : ''
     } catch (e) {
       console.warn('[Stream] RAG 检索失败（继续生成）:', e.message)
+      var ragSection = ''
     }
 
-    // ── 2. 读取写作规范 ───────────────────────────────────────────────────────
-    let agentsContent = ''
-    if (fs.existsSync(AGENTS_FILE)) {
-      agentsContent = fs.readFileSync(AGENTS_FILE, 'utf-8')
-    }
-
-    const ragSection = ragContext
-      ? `\n\n# 往期相关内容参考\n${ragContext}\n`
-      : ''
+    // ── 2. 读取写作规范（带缓存）─────────────────────────────────────────────
+    const agentsContent = getAgentsContent()
 
     const userPrompt = `你是一个专业的内容创作助手。请严格按照以下要求完成文章写作任务。
 
@@ -342,39 +349,16 @@ ${materials}
 
 现在请根据以上规范和素材，直接输出完整的文章内容（纯 Markdown 格式，不要有任何其他说明）：`
 
-    // ── 3. 构造请求参数 ───────────────────────────────────────────────────────
-    let requestHeaders = { 'Content-Type': 'application/json' }
-    let requestUrl = ''
-    let requestModel = ''
-
-    if (cfg.articleProvider === 'maas') {
-      requestUrl   = `${cfg.maasBaseUrl}/chat/completions`
-      requestModel = 'deepseek-v4-pro'
-      requestHeaders['api-key']           = cfg.maasApiKey
-      requestHeaders['x-maas-user-email'] = cfg.maasUserEmail
-      requestHeaders['x-maas-app-id']     = 'qs-api'
-    } else {
-      requestUrl   = `${cfg.articleBaseUrl}/chat/completions`
-      requestModel = cfg.articleModel || 'gpt-4o'
-      requestHeaders['Authorization'] = `Bearer ${cfg.articleApiKey}`
-    }
-
-    if (!cfg.articleApiKey && cfg.articleProvider !== 'maas') {
-      send('error', { message: '未配置 API Key，请前往「AI 配置」页面设置后重试' })
-      return res.end()
-    }
-    if (cfg.articleProvider === 'maas' && !cfg.maasApiKey) {
-      send('error', { message: '未配置 MaaS API Key，请前往「AI 配置」页面设置后重试' })
-      return res.end()
-    }
+    // ── 3. 构造请求参数（统一函数）──────────────────────────────────────────
+    const { url, model, headers } = buildLLMRequest(cfg)
 
     // ── 4. 流式请求上游 LLM ───────────────────────────────────────────────────
     send('status', { step: 'generate', message: 'AI 正在生成文章...' })
 
     const upstreamRes = await axios.post(
-      requestUrl,
+      url,
       {
-        model: requestModel,
+        model,
         messages: [
           { role: 'system', content: '你是一个专业的内容创作助手，擅长按照规范和要求生成高质量的文章内容。' },
           { role: 'user',   content: userPrompt },
@@ -383,15 +367,11 @@ ${materials}
         max_tokens: 4096,
         stream: true,
       },
-      {
-        headers: requestHeaders,
-        responseType: 'stream',
-      }
+      { headers, responseType: 'stream' }
     )
 
     // ── 5. 逐行解析 OpenAI SSE，转发给前端 ───────────────────────────────────
-    let fullText = ''
-    let buffer   = ''
+    let buffer = ''
 
     upstreamRes.data.on('data', (chunk) => {
       buffer += chunk.toString('utf-8')
@@ -426,18 +406,31 @@ ${materials}
         console.error('[Stream] 写入文章失败:', e.message)
       }
 
+      // 流式结束时 token 数无法精确获取，记录估算值（1 token ≈ 1.5 个汉字）
+      recordTokenUsage({
+        articleId, userId: req.user.id, operation: 'generate', model,
+        outputTokens: Math.ceil(fullText.length / 1.5),
+      })
+
       send('done', { article: fullText, ragCount: ragDocs.length })
       res.end()
     })
 
     upstreamRes.data.on('error', (e) => {
       console.error('[Stream] 上游流错误:', e.message)
-      send('error', { message: e.message })
+      savePartial()  // 中断时保存已生成内容
+      send('error', { message: e.message, partial: fullText.length > 0 })
       res.end()
+    })
+
+    // 客户端主动断开时也保存
+    req.on('close', () => {
+      if (!res.writableEnded) savePartial()
     })
 
   } catch (error) {
     console.error('[Stream] 生成失败:', error.response?.data || error.message)
+    savePartial()
     const msg = error.response?.data?.error?.message || error.message
     send('error', { message: msg })
     res.end()
@@ -474,11 +467,8 @@ router.post('/:articleId/analyze', async (req, res) => {
         ).join('\n\n')
       : ''
 
-    // ── 2. 读取写作规范 ───────────────────────────────────────────────────────
-    let agentsContent = ''
-    if (fs.existsSync(AGENTS_FILE)) {
-      agentsContent = fs.readFileSync(AGENTS_FILE, 'utf-8')
-    }
+    // ── 2. 读取写作规范（带缓存）─────────────────────────────────────────────
+    const agentsContent = getAgentsContent()
 
     const taskContext = task ? `\n\n# 本次写作任务\n${task}` : ''
 
@@ -522,36 +512,18 @@ ${article}
   "topSuggestion": <最重要的一条改进建议，不超过80字>
 }`
 
-    // ── 3. 调用 LLM ──────────────────────────────────────────────────────────
-    let requestHeaders = { 'Content-Type': 'application/json' }
-    let requestUrl = ''
-    let requestModel = ''
+    // ── 3. 调用 LLM（带重试）──────────────────────────────────────────────────
+    const { url, model, headers } = buildLLMRequest(cfg)
 
-    if (cfg.articleProvider === 'maas') {
-      requestUrl   = `${cfg.maasBaseUrl}/chat/completions`
-      requestModel = 'deepseek-v4-pro'
-      requestHeaders['api-key']           = cfg.maasApiKey
-      requestHeaders['x-maas-user-email'] = cfg.maasUserEmail
-      requestHeaders['x-maas-app-id']     = 'qs-api'
-    } else {
-      requestUrl   = `${cfg.articleBaseUrl}/chat/completions`
-      requestModel = cfg.articleModel || 'gpt-4o'
-      requestHeaders['Authorization'] = `Bearer ${cfg.articleApiKey}`
-    }
-
-    const llmRes = await axios.post(
-      requestUrl,
-      {
-        model: requestModel,
-        messages: [
-          { role: 'system', content: '你是专业的文章分析助手，只输出合法 JSON，不加任何解释或 Markdown 代码块。' },
-          { role: 'user',   content: prompt },
-        ],
-        temperature: 0.3,
-        max_tokens: 2048,
-      },
-      { headers: requestHeaders }
-    )
+    const llmRes = await callLLMWithRetry(url, {
+      model,
+      messages: [
+        { role: 'system', content: '你是专业的文章分析助手，只输出合法 JSON，不加任何解释或 Markdown 代码块。' },
+        { role: 'user',   content: prompt },
+      ],
+      temperature: 0.3,
+      max_tokens: 2048,
+    }, headers)
 
     const raw = llmRes.data.choices[0].message.content.trim()
     // 去掉可能的 ```json 包裹
@@ -563,6 +535,16 @@ ${article}
     // 自动保存到 SQLite
     try { saveAnalysis(articleId, fullResult) } catch (e) { console.warn('[Analyze] 保存分析结果失败:', e.message) }
 
+    // 记录 token 使用
+    const usage = llmRes.data.usage
+    if (usage) {
+      recordTokenUsage({
+        articleId, userId: req.user.id, operation: 'analyze', model,
+        inputTokens: usage.prompt_tokens, outputTokens: usage.completion_tokens,
+        totalTokens: usage.total_tokens,
+      })
+    }
+
     res.json(fullResult)
   } catch (error) {
     const msg = error.response?.data?.error?.message || error.message
@@ -570,25 +552,6 @@ ${article}
     res.status(500).json({ error: msg })
   }
 })
-
-// ── 公共工具：构造 LLM 请求参数 ──────────────────────────────────────────────
-
-function buildLLMRequest(cfg) {
-  const headers = { 'Content-Type': 'application/json' }
-  let url = '', model = ''
-  if (cfg.articleProvider === 'maas') {
-    url   = `${cfg.maasBaseUrl}/chat/completions`
-    model = 'deepseek-v4-pro'
-    headers['api-key']           = cfg.maasApiKey
-    headers['x-maas-user-email'] = cfg.maasUserEmail
-    headers['x-maas-app-id']     = 'qs-api'
-  } else {
-    url   = `${cfg.articleBaseUrl}/chat/completions`
-    model = cfg.articleModel || 'gpt-4o'
-    headers['Authorization'] = `Bearer ${cfg.articleApiKey}`
-  }
-  return { url, model, headers }
-}
 
 // ── POST /api/articles/:articleId/inline-edit  (AI 内联编辑) ─────────────────
 // body: { selected: string, action: 'polish'|'shorten'|'expand'|'rewrite-lead', aiConfig }
@@ -650,7 +613,7 @@ ${selected}`,
     const prompt = ACTION_PROMPTS[action]
     if (!prompt) return res.status(400).json({ error: '不支持的操作类型' })
 
-    const llmRes = await axios.post(url, {
+    const llmRes = await callLLMWithRetry(url, {
       model,
       messages: [
         {
@@ -661,7 +624,16 @@ ${selected}`,
       ],
       temperature: 0.65,
       max_tokens: 1200,
-    }, { headers })
+    }, headers)
+
+    const usage = llmRes.data.usage
+    if (usage) {
+      recordTokenUsage({
+        articleId: req.params.articleId, userId: req.user.id, operation: 'edit',
+        model, inputTokens: usage.prompt_tokens, outputTokens: usage.completion_tokens,
+        totalTokens: usage.total_tokens,
+      })
+    }
 
     res.json({ result: llmRes.data.choices[0].message.content.trim() })
   } catch (error) {
@@ -685,8 +657,7 @@ router.post('/:articleId/outline', async (req, res) => {
     const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
     const { url, model, headers } = buildLLMRequest(cfg)
 
-    let agentsContent = ''
-    if (fs.existsSync(AGENTS_FILE)) agentsContent = fs.readFileSync(AGENTS_FILE, 'utf-8')
+    const agentsContent = getAgentsContent()
 
     const prompt = `你是一个专业的内容策划助手。根据以下写作任务要求，生成一份清晰的文章写作大纲。
 
@@ -704,7 +675,7 @@ ${task}
 3. 总共 3-5 个主章节，结构符合任务要求
 4. 不要写"大纲如下"等废话，直接输出大纲内容`
 
-    const llmRes = await axios.post(url, {
+    const llmRes = await callLLMWithRetry(url, {
       model,
       messages: [
         { role: 'system', content: '你是专业的内容策划助手，只输出大纲内容，Markdown 格式。' },
@@ -712,7 +683,16 @@ ${task}
       ],
       temperature: 0.8,
       max_tokens: 1024,
-    }, { headers })
+    }, headers)
+
+    const usage = llmRes.data.usage
+    if (usage) {
+      recordTokenUsage({
+        articleId: req.params.articleId, userId: req.user.id, operation: 'outline',
+        model, inputTokens: usage.prompt_tokens, outputTokens: usage.completion_tokens,
+        totalTokens: usage.total_tokens,
+      })
+    }
 
     res.json({ outline: llmRes.data.choices[0].message.content.trim() })
   } catch (error) {
@@ -762,7 +742,7 @@ ${materials}
 ## 写作角度建议
 （根据素材，建议 2-3 个差异化的写作切入角度）`
 
-    const llmRes = await axios.post(url, {
+    const llmRes = await callLLMWithRetry(url, {
       model,
       messages: [
         { role: 'system', content: '你是专业的素材整理助手，只输出整理后的 Markdown 内容，不加任何解释。' },
@@ -770,7 +750,16 @@ ${materials}
       ],
       temperature: 0.5,
       max_tokens: 2048,
-    }, { headers })
+    }, headers)
+
+    const usage = llmRes.data.usage
+    if (usage) {
+      recordTokenUsage({
+        articleId: req.params.articleId, userId: req.user.id, operation: 'refine',
+        model, inputTokens: usage.prompt_tokens, outputTokens: usage.completion_tokens,
+        totalTokens: usage.total_tokens,
+      })
+    }
 
     res.json({ refined: llmRes.data.choices[0].message.content.trim() })
   } catch (error) {

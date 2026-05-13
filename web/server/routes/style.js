@@ -3,8 +3,9 @@
  * POST /api/generate-style
  */
 import { Router } from 'express'
-import axios from 'axios'
 import { SERVER_AI_CONFIG } from '../config.js'
+import { buildLLMRequest, callLLMWithRetry } from '../utils.js'
+import { recordTokenUsage } from '../db.js'
 
 const router = Router()
 
@@ -14,12 +15,15 @@ router.post('/generate-style', async (req, res) => {
     if (!prompt) return res.status(400).json({ error: '缺少 prompt 参数' })
 
     const aiConfig = { ...SERVER_AI_CONFIG, ...clientAiConfig }
-    const isMaas   = aiConfig.articleProvider === 'maas' && aiConfig.maasApiKey
-    const apiKey   = isMaas ? aiConfig.maasApiKey : (aiConfig.articleApiKey || aiConfig.openaiApiKey)
-    const baseUrl  = isMaas ? (aiConfig.maasBaseUrl || SERVER_AI_CONFIG.maasBaseUrl) : (aiConfig.articleBaseUrl || 'https://api.openai.com/v1')
-    const model    = isMaas ? (aiConfig.maasModel || 'deepseek-v3') : (aiConfig.articleModel || 'gpt-4o')
 
-    if (!apiKey) return res.status(400).json({ error: '未配置 AI API Key' })
+    if (!aiConfig.articleApiKey && aiConfig.articleProvider !== 'maas') {
+      return res.status(400).json({ error: '未配置 AI API Key' })
+    }
+    if (aiConfig.articleProvider === 'maas' && !aiConfig.maasApiKey) {
+      return res.status(400).json({ error: '未配置 MaaS API Key' })
+    }
+
+    const { url, model, headers } = buildLLMRequest(aiConfig)
 
     const systemPrompt = `你是一名专业的微信公众号 CSS 设计师，专门为微信公众号文章设计高质量排版样式。
 
@@ -97,22 +101,24 @@ ${baseCSS.slice(0, 2000)}
 7. 表格用斑马纹，th 有背景色
 8. 只输出 CSS 代码，从 \`#wemd {\` 开始`
 
-    const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }
-    if (isMaas && aiConfig.maasUserEmail) headers['X-User-Email'] = aiConfig.maasUserEmail
+    const response = await callLLMWithRetry(url, {
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: userPrompt },
+      ],
+      temperature: 0.8,
+      max_tokens: 3000,
+    }, headers)
 
-    const response = await axios.post(
-      `${baseUrl}/chat/completions`,
-      {
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user',   content: userPrompt },
-        ],
-        temperature: 0.8,
-        max_tokens: 3000,
-      },
-      { headers, timeout: 60000 }
-    )
+    const usage = response.data.usage
+    if (usage) {
+      recordTokenUsage({
+        userId: req.user?.id, operation: 'style', model,
+        inputTokens: usage.prompt_tokens, outputTokens: usage.completion_tokens,
+        totalTokens: usage.total_tokens,
+      })
+    }
 
     const css = response.data.choices?.[0]?.message?.content?.trim() || ''
     const cleanCss = css
