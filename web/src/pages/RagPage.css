@@ -378,8 +378,36 @@
   margin-top: 1px;
 }
 
-.rp-icon-ok   { color: #22c55e; flex-shrink: 0; margin-top: 1px; }
-.rp-icon-warn { color: #f59e0b; flex-shrink: 0; margin-top: 1px; }
+.rp-icon-ok       { color: var(--color-success);  flex-shrink: 0; margin-top: 1px; }
+.rp-icon-warn     { color: var(--color-warning);   flex-shrink: 0; margin-top: 1px; }
+.rp-icon-building { color: var(--color-brand-teal); flex-shrink: 0; margin-top: 1px; }
+
+/* 进度条 — mint / ochre 品牌色渐变 */
+.rp-progress-bar {
+  margin-top: var(--spacing-sm);
+  height: 4px;
+  border-radius: var(--rounded-pill);
+  background: var(--color-hairline);
+  overflow: hidden;
+}
+
+.rp-progress-bar-inner {
+  height: 100%;
+  border-radius: var(--rounded-pill);
+  /* mint → ochre → mint 品牌色循环 */
+  background: linear-gradient(90deg, var(--color-brand-mint), var(--color-brand-ochre), var(--color-brand-mint));
+  background-size: 200% 100%;
+}
+
+.rp-progress-bar-animate {
+  animation: rp-progress-slide 1.5s linear infinite;
+  width: 60%;
+}
+
+@keyframes rp-progress-slide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(280%); }
+}
 
 .rp-build-log {
   font-size: 13px;

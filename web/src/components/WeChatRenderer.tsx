@@ -377,8 +377,14 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
         return
       }
       setPushDone(true)
-      toast.success('已推送到草稿箱！在微信公众平台草稿箱中可见')
-      setTimeout(() => setPushDone(false), 4000)
+      // 推送成功后显示带跳转链接的提示
+      toast.success('草稿已推送到微信！点击前往公众平台发布', {
+        duration: 0, // 不自动消失
+        action: {
+          label: '去发布',
+          onClick: () => window.open('https://mp.weixin.qq.com', '_blank'),
+        },
+      })
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '推送失败')
     } finally {

@@ -587,7 +587,8 @@ export function recordTokenUsage({ articleId, userId, operation, model, inputTok
  * 查询用户的 token 使用汇总
  */
 export function getTokenUsageSummary(userId, days = 30) {
-  const rows = db.prepare(`
+  // 按操作类型+模型汇总
+  const byOperation = db.prepare(`
     SELECT operation, model,
            SUM(input_tokens) AS input_tokens,
            SUM(output_tokens) AS output_tokens,
@@ -599,7 +600,32 @@ export function getTokenUsageSummary(userId, days = 30) {
     GROUP BY operation, model
     ORDER BY total_tokens DESC
   `).all(userId, `-${days}`)
-  return rows
+
+  // 按天汇总（最近 days 天，用于趋势图）
+  const byDay = db.prepare(`
+    SELECT strftime('%Y-%m-%d', created_at) AS day,
+           SUM(total_tokens) AS total_tokens,
+           COUNT(*) AS call_count
+    FROM token_usage
+    WHERE user_id = ?
+      AND created_at >= datetime('now', ? || ' days')
+    GROUP BY day
+    ORDER BY day ASC
+  `).all(userId, `-${days}`)
+
+  // 总计
+  const totals = db.prepare(`
+    SELECT SUM(input_tokens) AS input_tokens,
+           SUM(output_tokens) AS output_tokens,
+           SUM(total_tokens) AS total_tokens,
+           COUNT(*) AS call_count,
+           COUNT(DISTINCT DATE(created_at)) AS active_days
+    FROM token_usage
+    WHERE user_id = ?
+      AND created_at >= datetime('now', ? || ' days')
+  `).get(userId, `-${days}`)
+
+  return { byOperation, byDay, totals }
 }
 
 console.log(`[DB] SQLite 已连接：${DB_PATH}`)

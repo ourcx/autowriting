@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Calendar, FileText, Trash2, ArrowRight, RefreshCw, Zap, Server, HardDrive } from 'lucide-react'
+import { Plus, Calendar, FileText, Trash2, ArrowRight, RefreshCw, Zap, Server, HardDrive, AlertTriangle, Upload } from 'lucide-react'
 import { fetchArticleList, deleteArticle } from '../utils/apiHelpers'
-import { showConfirm } from '../components/Toast'
+import { showConfirm, toast } from '../components/Toast'
 import './Dashboard.css'
 
 // ── 本地文章（localStorage）工具 ─────────────────────────────────────────────
@@ -55,6 +55,38 @@ const STATUS_META: Record<string, { label: string; className: string }> = {
 // 存储位置类型
 type StorageMode = 'server' | 'local'
 
+// 本地文章迁移到服务端
+async function migrateLocalToServer(articles: Article[]): Promise<{ ok: number; fail: number }> {
+  let ok = 0, fail = 0
+  for (const a of articles) {
+    try {
+      const raw = localStorage.getItem(`local_article_data_${a.id}`)
+      if (!raw) continue
+      const data = JSON.parse(raw)
+      const token = localStorage.getItem('auth_token')
+      // 用真实 articleId（去掉 local: 前缀）创建
+      const serverId = a.id.replace(/^local:/, '')
+      await fetch(`/api/articles/${serverId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(data),
+      })
+      // 删除本地数据
+      localStorage.removeItem(`local_article_data_${a.id}`)
+      ok++
+    } catch {
+      fail++
+    }
+  }
+  // 清理本地文章列表
+  const remaining = loadLocalArticles().filter(a => !articles.find(b => b.id === a.id) || fail > 0)
+  saveLocalArticles(remaining)
+  return { ok, fail }
+}
+
 export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardProps) {
   const [articles, setArticles] = useState<Article[]>([])
   const [localArticles, setLocalArticles] = useState<Article[]>([])
@@ -62,12 +94,29 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0])
   const [creating, setCreating] = useState(false)
   const [storageMode, setStorageMode] = useState<StorageMode>('server')
+  const [migrating, setMigrating] = useState(false)
   const titleRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     loadArticles()
     setLocalArticles(loadLocalArticles())
   }, [])
+
+  const handleMigrateLocal = async () => {
+    if (localArticles.length === 0) return
+    setMigrating(true)
+    try {
+      const { ok, fail } = await migrateLocalToServer(localArticles)
+      setLocalArticles(loadLocalArticles())
+      await loadArticles()
+      if (fail === 0) toast.success(`成功迁移 ${ok} 篇文章到服务端`)
+      else toast.warn(`迁移完成：${ok} 篇成功，${fail} 篇失败`)
+    } catch {
+      toast.error('迁移失败，请重试')
+    } finally {
+      setMigrating(false)
+    }
+  }
 
   const loadArticles = async () => {
     try {
@@ -163,6 +212,10 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
       <ul className="dash-article-list">
         {list.map(article => {
           const meta = STATUS_META[article.status] || STATUS_META.draft
+          // 格式化日期：从 date 字段 "20260512" 转为 "05-12"
+          const dateStr = article.date
+            ? `${article.date.slice(4, 6)}-${article.date.slice(6, 8)}`
+            : ''
           return (
             <li
               key={article.id}
@@ -179,6 +232,9 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
                     <span className={`dash-status-tag ${meta.className}`}>
                       {meta.label}
                     </span>
+                    {dateStr && (
+                      <span className="dash-meta-date">{dateStr}</span>
+                    )}
                     {article._local && (
                       <span className="dash-local-tag">
                         <HardDrive size={10} />本地
@@ -311,6 +367,24 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
 
       {/* ── 右栏：文章列表 ───────────────────────────── */}
       <main className="dash-main">
+        {/* 本地存储警告横幅 */}
+        {localArticles.length > 0 && (
+          <div className="dash-local-warning">
+            <AlertTriangle size={13} />
+            <span>
+              有 <strong>{localArticles.length}</strong> 篇文章仅存在本地浏览器，清除缓存或换设备后会丢失
+            </span>
+            <button
+              className="dash-migrate-btn"
+              onClick={handleMigrateLocal}
+              disabled={migrating}
+            >
+              <Upload size={11} />
+              {migrating ? '迁移中...' : '迁移到服务端'}
+            </button>
+          </div>
+        )}
+
         <div className="dash-list-header">
           <h3>文章列表</h3>
           <button

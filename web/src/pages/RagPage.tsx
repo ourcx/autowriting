@@ -1,10 +1,10 @@
 /**
  * RAG 管理页  /rag
  * - Embedding 配置（Key / Base URL / 模型）存 localStorage
- * - 索引状态 + 一键重建
+ * - 索引状态 + 一键重建（异步，轮询进度）
  * - 相似度搜索测试
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Database, RefreshCw, Search,
@@ -16,10 +16,15 @@ import { useConfigStore, updateLocalConfig } from '../store/useConfigStore'
 import './RagPage.css'
 
 interface IndexStatus {
-  indexed:    boolean
-  size?:      number
-  updatedAt?: string
-  indexDir?:  string
+  indexed:     boolean
+  size?:       number
+  updatedAt?:  string
+  indexDir?:   string
+  building?:   boolean
+  progress?:   string
+  buildError?: string | null
+  buildResult?: { indexed: number; chunks: number } | null
+  startedAt?:  string | null
 }
 
 interface RagDoc {
@@ -68,6 +73,7 @@ export default function RagPage() {
   const [status,    setStatus]    = useState<IndexStatus | null>(null)
   const [building,  setBuilding]  = useState(false)
   const [buildLog,  setBuildLog]  = useState<{ ok: boolean; msg: string } | null>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // ── 搜索 ──────────────────────────────────────────────────────────────────
   const [query,     setQuery]     = useState('')
@@ -93,7 +99,10 @@ export default function RagPage() {
     embeddingExtraHeaders:embHeaders     || undefined,
   }
 
-  useEffect(() => { fetchStatus() }, [])
+  useEffect(() => {
+    fetchStatus()
+    return () => { if (pollRef.current) clearInterval(pollRef.current) }
+  }, [])
 
   function authHeaders(): Record<string, string> {
     const token = localStorage.getItem('auth_token')
@@ -104,10 +113,29 @@ export default function RagPage() {
     try {
       const res = await fetch('/api/rag/status', { headers: authHeaders() })
       if (res.status === 401) { setStatus({ indexed: false }); return }
-      setStatus(await res.json())
+      const data: IndexStatus = await res.json()
+      setStatus(data)
+      // 如果还在构建中就保持轮询，否则停止
+      if (!data.building && pollRef.current) {
+        clearInterval(pollRef.current)
+        pollRef.current = null
+        // 构建完毕，更新日志
+        if (data.buildError) {
+          setBuildLog({ ok: false, msg: `失败：${data.buildError}` })
+          setBuilding(false)
+        } else if (data.buildResult) {
+          setBuildLog({ ok: true, msg: `成功索引 ${data.buildResult.indexed} 篇文档，切分为 ${data.buildResult.chunks} 个片段` })
+          setBuilding(false)
+        }
+      }
     } catch {
       setStatus({ indexed: false })
     }
+  }
+
+  function startPolling() {
+    if (pollRef.current) return
+    pollRef.current = setInterval(fetchStatus, 1500)
   }
 
   function saveEmbConfig() {
@@ -138,14 +166,13 @@ export default function RagPage() {
       })
       const data = await res.json()
       if (data.error) throw new Error(data.error)
-      setBuildLog({ ok: true, msg: `成功索引 ${data.indexed} 篇文档，切分为 ${data.chunks} 个片段` })
-      toast.success('索引构建完成')
-      fetchStatus()
+      // 异步构建：立即刷新状态并开始轮询
+      await fetchStatus()
+      startPolling()
     } catch (e: unknown) {
       const msg = (e as Error).message
       setBuildLog({ ok: false, msg: `失败：${msg}` })
       toast.error('构建失败：' + msg)
-    } finally {
       setBuilding(false)
     }
   }
@@ -348,6 +375,8 @@ export default function RagPage() {
             <div className="rp-status-left">
               {status === null ? (
                 <span className="rp-dot-loading" />
+              ) : (status.building || building) ? (
+                <RefreshCw size={20} className="rp-spin rp-icon-building" />
               ) : status.indexed ? (
                 <CheckCircle size={20} className="rp-icon-ok" />
               ) : (
@@ -355,30 +384,44 @@ export default function RagPage() {
               )}
               <div>
                 <div className="rp-status-title">
-                  {status === null           && '加载中...'}
-                  {status?.indexed === false && '尚未建立索引'}
-                  {status?.indexed === true  && '索引已就绪'}
+                  {status === null                           && '加载中...'}
+                  {status !== null && (status.building || building) && `构建中：${status.progress || '准备中...'}`}
+                  {status !== null && !status.building && !building && !status.indexed && '尚未建立索引'}
+                  {status !== null && !status.building && !building && status.indexed  && '索引已就绪'}
                 </div>
                 <div className="rp-status-meta">
-                  {status?.indexed && status.size      && <span>{fmtSize(status.size)}</span>}
-                  {status?.indexed && status.updatedAt && <span>更新于 {new Date(status.updatedAt).toLocaleString('zh-CN')}</span>}
-                  {status?.indexed && status.indexDir  && <span className="rp-mono">{status.indexDir}</span>}
-                  {!status?.indexed && status !== null && <span>扫描草稿目录，向量化后存入本地 HNSWLib</span>}
+                  {status?.building && status.startedAt && (
+                    <span>开始于 {new Date(status.startedAt).toLocaleTimeString('zh-CN')}</span>
+                  )}
+                  {!status?.building && !building && status?.indexed && status.size && <span>{fmtSize(status.size)}</span>}
+                  {!status?.building && !building && status?.indexed && status.updatedAt && (
+                    <span>更新于 {new Date(status.updatedAt).toLocaleString('zh-CN')}</span>
+                  )}
+                  {!status?.indexed && !status?.building && !building && status !== null && (
+                    <span>扫描草稿目录，向量化后存入本地 HNSWLib</span>
+                  )}
                 </div>
               </div>
             </div>
             <button
-              className={`rp-btn-primary${building ? ' rp-btn-loading' : ''}`}
+              className={`rp-btn-primary${(building || status?.building) ? ' rp-btn-loading' : ''}`}
               onClick={handleBuild}
-              disabled={building || !hasKey || embDirty}
+              disabled={building || status?.building || !hasKey || embDirty}
               title={!hasKey ? '请先配置 Key' : embDirty ? '请先保存 Embedding 配置' : ''}
             >
-              <RefreshCw size={14} className={building ? 'rp-spin' : ''} />
-              {building ? '构建中...' : status?.indexed ? '重新构建' : '立即构建'}
+              <RefreshCw size={14} className={(building || status?.building) ? 'rp-spin' : ''} />
+              {(building || status?.building) ? '构建中...' : status?.indexed ? '重新构建' : '立即构建'}
             </button>
           </div>
 
-          {buildLog && (
+          {/* 构建中进度条 */}
+          {(building || status?.building) && (
+            <div className="rp-progress-bar">
+              <div className="rp-progress-bar-inner rp-progress-bar-animate" />
+            </div>
+          )}
+
+          {buildLog && !building && !status?.building && (
             <div className={`rp-build-log${buildLog.ok ? '' : ' rp-build-log--error'}`}>
               {buildLog.msg}
             </div>

@@ -1,12 +1,14 @@
 /**
  * 配置路由（存储在 SQLite settings 表）
- * GET    /api/settings            获取所有配置
- * GET    /api/settings/:key       获取单个配置项
- * POST   /api/settings            批量设置（body: { key: value, ... }）
- * PUT    /api/settings/:key       设置单个配置项（body: { value }）
+ * GET    /api/settings                获取所有配置
+ * GET    /api/settings/token-usage    Token 用量统计（需登录）
+ * GET    /api/settings/:key           获取单个配置项
+ * POST   /api/settings                批量设置（body: { key: value, ... }）
+ * PUT    /api/settings/:key           设置单个配置项（body: { value }）
  */
 import { Router } from 'express'
-import { getSetting, setSetting, getAllSettings } from '../db.js'
+import { getSetting, setSetting, getAllSettings, getTokenUsageSummary } from '../db.js'
+import { authMiddleware } from '../authMiddleware.js'
 
 const router = Router()
 
@@ -14,6 +16,17 @@ const router = Router()
 router.get('/', (req, res) => {
   try {
     res.json(getAllSettings())
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// GET /api/settings/token-usage?days=30  （必须在 /:key 之前）
+router.get('/token-usage', authMiddleware, (req, res) => {
+  try {
+    const days = Math.min(parseInt(req.query.days || '30', 10) || 30, 365)
+    const summary = getTokenUsageSummary(req.user.id, days)
+    res.json({ days, ...summary })
   } catch (error) {
     res.status(500).json({ error: error.message })
   }

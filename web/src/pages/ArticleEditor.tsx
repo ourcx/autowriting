@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from '../components/Toast'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Zap, Save, Edit3, Palette, Settings, AlertTriangle, Plus, Trash2, Pencil, Sparkles, LayoutList } from 'lucide-react'
+import { ArrowLeft, Zap, Save, Edit3, Palette, Settings, AlertTriangle, Plus, Trash2, Pencil, Sparkles, LayoutList, CheckCircle, ChevronRight, GripVertical } from 'lucide-react'
 import { useAIReadiness, fetchServerStatus } from '../store/useConfigStore'
 import { fetchArticle, saveArticle } from '../utils/apiHelpers'
 import CoverGenerator from '../components/CoverGenerator'
@@ -28,6 +28,15 @@ interface ArticleData {
 
 type TabId = 'task' | 'materials' | 'article' | 'analysis' | 'cover' | 'history' | 'library'
 
+// 流程步骤定义
+const FLOW_STEPS: { id: TabId; label: string; check: (d: ArticleData) => boolean }[] = [
+  { id: 'task',      label: '任务要求', check: d => d.task.trim().length >= 20 },
+  { id: 'materials', label: '素材采集', check: d => d.materials.trim().length >= 30 },
+  { id: 'article',   label: '生成文章', check: d => d.article.trim().length > 100 },
+  { id: 'cover',     label: '生成封面', check: () => false }, // 无自动完成态
+  { id: 'analysis',  label: '内容分析', check: () => false },
+]
+
 export default function ArticleEditor() {
   const { articleId = '' } = useParams<{ articleId: string }>()
   const navigate = useNavigate()
@@ -46,6 +55,8 @@ export default function ArticleEditor() {
 
   // AI 生成大纲
   const [generatingOutline, setGeneratingOutline] = useState(false)
+  // 大纲编辑态：null=未生成, string=待确认的大纲内容
+  const [pendingOutline, setPendingOutline] = useState<string | null>(null)
 
   // AI 整理素材
   const [refiningMaterials, setRefiningMaterials] = useState(false)
@@ -151,10 +162,10 @@ export default function ArticleEditor() {
       })
       const d = await resp.json()
       if (!resp.ok) throw new Error(d.error || '生成失败')
-      const outlineBlock = `\n\n---\n\n## AI 生成大纲\n\n${d.outline}`
-      setData(prev => ({ ...prev, materials: prev.materials + outlineBlock }))
+      // 不直接追加，而是进入「待确认」状态让用户先编辑
+      setPendingOutline(d.outline)
       setActiveTab('materials')
-      toast.success('大纲已追加到素材库')
+      toast.success('大纲已生成，请确认后追加到素材库')
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : '生成大纲失败')
     }
@@ -328,26 +339,42 @@ export default function ArticleEditor() {
 
       {/* Tabs + 内容区 */}
       <div className="editor-container">
-        <div className="editor-tabs">
-          {(
-            [
-              ['task',      '任务要求'],
-              ['materials', '素材采集'],
-              ['article',   '文章内容'],
-              ['analysis',  '内容分析'],
-              ['cover',     '生成封面'],
-              ['history',   '生成历史'],
-              ['library',   '图片库'],
-            ] as [TabId, string][]
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              className={`tab ${activeTab === id ? 'active' : ''}`}
-              onClick={() => setActiveTab(id)}
-            >
-              {label}
-            </button>
-          ))}
+
+        {/* ── 流程进度条 ── */}
+        <div className="editor-flow-bar">
+          {FLOW_STEPS.map((step, idx) => {
+            const done = step.check(data)
+            const isActive = activeTab === step.id
+            return (
+              <button
+                key={step.id}
+                className={`flow-step ${isActive ? 'flow-step--active' : ''} ${done ? 'flow-step--done' : ''}`}
+                onClick={() => setActiveTab(step.id)}
+              >
+                <span className="flow-step-num">
+                  {done ? <CheckCircle size={13} /> : idx + 1}
+                </span>
+                <span className="flow-step-label">{step.label}</span>
+                {idx < FLOW_STEPS.length - 1 && <ChevronRight size={12} className="flow-step-sep" />}
+              </button>
+            )
+          })}
+          {/* 其余 Tab 以普通样式显示 */}
+          <div className="flow-extra-tabs">
+            {(['history', 'library'] as TabId[]).map(id => (
+              <button
+                key={id}
+                className={`tab tab-extra ${activeTab === id ? 'active' : ''}`}
+                onClick={() => setActiveTab(id)}
+              >
+                {id === 'history' ? '生成历史' : '图片库'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="editor-tabs" style={{ display: 'none' }}>
+          {/* 隐藏旧 tabs，保留结构兼容 */}
         </div>
 
         <div className="editor-content">
@@ -449,15 +476,48 @@ export default function ArticleEditor() {
                       className="materials-refine-btn"
                       onClick={handleRefineMaterials}
                       disabled={refiningMaterials || !data.materials}
-                      title="AI 读取当前素材，整理为结构化格式"
+                      title="AI 读取当前素材，整理为结构化格式（会自动去重）"
                     >
                       {refiningMaterials
                         ? <><span className="task-outline-spin" />整理中...</>
-                        : <><Sparkles size={12} />AI 整理</>}
+                        : <><Sparkles size={12} />AI 整理+去重</>}
                     </button>
                   </div>
                   <p>materials.md — 可直接编辑，也可从左侧采集后写入</p>
                 </div>
+
+                {/* 大纲待确认卡片 */}
+                {pendingOutline !== null && (
+                  <div className="outline-confirm-card">
+                    <div className="outline-confirm-header">
+                      <div className="outline-confirm-title">
+                        <GripVertical size={14} />
+                        AI 生成大纲（可编辑后追加）
+                      </div>
+                      <button className="outline-confirm-close" onClick={() => setPendingOutline(null)}>✕</button>
+                    </div>
+                    <textarea
+                      className="outline-confirm-editor"
+                      value={pendingOutline}
+                      onChange={e => setPendingOutline(e.target.value)}
+                    />
+                    <div className="outline-confirm-actions">
+                      <button className="outline-btn-cancel" onClick={() => setPendingOutline(null)}>放弃</button>
+                      <button
+                        className="outline-btn-apply"
+                        onClick={() => {
+                          const block = `\n\n---\n\n## AI 生成大纲\n\n${pendingOutline}`
+                          setData(prev => ({ ...prev, materials: prev.materials + block }))
+                          setPendingOutline(null)
+                          toast.success('大纲已追加到素材库')
+                        }}
+                      >
+                        追加到素材库
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <textarea
                   value={data.materials}
                   onChange={e => setData(prev => ({ ...prev, materials: e.target.value }))}

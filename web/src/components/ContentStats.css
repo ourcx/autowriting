@@ -144,10 +144,42 @@
   margin-top: 2px;
 }
 
+/* 禁词高亮 */
 .ci-found {
   display: inline;
   color: var(--color-error);
-  font-style: italic;
+  font-weight: 600;
+}
+
+/* 出现次数 badge-pill (error 色调) */
+.ci-count {
+  display: inline-block;
+  margin-left: var(--spacing-xxs);
+  padding: 2px var(--spacing-xs);
+  background: #fef2f2;   /* error tint */
+  color: var(--color-error);
+  border-radius: var(--rounded-pill);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.4;
+}
+
+/* 修改建议文字 */
+.ci-reason {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+/* 禁词子项缩进 — 用 error 色左边框 */
+.checklist-item--sub {
+  margin-left: var(--spacing-lg);
+  padding-left: var(--spacing-xs);
+  border-left: 2px solid #fca5a5;  /* error 40% tint */
+  background: var(--color-canvas) !important;
+  border-radius: 0 var(--rounded-xs) var(--rounded-xs) 0;
 }
 
 /* ── 目录折叠 ─────────────────────────────────────────────────────────────── */

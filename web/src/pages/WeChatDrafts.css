@@ -313,28 +313,60 @@
 /* 操作区 */
 .wd-card-actions {
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
 }
 
+/* 导入编辑按钮 — button-secondary 变体，用 lavender 品牌色 */
+.wd-card-import-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xxs);
+  padding: 12px 20px;
+  height: 44px;
+  border: 1px solid var(--color-brand-mint);
+  border-radius: var(--rounded-md);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.wd-card-import-btn:hover:not(:disabled) {
+  background: var(--color-surface-soft);
+}
+
+.wd-card-import-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* 预览按钮 — button-secondary */
 .wd-card-open-btn {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 7px 12px;
-  border: 1px solid #e5e5e5;
-  border-radius: 10px;
-  background: #fffaf0;
-  color: #4a4a4a;
-  font-size: 13px;
-  font-weight: 500;
+  gap: var(--spacing-xxs);
+  padding: 12px 20px;
+  height: 44px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-md);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 600;
   text-decoration: none;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s;
   white-space: nowrap;
+  line-height: 1;
 }
 
 .wd-card-open-btn:hover {
-  background: #f0f7f4;
-  border-color: #a4d4c5;
-  color: #1a3a3a;
+  background: var(--color-surface-soft);
 }
 
 /* ── 加载更多 ── */
@@ -367,4 +399,273 @@
 .wd-load-more-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* ════════════════════════════════════════
+   Tab 导航 — category-tab token
+════════════════════════════════════════ */
+.wd-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 10px 24px;
+  background: var(--color-canvas);
+  border-bottom: 1px solid var(--color-hairline);
+  flex-shrink: 0;
+}
+
+.wd-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border: none;
+  border-radius: var(--rounded-pill);
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  line-height: 1.4;
+}
+.wd-tab:hover { background: var(--color-surface-soft); color: var(--color-body); }
+
+.wd-tab--active {
+  background: var(--color-surface-card);
+  color: var(--color-ink);
+  font-weight: 600;
+}
+
+.wd-tab-count {
+  background: var(--color-surface-strong);
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: var(--rounded-pill);
+  line-height: 1.5;
+}
+.wd-tab--active .wd-tab-count {
+  background: var(--color-brand-mint);
+  color: var(--color-ink);
+}
+
+/* ════════════════════════════════════════
+   统一按钮变体 — button-secondary 规格
+════════════════════════════════════════ */
+.wd-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 14px;
+  height: 36px;
+  border-radius: var(--rounded-md);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+  white-space: nowrap;
+  line-height: 1;
+  border: 1px solid var(--color-hairline);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  text-decoration: none;
+}
+.wd-btn:hover:not(:disabled) { background: var(--color-surface-soft); }
+.wd-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* 导入 — mint 边框 */
+.wd-btn--import { border-color: var(--color-brand-mint); }
+.wd-btn--import:hover:not(:disabled) { background: #f0faf6; }
+
+/* 发布 — teal 背景（primary 风格）*/
+.wd-btn--publish {
+  background: var(--color-brand-teal);
+  color: var(--color-on-dark);
+  border-color: var(--color-brand-teal);
+}
+.wd-btn--publish:hover:not(:disabled) { background: #0f2828; border-color: #0f2828; }
+
+/* 预览 — 默认 secondary */
+.wd-btn--preview { }
+
+/* 删除 — error 色 */
+.wd-btn--delete {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-muted-soft);
+  padding: 8px 10px;
+}
+.wd-btn--delete:hover:not(:disabled) {
+  background: #fff2f2;
+  color: var(--color-error);
+  border-color: #fca5a5;
+}
+
+/* ════════════════════════════════════════
+   草稿卡片 actions 改为水平方向
+════════════════════════════════════════ */
+.wd-card-actions {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+/* 阅读数徽章 */
+.wd-card-reads {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--color-brand-teal);
+  font-weight: 500;
+}
+
+/* ════════════════════════════════════════
+   已发布 — 统计 banner
+════════════════════════════════════════ */
+.wd-stats-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--color-surface-card);
+  border-radius: var(--rounded-lg);
+  font-size: 13px;
+  color: var(--color-muted);
+  margin-bottom: 12px;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+  flex-wrap: wrap;
+}
+.wd-stats-item {
+  color: var(--color-body);
+}
+.wd-stats-item strong {
+  color: var(--color-ink);
+  font-weight: 600;
+}
+
+/* ════════════════════════════════════════
+   素材库 — 工具栏
+════════════════════════════════════════ */
+.wd-mat-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 24px;
+  background: var(--color-surface-soft);
+  border-bottom: 1px solid var(--color-hairline);
+  flex-shrink: 0;
+}
+
+.wd-mat-type-btn {
+  padding: 6px 16px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-pill);
+  background: var(--color-canvas);
+  color: var(--color-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.wd-mat-type-btn:hover { background: var(--color-surface-soft); color: var(--color-body); }
+.wd-mat-type-btn--active {
+  background: var(--color-ink);
+  color: var(--color-on-dark);
+  border-color: var(--color-ink);
+  font-weight: 600;
+}
+
+.wd-mat-total {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--color-muted-soft);
+}
+
+/* ════════════════════════════════════════
+   素材库 — 图片网格
+════════════════════════════════════════ */
+.wd-mat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.wd-mat-img-card {
+  border-radius: var(--rounded-lg);
+  overflow: hidden;
+  border: 1px solid var(--color-hairline);
+  background: var(--color-canvas);
+  transition: box-shadow 0.15s;
+}
+.wd-mat-img-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+
+.wd-mat-img-wrap {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  background: var(--color-surface-soft);
+}
+.wd-mat-img-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.wd-mat-img-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.wd-mat-img-wrap:hover .wd-mat-img-overlay { opacity: 1; }
+
+.wd-mat-del-btn,
+.wd-mat-open-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--rounded-md);
+  cursor: pointer;
+  transition: background 0.15s;
+  border: none;
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  text-decoration: none;
+}
+.wd-mat-del-btn:hover:not(:disabled)  { background: var(--color-error); }
+.wd-mat-open-btn:hover { background: rgba(255,255,255,0.3); }
+.wd-mat-del-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.wd-mat-img-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-body);
+  padding: 6px 8px 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wd-mat-img-time {
+  font-size: 11px;
+  color: var(--color-muted-soft);
+  padding: 0 8px 8px;
 }

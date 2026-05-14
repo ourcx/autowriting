@@ -17,11 +17,17 @@ import './Toast.css'
 
 type ToastType = 'success' | 'error' | 'warn' | 'info'
 
+interface ToastAction {
+  label: string
+  onClick: () => void
+}
+
 interface ToastItem {
   id: number
   type: ToastType
   message: string
-  duration: number
+  duration: number   // 0 = 不自动消失
+  action?: ToastAction
 }
 
 interface ConfirmItem {
@@ -37,7 +43,12 @@ interface ConfirmItem {
 
 // ── 全局事件总线 ─────────────────────────────────────────────
 
-type ToastEvent = { type: ToastType; message: string; duration?: number }
+interface ToastOptions {
+  duration?: number
+  action?: ToastAction
+}
+
+type ToastEvent = { type: ToastType; message: string } & ToastOptions
 type ConfirmEvent = Omit<ConfirmItem, 'id'>
 
 let _toastDispatch: ((e: ToastEvent) => void) | null = null
@@ -47,14 +58,23 @@ let _idSeq = 0
 // ── 公开 API ─────────────────────────────────────────────────
 
 export const toast = {
-  success: (msg: string, duration = 2500) =>
-    _toastDispatch?.({ type: 'success', message: msg, duration }),
-  error:   (msg: string, duration = 4000) =>
-    _toastDispatch?.({ type: 'error', message: msg, duration }),
-  warn:    (msg: string, duration = 3500) =>
-    _toastDispatch?.({ type: 'warn', message: msg, duration }),
-  info:    (msg: string, duration = 2500) =>
-    _toastDispatch?.({ type: 'info', message: msg, duration }),
+  success: (msg: string, opts?: ToastOptions | number) => {
+    const o = typeof opts === 'number' ? { duration: opts } : opts
+    _toastDispatch?.({ type: 'success', message: msg, duration: 2500, ...o })
+  },
+  error: (msg: string, opts?: ToastOptions | number) => {
+    // 错误默认不自动消失（duration: 0），需要用户手动关闭
+    const o = typeof opts === 'number' ? { duration: opts } : opts
+    _toastDispatch?.({ type: 'error', message: msg, duration: 0, ...o })
+  },
+  warn: (msg: string, opts?: ToastOptions | number) => {
+    const o = typeof opts === 'number' ? { duration: opts } : opts
+    _toastDispatch?.({ type: 'warn', message: msg, duration: 4000, ...o })
+  },
+  info: (msg: string, opts?: ToastOptions | number) => {
+    const o = typeof opts === 'number' ? { duration: opts } : opts
+    _toastDispatch?.({ type: 'info', message: msg, duration: 2500, ...o })
+  },
 }
 
 export function showConfirm(opts: Omit<ConfirmItem, 'id'>) {
@@ -86,10 +106,17 @@ export default function ToastProvider() {
 
   const addToast = useCallback((e: ToastEvent) => {
     const id = ++_idSeq
-    const item: ToastItem = { id, type: e.type, message: e.message, duration: e.duration ?? 2500 }
+    const item: ToastItem = {
+      id, type: e.type, message: e.message,
+      duration: e.duration ?? 2500,
+      action: e.action,
+    }
     setToasts(prev => [...prev, item])
-    const t = setTimeout(() => removeToast(id), item.duration)
-    timers.current.set(id, t)
+    // duration=0 时不自动消失
+    if (item.duration > 0) {
+      const t = setTimeout(() => removeToast(id), item.duration)
+      timers.current.set(id, t)
+    }
   }, [removeToast])
 
   const addConfirm = useCallback((e: ConfirmEvent) => {
@@ -123,10 +150,17 @@ export default function ToastProvider() {
           <div
             key={t.id}
             className={`toast-item toast-${t.type}`}
-            onClick={() => removeToast(t.id)}
           >
             <span className="toast-icon">{ICONS[t.type]}</span>
             <span className="toast-msg">{t.message}</span>
+            {t.action && (
+              <button
+                className="toast-action"
+                onClick={() => { t.action!.onClick(); removeToast(t.id) }}
+              >
+                {t.action.label}
+              </button>
+            )}
             <button className="toast-close" onClick={e => { e.stopPropagation(); removeToast(t.id) }}>
               <X size={13} />
             </button>

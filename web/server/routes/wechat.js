@@ -21,6 +21,30 @@ const router = Router()
 let _cachedToken = null
 let _tokenExp    = 0       // Unix 秒时间戳
 
+// ── 主动刷新定时器（每 5 分钟检查，剩余 10 分钟时提前换新 token）────────────
+function scheduleTokenRefresh() {
+  setInterval(async () => {
+    try {
+      const appId = getSetting('wechat_app_id')
+      if (!appId) return  // 未绑定则跳过
+
+      const now = Math.floor(Date.now() / 1000)
+      const remaining = _tokenExp - now
+
+      // 剩余 < 600 秒（10分钟）时提前刷新
+      if (remaining < 600) {
+        console.log(`[Wechat] Token 剩余 ${remaining}s，主动刷新中...`)
+        await getAccessToken()
+        console.log('[Wechat] Token 已刷新')
+      }
+    } catch (e) {
+      console.warn('[Wechat] Token 主动刷新失败:', e.message)
+    }
+  }, 5 * 60 * 1000)  // 每 5 分钟检查一次
+}
+
+scheduleTokenRefresh()
+
 /**
  * 获取有效的 access_token
  * 1. 内存有且未过期 → 直接返回
@@ -434,12 +458,291 @@ router.post('/draft', async (req, res) => {
 })
 
 // ── GET /api/wechat/token（调试用，不暴露 secret）────────────────────────────
+// ── GET /api/wechat/proxy-img  服务端代理微信图片（绕过防盗链）────────────────
+// ?url=<微信图片URL>  —— 只允许代理 mmbiz.qpic.cn / mmbiz.qlogo.cn 域名
+router.get('/proxy-img', async (req, res) => {
+  const url = req.query.url
+  if (!url) return res.status(400).json({ error: 'Missing url' })
+
+  // 安全白名单：只代理微信官方图片域名
+  let parsed
+  try { parsed = new URL(url) } catch { return res.status(400).json({ error: 'Invalid url' }) }
+  const allowed = ['mmbiz.qpic.cn', 'mmbiz.qlogo.cn', 'wx.qlogo.cn']
+  if (!allowed.some(h => parsed.hostname === h || parsed.hostname.endsWith('.' + h))) {
+    return res.status(403).json({ error: 'Domain not allowed' })
+  }
+
+  try {
+    const resp = await axios.get(url, {
+      responseType: 'arraybuffer',
+      timeout: 8000,
+      headers: {
+        // 带 Referer 让微信服务器认为请求来自公众号平台
+        Referer: 'https://mp.weixin.qq.com/',
+        'User-Agent': 'Mozilla/5.0 (compatible; WechatProxy/1.0)',
+      },
+    })
+    const ct = resp.headers['content-type'] ?? 'image/jpeg'
+    res.setHeader('Content-Type', ct)
+    res.setHeader('Cache-Control', 'public, max-age=86400')  // 缓存 1 天
+    res.send(resp.data)
+  } catch (err) {
+    console.error('[Wechat/proxy-img]', err.message)
+    res.status(502).json({ error: '图片代理失败' })
+  }
+})
+
+// ── GET /api/wechat/token ─────────────────────────────────────────────────────
 router.get('/token', async (req, res) => {
   try {
     const token = await getAccessToken()
     const now   = Math.floor(Date.now() / 1000)
     res.json({ token: token.slice(0, 16) + '...', expires_in: _tokenExp - now })
   } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── GET /api/wechat/draft/:mediaId  获取单篇草稿内容（用于反向导入）──────────
+// 返回 { title, content (HTML), digest, thumb_url }
+router.get('/draft/:mediaId', async (req, res) => {
+  try {
+    const token   = await getAccessToken()
+    const { mediaId } = req.params
+
+    const resp = await axios.post(
+      'https://api.weixin.qq.com/cgi-bin/draft/get',
+      { media_id: mediaId },
+      { params: { access_token: token }, timeout: 10000 },
+    )
+
+    if (resp.data.errcode && resp.data.errcode !== 0) {
+      return res.status(400).json({
+        error: `[${resp.data.errcode}] ${resp.data.errmsg}`,
+        errcode: resp.data.errcode,
+      })
+    }
+
+    const first = resp.data.news_item?.[0] ?? {}
+    res.json({
+      title:     first.title   ?? '',
+      content:   first.content ?? '',   // 原始 HTML
+      digest:    first.digest  ?? '',
+      thumb_url: first.thumb_url ?? null,
+    })
+  } catch (err) {
+    console.error('[Wechat/draft/get]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── DELETE /api/wechat/draft/:mediaId  删除草稿 ──────────────────────────────
+router.delete('/draft/:mediaId', async (req, res) => {
+  try {
+    const token   = await getAccessToken()
+    const { mediaId } = req.params
+
+    const resp = await axios.post(
+      'https://api.weixin.qq.com/cgi-bin/draft/delete',
+      { media_id: mediaId },
+      { params: { access_token: token }, timeout: 10000 },
+    )
+
+    if (resp.data.errcode && resp.data.errcode !== 0) {
+      return res.status(400).json({
+        error: `[${resp.data.errcode}] ${resp.data.errmsg}`,
+        errcode: resp.data.errcode,
+      })
+    }
+
+    res.json({ success: true })
+  } catch (err) {
+    console.error('[Wechat/draft/delete]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── POST /api/wechat/draft/:mediaId/publish  发布草稿 ────────────────────────
+router.post('/draft/:mediaId/publish', async (req, res) => {
+  try {
+    const token   = await getAccessToken()
+    const { mediaId } = req.params
+
+    const resp = await axios.post(
+      'https://api.weixin.qq.com/cgi-bin/freepublish/submit',
+      { media_id: mediaId },
+      { params: { access_token: token }, timeout: 15000 },
+    )
+
+    if (resp.data.errcode && resp.data.errcode !== 0) {
+      return res.status(400).json({
+        error: `[${resp.data.errcode}] ${resp.data.errmsg}`,
+        errcode: resp.data.errcode,
+      })
+    }
+
+    res.json({ success: true, publish_id: resp.data.publish_id })
+  } catch (err) {
+    console.error('[Wechat/draft/publish]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── GET /api/wechat/published  已发布文章列表 ─────────────────────────────────
+// ?offset=0&count=10
+router.get('/published', async (req, res) => {
+  try {
+    const token  = await getAccessToken()
+    const offset = parseInt(req.query.offset ?? '0', 10)
+    const count  = Math.min(parseInt(req.query.count ?? '10', 10), 20)
+
+    const resp = await axios.post(
+      'https://api.weixin.qq.com/cgi-bin/freepublish/batchget',
+      { offset, count, no_content: 1 },
+      { params: { access_token: token }, timeout: 10000 },
+    )
+
+    if (resp.data.errcode && resp.data.errcode !== 0) {
+      return res.status(400).json({
+        error: `[${resp.data.errcode}] ${resp.data.errmsg}`,
+        errcode: resp.data.errcode,
+      })
+    }
+
+    const items = (resp.data.item ?? []).map(item => {
+      const first = item.content?.news_item?.[0] ?? {}
+      return {
+        article_id:  item.article_id,
+        update_time: item.update_time,
+        title:       first.title   ?? '（无标题）',
+        digest:      first.digest  ?? '',
+        thumb_url:   first.thumb_url ?? null,
+        url:         first.url     ?? null,
+        count:       item.content?.news_item?.length ?? 1,
+      }
+    })
+
+    res.json({
+      total_count: resp.data.total_count ?? 0,
+      item_count:  resp.data.item_count  ?? items.length,
+      items,
+    })
+  } catch (err) {
+    console.error('[Wechat/published]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── GET /api/wechat/materials  永久素材库 ────────────────────────────────────
+// ?type=image|voice|video&offset=0&count=20
+router.get('/materials', async (req, res) => {
+  try {
+    const token  = await getAccessToken()
+    const type   = req.query.type ?? 'image'
+    const offset = parseInt(req.query.offset ?? '0', 10)
+    const count  = Math.min(parseInt(req.query.count ?? '20', 10), 20)
+
+    const resp = await axios.post(
+      'https://api.weixin.qq.com/cgi-bin/material/batchget_material',
+      { type, offset, count },
+      { params: { access_token: token }, timeout: 10000 },
+    )
+
+    if (resp.data.errcode && resp.data.errcode !== 0) {
+      return res.status(400).json({
+        error: `[${resp.data.errcode}] ${resp.data.errmsg}`,
+        errcode: resp.data.errcode,
+      })
+    }
+
+    res.json({
+      total_count: resp.data.total_count ?? 0,
+      item_count:  resp.data.item_count  ?? 0,
+      items:       resp.data.item ?? [],
+    })
+  } catch (err) {
+    console.error('[Wechat/materials]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── DELETE /api/wechat/material/:mediaId  删除永久素材 ───────────────────────
+router.delete('/material/:mediaId', async (req, res) => {
+  try {
+    const token   = await getAccessToken()
+    const { mediaId } = req.params
+
+    const resp = await axios.post(
+      'https://api.weixin.qq.com/cgi-bin/material/del_material',
+      { media_id: mediaId },
+      { params: { access_token: token }, timeout: 10000 },
+    )
+
+    if (resp.data.errcode && resp.data.errcode !== 0) {
+      return res.status(400).json({
+        error: `[${resp.data.errcode}] ${resp.data.errmsg}`,
+        errcode: resp.data.errcode,
+      })
+    }
+
+    res.json({ success: true })
+  } catch (err) {
+    console.error('[Wechat/material/delete]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── GET /api/wechat/article-stats  图文阅读数据 ───────────────────────────────
+// ?begin_date=2025-05-01&end_date=2025-05-14（最多 30 天跨度）
+router.get('/article-stats', async (req, res) => {
+  try {
+    const token = await getAccessToken()
+
+    // 默认最近 7 天
+    const now    = new Date()
+    const endD   = req.query.end_date   ?? now.toISOString().slice(0, 10)
+    const startD = req.query.begin_date ?? (() => {
+      const d = new Date(now); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10)
+    })()
+
+    const resp = await axios.post(
+      'https://api.weixin.qq.com/datacube/getarticleread',
+      { begin_date: startD, end_date: endD },
+      { params: { access_token: token }, timeout: 10000 },
+    )
+
+    if (resp.data.errcode && resp.data.errcode !== 0) {
+      return res.status(400).json({
+        error: `[${resp.data.errcode}] ${resp.data.errmsg}`,
+        errcode: resp.data.errcode,
+      })
+    }
+
+    // 按文章聚合：{ title, url, read_num, share_num }
+    const byArticle = {}
+    for (const row of (resp.data.list ?? [])) {
+      const key = row.msgid ?? row.title
+      if (!byArticle[key]) {
+        byArticle[key] = {
+          title:     row.title    ?? '',
+          url:       row.ori_url  ?? null,
+          read_num:  0,
+          share_num: 0,
+          date:      row.ref_date ?? '',
+        }
+      }
+      byArticle[key].read_num  += row.int_page_read_count  ?? 0
+      byArticle[key].share_num += row.share_count          ?? 0
+    }
+
+    res.json({
+      begin_date: startD,
+      end_date:   endD,
+      list:       resp.data.list ?? [],           // 原始按天数据
+      articles:   Object.values(byArticle).sort((a, b) => b.read_num - a.read_num),
+    })
+  } catch (err) {
+    console.error('[Wechat/article-stats]', err.message)
     res.status(500).json({ error: err.message })
   }
 })

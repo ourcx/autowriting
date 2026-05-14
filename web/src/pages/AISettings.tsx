@@ -285,6 +285,19 @@ export default function AISettings() {
                 <ChevronRight size={14} className="as-nav-arrow" />
               </button>
             ))}
+
+            {/* Token 用量统计入口 */}
+            <button
+              className="as-nav-item"
+              onClick={() => navigate('/token-usage')}
+            >
+              <span className="as-nav-icon">⚡</span>
+              <span className="as-nav-text">
+                <span className="as-nav-label">Token 用量</span>
+                <span className="as-nav-sub">消耗统计与费用估算</span>
+              </span>
+              <ChevronRight size={14} className="as-nav-arrow" />
+            </button>
           </nav>
         </aside>
 

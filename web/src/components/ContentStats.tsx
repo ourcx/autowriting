@@ -42,19 +42,61 @@ interface AnalysisResult {
 
 // ── AGENTS.md 规范核查（纯本地，即时） ────────────────────────────────────────
 
-const AI_CLICHES = [
-  '在当今这个', '随着科技', '大家好，今天', '总而言之', '总的来说', '综上所述',
-  '希望本文', '让我们一起', '打开了新世界', '不得不说', '不得不提', '值得一提',
-  '极大地', '显著地', '大幅度地', '接下来，让我们', '下面我将',
-  '非常重要', '至关重要', '深刻影响', '不可忽视',
+// AGENTS.md 中明确列出的禁词，按类别分组（用于精准定位）
+const AI_CLICHES: Array<{ word: string; reason: string }> = [
+  // 空洞开场白
+  { word: '在当今这个',   reason: '空洞开场白，直接切入主题' },
+  { word: '随着科技',     reason: '空洞开场白，直接切入主题' },
+  { word: '随着人工智能', reason: '空洞开场白，直接切入主题' },
+  { word: '大家好，今天', reason: '空洞开场白，直接切入主题' },
+  { word: '在这个时代',   reason: '空洞开场白，直接切入主题' },
+  { word: '在当下这个',   reason: '空洞开场白，直接切入主题' },
+  // 空泛总结
+  { word: '总而言之',     reason: '机器人式收尾，改为具体行动建议' },
+  { word: '总的来说',     reason: '机器人式收尾，改为具体行动建议' },
+  { word: '综上所述',     reason: '机器人式收尾，改为具体行动建议' },
+  { word: '希望本文',     reason: '空洞结尾套话，直接结束' },
+  { word: '希望这篇',     reason: '空洞结尾套话，直接结束' },
+  { word: '让我们一起',   reason: '空洞结尾套话，直接结束' },
+  // 陈词滥调
+  { word: '打开了新世界', reason: 'AI 套话，用具体描述替代' },
+  { word: '不得不说',     reason: 'AI 套话，直接说结论' },
+  { word: '不得不提',     reason: 'AI 套话，直接说结论' },
+  { word: '值得一提的是', reason: 'AI 套话，直接说结论' },
+  { word: '值得注意的是', reason: 'AI 套话，直接说结论' },
+  { word: '说实话',       reason: '除非真的在强调对比，否则删除' },
+  { word: '老实说',       reason: '除非真的在强调对比，否则删除' },
+  // 机器人过渡
+  { word: '接下来，让我们', reason: '机器人式过渡，删除或改为自然过渡' },
+  { word: '下面我将详细介绍', reason: '机器人式过渡，直接介绍内容' },
+  { word: '首先，其次，',  reason: '机械式结构，用逻辑关系自然过渡' },
+  // 过度修饰
+  { word: '极大地',       reason: '空洞修饰，用数据替代（如「节省了 2 小时」）' },
+  { word: '显著地',       reason: '空洞修饰，用数据替代' },
+  { word: '大幅度地',     reason: '空洞修饰，用数据替代' },
+  { word: '至关重要',     reason: '空洞修饰，说清楚为什么重要' },
+  { word: '深刻影响',     reason: '空洞修饰，说清楚怎么影响' },
+  { word: '不可忽视',     reason: '空洞修饰，说清楚忽视了什么后果' },
+  { word: '非常重要',     reason: '空洞修饰，用数据或具体场景替代' },
 ]
 
 const WRONG_QUOTES = ['"', '"']  // 应该用「」
 const WRONG_DASH   = '--'        // 应该用 ——
 const WRONG_ELLIP  = '...'       // 应该用 ……
 
+interface CliqueFound { word: string; reason: string; count: number }
+
 function runChecks(text: string, title?: string) {
-  const foundCliches = AI_CLICHES.filter(c => text.includes(c))
+  // 统计每个套话出现次数
+  const foundCliches: CliqueFound[] = AI_CLICHES
+    .map(c => {
+      let count = 0
+      let pos = 0
+      while ((pos = text.indexOf(c.word, pos)) !== -1) { count++; pos++ }
+      return { ...c, count }
+    })
+    .filter(c => c.count > 0)
+
   const hasWrongQuotes = WRONG_QUOTES.some(q => text.includes(q))
   const hasWrongDash   = text.includes(WRONG_DASH)
   const hasWrongEllip  = text.includes(WRONG_ELLIP)
@@ -263,21 +305,31 @@ export default function ContentStats({ content, title, articleId, task }: Conten
               <div className="checklist-group">
                 <div className="checklist-group-title">AI 套话检测</div>
                 <div className="checklist-items">
-                  <div className={`checklist-item ${checks.foundCliches.length === 0 ? 'pass' : 'fail'}`}>
-                    <span className={`ci-icon ${checks.foundCliches.length === 0 ? 'pass' : 'fail'}`}>
-                      {checks.foundCliches.length === 0
-                        ? <CheckCircle2 size={14} />
-                        : <AlertCircle size={14} />}
-                    </span>
-                    <span className="ci-text">
-                      {checks.foundCliches.length === 0
-                        ? '没有检测到 AI 套话'
-                        : <>发现 {checks.foundCliches.length} 处套话：
-                            <span className="ci-found">「{checks.foundCliches.slice(0, 3).join('」「')}」{checks.foundCliches.length > 3 ? `等` : ''}</span>
-                          </>
-                      }
-                    </span>
-                  </div>
+                  {checks.foundCliches.length === 0 ? (
+                    <div className="checklist-item pass">
+                      <span className="ci-icon pass"><CheckCircle2 size={14} /></span>
+                      <span className="ci-text">没有检测到 AI 套话</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="checklist-item fail">
+                        <span className="ci-icon fail"><AlertCircle size={14} /></span>
+                        <span className="ci-text">
+                          发现 <strong>{checks.foundCliches.length}</strong> 处禁用套话，请逐一修改：
+                        </span>
+                      </div>
+                      {checks.foundCliches.map((c, i) => (
+                        <div key={i} className="checklist-item checklist-item--sub fail">
+                          <span className="ci-icon fail"><AlertCircle size={12} /></span>
+                          <span className="ci-text">
+                            <span className="ci-found">「{c.word}」</span>
+                            {c.count > 1 && <span className="ci-count">×{c.count}</span>}
+                            <span className="ci-reason"> — {c.reason}</span>
+                          </span>
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </div>
               </div>
 

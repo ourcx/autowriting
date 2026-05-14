@@ -281,6 +281,56 @@
   font-weight: 600;
 }
 
+/* ── 本地存储警告横幅 ─────────────────────────────────────────── */
+.dash-local-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 32px;
+  background: #fffbe6;
+  border-bottom: 1px solid #f0d080;
+  font-size: 13px;
+  color: #7a5c00;
+  flex-shrink: 0;
+}
+
+.dash-local-warning strong {
+  font-weight: 700;
+}
+
+.dash-migrate-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 4px 12px;
+  background: #1a3a3a;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.dash-migrate-btn:hover:not(:disabled) {
+  background: #2d6a4f;
+}
+
+.dash-migrate-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── 文章日期 ───────────────────────────────────────────────────── */
+.dash-meta-date {
+  font-size: 11px;
+  color: var(--color-muted-soft, #aaa);
+  font-family: 'Space Mono', monospace;
+}
+
 /* ── 右栏 main ──────────────────────────────────────────────────── */
 .dash-main {
   display: flex;

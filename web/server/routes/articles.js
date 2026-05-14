@@ -17,6 +17,7 @@ import { ensureDir, buildLLMRequest, callLLMWithRetry } from '../utils.js'
 import { retrieveRelevant, formatRetrievedContext } from '../rag.js'
 import { saveAnalysis, getLatestAnalysis, listAnalyses, recordTokenUsage } from '../db.js'
 import { authMiddleware } from '../authMiddleware.js'
+import { triggerBuildIndex } from './rag.js'
 
 const router = Router()
 
@@ -188,6 +189,11 @@ router.post('/:articleId', (req, res) => {
     if (materials) fs.writeFileSync(materialsPath, materials, 'utf-8')
     if (article)   fs.writeFileSync(articlePath,   article,   'utf-8')
     if (title)     fs.writeFileSync(titlePath,     title,     'utf-8')
+
+    // 文章内容有更新时，异步触发增量 RAG 索引（不阻塞响应）
+    if (article || materials) {
+      triggerBuildIndex(SERVER_AI_CONFIG, req.user.id).catch(() => {})
+    }
 
     res.json({ success: true })
   } catch (error) {
@@ -720,27 +726,33 @@ router.post('/:articleId/refine-materials', async (req, res) => {
 
     const prompt = `你是一个专业的素材整理助手。请把以下原始素材整理成结构化的写作参考，方便作者按图索骥写文章。${taskContext}
 
+**整理要求：**
+1. 去除完全重复的内容，合并表达相似的观点（合并时保留最完整的表述）
+2. 删除泛泛而谈的废话，只保留有具体支撑的内容
+3. 数据、案例务必保留原始数字，不要模糊化
+4. 结构化输出，每条信息独立成行，便于写作时直接引用
+
 # 原始素材
 ${materials}
 
 ---
 
-请整理成以下结构（Markdown 格式，直接输出，不要解释）：
+请整理成以下结构（Markdown 格式，直接输出，不要解释，不要重复内容）：
 
 ## 核心数据与事实
-（列出所有可引用的数据、时间、数字、具体事实）
+（列出所有可引用的数据、时间、数字、具体事实；重复数据只保留一条）
 
 ## 关键观点
-（提炼出 3-5 个核心论点，每条一句话）
+（提炼出 3-5 个核心论点，每条一句话；相似观点合并为一条）
 
 ## 可用案例
-（整理出具体的案例、场景、故事，每条说明来源）
+（整理出具体的案例、场景、故事，每条说明来源；相似案例合并）
 
 ## 踩坑与注意
-（整理出实际问题、风险、注意事项）
+（整理出实际问题、风险、注意事项；去除重复警告）
 
 ## 写作角度建议
-（根据素材，建议 2-3 个差异化的写作切入角度）`
+（根据素材，建议 2-3 个差异化的写作切入角度，避免大而全）`
 
     const llmRes = await callLLMWithRetry(url, {
       model,

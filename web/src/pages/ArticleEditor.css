@@ -806,6 +806,191 @@
   to { transform: rotate(360deg); }
 }
 
+/* ── 流程进度条 ── */
+.editor-flow-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 var(--spacing-lg);
+  background: var(--color-surface-soft);
+  border-bottom: 1px solid var(--color-hairline);
+  min-height: 44px;
+  overflow-x: auto;
+}
+
+.flow-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s;
+  font-family: inherit;
+}
+
+.flow-step:hover {
+  color: var(--color-body);
+}
+
+.flow-step--active {
+  color: var(--color-brand-teal);
+  font-weight: 600;
+}
+
+.flow-step--done {
+  color: #2d6a4f;
+}
+
+.flow-step--done .flow-step-num {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.flow-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: var(--color-hairline);
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.flow-step--active .flow-step-num {
+  background: var(--color-brand-teal);
+  color: #fff;
+}
+
+.flow-step-label {
+  font-size: 13px;
+}
+
+.flow-step-sep {
+  color: var(--color-hairline);
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
+.flow-extra-tabs {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  border-left: 1px solid var(--color-hairline);
+  padding-left: 8px;
+}
+
+.tab-extra {
+  font-size: 12px;
+  padding: 6px 10px;
+  color: var(--color-muted);
+}
+
+/* ── 大纲待确认卡片 ── */
+.outline-confirm-card {
+  display: flex;
+  flex-direction: column;
+  margin: 8px 12px;
+  border: 1px solid #a4d4c5;
+  border-radius: var(--rounded-lg);
+  background: #f0faf6;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.outline-confirm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #d6f0e8;
+  border-bottom: 1px solid #a4d4c5;
+}
+
+.outline-confirm-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1a5c3a;
+}
+
+.outline-confirm-close {
+  background: transparent;
+  border: none;
+  color: #5a9a7a;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.outline-confirm-close:hover {
+  color: #1a3a3a;
+}
+
+.outline-confirm-editor {
+  width: 100%;
+  min-height: 140px;
+  max-height: 260px;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+  color: var(--color-ink);
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.outline-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid #c8e8d8;
+}
+
+.outline-btn-cancel {
+  padding: 5px 14px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-sm);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.outline-btn-cancel:hover {
+  background: var(--color-surface-card);
+}
+
+.outline-btn-apply {
+  padding: 5px 14px;
+  border: none;
+  border-radius: var(--rounded-sm);
+  background: #1a3a3a;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.outline-btn-apply:hover {
+  background: #2d6a4f;
+}
+
 /* ── 响应式设计 ── */
 /* 响应式设计 */
 @media (max-width: 768px) {

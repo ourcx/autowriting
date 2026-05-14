@@ -7,6 +7,7 @@ import WeChatDrafts from './pages/WeChatDrafts'
 import StyleEditor from './pages/StyleEditor'
 import AISettings from './pages/AISettings'
 import RagPage from './pages/RagPage'
+import TokenUsagePage from './pages/TokenUsagePage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import AdminPage from './pages/AdminPage'
@@ -39,6 +40,7 @@ export default function App() {
         <Route path="/styles" element={<PrivateRoute><StyleEditor /></PrivateRoute>} />
         <Route path="/settings" element={<PrivateRoute><AISettings /></PrivateRoute>} />
         <Route path="/rag" element={<PrivateRoute><RagPage /></PrivateRoute>} />
+        <Route path="/token-usage" element={<PrivateRoute><TokenUsagePage /></PrivateRoute>} />
 
         {/* 管理员路由 */}
         <Route path="/admin" element={<PrivateRoute requireAdmin><AdminPage /></PrivateRoute>} />
