@@ -149,9 +149,23 @@ export const CSS_DEFAULT = `/* ====== 经典蓝 ====== */
 #wemd img {
   display: block;
   max-width: 100%;
-  margin: 16px auto;
-  border-radius: 4px;
+  margin: 20px auto;
+  border-radius: 6px;
+  box-shadow: 0 2px 12px rgba(30,107,184,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  border: 1px solid #dbeafe;
 }
+#wemd img + em, #wemd img + p > em:only-child {
+  display: block;
+  text-align: center;
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: -10px;
+  margin-bottom: 16px;
+  font-style: normal;
+}
+#wemd figure { margin: 20px 0; text-align: center; }
+#wemd figure img { margin: 0 auto 8px; }
+#wemd figcaption { font-size: 13px; color: #6b7280; }
 #wemd table {
   width: 100%;
   border-collapse: collapse;
@@ -310,9 +324,24 @@ export const CSS_MORANDI = `/* ====== 莫兰迪 ====== */
 #wemd img {
   display: block;
   max-width: 100%;
-  margin: 16px auto;
-  border-radius: 4px;
+  margin: 20px auto;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(79,111,82,0.15), 0 1px 4px rgba(0,0,0,0.06);
+  border: 1px solid #c8d5c9;
 }
+#wemd img + em, #wemd img + p > em:only-child {
+  display: block;
+  text-align: center;
+  font-size: 13px;
+  color: #739072;
+  margin-top: -10px;
+  margin-bottom: 16px;
+  font-style: normal;
+  letter-spacing: 0.3px;
+}
+#wemd figure { margin: 20px 0; text-align: center; }
+#wemd figure img { margin: 0 auto 8px; }
+#wemd figcaption { font-size: 13px; color: #739072; }
 #wemd table {
   width: 100%;
   border-collapse: collapse;
@@ -468,8 +497,26 @@ export const CSS_MINIMAL = `/* ====== 极简黑 ====== */
 #wemd img {
   display: block;
   max-width: 100%;
-  margin: 16px auto;
+  margin: 24px auto;
+  border-radius: 2px;
+  box-shadow: 4px 4px 0 #111111;
+  border: 2px solid #111111;
 }
+#wemd img + em, #wemd img + p > em:only-child {
+  display: block;
+  text-align: center;
+  font-size: 12px;
+  color: #888888;
+  margin-top: -14px;
+  margin-bottom: 16px;
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+#wemd figure { margin: 24px 0; text-align: center; }
+#wemd figure img { margin: 0 auto 8px; }
+#wemd figcaption { font-size: 12px; color: #888888; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; }
 #wemd table {
   width: 100%;
   border-collapse: collapse;
@@ -627,9 +674,24 @@ export const CSS_SUNSET = `/* ====== 夕阳橙 ====== */
 #wemd img {
   display: block;
   max-width: 100%;
-  margin: 16px auto;
+  margin: 20px auto;
   border-radius: 4px;
+  box-shadow: 0 3px 14px rgba(200,96,42,0.18), 0 1px 4px rgba(0,0,0,0.08);
+  border: 1px solid #e5c9a0;
 }
+#wemd img + em, #wemd img + p > em:only-child {
+  display: block;
+  text-align: center;
+  font-size: 13px;
+  color: #b25220;
+  margin-top: -10px;
+  margin-bottom: 16px;
+  font-style: italic;
+  letter-spacing: 0.2px;
+}
+#wemd figure { margin: 20px 0; text-align: center; }
+#wemd figure img { margin: 0 auto 8px; }
+#wemd figcaption { font-size: 13px; color: #b25220; font-style: italic; }
 #wemd table {
   width: 100%;
   border-collapse: collapse;
@@ -787,9 +849,23 @@ export const CSS_AURORA = `/* ====== 极光紫 ====== */
 #wemd img {
   display: block;
   max-width: 100%;
-  margin: 16px auto;
-  border-radius: 8px;
+  margin: 20px auto;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(124,58,237,0.18), 0 1px 4px rgba(0,0,0,0.08);
+  border: 1px solid #ddd6fe;
 }
+#wemd img + em, #wemd img + p > em:only-child {
+  display: block;
+  text-align: center;
+  font-size: 13px;
+  color: #7c3aed;
+  margin-top: -10px;
+  margin-bottom: 16px;
+  font-style: normal;
+}
+#wemd figure { margin: 20px 0; text-align: center; }
+#wemd figure img { margin: 0 auto 8px; }
+#wemd figcaption { font-size: 13px; color: #7c3aed; }
 #wemd table {
   width: 100%;
   border-collapse: collapse;
@@ -921,7 +997,7 @@ export function createNewTemplate(base?: Partial<TemplateItem>): TemplateItem {
   }
 }
 
-/** 用于预览的示例 Markdown，覆盖所有元素 */
+/** 用于预览的示例 Markdown，覆盖所有元素（含图片） */
 export const PREVIEW_MARKDOWN = `# 一级标题样式
 
 这是**正文段落**，包含*斜体*文字和\`行内代码\`示例。点击[这是链接](#)查看效果。段落文字随模板自动调整行高和间距。
@@ -943,6 +1019,12 @@ export const PREVIEW_MARKDOWN = `# 一级标题样式
 #### 四级标题
 
 ---
+
+### 图片样式预览
+
+![示例图片](https://picsum.photos/seed/style/600/300)
+
+*图片注释文字——斜体紧跟在图片下方会被识别为图注*
 
 \`\`\`javascript
 // 代码块样式预览

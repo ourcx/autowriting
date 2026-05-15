@@ -24,7 +24,11 @@ const CSS_DEFAULT = `/* ====== 经典蓝 ====== */
 #wemd pre code { color: #abb2bf; font-size: 13px; background: transparent; padding: 0; }
 #wemd a { color: #1e6bb8; text-decoration: none; border-bottom: 1px solid #b3d0f0; }
 #wemd hr { margin: 28px 0; border: none; border-top: 1px solid #e5e7eb; }
-#wemd img { display: block; max-width: 100%; margin: 16px auto; border-radius: 4px; }
+#wemd img { display: block; max-width: 100%; margin: 20px auto; border-radius: 6px; box-shadow: 0 2px 12px rgba(30,107,184,0.12), 0 1px 3px rgba(0,0,0,0.08); border: 1px solid #dbeafe; }
+#wemd img + em, #wemd img + p > em:only-child { display: block; text-align: center; font-size: 13px; color: #6b7280; margin-top: -10px; margin-bottom: 16px; font-style: normal; }
+#wemd figure { margin: 20px 0; text-align: center; }
+#wemd figure img { margin: 0 auto 8px; }
+#wemd figcaption { font-size: 13px; color: #6b7280; }
 #wemd table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
 #wemd th { background: #dbeafe; color: #1e3a5f; font-weight: bold; border: 1px solid #bfdbfe; padding: 10px 12px; text-align: left; }
 #wemd td { border: 1px solid #e5e7eb; padding: 10px 12px; color: #374151; }
@@ -45,7 +49,11 @@ const CSS_MORANDI = `/* ====== 莫兰迪 ====== */
 #wemd pre code { color: #a8c5a0; font-size: 13px; background: transparent; padding: 0; }
 #wemd a { color: #4F6F52; text-decoration: none; border-bottom: 1px solid #a0bea2; }
 #wemd hr { margin: 28px 0; border: none; border-top: 1px dashed #b0c4b1; }
-#wemd img { display: block; max-width: 100%; margin: 16px auto; border-radius: 4px; }
+#wemd img { display: block; max-width: 100%; margin: 20px auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(79,111,82,0.15), 0 1px 4px rgba(0,0,0,0.06); border: 1px solid #c8d5c9; }
+#wemd img + em, #wemd img + p > em:only-child { display: block; text-align: center; font-size: 13px; color: #739072; margin-top: -10px; margin-bottom: 16px; font-style: normal; letter-spacing: 0.3px; }
+#wemd figure { margin: 20px 0; text-align: center; }
+#wemd figure img { margin: 0 auto 8px; }
+#wemd figcaption { font-size: 13px; color: #739072; }
 #wemd table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
 #wemd th { background: #dde8de; color: #2f3e32; font-weight: bold; border: 1px solid #b8cebc; padding: 10px 12px; text-align: left; }
 #wemd td { border: 1px solid #c8d5c9; padding: 10px 12px; color: #3A4D39; }
@@ -66,7 +74,11 @@ const CSS_MINIMAL = `/* ====== 极简黑 ====== */
 #wemd pre code { color: #eeeeee; font-size: 13px; background: transparent; padding: 0; }
 #wemd a { color: #000000; text-decoration: none; border-bottom: 1px solid #888888; font-weight: 600; }
 #wemd hr { margin: 28px 0; border: none; border-top: 2px solid #000000; }
-#wemd img { display: block; max-width: 100%; margin: 16px auto; }
+#wemd img { display: block; max-width: 100%; margin: 24px auto; border-radius: 2px; box-shadow: 4px 4px 0 #111111; border: 2px solid #111111; }
+#wemd img + em, #wemd img + p > em:only-child { display: block; text-align: center; font-size: 12px; color: #888888; margin-top: -14px; margin-bottom: 16px; font-style: normal; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; }
+#wemd figure { margin: 24px 0; text-align: center; }
+#wemd figure img { margin: 0 auto 8px; }
+#wemd figcaption { font-size: 12px; color: #888888; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; }
 #wemd table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
 #wemd th { background: #111111; color: #ffffff; font-weight: bold; border: 1px solid #111111; padding: 10px 12px; text-align: left; }
 #wemd td { border: 1px solid #cccccc; padding: 10px 12px; }
@@ -87,7 +99,11 @@ const CSS_SUNSET = `/* ====== 夕阳橙 ====== */
 #wemd pre code { color: #f4c87a; font-size: 13px; background: transparent; padding: 0; }
 #wemd a { color: #c8602a; text-decoration: none; border-bottom: 1px solid #e5a882; }
 #wemd hr { margin: 28px 0; border: none; border-top: 1px solid #e5c9a0; }
-#wemd img { display: block; max-width: 100%; margin: 16px auto; border-radius: 4px; }
+#wemd img { display: block; max-width: 100%; margin: 20px auto; border-radius: 4px; box-shadow: 0 3px 14px rgba(200,96,42,0.18), 0 1px 4px rgba(0,0,0,0.08); border: 1px solid #e5c9a0; }
+#wemd img + em, #wemd img + p > em:only-child { display: block; text-align: center; font-size: 13px; color: #b25220; margin-top: -10px; margin-bottom: 16px; font-style: italic; letter-spacing: 0.2px; }
+#wemd figure { margin: 20px 0; text-align: center; }
+#wemd figure img { margin: 0 auto 8px; }
+#wemd figcaption { font-size: 13px; color: #b25220; font-style: italic; }
 #wemd table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
 #wemd th { background: #f5ddc8; color: #6b1d0a; font-weight: bold; border: 1px solid #e5c9a0; padding: 10px 12px; text-align: left; }
 #wemd td { border: 1px solid #e5c9a0; padding: 10px 12px; color: #3d2b1f; }
@@ -108,7 +124,11 @@ const CSS_AURORA = `/* ====== 极光紫 ====== */
 #wemd pre code { color: #c4b5fd; font-size: 13px; background: transparent; padding: 0; }
 #wemd a { color: #7c3aed; text-decoration: none; border-bottom: 1px solid #c4b5fd; }
 #wemd hr { margin: 28px 0; border: none; border-top: 1px solid #d8c8f8; }
-#wemd img { display: block; max-width: 100%; margin: 16px auto; border-radius: 8px; }
+#wemd img { display: block; max-width: 100%; margin: 20px auto; border-radius: 12px; box-shadow: 0 4px 20px rgba(124,58,237,0.18), 0 1px 4px rgba(0,0,0,0.08); border: 1px solid #ddd6fe; }
+#wemd img + em, #wemd img + p > em:only-child { display: block; text-align: center; font-size: 13px; color: #7c3aed; margin-top: -10px; margin-bottom: 16px; font-style: normal; }
+#wemd figure { margin: 20px 0; text-align: center; }
+#wemd figure img { margin: 0 auto 8px; }
+#wemd figcaption { font-size: 13px; color: #7c3aed; }
 #wemd table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
 #wemd th { background: #ede9fe; color: #4c1d95; font-weight: bold; border: 1px solid #c4b5fd; padding: 10px 12px; text-align: left; }
 #wemd td { border: 1px solid #ddd6fe; padding: 10px 12px; color: #2d2a3e; }

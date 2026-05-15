@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { toast } from './Toast'
-import { Eye, Edit2, Copy, Download, Sparkles, Check, X, RotateCcw } from 'lucide-react'
+import { Eye, Edit2, Copy, Download, Sparkles, Check, X, RotateCcw, ImagePlus, Loader2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { loadAIConfig } from '../utils/aiConfig'
@@ -40,6 +40,7 @@ export default function MarkdownEditor({
 }: MarkdownEditorProps) {
   const [mode, setMode] = useState<'edit' | 'preview' | 'split'>('edit')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // ── AI 内联助手状态 ──
   const [floatMenu, setFloatMenu]     = useState<FloatMenu | null>(null)
@@ -47,6 +48,9 @@ export default function MarkdownEditor({
   const [aiResult, setAiResult]       = useState<string | null>(null)
   const [aiAction, setAiAction]       = useState<AIAction | null>(null)
   const floatRef = useRef<HTMLDivElement>(null)
+
+  // ── 图片上传状态 ──
+  const [uploading, setUploading] = useState(false)
 
   // 监听选区变化，用 textarea 镜像层精确定位
   const handleSelect = useCallback(() => {
@@ -126,6 +130,111 @@ export default function MarkdownEditor({
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
+
+  // ── 图片上传核心函数 ──────────────────────────────────────────────────────
+  const uploadImageFile = useCallback(async (file: File): Promise<string | null> => {
+    if (!file.type.startsWith('image/')) {
+      toast.error('只支持图片文件')
+      return null
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error('图片超过 20MB 限制')
+      return null
+    }
+
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('image', file)
+      if (articleId) formData.append('articleId', articleId)
+
+      const token = localStorage.getItem('auth_token')
+      const resp = await fetch('/api/images/upload', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      })
+      const data = await resp.json()
+      if (!resp.ok) throw new Error(data.error || '上传失败')
+      return data.url as string
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : '图片上传失败')
+      return null
+    } finally {
+      setUploading(false)
+    }
+  }, [articleId])
+
+  // 在光标处插入图片 Markdown 语法
+  const insertImageMarkdown = useCallback((url: string, alt = '图片') => {
+    const ta = textareaRef.current
+    const cursor = ta ? ta.selectionStart : value.length
+    const mdImg = `![${alt}](${url})`
+    const newValue = value.substring(0, cursor) + mdImg + value.substring(cursor)
+    onChange(newValue)
+    // 移动光标到图片语法后
+    setTimeout(() => {
+      if (ta) {
+        ta.focus()
+        const newPos = cursor + mdImg.length
+        ta.setSelectionRange(newPos, newPos)
+      }
+    }, 0)
+  }, [value, onChange])
+
+  // 粘贴事件：拦截图片粘贴
+  const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = Array.from(e.clipboardData.items)
+    const imageItem = items.find(item => item.type.startsWith('image/'))
+    if (!imageItem) return // 非图片粘贴，走默认行为
+
+    e.preventDefault()
+    const file = imageItem.getAsFile()
+    if (!file) return
+
+    toast.info('正在上传粘贴的图片...')
+    const url = await uploadImageFile(file)
+    if (url) {
+      insertImageMarkdown(url, '图片')
+      toast.success('图片已上传并插入')
+    }
+  }, [uploadImageFile, insertImageMarkdown])
+
+  // 拖拽图片到编辑区
+  const handleDrop = useCallback(async (e: React.DragEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'))
+    if (files.length === 0) return
+    e.preventDefault()
+
+    toast.info(`正在上传 ${files.length} 张图片...`)
+    for (const file of files) {
+      const url = await uploadImageFile(file)
+      if (url) insertImageMarkdown(url, file.name.replace(/\.[^.]+$/, ''))
+    }
+    if (files.length > 0) toast.success('图片上传完成')
+  }, [uploadImageFile, insertImageMarkdown])
+
+  const handleDragOver = (e: React.DragEvent<HTMLTextAreaElement>) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+  }
+
+  // 点击工具栏图片按钮
+  const handleImageButtonClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+    // reset
+    e.target.value = ''
+
+    for (const file of files) {
+      const url = await uploadImageFile(file)
+      if (url) insertImageMarkdown(url, file.name.replace(/\.[^.]+$/, ''))
+    }
+  }
 
   const handleAIAction = async (action: AIAction) => {
     if (!floatMenu) return
@@ -209,6 +318,16 @@ export default function MarkdownEditor({
 
   return (
     <div className="markdown-editor">
+      {/* 隐藏的文件 input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        style={{ display: 'none' }}
+        onChange={handleFileChange}
+      />
+
       {/* ── Toolbar ── */}
       <div className="editor-toolbar">
         <div className="toolbar-left">
@@ -225,6 +344,18 @@ export default function MarkdownEditor({
           <button className="toolbar-btn" onClick={() => insertMarkdown('[', '](url)')} title="链接">🔗</button>
           <button className="toolbar-btn" onClick={() => insertMarkdown('```\n', '\n```')} title="代码块">{'<>'}</button>
           <div className="toolbar-divider" />
+          <button
+            className={`toolbar-btn toolbar-btn--image${uploading ? ' toolbar-btn--loading' : ''}`}
+            onClick={handleImageButtonClick}
+            disabled={uploading}
+            title="上传图片（也可直接粘贴或拖拽图片到编辑区）"
+          >
+            {uploading
+              ? <Loader2 size={16} className="spin" />
+              : <ImagePlus size={16} />}
+            图片
+          </button>
+          <div className="toolbar-divider" />
           <button className="toolbar-btn" onClick={handleCopy}     title="复制"><Copy     size={18} /></button>
           <button className="toolbar-btn" onClick={handleDownload} title="下载"><Download size={18} /></button>
         </div>
@@ -240,8 +371,11 @@ export default function MarkdownEditor({
             onKeyDown={handleKeyDown}
             onMouseUp={handleSelect}
             onKeyUp={handleSelect}
+            onPaste={handlePaste}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
             placeholder={placeholder}
-            className="editor-textarea"
+            className={`editor-textarea${uploading ? ' editor-textarea--uploading' : ''}`}
             spellCheck={false}
           />
         )}
@@ -251,6 +385,14 @@ export default function MarkdownEditor({
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {value || '*预览内容将显示在这里*'}
             </ReactMarkdown>
+          </div>
+        )}
+
+        {/* 上传遮罩 */}
+        {uploading && (
+          <div className="editor-upload-overlay">
+            <Loader2 size={28} className="spin" />
+            <span>图片上传中...</span>
           </div>
         )}
 
@@ -317,7 +459,9 @@ export default function MarkdownEditor({
       {/* ── Footer ── */}
       <div className="editor-footer">
         <span className="char-count">{value.length} 字符 · {value.split('\n').length} 行</span>
-        {floatMenu && <span className="char-count" style={{ color: 'var(--color-brand-teal)' }}>已选 {floatMenu.selectedText.length} 字 · 选中后点击 AI 助手操作</span>}
+        {uploading && <span className="char-count" style={{ color: 'var(--color-brand-teal)' }}>图片上传中...</span>}
+        {!uploading && floatMenu && <span className="char-count" style={{ color: 'var(--color-brand-teal)' }}>已选 {floatMenu.selectedText.length} 字 · 选中后点击 AI 助手操作</span>}
+        {!uploading && !floatMenu && <span className="char-count" style={{ color: 'var(--color-neutral-400)' }}>支持粘贴 / 拖拽图片到编辑区自动上传</span>}
       </div>
     </div>
   )

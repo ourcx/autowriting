@@ -286,6 +286,12 @@
   background: var(--color-surface-soft);
 }
 
+/* 上传中状态 */
+.editor-textarea--uploading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
 .editor-textarea::placeholder {
   color: var(--color-muted);
 }
@@ -436,6 +442,62 @@
 
 .char-count {
   display: inline-block;
+}
+
+/* ── 图片上传工具栏按钮 ── */
+.toolbar-btn--image {
+  color: var(--color-brand-teal);
+  border-color: var(--color-brand-teal);
+  background: rgba(26, 58, 58, 0.05);
+  font-size: 13px;
+}
+
+.toolbar-btn--image:hover {
+  background: var(--color-brand-teal);
+  color: var(--color-on-dark);
+}
+
+.toolbar-btn--image.toolbar-btn--loading {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 旋转动画（Loader2 图标） */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+/* ── 上传遮罩 ── */
+.editor-upload-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(3px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  z-index: 10;
+  color: var(--color-brand-teal);
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 0;
+  pointer-events: none;
+}
+
+/* ── 图片在 Markdown 预览中的样式 ── */
+.markdown-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--rounded-md);
+  margin: 8px 0;
+  border: 1px solid var(--color-hairline);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 /* 响应式设计 */

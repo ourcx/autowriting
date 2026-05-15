@@ -81,14 +81,11 @@ app.get('/api/config/status', (_req, res) => {
   })
 })
 
-// ── 内置模板 seed（首次启动时写入）──────────────────────────────────────────
-const existingTemplates = listTemplates()
-if (!existingTemplates.some(t => t.isBuiltin)) {
-  for (const t of BUILTIN_TEMPLATES_DATA) {
-    upsertTemplate(t)
-  }
-  console.log(`[DB] 已写入 ${BUILTIN_TEMPLATES_DATA.length} 个内置模板`)
+// ── 内置模板 seed（始终同步：每次启动时强制覆盖内置模板到最新版）──────────────
+for (const t of BUILTIN_TEMPLATES_DATA) {
+  upsertTemplate(t)
 }
+console.log(`[DB] 内置模板已同步（${BUILTIN_TEMPLATES_DATA.length} 个）`)
 
 // ── 启动 ──────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {

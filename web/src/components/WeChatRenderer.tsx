@@ -48,9 +48,19 @@ const INLINE_PROPS = [
   'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
   'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
   'border-top-width', 'border-top-style', 'border-top-color',
+  'border-right-width', 'border-right-style', 'border-right-color',
+  'border-bottom-width', 'border-bottom-style', 'border-bottom-color',
   'border-left-width', 'border-left-style', 'border-left-color',
   'border-radius',
+  'border-top-left-radius', 'border-top-right-radius',
+  'border-bottom-left-radius', 'border-bottom-right-radius',
   'display',
+  // ── 图片专属 ──
+  'max-width', 'width', 'height',
+  'vertical-align',
+  'box-shadow',
+  'opacity',
+  'object-fit',
 ] as const
 
 // 常见默认值集合，命中则跳过内联（减少 HTML 体积）
@@ -74,19 +84,41 @@ function inlineComputedStyles(root: HTMLElement): void {
   all.forEach(el => {
     const computed = window.getComputedStyle(el)
     const parts: string[] = []
+    const isImg = el.tagName === 'IMG'
+
     INLINE_PROPS.forEach(prop => {
       const val = computed.getPropertyValue(prop)?.trim()
       if (!val) return
       if (DEFAULT_VALUES.has(val)) return
       // 跳过透明背景
       if (prop === 'background-color' && val === 'rgba(0, 0, 0, 0)') return
+      // 图片不跳过 max-width / width（微信需要显式设置）
+      if (isImg && (prop === 'max-width' || prop === 'width')) {
+        parts.push(`${prop}:${val}`)
+        return
+      }
       // border-style 为 none 时跳过 border-width/color
       if (
-        (prop === 'border-top-width' || prop === 'border-left-width') &&
+        (prop.includes('border') && prop.includes('width')) &&
         val === '0px'
       ) return
       parts.push(`${prop}:${val}`)
     })
+
+    if (isImg) {
+      // 图片固定补充：display:block + 左右 auto 居中（微信支持 margin:auto）
+      if (!parts.some(p => p.startsWith('display:'))) parts.push('display:block')
+      if (!parts.some(p => p.startsWith('max-width:'))) parts.push('max-width:100%')
+      // 合并 margin：保留上下，左右强制 auto（居中）
+      const mtVal = computed.getPropertyValue('margin-top')?.trim() || '16px'
+      const mbVal = computed.getPropertyValue('margin-bottom')?.trim() || '16px'
+      // 移除可能已经被加入的 margin-left / margin-right
+      const withoutMarginLR = parts.filter(p => !p.startsWith('margin-left:') && !p.startsWith('margin-right:'))
+      withoutMarginLR.push(`margin:${mtVal} auto ${mbVal}`)
+      el.setAttribute('style', withoutMarginLR.join(';'))
+      return
+    }
+
     if (parts.length) el.setAttribute('style', parts.join(';'))
   })
 }

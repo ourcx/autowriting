@@ -70,6 +70,17 @@ db.exec(`
     updated_at  TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS uploaded_images (
+    id          TEXT PRIMARY KEY,
+    filename    TEXT NOT NULL,
+    original_name TEXT NOT NULL,
+    mime_type   TEXT NOT NULL DEFAULT 'image/png',
+    size        INTEGER NOT NULL DEFAULT 0,
+    article_id  TEXT,
+    created_at  TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_uploaded_images_article ON uploaded_images(article_id, created_at DESC);
+
   CREATE TABLE IF NOT EXISTS publish_history (
     id          TEXT PRIMARY KEY,
     title       TEXT NOT NULL,
@@ -626,6 +637,32 @@ export function getTokenUsageSummary(userId, days = 30) {
   `).get(userId, `-${days}`)
 
   return { byOperation, byDay, totals }
+}
+
+// ── 上传图片管理 ──────────────────────────────────────────────────────────────
+
+export function addUploadedImage({ id, filename, originalName, mimeType, size, articleId }) {
+  const now = new Date().toISOString()
+  db.prepare(`
+    INSERT INTO uploaded_images (id, filename, original_name, mime_type, size, article_id, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, filename, originalName, mimeType || 'image/png', size || 0, articleId || null, now)
+  return { id, filename, originalName, mimeType, size, articleId, createdAt: now }
+}
+
+export function listUploadedImages({ articleId } = {}) {
+  if (articleId) {
+    return db.prepare('SELECT * FROM uploaded_images WHERE article_id = ? ORDER BY created_at DESC').all(articleId)
+      .map(r => ({ id: r.id, filename: r.filename, originalName: r.original_name, mimeType: r.mime_type, size: r.size, articleId: r.article_id, createdAt: r.created_at }))
+  }
+  return db.prepare('SELECT * FROM uploaded_images ORDER BY created_at DESC LIMIT 200').all()
+    .map(r => ({ id: r.id, filename: r.filename, originalName: r.original_name, mimeType: r.mime_type, size: r.size, articleId: r.article_id, createdAt: r.created_at }))
+}
+
+export function deleteUploadedImage(id) {
+  const row = db.prepare('SELECT filename FROM uploaded_images WHERE id = ?').get(id)
+  db.prepare('DELETE FROM uploaded_images WHERE id = ?').run(id)
+  return row ? row.filename : null
 }
 
 console.log(`[DB] SQLite 已连接：${DB_PATH}`)
