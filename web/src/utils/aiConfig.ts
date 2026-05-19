@@ -47,7 +47,7 @@ export const DEFAULT_CONFIG: AIConfig = {
   articleApiKey: '',
   articleBaseUrl: 'https://api.openai.com/v1',
 
-  coverProvider: 'local',
+  coverProvider: 'siliconflow',
   coverApiKey: '',
 
   siliconflowApiKey: '',
@@ -68,6 +68,50 @@ export const DEFAULT_CONFIG: AIConfig = {
   searchApiKey:   '',
   searchEngine:   'google',
 }
+
+// 快速预设方案（用户可一键应用）
+export const CONFIG_PRESETS = [
+  {
+    id: 'openai-basic',
+    name: 'OpenAI 基础方案',
+    desc: '使用 OpenAI API，适合大多数用户',
+    config: {
+      articleProvider: 'openai',
+      articleModel: 'gpt-4o-mini',
+      coverProvider: 'openai',
+    }
+  },
+  {
+    id: 'openai-pro',
+    name: 'OpenAI 专业方案',
+    desc: '使用 GPT-4o + DALL-E 3，质量最高',
+    config: {
+      articleProvider: 'openai',
+      articleModel: 'gpt-4o',
+      coverProvider: 'openai',
+    }
+  },
+  {
+    id: 'siliconflow-budget',
+    name: 'SiliconFlow 经济方案',
+    desc: '使用开源模型，成本最低',
+    config: {
+      articleProvider: 'openai-compat',
+      articleModel: 'deepseek-chat',
+      coverProvider: 'siliconflow',
+      siliconflowModel: 'Kwai-Kolors/Kolors',
+    }
+  },
+  {
+    id: 'maas-internal',
+    name: '小红书 MaaS（内部）',
+    desc: '使用内部 MaaS 服务',
+    config: {
+      articleProvider: 'maas',
+      coverProvider: 'siliconflow',
+    }
+  },
+]
 
 /** 同步读取（优先 localStorage，保证组件渲染不阻塞） */
 export function loadAIConfig(): AIConfig {

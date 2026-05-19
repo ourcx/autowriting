@@ -1,0 +1,295 @@
+/* ===== Onboarding Guide — Clay Design System ===== */
+/* 
+ * Design System Reference:
+ * - Canvas: #fffaf0 (cream-tinted white)
+ * - Primary: #0a0a0a (dark navy/black)
+ * - Brand Colors: teal (#1a3a3a), lavender (#b8a4ed), peach (#ffb084), ochre (#e8b94a)
+ * - Typography: Inter font family
+ * - Rounded: md (12px), lg (16px), xl (24px)
+ * - Spacing: xs (8px), sm (12px), md (16px), lg (24px), xl (32px)
+ */
+
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 10, 10, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease-out;
+  padding: 16px;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.onboarding-container {
+  background: #fffaf0;
+  border-radius: 24px;
+  width: 100%;
+  max-width: 600px;
+  padding: 48px 40px;
+  border: 1px solid #e5e5e5;
+  position: relative;
+  animation: slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---- Close button ---- */
+.onboarding-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: transparent;
+  color: #6a6a6a;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all 0.2s;
+  font-size: 20px;
+  padding: 0;
+}
+
+.onboarding-close:hover {
+  background: #f5f0e0;
+  color: #0a0a0a;
+}
+
+/* ---- Content ---- */
+.onboarding-content {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.onboarding-icon {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f5f0e0, #ebe6d6);
+  border-radius: 20px;
+  color: #1a3a3a;
+  font-size: 40px;
+  animation: bounce 0.6s ease-out;
+  flex-shrink: 0;
+}
+
+@keyframes bounce {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.onboarding-title {
+  font-family: "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+  font-size: 28px;
+  font-weight: 600;
+  color: #0a0a0a;
+  margin: 0;
+  letter-spacing: -0.5px;
+  line-height: 1.3;
+}
+
+.onboarding-description {
+  font-family: "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+  font-size: 15px;
+  color: #3a3a3a;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ---- Step indicators ---- */
+.onboarding-steps {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.onboarding-step-dot {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #f5f0e0;
+  border: 1px solid #e5e5e5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6a6a6a;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-family: "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+  flex-shrink: 0;
+}
+
+.onboarding-step-dot:hover {
+  background: #ebe6d6;
+  border-color: #d0d0d0;
+  transform: translateY(-2px);
+}
+
+.onboarding-step-dot.active {
+  background: #1a3a3a;
+  color: #ffffff;
+  border-color: #1a3a3a;
+  transform: scale(1.15);
+  box-shadow: 0 4px 12px rgba(26, 58, 58, 0.2);
+}
+
+.onboarding-step-dot.completed {
+  background: #22c55e;
+  color: #ffffff;
+  border-color: #22c55e;
+}
+
+/* ---- Actions ---- */
+.onboarding-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.onboarding-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+  white-space: nowrap;
+  font-family: "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+  height: 44px;
+  min-width: 120px;
+}
+
+.onboarding-btn-primary {
+  background: #0a0a0a;
+  color: #ffffff;
+}
+
+.onboarding-btn-primary:hover {
+  background: #1f1f1f;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(10, 10, 10, 0.15);
+}
+
+.onboarding-btn-primary:active {
+  transform: translateY(0);
+}
+
+.onboarding-btn-secondary {
+  background: #f5f0e0;
+  color: #0a0a0a;
+  border: 1px solid #e5e5e5;
+}
+
+.onboarding-btn-secondary:hover {
+  background: #ebe6d6;
+  border-color: #d0d0d0;
+  transform: translateY(-2px);
+}
+
+/* ---- Skip button ---- */
+.onboarding-skip {
+  position: absolute;
+  bottom: 20px;
+  left: 40px;
+  background: none;
+  border: none;
+  color: #6a6a6a;
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.2s;
+  font-family: "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+  font-weight: 500;
+  padding: 0;
+}
+
+.onboarding-skip:hover {
+  color: #0a0a0a;
+  text-decoration: underline;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 768px) {
+  .onboarding-container {
+    padding: 40px 24px;
+    gap: 24px;
+  }
+
+  .onboarding-title {
+    font-size: 24px;
+  }
+
+  .onboarding-description {
+    font-size: 14px;
+  }
+
+  .onboarding-btn {
+    padding: 10px 16px;
+    font-size: 13px;
+    height: 40px;
+    min-width: 100px;
+  }
+
+  .onboarding-steps {
+    gap: 6px;
+  }
+
+  .onboarding-step-dot {
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+  }
+
+  .onboarding-icon {
+    width: 64px;
+    height: 64px;
+    font-size: 32px;
+  }
+}

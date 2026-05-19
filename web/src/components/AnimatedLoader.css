@@ -1,0 +1,249 @@
+/* ===== Animated Loader — Clay Design System ===== */
+/* 
+ * Design System Reference:
+ * - Canvas: #fffaf0 (cream-tinted white)
+ * - Primary: #0a0a0a (dark navy/black)
+ * - Brand Colors: teal (#1a3a3a), lavender (#b8a4ed), peach (#ffb084), ochre (#e8b94a)
+ * - Success: #22c55e
+ * - Typography: Inter font family
+ * - Rounded: md (12px), lg (16px), xl (24px)
+ * - Spacing: xs (8px), sm (12px), md (16px), lg (24px), xl (32px)
+ */
+
+.animated-loader {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 250, 240, 0.95);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  animation: fadeIn 0.3s ease-out;
+  padding: 16px;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.loader-content {
+  text-align: center;
+  max-width: 500px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* ---- Spinner ---- */
+.loader-spinner {
+  width: 100px;
+  height: 100px;
+  margin: 0 auto;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.spinner-ring {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border: 3px solid transparent;
+  border-radius: 50%;
+  border-top-color: #1a3a3a;
+  border-right-color: #b8a4ed;
+  animation: spin 1.2s linear infinite;
+}
+
+.spinner-ring:nth-child(2) {
+  width: 70px;
+  height: 70px;
+  top: 15px;
+  left: 15px;
+  border-top-color: #ffb084;
+  border-right-color: #1a3a3a;
+  animation: spin 1.5s linear infinite reverse;
+}
+
+.spinner-ring:nth-child(3) {
+  width: 40px;
+  height: 40px;
+  top: 30px;
+  left: 30px;
+  border-top-color: #e8b94a;
+  border-right-color: #ffb084;
+  animation: spin 1.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---- Message ---- */
+.loader-message {
+  font-family: "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+  font-size: 18px;
+  font-weight: 600;
+  color: #0a0a0a;
+  margin: 0;
+  letter-spacing: -0.3px;
+  line-height: 1.4;
+}
+
+/* ---- Progress bar ---- */
+.loader-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.progress-bar {
+  height: 6px;
+  background: linear-gradient(90deg, #1a3a3a, #b8a4ed, #ffb084);
+  border-radius: 3px;
+  transition: width 0.3s ease-out;
+  width: 100%;
+}
+
+.progress-text {
+  display: block;
+  font-family: "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+  font-size: 13px;
+  color: #6a6a6a;
+  font-weight: 500;
+}
+
+/* ---- Steps ---- */
+.loader-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #f5f0e0;
+  border: 1px solid #e5e5e5;
+  transition: all 0.3s;
+}
+
+.step-item.active {
+  background: #faf5e8;
+  border-color: #1a3a3a;
+  box-shadow: 0 2px 8px rgba(26, 58, 58, 0.1);
+}
+
+.step-item.completed {
+  background: #f0fdf4;
+  border-color: #22c55e;
+}
+
+.step-indicator {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  flex-shrink: 0;
+  background: #6a6a6a;
+  transition: all 0.3s;
+  font-family: "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+}
+
+.step-item.active .step-indicator {
+  background: #1a3a3a;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.step-item.completed .step-indicator {
+  background: #22c55e;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.step-label {
+  font-family: "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+  font-size: 14px;
+  color: #3a3a3a;
+  font-weight: 500;
+  text-align: left;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.step-item.active .step-label {
+  color: #1a3a3a;
+  font-weight: 600;
+}
+
+.step-item.completed .step-label {
+  color: #22c55e;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 768px) {
+  .loader-content {
+    gap: 24px;
+  }
+
+  .loader-spinner {
+    width: 80px;
+    height: 80px;
+  }
+
+  .spinner-ring:nth-child(2) {
+    width: 55px;
+    height: 55px;
+    top: 12.5px;
+    left: 12.5px;
+  }
+
+  .spinner-ring:nth-child(3) {
+    width: 30px;
+    height: 30px;
+    top: 25px;
+    left: 25px;
+  }
+
+  .loader-message {
+    font-size: 16px;
+  }
+
+  .step-item {
+    padding: 12px 14px;
+    gap: 12px;
+  }
+
+  .step-indicator {
+    width: 32px;
+    height: 32px;
+    font-size: 13px;
+  }
+
+  .step-label {
+    font-size: 13px;
+  }
+}

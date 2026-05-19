@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Settings, Palette, AlertTriangle, Database, BookOpen, LogOut, Shield } from 'lucide-react'
 import Dashboard from './Dashboard'
+import OnboardingGuide from '../components/OnboardingGuide'
 import { useAIReadiness, fetchServerStatus } from '../store/useConfigStore'
 import { useAuth, logout } from '../store/useAuth'
 import './DashboardPage.css'
@@ -11,6 +12,7 @@ export default function DashboardPage() {
   const { articleReady: apiKeyReady } = useAIReadiness()
   const { user, isAdmin } = useAuth()
   const [wxBound, setWxBound] = useState(false)
+  const [showOnboarding, setShowOnboarding] = useState(false)
 
   useEffect(() => {
     fetchServerStatus()
@@ -18,7 +20,18 @@ export default function DashboardPage() {
       .then(r => r.json())
       .then(d => setWxBound(d.bound))
       .catch(() => {})
+
+    // 检查是否需要显示引导（首次访问）
+    const hasSeenOnboarding = localStorage.getItem('onboarding-completed')
+    if (!hasSeenOnboarding) {
+      setShowOnboarding(true)
+    }
   }, [])
+
+  const handleOnboardingComplete = () => {
+    localStorage.setItem('onboarding-completed', 'true')
+    setShowOnboarding(false)
+  }
 
   return (
     <div className="dp-root">
@@ -80,6 +93,11 @@ export default function DashboardPage() {
           onEditArticle={id => navigate(`/editor/${id}`)}
         />
       </div>
+
+      {/* ── 欢迎引导 ── */}
+      {showOnboarding && (
+        <OnboardingGuide onComplete={handleOnboardingComplete} />
+      )}
     </div>
   )
 }

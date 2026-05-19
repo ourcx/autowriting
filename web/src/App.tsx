@@ -11,6 +11,7 @@ import TokenUsagePage from './pages/TokenUsagePage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import AdminPage from './pages/AdminPage'
+import MonitoringPage from './pages/MonitoringPage'
 import PrivateRoute from './components/PrivateRoute'
 import ToastProvider from './components/Toast'
 import { syncAIConfigFromServer } from './utils/aiConfig'
@@ -44,6 +45,7 @@ export default function App() {
 
         {/* 管理员路由 */}
         <Route path="/admin" element={<PrivateRoute requireAdmin><AdminPage /></PrivateRoute>} />
+        <Route path="/monitoring" element={<PrivateRoute requireAdmin><MonitoringPage /></PrivateRoute>} />
 
         {/* 404 兜底 */}
         <Route path="*" element={<Navigate to="/" replace />} />

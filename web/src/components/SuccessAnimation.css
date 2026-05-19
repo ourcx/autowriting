@@ -1,0 +1,113 @@
+/* ===== Success Animation — Clay Design System ===== */
+/* 
+ * Design System Reference:
+ * - Canvas: #fffaf0 (cream-tinted white)
+ * - Primary: #0a0a0a (dark navy/black)
+ * - Success: #22c55e
+ * - Typography: Inter font family
+ * - Rounded: md (12px), lg (16px), xl (24px)
+ * - Spacing: xs (8px), sm (12px), md (16px), lg (24px), xl (32px)
+ */
+
+.success-animation {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 10, 10, 0.3);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+  animation: fadeIn 0.3s ease-out;
+  padding: 16px;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.success-content {
+  text-align: center;
+  animation: scaleIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.success-icon {
+  width: 120px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+  border-radius: 50%;
+  color: #22c55e;
+  font-size: 56px;
+  animation: bounce 0.6s ease-out;
+  flex-shrink: 0;
+}
+
+@keyframes bounce {
+  0% {
+    transform: scale(0.8);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.success-message {
+  font-family: "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+  font-size: 20px;
+  font-weight: 600;
+  color: #0a0a0a;
+  letter-spacing: -0.3px;
+  line-height: 1.4;
+  margin: 0;
+  animation: slideUp 0.5s ease-out 0.1s both;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 768px) {
+  .success-icon {
+    width: 100px;
+    height: 100px;
+    font-size: 48px;
+  }
+
+  .success-message {
+    font-size: 18px;
+  }
+}

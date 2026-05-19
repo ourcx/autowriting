@@ -50,6 +50,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS cover_history (
     id          TEXT PRIMARY KEY,
+    user_id     TEXT,
     title       TEXT NOT NULL,
     style       TEXT,
     color       TEXT,
@@ -61,6 +62,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS image_library (
     id          TEXT PRIMARY KEY,
+    user_id     TEXT,
     title       TEXT NOT NULL,
     category    TEXT,
     tags        TEXT NOT NULL DEFAULT '[]',  -- JSON 数组
@@ -79,7 +81,6 @@ db.exec(`
     article_id  TEXT,
     created_at  TEXT NOT NULL
   );
-  CREATE INDEX IF NOT EXISTS idx_uploaded_images_article ON uploaded_images(article_id, created_at DESC);
 
   CREATE TABLE IF NOT EXISTS publish_history (
     id          TEXT PRIMARY KEY,
@@ -92,6 +93,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS analyses (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         TEXT,
     article_id      TEXT NOT NULL,
     created_at      TEXT NOT NULL,
     scores          TEXT NOT NULL,   -- JSON: { overall, style, structure, actionability, originality }
@@ -101,7 +103,6 @@ db.exec(`
     top_suggestion  TEXT,
     rag_count       INTEGER DEFAULT 0
   );
-  CREATE INDEX IF NOT EXISTS idx_analyses_article ON analyses(article_id, created_at DESC);
 
   CREATE TABLE IF NOT EXISTS style_templates (
     id           TEXT PRIMARY KEY,
@@ -131,11 +132,60 @@ db.exec(`
     total_tokens   INTEGER NOT NULL DEFAULT 0,
     created_at     TEXT NOT NULL
   );
-  CREATE INDEX IF NOT EXISTS idx_token_usage_user ON token_usage(user_id, created_at DESC);
-  CREATE INDEX IF NOT EXISTS idx_token_usage_article ON token_usage(article_id, created_at DESC);
 `)
 
+// ── 创建索引（分离出来，避免与表创建冲突） ──────────────────────────────────────
+
+function createIndexes() {
+  try {
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_cover_history_user ON cover_history(user_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_cover_history_created ON cover_history(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_image_library_user ON image_library(user_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_image_library_tags ON image_library(tags);
+      CREATE INDEX IF NOT EXISTS idx_uploaded_images_article ON uploaded_images(article_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_analyses_user_article ON analyses(user_id, article_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_analyses_article ON analyses(article_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_token_usage_user ON token_usage(user_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_token_usage_article ON token_usage(article_id, created_at DESC);
+    `)
+  } catch (e) {
+    console.warn('[DB] 创建索引失败:', e.message)
+  }
+}
+
 // ── 迁移旧 JSON 文件数据（首次运行时执行一次） ───────────────────────────────
+
+// 添加缺失的列（如果表已存在但列不存在）
+function addMissingColumns() {
+  try {
+    // 检查 cover_history 是否有 user_id 列
+    const coverHistoryInfo = db.prepare("PRAGMA table_info(cover_history)").all()
+    const hasUserIdInCoverHistory = coverHistoryInfo.some(col => col.name === 'user_id')
+    if (!hasUserIdInCoverHistory) {
+      db.exec("ALTER TABLE cover_history ADD COLUMN user_id TEXT")
+      console.log('[DB] 添加 cover_history.user_id 列')
+    }
+
+    // 检查 image_library 是否有 user_id 列
+    const imageLibraryInfo = db.prepare("PRAGMA table_info(image_library)").all()
+    const hasUserIdInImageLibrary = imageLibraryInfo.some(col => col.name === 'user_id')
+    if (!hasUserIdInImageLibrary) {
+      db.exec("ALTER TABLE image_library ADD COLUMN user_id TEXT")
+      console.log('[DB] 添加 image_library.user_id 列')
+    }
+
+    // 检查 analyses 是否有 user_id 列
+    const analysesInfo = db.prepare("PRAGMA table_info(analyses)").all()
+    const hasUserIdInAnalyses = analysesInfo.some(col => col.name === 'user_id')
+    if (!hasUserIdInAnalyses) {
+      db.exec("ALTER TABLE analyses ADD COLUMN user_id TEXT")
+      console.log('[DB] 添加 analyses.user_id 列')
+    }
+  } catch (e) {
+    console.warn('[DB] 添加缺失列失败:', e.message)
+  }
+}
 
 function migrateIfNeeded() {
   const legacyFiles = {
@@ -257,6 +307,9 @@ function migrateIfNeeded() {
   }
 }
 
+// 先添加缺失的列，再创建索引，最后进行数据迁移
+addMissingColumns()
+createIndexes()
 migrateIfNeeded()
 
 // ── 初始化 admin 账号（首次启动时创建） ──────────────────────────────────────

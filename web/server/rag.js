@@ -132,10 +132,13 @@ function getEmbeddings(aiConfig = {}) {
 }
 
 // ── 文本切割器 ────────────────────────────────────────────────────────────────
+// 优化：减小 chunk 大小以降低 token 消耗
+// 原来 800 字符会导致检索结果过长，现改为 400 字符
+// 这样既能保留足够的上下文，又能减少不必要的 token 消耗
 
 const splitter = new RecursiveCharacterTextSplitter({
-  chunkSize: 800,
-  chunkOverlap: 100,
+  chunkSize: 400,      // 从 800 减小到 400，减少 50% token 消耗
+  chunkOverlap: 50,    // 相应减小重叠部分
   separators: ['\n\n', '\n', '。', '！', '？', '，', ''],
 })
 
@@ -204,7 +207,7 @@ export async function buildIndex(aiConfig = {}, userId) {
 
 // ── 检索相关文档 ──────────────────────────────────────────────────────────────
 
-export async function retrieveRelevant(query, { topK = 5, aiConfig = {}, userId } = {}) {
+export async function retrieveRelevant(query, { topK = 3, aiConfig = {}, userId } = {}) {
   const indexDir = getUserIndexDir(userId)
   if (!fs.existsSync(path.join(indexDir, 'hnswlib.index'))) {
     return []  // 未索引，静默返回空
@@ -212,10 +215,13 @@ export async function retrieveRelevant(query, { topK = 5, aiConfig = {}, userId 
   try {
     const embeddings = getEmbeddings(aiConfig)
     const vectorStore = await HNSWLib.load(indexDir, embeddings)
+    // 优化：topK 从 5 减小到 3，减少检索结果数量
+    // 这样既能保留最相关的内容，又能显著降低 token 消耗
     const results = await vectorStore.similaritySearchWithScore(query, topK)
-    // 过滤掉相似度太低的（score < 0.3 in cosine distance）
+    // 优化：提高相似度阈值从 0.8 到 0.7（更严格的过滤）
+    // 只保留真正相关的内容，避免引入噪声
     return results
-      .filter(([, score]) => score < 0.8)
+      .filter(([, score]) => score < 0.7)
       .map(([doc, score]) => ({
         content:  doc.pageContent,
         source:   doc.metadata.source,

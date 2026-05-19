@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '../store/useAuth'
-import { UserPlus, RotateCcw, Trash2, FileText, X, Eye, EyeOff } from 'lucide-react'
+import { UserPlus, RotateCcw, Trash2, FileText, X, Eye, EyeOff, Activity } from 'lucide-react'
 import './AdminPage.css'
 
 interface UserRow {
@@ -159,10 +159,16 @@ export default function AdminPage() {
             <h1>用户管理</h1>
             <p>管理账号、查看创作数据、控制账号状态</p>
           </div>
-          <button className="admin-create-btn" onClick={openCreate}>
-            <UserPlus size={15} />
-            新建用户
-          </button>
+          <div className="admin-header-actions">
+            <Link to="/monitoring" className="admin-create-btn">
+              <Activity size={15} />
+              系统监控
+            </Link>
+            <button className="admin-create-btn" onClick={openCreate}>
+              <UserPlus size={15} />
+              新建用户
+            </button>
+          </div>
         </div>
 
         {/* Stat cards */}

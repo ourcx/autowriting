@@ -127,28 +127,45 @@ export function addImageToLibrary(imageUrl, title, category, tags, provider) {
 
 export function generatePrompt(title, content, style, color) {
   const stylePrompts = {
-    modern:       'modern flat design, bold clean typography, simple geometric elements, strong visual hierarchy, no clutter',
-    minimalist:   'minimalist design, generous white space, single accent color, thin elegant lines, premium feel',
-    gradient:     'smooth gradient background, vibrant two-tone color wash, soft light rays, contemporary aesthetic',
-    illustration: 'flat vector illustration style, friendly characters or icons, warm colors, editorial feel',
-    photography:  'cinematic background photo, shallow depth of field, dramatic lighting, magazine cover style',
-    abstract:     'bold abstract shapes, dynamic composition, overlapping geometric forms, artistic and eye-catching',
+    modern:       'modern flat design with bold geometric shapes, clean sans-serif typography, strong visual hierarchy, minimalist color blocking, professional and contemporary',
+    minimalist:   'minimalist design with generous white space, single bold accent color, thin elegant lines, premium typography, sophisticated and clean',
+    gradient:     'smooth gradient background with vibrant two-tone color wash, soft light rays and depth, contemporary aesthetic with subtle texture',
+    illustration: 'flat vector illustration style with friendly characters or abstract icons, warm color palette, editorial and approachable feel',
+    photography:  'cinematic background photography with shallow depth of field, dramatic directional lighting, magazine cover quality, professional and polished',
+    abstract:     'bold abstract geometric shapes with dynamic composition, overlapping forms creating depth, artistic and eye-catching, modern art style',
   }
   const colorNames = {
-    matcha: 'matcha green (#078a52)', slushie: 'cyan blue (#3bd3fd)', lemon: 'golden yellow (#fbbd41)',
-    ube: 'deep purple (#43089f)', pomegranate: 'coral red (#fc7981)', blueberry: 'navy blue (#01418d)',
+    matcha: 'matcha green (#078a52) with white accents',
+    slushie: 'cyan blue (#3bd3fd) with light backgrounds',
+    lemon: 'golden yellow (#fbbd41) with dark text contrast',
+    ube: 'deep purple (#43089f) with bright highlights',
+    pomegranate: 'coral red (#fc7981) with soft shadows',
+    blueberry: 'navy blue (#01418d) with light accents',
   }
   const styleDesc = stylePrompts[style] || stylePrompts.modern
   const colorDesc = colorNames[color]   || 'vibrant accent color'
   const preview   = (content || '').substring(0, 80).replace(/[#*\[\]`]/g, '').trim()
-  const themeHint = preview ? `Topic hint: ${preview}.` : ''
-  return `Generate a WeChat public account article cover image.
-Aspect ratio: 2.35:1 (landscape, like 1080x460 pixels).
-Article title: "${title}".
-${themeHint}
-Visual style: ${styleDesc}.
-Primary color scheme: ${colorDesc}.
-Requirements: No text rendered in the image. Focus on a strong visual that matches the article topic. High quality, clean composition, suitable as a blog/social media banner. No watermarks, no borders.`
+  const themeHint = preview ? `Article topic: ${preview}. ` : ''
+  return `Create a high-quality WeChat public account article cover image.
+
+Specifications:
+- Aspect ratio: 2.35:1 (landscape, 1024×576 pixels minimum)
+- Article title: "${title}"
+- ${themeHint}
+
+Visual Direction:
+- Style: ${styleDesc}
+- Color scheme: ${colorDesc}
+- Composition: Balanced, professional, eye-catching
+- Quality: High resolution, sharp details, vibrant colors
+
+Requirements:
+- NO text or typography in the image
+- NO watermarks, logos, or borders
+- Focus on visual impact that matches the article topic
+- Suitable for social media and blog headers
+- Professional quality suitable for publication
+- Ensure good contrast and readability when used as a banner`
 }
 
 export function generatePlaceholderCover(title, style, color) {
@@ -198,8 +215,12 @@ export async function generateWithSiliconFlow(prompt, apiKey, model) {
       prompt,
       image_size: '1024x576',
       batch_size: 1,
-      num_inference_steps: 20,
-      guidance_scale: 7.5,
+      // 优化：提高推理步数从 20 到 30，提升图片质量
+      // 更多步数 = 更精细的细节和更好的色彩准确度
+      num_inference_steps: 30,
+      // 优化：提高引导尺度从 7.5 到 8.5，增强提示词遵循度
+      // 更高的值 = 更严格地遵循提示词，减少偏离
+      guidance_scale: 8.5,
     },
     { headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' } },
   )

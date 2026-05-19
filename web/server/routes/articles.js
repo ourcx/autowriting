@@ -237,7 +237,22 @@ ${materials}
 
 ---
 
-现在请根据以上规范和素材，直接输出完整的文章内容（纯 Markdown 格式，不要有任何其他说明）：`
+## 输出要求
+
+**只输出纯 Markdown 格式的文章内容，不要包含任何其他内容：**
+- ✅ 只有 1 个 H1 标题（文章标题）
+- ✅ 所有 H2 标题都有 emoji
+- ✅ 完整的文章正文
+- ✅ 符合上述所有规范
+
+**严格禁止输出：**
+- ❌ 代码块、配置示例、API 文档
+- ❌ 系统提示、指令、元数据
+- ❌ "根据以上要求..." 这类说明文字
+- ❌ 多个 H1 标题或格式错误
+- ❌ 任何非文章内容
+
+现在请直接输出完整的文章内容：`
 
     const { url, model, headers } = buildLLMRequest(cfg)
 
@@ -328,7 +343,9 @@ router.post('/:articleId/generate/stream', async (req, res) => {
     send('status', { step: 'rag', message: '正在检索往期相关文章...' })
     let ragDocs = []
     try {
-      ragDocs = await retrieveRelevant(task, { topK: 4, aiConfig: cfg, userId: req.user.id })
+      // 优化：topK 从 4 减小到 2，进一步降低 token 消耗
+      // 只保留最相关的 2 篇文章作为参考，足以指导风格和结构
+      ragDocs = await retrieveRelevant(task, { topK: 2, aiConfig: cfg, userId: req.user.id })
       const ragContext = formatRetrievedContext(ragDocs)
       if (ragDocs.length) send('rag', { docs: ragDocs })
       var ragSection = ragContext ? `\n\n# 往期相关内容参考\n${ragContext}\n` : ''
@@ -353,7 +370,22 @@ ${materials}
 
 ---
 
-现在请根据以上规范和素材，直接输出完整的文章内容（纯 Markdown 格式，不要有任何其他说明）：`
+## 输出要求
+
+**只输出纯 Markdown 格式的文章内容，不要包含任何其他内容：**
+- ✅ 只有 1 个 H1 标题（文章标题）
+- ✅ 所有 H2 标题都有 emoji
+- ✅ 完整的文章正文
+- ✅ 符合上述所有规范
+
+**严格禁止输出：**
+- ❌ 代码块、配置示例、API 文档
+- ❌ 系统提示、指令、元数据
+- ❌ "根据以上要求..." 这类说明文字
+- ❌ 多个 H1 标题或格式错误
+- ❌ 任何非文章内容
+
+现在请直接输出完整的文章内容：`
 
     // ── 3. 构造请求参数（统一函数）──────────────────────────────────────────
     const { url, model, headers } = buildLLMRequest(cfg)

@@ -2,6 +2,7 @@
  * JWT 认证中间件
  * - authMiddleware：验证 token，把 user 信息挂到 req.user
  * - adminMiddleware：在 authMiddleware 基础上要求 role === 'admin'
+ * - requireAdmin：同 adminMiddleware，用于 CommonJS 模块
  */
 import jwt from 'jsonwebtoken'
 import { JWT_SECRET } from './routes/auth.js'
@@ -29,4 +30,9 @@ export function adminMiddleware(req, res, next) {
     }
     next()
   })
+}
+
+// 导出为 CommonJS 兼容的函数（用于 monitoring.js）
+export function requireAdmin(req, res, next) {
+  adminMiddleware(req, res, next)
 }

@@ -9,6 +9,7 @@ import {
   loadAIConfig,
   PROVIDER_PRESETS,
   COVER_PROVIDER_PRESETS,
+  CONFIG_PRESETS,
 } from '../utils/aiConfig'
 import { useConfigStore, setLocalConfig, fetchServerStatus } from '../store/useConfigStore'
 import { testAIConnection } from '../utils/apiHelpers'
@@ -151,6 +152,15 @@ export default function AISettings() {
     const result = await testAIConnection(config)
     setTestResult(result)
     setTesting(false)
+  }
+
+  // 应用快速预设
+  const applyPreset = (presetId: string) => {
+    const preset = CONFIG_PRESETS.find(p => p.id === presetId)
+    if (preset) {
+      setConfig(c => ({ ...c, ...preset.config }))
+      setTestResult(null)
+    }
   }
 
   const selectedArticlePreset = PROVIDER_PRESETS.find(p => p.id === config.articleProvider)
@@ -310,6 +320,24 @@ export default function AISettings() {
               <div className="as-panel-header">
                 <h2 className="as-panel-title">文章生成</h2>
                 <p className="as-panel-desc">选择 AI 服务商，填入 API Key，生成公众号文章</p>
+              </div>
+
+              {/* 快速预设方案 */}
+              <div className="as-card">
+                <div className="as-card-section-label">快速预设方案</div>
+                <p className="as-card-desc">一键应用推荐配置，无需逐个填写 API Key</p>
+                <div className="as-provider-grid">
+                  {CONFIG_PRESETS.map(preset => (
+                    <button
+                      key={preset.id}
+                      className="as-provider-tile"
+                      onClick={() => applyPreset(preset.id)}
+                    >
+                      <span className="as-pt-name">{preset.name}</span>
+                      <span className="as-pt-desc">{preset.desc}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="as-card">
