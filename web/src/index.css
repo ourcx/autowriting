@@ -78,6 +78,42 @@ body {
 }
 
 html, body, #root {
-  height: 100%;
-  width: 100%;
+   height: 100%;
+   width: 100%;
+}
+
+/* ── 统一返回按钮样式 ── */
+.wd-back-btn {
+   display: flex;
+   align-items: center;
+   gap: 6px;
+   padding: 8px 14px;
+   height: 36px;
+   border: 1px solid #e5e5e5;
+   border-radius: 12px;
+   background: #fffaf0;
+   color: #0a0a0a;
+   font-size: 14px;
+   font-weight: 500;
+   cursor: pointer;
+   white-space: nowrap;
+   transition: background 0.15s, border-color 0.15s;
+}
+
+.wd-back-btn:hover {
+   background: #faf5e8;
+   border-color: #9a9a9a;
+}
+
+.wd-back-btn:active {
+   background: #f5f0e0;
+}
+
+.wd-back-btn:disabled {
+   opacity: 0.5;
+   cursor: not-allowed;
+}
+
+.wd-back-btn svg {
+   flex-shrink: 0;
 }

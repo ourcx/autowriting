@@ -121,6 +121,31 @@ db.exec(`
     updated_at  TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS prompts (
+    id           TEXT PRIMARY KEY,
+    name         TEXT NOT NULL,
+    category     TEXT NOT NULL,
+    description  TEXT,
+    content      TEXT NOT NULL,
+    version      INTEGER NOT NULL DEFAULT 1,
+    tags         TEXT NOT NULL DEFAULT '[]',
+    is_builtin   INTEGER NOT NULL DEFAULT 0,
+    usage_count  INTEGER NOT NULL DEFAULT 0,
+    replaces_id  TEXT,
+    created_at   TEXT NOT NULL,
+    updated_at   TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS prompt_versions (
+    id           TEXT PRIMARY KEY,
+    prompt_id    TEXT NOT NULL,
+    version      INTEGER NOT NULL,
+    content      TEXT NOT NULL,
+    change_note  TEXT,
+    created_at   TEXT NOT NULL,
+    FOREIGN KEY (prompt_id) REFERENCES prompts(id) ON DELETE CASCADE
+  );
+
   CREATE TABLE IF NOT EXISTS token_usage (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     article_id     TEXT,
@@ -148,6 +173,9 @@ function createIndexes() {
       CREATE INDEX IF NOT EXISTS idx_analyses_article ON analyses(article_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_token_usage_user ON token_usage(user_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_token_usage_article ON token_usage(article_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_prompts_category ON prompts(category);
+      CREATE INDEX IF NOT EXISTS idx_prompts_tags ON prompts(tags);
+      CREATE INDEX IF NOT EXISTS idx_prompt_versions_prompt ON prompt_versions(prompt_id, version DESC);
     `)
   } catch (e) {
     console.warn('[DB] 创建索引失败:', e.message)
@@ -363,6 +391,26 @@ export function deleteUser(id) {
 // ── 封面缓存 API ──────────────────────────────────────────────────────────────
 
 const stmts = {
+  // prompts
+  insertPrompt: db.prepare(`
+    INSERT OR REPLACE INTO prompts (id, name, category, description, content, version, tags, is_builtin, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `),
+  listPrompts: db.prepare('SELECT * FROM prompts ORDER BY category, created_at DESC'),
+  getPrompt: db.prepare('SELECT * FROM prompts WHERE id = ?'),
+  deletePrompt: db.prepare('DELETE FROM prompts WHERE id = ? AND is_builtin = 0'),
+  updatePromptContent: db.prepare('UPDATE prompts SET content = ?, version = version + 1, updated_at = ? WHERE id = ?'),
+  updatePromptUsage: db.prepare('UPDATE prompts SET usage_count = usage_count + 1 WHERE id = ?'),
+  listPromptsByCategory: db.prepare('SELECT * FROM prompts WHERE category = ? ORDER BY created_at DESC'),
+  
+  // prompt_versions
+  insertPromptVersion: db.prepare(`
+    INSERT INTO prompt_versions (id, prompt_id, version, content, change_note, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `),
+  listPromptVersions: db.prepare('SELECT * FROM prompt_versions WHERE prompt_id = ? ORDER BY version DESC'),
+  getPromptVersion: db.prepare('SELECT * FROM prompt_versions WHERE prompt_id = ? AND version = ?'),
+
   // cover_cache
   getCoverCache: db.prepare('SELECT image_url, metadata, cached_at FROM cover_cache WHERE cache_key = ?'),
   setCoverCache: db.prepare(`
@@ -716,6 +764,110 @@ export function deleteUploadedImage(id) {
   const row = db.prepare('SELECT filename FROM uploaded_images WHERE id = ?').get(id)
   db.prepare('DELETE FROM uploaded_images WHERE id = ?').run(id)
   return row ? row.filename : null
+}
+
+// ── 提示词管理 ────────────────────────────────────────────────────────────────
+
+/**
+ * 创建或更新提示词
+ */
+export function upsertPrompt({ id, name, category, description, content, tags = [], isBuiltin = false }) {
+  const now = new Date().toISOString()
+  const tagsJson = JSON.stringify(Array.isArray(tags) ? tags : [])
+  stmts.insertPrompt.run(id, name, category, description || '', content, 1, tagsJson, isBuiltin ? 1 : 0, now, now)
+  return { id, name, category, description, content, version: 1, tags, isBuiltin, usageCount: 0, createdAt: now, updatedAt: now }
+}
+
+/**
+ * 获取所有提示词
+ */
+export function listPrompts() {
+  return stmts.listPrompts.all().map(r => ({
+    id: r.id, name: r.name, category: r.category, description: r.description,
+    content: r.content, version: r.version, tags: JSON.parse(r.tags || '[]'),
+    isBuiltin: r.is_builtin === 1, usageCount: r.usage_count, replacesId: r.replaces_id || null,
+    createdAt: r.created_at, updatedAt: r.updated_at,
+  }))
+}
+
+/**
+ * 按分类获取提示词
+ */
+export function listPromptsByCategory(category) {
+  return stmts.listPromptsByCategory.all(category).map(r => ({
+    id: r.id, name: r.name, category: r.category, description: r.description,
+    content: r.content, version: r.version, tags: JSON.parse(r.tags || '[]'),
+    isBuiltin: r.is_builtin === 1, usageCount: r.usage_count, replacesId: r.replaces_id || null,
+    createdAt: r.created_at, updatedAt: r.updated_at,
+  }))
+}
+
+/**
+ * 获取单个提示词
+ */
+export function getPrompt(id) {
+  const row = stmts.getPrompt.get(id)
+  if (!row) return null
+  return {
+    id: row.id, name: row.name, category: row.category, description: row.description,
+    content: row.content, version: row.version, tags: JSON.parse(row.tags || '[]'),
+    isBuiltin: row.is_builtin === 1, usageCount: row.usage_count, replacesId: row.replaces_id || null,
+    createdAt: row.created_at, updatedAt: row.updated_at,
+  }
+}
+
+/**
+ * 更新提示词内容（自动创建版本记录）
+ */
+export function updatePromptContent(id, content, changeNote = '') {
+  const prompt = stmts.getPrompt.get(id)
+  if (!prompt) return null
+  
+  // 保存当前版本到历史
+  const versionId = `${id}_v${prompt.version}`
+  stmts.insertPromptVersion.run(versionId, id, prompt.version, prompt.content, changeNote, new Date().toISOString())
+  
+  // 更新为新版本
+  const now = new Date().toISOString()
+  stmts.updatePromptContent.run(content, now, id)
+  
+  return getPrompt(id)
+}
+
+/**
+ * 删除提示词（仅非内置）
+ */
+export function deletePrompt(id) {
+  stmts.deletePrompt.run(id)
+}
+
+/**
+ * 记录提示词使用
+ */
+export function recordPromptUsage(id) {
+  stmts.updatePromptUsage.run(id)
+}
+
+/**
+ * 获取提示词版本历史
+ */
+export function listPromptVersions(promptId) {
+  return stmts.listPromptVersions.all(promptId).map(r => ({
+    id: r.id, promptId: r.prompt_id, version: r.version,
+    content: r.content, changeNote: r.change_note, createdAt: r.created_at,
+  }))
+}
+
+/**
+ * 获取特定版本的提示词
+ */
+export function getPromptVersion(promptId, version) {
+  const row = stmts.getPromptVersion.get(promptId, version)
+  if (!row) return null
+  return {
+    id: row.id, promptId: row.prompt_id, version: row.version,
+    content: row.content, changeNote: row.change_note, createdAt: row.created_at,
+  }
 }
 
 console.log(`[DB] SQLite 已连接：${DB_PATH}`)

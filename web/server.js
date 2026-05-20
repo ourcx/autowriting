@@ -26,10 +26,12 @@ import wechatRouter     from './server/routes/wechat.js'
 import authRouter       from './server/routes/auth.js'
 import adminRouter      from './server/routes/admin.js'
 import monitoringRouter from './server/routes/monitoring.js'
+import promptsRouter    from './server/routes/prompts.js'
 
 // 数据库初始化（建表 + 迁移旧数据 + 内置模板 seed）
 import { upsertTemplate, listTemplates, db } from './server/db.js'
 import { BUILTIN_TEMPLATES_DATA } from './server/builtinTemplates.js'
+import { seedBuiltinPrompts } from './server/seedPrompts.js'
 
 const app = express()
 
@@ -86,6 +88,7 @@ app.use('/api/settings',   settingsRouter)
 app.use('/api/materials',  materialsRouter) // 素材采集
 app.use('/api/wechat',     wechatRouter)    // 微信公众号绑定
 app.use('/api/monitoring', monitoringRouter) // 日志和监控（仅管理员可访问）
+app.use('/api/prompts',    promptsRouter)   // 提示词管理
 
 // ── 杂项接口 ──────────────────────────────────────────────────────────────────
 
@@ -126,6 +129,9 @@ for (const t of BUILTIN_TEMPLATES_DATA) {
   upsertTemplate(t)
 }
 console.log(`[DB] 内置模板已同步（${BUILTIN_TEMPLATES_DATA.length} 个）`)
+
+// ── 内置提示词 seed（始终同步：每次启动时检查并添加缺失的内置提示词）──────────
+seedBuiltinPrompts()
 
 // ── 启动 ──────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {

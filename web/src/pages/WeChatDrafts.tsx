@@ -316,7 +316,7 @@ export default function WeChatDrafts() {
       <div className="wd-root">
         <header className="wd-header">
           <button className="wd-back-btn" onClick={() => navigate(-1)}>
-            <ArrowLeft size={14} />返回
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>返回
           </button>
           <span className="wd-header-title">公众号</span>
         </header>
@@ -343,7 +343,7 @@ export default function WeChatDrafts() {
       {/* ── Header ── */}
       <header className="wd-header">
         <button className="wd-back-btn" onClick={() => navigate(-1)}>
-          <ArrowLeft size={14} />返回
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>返回
         </button>
         <div className="wd-header-center">
           <span className="wd-header-title">公众号管理</span>

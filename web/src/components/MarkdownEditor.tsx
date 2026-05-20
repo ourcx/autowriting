@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { toast } from './Toast'
-import { Eye, Edit2, Copy, Download, Sparkles, Check, X, RotateCcw, ImagePlus, Loader2 } from 'lucide-react'
+import { Eye, Edit2, Copy, Download, Sparkles, Check, X, RotateCcw, ImagePlus, Loader2, Zap } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { loadAIConfig } from '../utils/aiConfig'
+import PromptSelector from './PromptSelector'
 import './MarkdownEditor.css'
 
 interface MarkdownEditorProps {
@@ -51,6 +52,9 @@ export default function MarkdownEditor({
 
   // ── 图片上传状态 ──
   const [uploading, setUploading] = useState(false)
+
+  // ── 提示词选择器状态 ──
+  const [showPromptSelector, setShowPromptSelector] = useState(false)
 
   // 监听选区变化，用 textarea 镜像层精确定位
   const handleSelect = useCallback(() => {
@@ -316,6 +320,35 @@ export default function MarkdownEditor({
     if ((e.ctrlKey || e.metaKey) && e.key === 'i') { e.preventDefault(); insertMarkdown('*', '*') }
   }
 
+  interface Prompt {
+    id: string
+    name: string
+    category: string
+    description: string
+    content: string
+    version: number
+    tags: string[]
+    isBuiltin: boolean
+    usageCount: number
+    createdAt: string
+    updatedAt: string
+    replacesId?: string | null
+  }
+
+  const handlePromptSelect = (prompt: Prompt) => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+    const cursor = textarea.selectionStart
+    const newValue = value.substring(0, cursor) + prompt.content + value.substring(cursor)
+    onChange(newValue)
+    setTimeout(() => {
+      textarea.focus()
+      const newPos = cursor + prompt.content.length
+      textarea.setSelectionRange(newPos, newPos)
+    }, 0)
+    toast.success(`已插入提示词：${prompt.name}`)
+  }
+
   return (
     <div className="markdown-editor">
       {/* 隐藏的文件 input */}
@@ -354,6 +387,15 @@ export default function MarkdownEditor({
               ? <Loader2 size={16} className="spin" />
               : <ImagePlus size={16} />}
             图片
+          </button>
+          <div className="toolbar-divider" />
+          <button
+            className="toolbar-btn"
+            onClick={() => setShowPromptSelector(true)}
+            title="插入提示词"
+          >
+            <Zap size={16} />
+            提示词
           </button>
           <div className="toolbar-divider" />
           <button className="toolbar-btn" onClick={handleCopy}     title="复制"><Copy     size={18} /></button>
@@ -463,6 +505,14 @@ export default function MarkdownEditor({
         {!uploading && floatMenu && <span className="char-count" style={{ color: 'var(--color-brand-teal)' }}>已选 {floatMenu.selectedText.length} 字 · 选中后点击 AI 助手操作</span>}
         {!uploading && !floatMenu && <span className="char-count" style={{ color: 'var(--color-neutral-400)' }}>支持粘贴 / 拖拽图片到编辑区自动上传</span>}
       </div>
+
+      {/* ── 提示词选择器 ── */}
+      {showPromptSelector && (
+        <PromptSelector
+          onSelect={handlePromptSelect}
+          onClose={() => setShowPromptSelector(false)}
+        />
+      )}
     </div>
   )
 }

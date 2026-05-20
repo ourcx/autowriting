@@ -260,6 +260,22 @@
   margin: 0 var(--spacing-xs);
 }
 
+/* ── 提示词按钮特殊样式 ── */
+.toolbar-btn[title="插入提示词"] {
+  background: linear-gradient(135deg, var(--color-brand-teal) 0%, #0f2a2a 100%);
+  color: white;
+  border-color: var(--color-brand-teal);
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(26, 58, 58, 0.2);
+}
+
+.toolbar-btn[title="插入提示词"]:hover {
+  background: linear-gradient(135deg, #0f2a2a 0%, #082020 100%);
+  border-color: #082020;
+  box-shadow: 0 4px 12px rgba(26, 58, 58, 0.3);
+  transform: translateY(-1px);
+}
+
 .editor-container {
   display: flex;
   flex: 1;

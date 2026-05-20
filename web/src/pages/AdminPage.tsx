@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '../store/useAuth'
 import { UserPlus, RotateCcw, Trash2, FileText, X, Eye, EyeOff, Activity } from 'lucide-react'
@@ -29,8 +29,9 @@ type Modal =
   | null
 
 export default function AdminPage() {
-  const { user: me } = useAuth()
-  const [users, setUsers] = useState<UserRow[]>([])
+   const navigate = useNavigate()
+   const { user: me } = useAuth()
+   const [users, setUsers] = useState<UserRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [modal, setModal] = useState<Modal>(null)
@@ -149,7 +150,10 @@ export default function AdminPage() {
         <div className="admin-nav-sep" />
         <span className="admin-nav-title">用户管理</span>
         <div className="admin-nav-spacer" />
-        <Link to="/" className="admin-nav-back">← 返回创作台</Link>
+        <button className="wd-back-btn" onClick={() => navigate('/')}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
+          返回
+        </button>
       </nav>
 
       {/* ── Content ── */}

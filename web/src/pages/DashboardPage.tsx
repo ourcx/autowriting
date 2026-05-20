@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings, Palette, AlertTriangle, Database, BookOpen, LogOut, Shield } from 'lucide-react'
+import { Settings, Palette, AlertTriangle, Database, BookOpen, LogOut, Shield, Zap } from 'lucide-react'
 import Dashboard from './Dashboard'
 import OnboardingGuide from '../components/OnboardingGuide'
 import { useAIReadiness, fetchServerStatus } from '../store/useConfigStore'
@@ -61,6 +61,10 @@ export default function DashboardPage() {
           <button className="dp-nav-btn" onClick={() => navigate('/rag')}>
             <Database size={14} />
             知识库
+          </button>
+          <button className="dp-nav-btn" onClick={() => navigate('/prompts')}>
+            <Zap size={14} />
+            提示词
           </button>
           <button className="dp-nav-btn" onClick={() => navigate('/settings')}>
             <Settings size={14} />
