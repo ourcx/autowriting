@@ -147,15 +147,66 @@ export default function MarkdownEditor({
     }
 
     setUploading(true)
+    const authToken = localStorage.getItem('auth_token')
+    const authHeader: Record<string, string> = authToken ? { Authorization: `Bearer ${authToken}` } : {}
+
     try {
+      const cfg = loadAIConfig()
+      const cdnProvider = cfg.cdnProvider || 'none'
+
+      // ── GitHub + jsDelivr ──────────────────────────────────────────────
+      if (cdnProvider === 'github' && cfg.githubToken && cfg.githubRepo) {
+        try {
+          const formData = new FormData()
+          formData.append('image', file)
+          const resp = await fetch('/api/images/upload-github', {
+            method: 'POST',
+            headers: {
+              'x-github-token':  cfg.githubToken,
+              'x-github-repo':   cfg.githubRepo,
+              'x-github-branch': cfg.githubBranch || 'main',
+              'x-github-path':   cfg.githubPath   || 'images/',
+              ...authHeader,
+            },
+            body: formData,
+          })
+          const data = await resp.json()
+          if (resp.ok && data.url) return data.url as string
+          console.warn('[github-cdn] 上传失败，降级本地：', data.error)
+          toast.warn('GitHub 上传失败，已保存到本地')
+        } catch (e) {
+          console.warn('[github-cdn] 上传异常，降级本地：', e)
+          toast.warn('GitHub 上传异常，已保存到本地')
+        }
+      }
+
+      // ── Imgur ──────────────────────────────────────────────────────────
+      if (cdnProvider === 'imgur' && cfg.imgurClientId) {
+        try {
+          const formData = new FormData()
+          formData.append('image', file)
+          const resp = await fetch('/api/images/upload-imgur', {
+            method: 'POST',
+            headers: { 'x-imgur-client-id': cfg.imgurClientId, ...authHeader },
+            body: formData,
+          })
+          const data = await resp.json()
+          if (resp.ok && data.url) return data.url as string
+          console.warn('[imgur] 上传失败，降级本地：', data.error)
+          toast.warn('Imgur 上传失败，已保存到本地')
+        } catch (e) {
+          console.warn('[imgur] 上传异常，降级本地：', e)
+          toast.warn('Imgur 上传异常，已保存到本地')
+        }
+      }
+
+      // ── 降级：本地存储 ─────────────────────────────────────────────────
       const formData = new FormData()
       formData.append('image', file)
       if (articleId) formData.append('articleId', articleId)
-
-      const token = localStorage.getItem('auth_token')
       const resp = await fetch('/api/images/upload', {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authHeader,
         body: formData,
       })
       const data = await resp.json()

@@ -39,6 +39,14 @@ export interface AIConfig {
   searchProvider: 'serper' | 'bing'  // 搜索引擎服务商
   searchApiKey:   string             // 搜索 API Key
   searchEngine:   string             // serper engine：google / baidu / bing
+
+  // 图床
+  cdnProvider:   'none' | 'imgur' | 'github'  // 选择图床方案
+  imgurClientId: string                        // Imgur Client ID
+  githubToken:   string                        // GitHub Personal Access Token（需要 repo 权限）
+  githubRepo:    string                        // 仓库，格式：username/repo
+  githubBranch:  string                        // 分支，默认 main
+  githubPath:    string                        // 存储目录，默认 images/
 }
 
 export const DEFAULT_CONFIG: AIConfig = {
@@ -67,6 +75,13 @@ export const DEFAULT_CONFIG: AIConfig = {
   searchProvider: 'serper',
   searchApiKey:   '',
   searchEngine:   'google',
+
+  cdnProvider:  'none',
+  imgurClientId: '',
+  githubToken:  '',
+  githubRepo:   '',
+  githubBranch: 'main',
+  githubPath:   'images/',
 }
 
 // 快速预设方案（用户可一键应用）

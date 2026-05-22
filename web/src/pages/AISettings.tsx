@@ -15,13 +15,14 @@ import { useConfigStore, setLocalConfig, fetchServerStatus } from '../store/useC
 import { testAIConnection } from '../utils/apiHelpers'
 import './AISettings.css'
 
-type Section = 'article' | 'cover' | 'search' | 'wechat'
+type Section = 'article' | 'cover' | 'search' | 'wechat' | 'cdn'
 
 const NAV_ITEMS: { id: Section; icon: React.ReactNode; label: string; sub: string }[] = [
   { id: 'article', icon: <Zap size={16} />,    label: '文章生成',    sub: '大语言模型 API' },
   { id: 'cover',   icon: <Image size={16} />,  label: '封面生成',    sub: '图片生成 API'   },
   { id: 'search',  icon: <Search size={16} />, label: '素材搜索',    sub: '搜索引擎 API'   },
   { id: 'wechat',  icon: <Link2 size={16} />,  label: '公众号绑定',  sub: '发布 & 数据预览' },
+  { id: 'cdn',     icon: <Image size={16} />,  label: '图床配置',    sub: 'Imgur 图片 CDN' },
 ]
 
 // ── 微信账号信息类型 ──────────────────────────────────────────────────────────
@@ -158,7 +159,7 @@ export default function AISettings() {
   const applyPreset = (presetId: string) => {
     const preset = CONFIG_PRESETS.find(p => p.id === presetId)
     if (preset) {
-      setConfig(c => ({ ...c, ...preset.config }))
+      setConfig(c => ({ ...c, ...(preset.config as Partial<AIConfig>) }))
       setTestResult(null)
     }
   }
@@ -171,6 +172,8 @@ export default function AISettings() {
   const localSiliconflow = !!config.siliconflowApiKey
   const localCoverKey    = !!config.coverApiKey
   const localSearchKey   = !!config.searchApiKey
+  const localCdn = (config.cdnProvider === 'imgur' && !!config.imgurClientId)
+               || (config.cdnProvider === 'github' && !!config.githubToken && !!config.githubRepo)
 
   const STATUS_CARDS = [
     {
@@ -220,6 +223,14 @@ export default function AISettings() {
       serverNote: '',
       color: 'mint',
       section: 'search' as Section,
+    },
+    {
+      label: '图床',
+      local: localCdn,
+      server: false,
+      serverNote: '',
+      color: 'lavender',
+      section: 'cdn' as Section,
     },
   ]
 
@@ -767,6 +778,163 @@ export default function AISettings() {
                   <p className="as-hint">
                     AppSecret 仅存储在本机数据库（SQLite），不会上传到任何云端。
                     如需重置 AppSecret，请先在公众平台重新生成后再重新绑定。
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ════ 图床配置 ════ */}
+          {activeSection === 'cdn' && (
+            <div className="as-panel">
+              <div className="as-panel-header">
+                <h2 className="as-panel-title">图床配置</h2>
+                <p className="as-panel-desc">编辑器粘贴 / 拖拽图片时，自动上传到图床并插入外链 URL，方便公众号发布</p>
+              </div>
+
+              {/* 选择方案 */}
+              <div className="as-card">
+                <div className="as-card-section-label">选择图床方案</div>
+                <div className="as-provider-grid">
+                  {[
+                    { id: 'none',   name: '不使用',           desc: '图片保存在本机，仅本地可访问' },
+                    { id: 'github', name: 'GitHub + jsDelivr', desc: '国内访问快，免费无限制，推荐' },
+                    { id: 'imgur',  name: 'Imgur',             desc: '全球 CDN，国内需代理' },
+                  ].map(p => (
+                    <button
+                      key={p.id}
+                      className={`as-provider-tile${config.cdnProvider === p.id ? ' as-provider-tile--active' : ''}`}
+                      onClick={() => set({ cdnProvider: p.id as AIConfig['cdnProvider'] })}
+                    >
+                      <span className="as-pt-name">{p.name}</span>
+                      <span className="as-pt-desc">{p.desc}</span>
+                      {config.cdnProvider === p.id && <Check size={13} className="as-pt-check" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* GitHub 配置 */}
+              {config.cdnProvider === 'github' && (
+                <div className="as-card">
+                  <div className="as-card-label-row">
+                    <span className="as-card-section-label">GitHub + jsDelivr</span>
+                    <span className="as-card-tag as-card-tag--teal">国内加速 · 免费无限制</span>
+                  </div>
+                  <p className="as-card-desc">
+                    图片上传到 GitHub 仓库，通过 jsDelivr CDN 分发。国内访问速度优于 Imgur，且无容量限制。
+                  </p>
+
+                  <div className="as-field">
+                    <label className="as-label">Personal Access Token</label>
+                    <div className="as-key-wrap">
+                      <input
+                        className="as-input as-input-mono"
+                        type={showKeys['github'] ? 'text' : 'password'}
+                        value={config.githubToken}
+                        onChange={e => set({ githubToken: e.target.value })}
+                        placeholder="ghp_xxxxxxxxxxxx"
+                      />
+                      <button className="as-eye-btn" onClick={() => toggleKey('github')}>
+                        {showKeys['github'] ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                    <p className="as-hint">
+                      前往 <a href="https://github.com/settings/tokens/new" target="_blank" rel="noreferrer">GitHub → Settings → Tokens</a>，
+                      创建 Classic Token，勾选 <code>repo</code> 权限
+                    </p>
+                  </div>
+
+                  <div className="as-row-2">
+                    <div className="as-field as-field--grow">
+                      <label className="as-label">仓库</label>
+                      <input
+                        className="as-input as-input-mono"
+                        value={config.githubRepo}
+                        onChange={e => set({ githubRepo: e.target.value })}
+                        placeholder="username/my-images"
+                      />
+                      <p className="as-hint">建一个专门存图片的公开仓库，格式：用户名/仓库名</p>
+                    </div>
+                    <div className="as-field">
+                      <label className="as-label">分支</label>
+                      <input
+                        className="as-input as-input-mono"
+                        value={config.githubBranch}
+                        onChange={e => set({ githubBranch: e.target.value })}
+                        placeholder="main"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="as-field">
+                    <label className="as-label">存储路径 <span className="as-label-opt">选填</span></label>
+                    <input
+                      className="as-input as-input-mono"
+                      value={config.githubPath}
+                      onChange={e => set({ githubPath: e.target.value })}
+                      placeholder="images/"
+                    />
+                    <p className="as-hint">图片在仓库中的存放目录，以 / 结尾，默认 images/</p>
+                  </div>
+
+                  {config.githubToken && config.githubRepo && (
+                    <div className="as-test-row">
+                      <span className="as-test-msg as-test-msg--ok">
+                        <CheckCircle2 size={13} />
+                        已配置，图片将上传到 {config.githubRepo} 并通过 jsDelivr 访问
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Imgur 配置 */}
+              {config.cdnProvider === 'imgur' && (
+                <div className="as-card">
+                  <div className="as-card-label-row">
+                    <span className="as-card-section-label">Imgur</span>
+                    <span className="as-card-tag as-card-tag--lavender">全球 CDN · 国内需代理</span>
+                  </div>
+                  <p className="as-card-desc">
+                    免费图床，单张 10MB 限制，匿名上传永久有效。国内访问可能较慢。
+                  </p>
+                  <div className="as-field">
+                    <label className="as-label">Client ID</label>
+                    <div className="as-key-wrap">
+                      <input
+                        className="as-input as-input-mono"
+                        type={showKeys['imgur'] ? 'text' : 'password'}
+                        value={config.imgurClientId}
+                        onChange={e => set({ imgurClientId: e.target.value })}
+                        placeholder="xxxxxxxxxxxxxxx"
+                      />
+                      <button className="as-eye-btn" onClick={() => toggleKey('imgur')}>
+                        {showKeys['imgur'] ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                    <p className="as-hint">
+                      前往 <a href="https://api.imgur.com/oauth2/addclient" target="_blank" rel="noreferrer">api.imgur.com/oauth2/addclient</a>，
+                      选「OAuth 2 authorization without a callback URL」，获取 Client ID
+                    </p>
+                  </div>
+
+                  {config.imgurClientId && (
+                    <div className="as-test-row">
+                      <span className="as-test-msg as-test-msg--ok">
+                        <CheckCircle2 size={13} />
+                        已配置，图片将上传到 Imgur CDN
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 不使用时提示 */}
+              {config.cdnProvider === 'none' && (
+                <div className="as-card">
+                  <p className="as-hint" style={{ margin: 0 }}>
+                    未启用图床，图片将保存在本机服务器。分享文章时图片链接仅本地可访问，不适合对外发布。
                   </p>
                 </div>
               )}

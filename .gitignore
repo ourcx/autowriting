@@ -32,3 +32,6 @@ app/dist/
 .env
 .env.local
 .env.*.local
+
+# 数据缓存（含 SQLite 数据库，可能含 API Key 等敏感数据）
+.cache/

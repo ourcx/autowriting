@@ -98,4 +98,7 @@ export const SERVER_AI_CONFIG = {
   siliconflowApiKey:  process.env.SILICONFLOW_API_KEY || '',
   siliconflowBaseUrl: process.env.SILICONFLOW_BASE_URL || 'https://api.siliconflow.cn/v1',
   siliconflowModel:   process.env.SILICONFLOW_MODEL || 'Kwai-Kolors/Kolors',
+
+  // Imgur 图床
+  imgurClientId: process.env.IMGUR_CLIENT_ID || '',
 }
