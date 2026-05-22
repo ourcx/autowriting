@@ -1237,8 +1237,6 @@
 
 /* ── 编辑器面板 ── */
 .editor-panel {
-  display: flex;
-  flex-direction: column;
   height: 100%;
 }
 

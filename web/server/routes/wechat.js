@@ -46,29 +46,10 @@ function scheduleTokenRefresh() {
 scheduleTokenRefresh()
 
 /**
- * 获取有效的 access_token
- * 1. 内存有且未过期 → 直接返回
- * 2. DB 有且未过期  → 装填内存后返回
- * 3. 否则重新向微信换取
+ * 向微信重新拉取一个新 token，写入内存和 DB 后返回。
+ * 内部方法，不做缓存判断。
  */
-async function getAccessToken() {
-  const now = Math.floor(Date.now() / 1000)
-
-  // 内存层
-  if (_cachedToken && _tokenExp - now > 300) {
-    return _cachedToken
-  }
-
-  // DB 层恢复
-  const dbToken = getSetting('wechat_token')
-  const dbExp   = parseInt(getSetting('wechat_token_exp') || '0', 10)
-  if (dbToken && dbExp - now > 300) {
-    _cachedToken = dbToken
-    _tokenExp    = dbExp
-    return dbToken
-  }
-
-  // 重新获取
+async function fetchFreshToken() {
   const appId     = getSetting('wechat_app_id')
   const appSecret = getSetting('wechat_app_secret')
   if (!appId || !appSecret) throw new Error('公众号未绑定，请先填写 AppID 和 AppSecret')
@@ -82,17 +63,55 @@ async function getAccessToken() {
     throw new Error(`微信 Token 获取失败: [${resp.data.errcode}] ${resp.data.errmsg}`)
   }
 
-  const token      = resp.data.access_token
-  const expiresIn  = resp.data.expires_in || 7200
-  const expAt      = now + expiresIn
+  const now       = Math.floor(Date.now() / 1000)
+  const token     = resp.data.access_token
+  const expiresIn = resp.data.expires_in || 7200
+  const expAt     = now + expiresIn
 
-  // 写内存 + DB
   _cachedToken = token
   _tokenExp    = expAt
   setSetting('wechat_token',     token)
   setSetting('wechat_token_exp', String(expAt))
-
   return token
+}
+
+/**
+ * 获取有效的 access_token
+ * 1. 内存有且未过期 → 直接返回
+ * 2. DB 有且未过期  → 装填内存后返回
+ * 3. 否则重新向微信换取
+ */
+async function getAccessToken({ forceRefresh = false } = {}) {
+  const now = Math.floor(Date.now() / 1000)
+
+  if (!forceRefresh) {
+    // 内存层
+    if (_cachedToken && _tokenExp - now > 300) {
+      return _cachedToken
+    }
+
+    // DB 层恢复
+    const dbToken = getSetting('wechat_token')
+    const dbExp   = parseInt(getSetting('wechat_token_exp') || '0', 10)
+    if (dbToken && dbExp - now > 300) {
+      _cachedToken = dbToken
+      _tokenExp    = dbExp
+      return dbToken
+    }
+  }
+
+  // 重新向微信获取
+  return fetchFreshToken()
+}
+
+/**
+ * 清除 token 缓存（内存 + DB），下次调用 getAccessToken 时强制重取。
+ */
+function invalidateToken() {
+  _cachedToken = null
+  _tokenExp    = 0
+  setSetting('wechat_token',     '')
+  setSetting('wechat_token_exp', '')
 }
 
 // ── GET /api/wechat/status ───────────────────────────────────────────────────
@@ -411,14 +430,8 @@ router.post('/draft', async (req, res) => {
     return res.status(400).json({ error: '标题和内容不能为空' })
   }
 
-  try {
-    const token = await getAccessToken()
-
-    // 内联样式后 HTML 会膨胀，微信实际限制约 1MB（字节），不做字符数硬限制，
-    // 由微信 API 自身报错（errcode: 45009 等）透传给前端。
-
-    // thumb_media_id 是微信草稿必填字段；若前端没提供（文章无图/图片上传失败），
-    // 用预置的默认白图兜底，避免 40007 错误。
+  // 内部发送草稿的函数，token 作为参数方便重试
+  const submitDraft = async (token) => {
     let finalThumbId = thumb_media_id
     if (!finalThumbId) {
       try {
@@ -429,7 +442,7 @@ router.post('/draft', async (req, res) => {
     }
 
     const article = {
-      title:                 title.slice(0, 64),    // 最长 32 个汉字 ≈ 64 字节
+      title:                 title.slice(0, 64),
       content,
       need_open_comment:     0,
       only_fans_can_comment: 0,
@@ -437,11 +450,24 @@ router.post('/draft', async (req, res) => {
     if (digest)        article.digest         = digest.slice(0, 120)
     if (finalThumbId)  article.thumb_media_id = finalThumbId
 
-    const resp = await axios.post(
+    return axios.post(
       'https://api.weixin.qq.com/cgi-bin/draft/add',
       { articles: [article] },
       { params: { access_token: token }, timeout: 15000 },
     )
+  }
+
+  try {
+    let token = await getAccessToken()
+    let resp  = await submitDraft(token)
+
+    // 40001 = token 失效（在别处重新获取后旧 token 立即作废）→ 清缓存强刷一次
+    if (resp.data.errcode === 40001) {
+      console.warn('[Wechat/draft] 收到 40001，强制刷新 token 后重试...')
+      invalidateToken()
+      token = await getAccessToken({ forceRefresh: true })
+      resp  = await submitDraft(token)
+    }
 
     if (resp.data.errcode && resp.data.errcode !== 0) {
       return res.status(400).json({
