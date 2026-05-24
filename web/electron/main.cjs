@@ -1,28 +1,55 @@
 /**
  * Electron 主进程（CommonJS 格式）
  *
- * 职责：
- * 1. 创建主窗口（开发模式加载 Vite Dev Server，生产模式加载 dist/index.html）
- * 2. 在同一进程中启动内嵌 Express 服务（server.js）
- * 3. 设置 CSP，允许渲染进程访问 localhost API
- * 4. 处理应用生命周期事件
+ * 开发模式：Express 由外部 `node server.js` 单独运行，Electron 不重复启动
+ * 生产模式：Electron 主进程内嵌用系统 Node 以子进程方式启动 Express
  *
- * 注意：项目整体是 ESM（"type":"module"），但 Electron 主进程入口
- * 必须是 CJS（.cjs），因为 Electron 本身是 CJS 模块。
- * server.js 是 ESM，通过动态 import() 在主进程内加载。
+ * 为什么用系统 Node 而非 Electron 内置 Node？
+ *   better-sqlite3 等原生模块与 Electron 42 的 V8 API 不兼容，
+ *   无法用 @electron/rebuild 为 Electron 重编译。
+ *   用系统 Node 运行 server，原生模块只需为系统 Node 编译一次（postinstall 自动完成）。
  */
 
 'use strict'
 
 const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron')
 const path = require('path')
+const { spawn } = require('child_process')
 
-// ── 判断是否是开发模式 ────────────────────────────────────────────────────────
-const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
+// ── 判断运行模式 ─────────────────────────────────────────────────────────────
+const isDev = !app.isPackaged
 
-// ── 设置用户数据目录 ──────────────────────────────────────────────────────────
-// userData：Mac ~/Library/Application Support/AutoWriting
-//           Win %APPDATA%/AutoWriting
+// ── 找系统 Node 路径（生产包内 PATH 不完整，需穷举常见位置） ────────────────────
+function findNodeBin() {
+  const { existsSync } = require('fs')
+  const candidates = [
+    // 用户通过 nvm/fnm 安装
+    process.env.HOME + '/.nvm/versions/node/current/bin/node',
+    // Homebrew arm64
+    '/opt/homebrew/bin/node',
+    // Homebrew x64
+    '/usr/local/bin/node',
+    // macOS 系统自带
+    '/usr/bin/node',
+    // Windows
+    'C:\\Program Files\\nodejs\\node.exe',
+    'C:\\Program Files (x86)\\nodejs\\node.exe',
+  ]
+  // 还可以从 PATH 里找
+  const pathDirs = (process.env.PATH || '').split(path.delimiter)
+  for (const dir of pathDirs) {
+    candidates.unshift(path.join(dir, 'node'))
+  }
+  for (const p of candidates) {
+    if (existsSync(p)) return p
+  }
+  // 最后兜底：直接用 'node'，依赖系统 PATH
+  return 'node'
+}
+
+// ── 用户数据目录（必须在 app.ready 前取到） ───────────────────────────────────
+// Mac: ~/Library/Application Support/AutoWriting
+// Win: %APPDATA%/AutoWriting
 const USER_DATA_DIR = app.getPath('userData')
 const DOCUMENTS_DIR = app.getPath('documents')
 
@@ -31,36 +58,79 @@ process.env.ELECTRON_USER_DATA = USER_DATA_DIR
 process.env.ELECTRON_DOCUMENTS = DOCUMENTS_DIR
 process.env.ELECTRON_APP = 'true'
 
-// ── 内嵌 Express 服务端口 ─────────────────────────────────────────────────────
+// ── 端口 ─────────────────────────────────────────────────────────────────────
 const SERVER_PORT = 3000
 
-// ── 启动内嵌 Express 服务 ─────────────────────────────────────────────────────
-let serverStarted = false
+// ── 生产模式：用子进程方式启动 Express ───────────────────────────────────────
+// 子进程方式的优点：
+//   1. Node 运行时与 Electron 主进程隔离，原生模块 ABI 无需重编译
+//   2. 服务崩溃不会拖垮 Electron 进程
+//   3. 可以独立重启
+let serverProcess = null
 
-async function startServer() {
-  if (serverStarted) return
+function startServerProcess() {
+  return new Promise((resolve, reject) => {
+    if (isDev) {
+      // 开发模式由外部 `node server.js` 负责，Electron 不再启动
+      console.log('[Electron] 开发模式：使用外部 Express（http://localhost:' + SERVER_PORT + '）')
+      resolve()
+      return
+    }
 
-  if (isDev) {
-    // 开发模式：Express 服务由外部 `npm run server` 单独启动，
-    // Electron 进程不重复启动，避免端口 3000 冲突
-    serverStarted = true
-    console.log('[Electron] 开发模式：使用外部 Express 服务 http://localhost:' + SERVER_PORT)
-    return
-  }
+    // 生产模式：server.js 打包在 app.asar 内，用系统 node 运行
+    // process.resourcesPath = .../AutoWriting.app/Contents/Resources
+    const serverScript = path.join(process.resourcesPath, 'app.asar', 'server.js')
 
-  // 生产模式：在 Electron 主进程内启动内嵌 Express
-  try {
-    const serverPath = path.join(__dirname, '..', 'server.js')
-    await import(`file://${serverPath}`)
-    serverStarted = true
-    console.log('[Electron] 内嵌服务已启动，端口:', SERVER_PORT)
-  } catch (err) {
-    console.error('[Electron] 服务启动失败:', err)
-    throw err
-  }
+    // 找系统 node 路径（打包应用里没有 PATH，需要手动指定常见位置）
+    const nodeBin = findNodeBin()
+
+    serverProcess = spawn(
+      nodeBin,
+      [serverScript],
+      {
+        env: {
+          ...process.env,
+          ELECTRON_USER_DATA: USER_DATA_DIR,
+          ELECTRON_DOCUMENTS: DOCUMENTS_DIR,
+          ELECTRON_APP: 'true',
+          PORT: String(SERVER_PORT),
+          NODE_ENV: 'production',
+          // 清除 Electron 相关环境变量，避免子进程行为异常
+          ELECTRON_RUN_AS_NODE: undefined,
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }
+    )
+
+    serverProcess.stdout.on('data', (d) => {
+      const line = d.toString().trim()
+      console.log('[Server]', line)
+      // 检测服务就绪信号
+      if (line.includes('Server running') || line.includes('服务启动成功')) {
+        resolve()
+      }
+    })
+
+    serverProcess.stderr.on('data', (d) => {
+      console.error('[Server ERR]', d.toString().trim())
+    })
+
+    serverProcess.on('error', (err) => {
+      console.error('[Electron] server 进程启动失败:', err)
+      reject(err)
+    })
+
+    serverProcess.on('exit', (code) => {
+      console.log('[Electron] server 进程退出，code:', code)
+      serverProcess = null
+    })
+
+    // 最多等 15 秒，超时后仍然开窗口（用户会看到 API 错误提示）
+    setTimeout(() => resolve(), 15000)
+  })
 }
 
-// ── 创建主窗口 ─────────────────────────────────────────────────────────────────
+// ── 创建主窗口 ────────────────────────────────────────────────────────────────
 let mainWindow = null
 
 function createWindow() {
@@ -80,13 +150,14 @@ function createWindow() {
     icon: path.join(__dirname, 'assets', 'icon.png'),
   })
 
-  // CSP：允许渲染进程向 localhost Express 发请求
+  // CSP：允许渲染进程访问本地 Express API
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          `default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: http://localhost:${SERVER_PORT} ws://localhost:*`,
+          `default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: ` +
+          `http://localhost:${SERVER_PORT} ws://localhost:*`,
         ],
       },
     })
@@ -122,7 +193,7 @@ function createWindow() {
   })
 }
 
-// ── IPC 处理 ──────────────────────────────────────────────────────────────────
+// ── IPC 处理 ─────────────────────────────────────────────────────────────────
 
 ipcMain.handle('app:getInfo', () => ({
   version: app.getVersion(),
@@ -145,11 +216,12 @@ ipcMain.handle('app:selectDirectory', async () => {
 // ── 应用生命周期 ──────────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
-  await startServer()
-
-  // 稍等服务就绪再开窗口
-  const delay = isDev ? 800 : 400
-  await new Promise((r) => setTimeout(r, delay))
+  // 启动 Express（失败也不阻塞，窗口始终会弹出）
+  try {
+    await startServerProcess()
+  } catch (err) {
+    console.error('[Electron] 后端启动失败（窗口仍会打开）:', err.message)
+  }
 
   createWindow()
 
@@ -161,12 +233,24 @@ app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', () => {
+  // 关闭应用时也终止后端子进程
+  if (serverProcess) {
+    serverProcess.kill()
+    serverProcess = null
+  }
   if (process.platform !== 'darwin') {
     app.quit()
   }
 })
 
-// 安全策略：阻止导航到外部非白名单 URL
+app.on('before-quit', () => {
+  if (serverProcess) {
+    serverProcess.kill()
+    serverProcess = null
+  }
+})
+
+// 安全策略：阻止导航到外部 URL
 app.on('web-contents-created', (_, contents) => {
   contents.on('will-navigate', (event, url) => {
     try {

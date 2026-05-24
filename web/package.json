@@ -11,7 +11,8 @@
     "server": "node server.js",
     "start": "concurrently \"npm run server\" \"npm run dev\"",
     "sync": "bash sync-to-guard.sh",
-    "rebuild:native": "cd node_modules/.pnpm/better-sqlite3@12.10.0/node_modules/better-sqlite3 && npx node-gyp rebuild",
+    "postinstall": "node scripts/postinstall.cjs",
+    "rebuild:native": "node scripts/postinstall.cjs",
 
     "electron:dev": "concurrently --kill-others -n server,vite,electron \"node server.js\" \"vite\" \"wait-on http://localhost:5173 http://localhost:3000/health && NODE_ENV=development electron .\"",
     "electron:build": "ELECTRON=true vite build && npx electron-builder build --config electron-builder.config.cjs",

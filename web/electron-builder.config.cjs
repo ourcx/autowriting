@@ -1,15 +1,16 @@
 /**
  * electron-builder 打包配置
  *
- * 打包策略：
- *   - 前端 React 编译产物（dist/）内嵌到应用包内
- *   - 后端 Express 服务器（server.js + server/）随 app.asar 打包
- *   - 原生模块（better-sqlite3, hnswlib-node）解包在 app.asar.unpacked/
+ * 架构说明：
+ *   - 前端 React 产物（dist/）内嵌进 app.asar
+ *   - 后端 Express（server.js + server/）也在 app.asar 内
+ *   - 生产模式下，Electron 主进程通过 spawn(系统Node, [serverScript]) 启动 server 子进程
+ *   - server 子进程使用系统 Node 运行，better-sqlite3 为系统 Node 编译（非 Electron Node）
+ *   - 因此不需要 @electron/rebuild，也不需要为 Electron ABI 重编原生模块
+ *   - asar.unpacked 解包原生 .node 文件，系统 Node 子进程可正常加载
  */
 
 'use strict'
-const { execSync } = require('child_process')
-const path = require('path')
 
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
@@ -17,7 +18,7 @@ module.exports = {
   productName: 'AutoWriting',
   copyright: 'Copyright © 2025',
 
-  // 打包的文件范围（相对于 web/ 目录）
+  // 打包文件范围（相对于 web/ 目录）
   files: [
     'dist/**/*',
     'electron/**/*',
@@ -27,11 +28,16 @@ module.exports = {
     '!node_modules/.cache',
     '!node_modules/.pnpm-store',
     '!node_modules/.modules.yaml',
+    '!node_modules/.pnpm',
     '!**/*.map',
     '!**/*.md',
+    '!**/*.ts',
+    '!**/test/**',
+    '!**/tests/**',
+    '!**/spec/**',
   ],
 
-  // 额外资源：AGENTS.md 示例文件复制到 resources/
+  // 额外资源：放在 Resources/ 下（asar 外），用于初始化用户数据
   extraResources: [
     {
       from: '../AGENTS.md',
@@ -39,21 +45,22 @@ module.exports = {
     },
   ],
 
-  // asar 压缩（排除原生模块，避免加载失败）
+  // asar 压缩，原生 .node 模块必须解包，系统 Node 子进程才能加载
   asar: true,
   asarUnpack: [
     '**/better-sqlite3/**',
     '**/hnswlib-node/**',
+    '**/bindings/**',
     '**/*.node',
   ],
 
-  // 目录配置
+  // 输出目录
   directories: {
     output: 'dist-electron',
     buildResources: 'electron/assets',
   },
 
-  // macOS 配置
+  // macOS
   mac: {
     target: [
       { target: 'dmg', arch: ['arm64', 'x64'] },
@@ -62,11 +69,9 @@ module.exports = {
     category: 'public.app-category.productivity',
     icon: 'electron/assets/icon.icns',
     darkModeSupport: true,
-    // 未签名时跳过公证（本地构建）
     notarize: false,
   },
 
-  // dmg 安装包配置
   dmg: {
     title: 'AutoWriting ${version}',
     contents: [
@@ -76,7 +81,7 @@ module.exports = {
     window: { width: 540, height: 380 },
   },
 
-  // Windows 配置
+  // Windows
   win: {
     target: [
       { target: 'nsis', arch: ['x64'] },
@@ -85,7 +90,6 @@ module.exports = {
     icon: 'electron/assets/icon.ico',
   },
 
-  // Windows 安装向导配置
   nsis: {
     oneClick: false,
     allowToChangeInstallationDirectory: true,
@@ -96,16 +100,11 @@ module.exports = {
     createStartMenuShortcut: true,
   },
 
-  // 在打包开始前重新编译原生模块（适配当前 Electron 版本的 Node ABI）
-  beforeBuild: async (context) => {
-    console.log('[electron-builder] 重新编译原生模块...')
-    try {
-      execSync(
-        `npx @electron/rebuild --parallel`,
-        { cwd: path.join(__dirname), stdio: 'inherit' }
-      )
-    } catch (e) {
-      console.warn('[electron-builder] rebuild 警告:', e.message)
-    }
+  // beforeBuild 返回 false → 告诉 electron-builder 跳过 installAppDependencies
+  // 即禁用内置的 @electron/rebuild 调用
+  // 原因：better-sqlite3@12.10.0 的 C++ 源码与 Electron 42 的 V8 API 不兼容，无法为 Electron 编译
+  // 解决方案：server 子进程用系统 Node 运行，better-sqlite3 已由 postinstall 为系统 Node 编译好
+  beforeBuild: async () => {
+    return false
   },
 }
