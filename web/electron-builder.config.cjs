@@ -14,9 +14,9 @@
 
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
-  appId: 'com.autowriting.app',
-  productName: 'AutoWriting',
-  copyright: 'Copyright © 2025',
+  appId: 'com.dashy.app',
+  productName: 'dashy',
+  copyright: 'Copyright © 2026',
 
   // 打包文件范围（相对于 web/ 目录）
   files: [
