@@ -5,27 +5,12 @@
 import { Router } from 'express'
 import { SERVER_AI_CONFIG } from '../config.js'
 import { buildLLMRequest, callLLMWithRetry } from '../utils.js'
-import { recordTokenUsage } from '../db.js'
+import { recordTokenUsage, getEffectivePrompt } from '../db.js'
 
 const router = Router()
 
-router.post('/generate-style', async (req, res) => {
-  try {
-    const { prompt, baseCSS, aiConfig: clientAiConfig } = req.body
-    if (!prompt) return res.status(400).json({ error: '缺少 prompt 参数' })
-
-    const aiConfig = { ...SERVER_AI_CONFIG, ...clientAiConfig }
-
-    if (!aiConfig.articleApiKey && aiConfig.articleProvider !== 'maas') {
-      return res.status(400).json({ error: '未配置 AI API Key' })
-    }
-    if (aiConfig.articleProvider === 'maas' && !aiConfig.maasApiKey) {
-      return res.status(400).json({ error: '未配置 MaaS API Key' })
-    }
-
-    const { url, model, headers } = buildLLMRequest(aiConfig)
-
-    const systemPrompt = `你是一名专业的微信公众号 CSS 设计师，专门为微信公众号文章设计高质量排版样式。
+// 内置 system prompt（当数据库中没有自定义版本时使用）
+const BUILTIN_STYLE_SYSTEM_PROMPT = `你是一名专业的微信公众号 CSS 设计师，专门为微信公众号文章设计高质量排版样式。
 
 ## 微信渲染器兼容约束（必须严格遵守）
 
@@ -82,6 +67,26 @@ router.post('/generate-style', async (req, res) => {
 
 只输出纯 CSS 代码，无任何解释、无 markdown 代码块标记、无注释，直接以 \`#wemd {\` 开头，以最后一个 \`}\` 结尾。`
 
+router.post('/generate-style', async (req, res) => {
+  try {
+    const { prompt, baseCSS, aiConfig: clientAiConfig } = req.body
+    if (!prompt) return res.status(400).json({ error: '缺少 prompt 参数' })
+
+    const aiConfig = { ...SERVER_AI_CONFIG, ...clientAiConfig }
+
+    if (!aiConfig.articleApiKey && aiConfig.articleProvider !== 'maas') {
+      return res.status(400).json({ error: '未配置 AI API Key' })
+    }
+    if (aiConfig.articleProvider === 'maas' && !aiConfig.maasApiKey) {
+      return res.status(400).json({ error: '未配置 MaaS API Key' })
+    }
+
+    const { url, model, headers } = buildLLMRequest(aiConfig)
+
+    // 从数据库读取样式生成提示词（支持用户自定义覆盖）
+    const stylePromptData = getEffectivePrompt('prompt-style-generate')
+    const systemPrompt = stylePromptData?.content || BUILTIN_STYLE_SYSTEM_PROMPT
+
     const userPrompt = `请根据以下风格要求生成微信公众号文章的 CSS 样式：
 
 **风格描述**：${prompt}
@@ -92,7 +97,7 @@ ${baseCSS.slice(0, 2000)}
 \`\`\`` : ''}
 
 生成要求：
-1. 颜色方案严格贴合风格描述，主色只用 hex 实色，不用 rgba/渐变
+1. 颜色方案严格贴合风格描述
 2. h1 居中，::after 伪元素做底部短横线装饰
 3. h2 左侧竖线（::before 绝对定位）+ 轻度背景色块，color/background 都用实色
 4. h3 用 ::before 放小符号（◆ ▎ ✦ ◈ 等）做前缀，padding-left 留位置

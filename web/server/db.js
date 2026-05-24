@@ -210,6 +210,14 @@ function addMissingColumns() {
       db.exec("ALTER TABLE analyses ADD COLUMN user_id TEXT")
       console.log('[DB] 添加 analyses.user_id 列')
     }
+
+    // 检查 prompts 是否有 replaces_id 列
+    const promptsInfo = db.prepare("PRAGMA table_info(prompts)").all()
+    const hasReplacesId = promptsInfo.some(col => col.name === 'replaces_id')
+    if (!hasReplacesId) {
+      db.exec("ALTER TABLE prompts ADD COLUMN replaces_id TEXT")
+      console.log('[DB] 添加 prompts.replaces_id 列')
+    }
   } catch (e) {
     console.warn('[DB] 添加缺失列失败:', e.message)
   }
@@ -781,10 +789,21 @@ export function upsertPrompt({ id, name, category, description, content, tags = 
 /**
  * 获取所有提示词
  */
+function parseTags(raw) {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    // 旧数据：逗号分隔字符串，如 "核心,文章生成"
+    return raw.split(',').map(t => t.trim()).filter(Boolean)
+  }
+}
+
 export function listPrompts() {
   return stmts.listPrompts.all().map(r => ({
     id: r.id, name: r.name, category: r.category, description: r.description,
-    content: r.content, version: r.version, tags: JSON.parse(r.tags || '[]'),
+    content: r.content, version: r.version, tags: parseTags(r.tags),
     isBuiltin: r.is_builtin === 1, usageCount: r.usage_count, replacesId: r.replaces_id || null,
     createdAt: r.created_at, updatedAt: r.updated_at,
   }))
@@ -796,7 +815,7 @@ export function listPrompts() {
 export function listPromptsByCategory(category) {
   return stmts.listPromptsByCategory.all(category).map(r => ({
     id: r.id, name: r.name, category: r.category, description: r.description,
-    content: r.content, version: r.version, tags: JSON.parse(r.tags || '[]'),
+    content: r.content, version: r.version, tags: parseTags(r.tags),
     isBuiltin: r.is_builtin === 1, usageCount: r.usage_count, replacesId: r.replaces_id || null,
     createdAt: r.created_at, updatedAt: r.updated_at,
   }))
@@ -810,7 +829,7 @@ export function getPrompt(id) {
   if (!row) return null
   return {
     id: row.id, name: row.name, category: row.category, description: row.description,
-    content: row.content, version: row.version, tags: JSON.parse(row.tags || '[]'),
+    content: row.content, version: row.version, tags: parseTags(row.tags),
     isBuiltin: row.is_builtin === 1, usageCount: row.usage_count, replacesId: row.replaces_id || null,
     createdAt: row.created_at, updatedAt: row.updated_at,
   }
@@ -867,6 +886,36 @@ export function getPromptVersion(promptId, version) {
   return {
     id: row.id, promptId: row.prompt_id, version: row.version,
     content: row.content, changeNote: row.change_note, createdAt: row.created_at,
+  }
+}
+
+/**
+ * 获取「有效」提示词内容：
+ * 优先查找替换了该内置提示词的自定义版本，没有则返回内置版本的 content。
+ * 如果内置提示词本身不存在，返回 null。
+ */
+export function getEffectivePrompt(builtinId) {
+  // 查找是否有自定义提示词替换了它
+  const replacement = db.prepare(
+    'SELECT * FROM prompts WHERE replaces_id = ? LIMIT 1'
+  ).get(builtinId)
+
+  if (replacement) {
+    return {
+      id: replacement.id,
+      content: replacement.content,
+      isReplacement: true,
+    }
+  }
+
+  // 没有替换，直接返回内置版本
+  const builtin = stmts.getPrompt.get(builtinId)
+  if (!builtin) return null
+
+  return {
+    id: builtin.id,
+    content: builtin.content,
+    isReplacement: false,
   }
 }
 

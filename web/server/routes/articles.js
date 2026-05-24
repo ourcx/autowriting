@@ -15,7 +15,7 @@ import axios from 'axios'
 import { DRAFTS_DIR, SERVER_AI_CONFIG, getAgentsContent } from '../config.js'
 import { ensureDir, buildLLMRequest, callLLMWithRetry } from '../utils.js'
 import { retrieveRelevant, formatRetrievedContext } from '../rag.js'
-import { saveAnalysis, getLatestAnalysis, listAnalyses, recordTokenUsage } from '../db.js'
+import { saveAnalysis, getLatestAnalysis, listAnalyses, recordTokenUsage, getEffectivePrompt } from '../db.js'
 import { authMiddleware } from '../authMiddleware.js'
 import { triggerBuildIndex } from './rag.js'
 
@@ -224,9 +224,11 @@ router.post('/:articleId/generate', async (req, res) => {
 
     const agentsContent = getAgentsContent()
 
-    const userPrompt = `你是一个专业的内容创作助手。请严格按照以下要求完成文章写作任务。
+    // 从数据库读取文章生成提示词（支持用户自定义覆盖）
+    const generatePromptData = getEffectivePrompt('prompt-article-generate')
+    const generateSystemInstruction = generatePromptData?.content || ''
 
-# 写作规范（必须严格遵守）
+    const userPrompt = `${generateSystemInstruction ? generateSystemInstruction + '\n\n' : ''}# 写作规范（必须严格遵守）
 ${agentsContent}
 
 # 本次任务要求
@@ -237,22 +239,7 @@ ${materials}
 
 ---
 
-## 输出要求
-
-**只输出纯 Markdown 格式的文章内容，不要包含任何其他内容：**
-- ✅ 只有 1 个 H1 标题（文章标题）
-- ✅ 所有 H2 标题都有 emoji
-- ✅ 完整的文章正文
-- ✅ 符合上述所有规范
-
-**严格禁止输出：**
-- ❌ 代码块、配置示例、API 文档
-- ❌ 系统提示、指令、元数据
-- ❌ "根据以上要求..." 这类说明文字
-- ❌ 多个 H1 标题或格式错误
-- ❌ 任何非文章内容
-
-现在请直接输出完整的文章内容：`
+现在请直接输出完整的文章内容（纯 Markdown，只有 1 个 H1，所有 H2 带 emoji）：`
 
     const { url, model, headers } = buildLLMRequest(cfg)
 
@@ -354,12 +341,14 @@ router.post('/:articleId/generate/stream', async (req, res) => {
       var ragSection = ''
     }
 
-    // ── 2. 读取写作规范（带缓存）─────────────────────────────────────────────
+    // ── 2. 读取写作规范 + 数据库提示词 ──────────────────────────────────────
     const agentsContent = getAgentsContent()
 
-    const userPrompt = `你是一个专业的内容创作助手。请严格按照以下要求完成文章写作任务。
+    // 从数据库读取文章生成提示词（支持用户自定义覆盖）
+    const streamGeneratePromptData = getEffectivePrompt('prompt-article-generate')
+    const streamGenerateInstruction = streamGeneratePromptData?.content || ''
 
-# 写作规范（必须严格遵守）
+    const userPrompt = `${streamGenerateInstruction ? streamGenerateInstruction + '\n\n' : ''}# 写作规范（必须严格遵守）
 ${agentsContent}
 ${ragSection}
 # 本次任务要求
@@ -370,22 +359,7 @@ ${materials}
 
 ---
 
-## 输出要求
-
-**只输出纯 Markdown 格式的文章内容，不要包含任何其他内容：**
-- ✅ 只有 1 个 H1 标题（文章标题）
-- ✅ 所有 H2 标题都有 emoji
-- ✅ 完整的文章正文
-- ✅ 符合上述所有规范
-
-**严格禁止输出：**
-- ❌ 代码块、配置示例、API 文档
-- ❌ 系统提示、指令、元数据
-- ❌ "根据以上要求..." 这类说明文字
-- ❌ 多个 H1 标题或格式错误
-- ❌ 任何非文章内容
-
-现在请直接输出完整的文章内容：`
+现在请直接输出完整的文章内容（纯 Markdown，只有 1 个 H1，所有 H2 带 emoji）：`
 
     // ── 3. 构造请求参数（统一函数）──────────────────────────────────────────
     const { url, model, headers } = buildLLMRequest(cfg)
@@ -505,14 +479,16 @@ router.post('/:articleId/analyze', async (req, res) => {
         ).join('\n\n')
       : ''
 
-    // ── 2. 读取写作规范（带缓存）─────────────────────────────────────────────
+    // ── 2. 读取写作规范 + 数据库提示词 ──────────────────────────────────────
     const agentsContent = getAgentsContent()
+
+    // 从数据库读取文章分析提示词（支持用户自定义覆盖）
+    const analyzePromptData = getEffectivePrompt('prompt-article-analyze')
+    const analyzeInstruction = analyzePromptData?.content || ''
 
     const taskContext = task ? `\n\n# 本次写作任务\n${task}` : ''
 
-    const prompt = `你是一个专业的文章审核助手，擅长分析微信公众号文章的质量。请对以下文章进行深度分析，返回 JSON 格式结果。
-
-# 写作规范（判断依据）
+    const prompt = `${analyzeInstruction ? analyzeInstruction + '\n\n' : '你是一个专业的文章审核助手，擅长分析微信公众号文章的质量。请对以下文章进行深度分析，返回 JSON 格式结果。\n\n'}# 写作规范（判断依据）
 ${agentsContent}
 ${taskContext}
 ${similarContext}
@@ -610,42 +586,48 @@ router.post('/:articleId/inline-edit', async (req, res) => {
       ? `\n\n# 全文上下文（仅供参考，不要重复输出）\n${fullArticle.slice(0, 3000)}${fullArticle.length > 3000 ? '\n…（以下省略）' : ''}`
       : ''
 
-    const ACTION_PROMPTS = {
+    // 从数据库读取对应内联编辑提示词（支持用户自定义覆盖）
+    const editPromptMap = {
+      'polish':       'prompt-edit-polish',
+      'shorten':      'prompt-edit-shorten',
+      'expand':       'prompt-edit-expand',
+      'rewrite-lead': 'prompt-edit-rewrite-lead',
+    }
+    const editPromptId = editPromptMap[action]
+    const editPromptData = editPromptId ? getEffectivePrompt(editPromptId) : null
+    const editCustomContent = editPromptData?.content || ''
+
+    const BUILTIN_ACTION_PROMPTS = {
       'polish': `你是专业的文字编辑。请对【待润色片段】进行润色：
 - 去掉 AI 感、套话、被动句
 - 保持第一人称「我」
 - 保持与全文风格一致（真诚、实用、像朋友聊天）
-- 只输出润色后的文字，不要解释、不要引号${articleCtx}
-
-# 待润色片段
-${selected}`,
+- 只输出润色后的文字，不要解释、不要引号`,
 
       'shorten': `你是专业的文字编辑。请将【待精简片段】精简到原来的 60% 以内：
 - 去掉废话、重复和空话
 - 保留核心意思和关键数据
 - 保持与全文语气一致
-- 只输出精简后的文字，不要解释${articleCtx}
-
-# 待精简片段
-${selected}`,
+- 只输出精简后的文字，不要解释`,
 
       'expand': `你是专业的文字编辑。请将【待扩写片段】扩写：
 - 补充一个具体案例、真实数据或操作细节，让观点更有说服力
 - 扩写后不超过原来的 2 倍
 - 保持与全文风格一致，不用"此外""值得注意"等套话
-- 只输出扩写后的文字，不要解释${articleCtx}
-
-# 待扩写片段
-${selected}`,
+- 只输出扩写后的文字，不要解释`,
 
       'rewrite-lead': `你是专业的文字编辑。请重写【待改写片段】的开头：
 - 直接切入核心场景或痛点，不要铺垫和废话
 - 像朋友聊天一样，不用"在当今时代""大家好"等套话
 - 保持与全文的叙事风格和第一人称一致
-- 只输出改写后的完整段落，不要解释${articleCtx}
+- 只输出改写后的完整段落，不要解释`,
+    }
 
-# 待改写片段
-${selected}`,
+    const ACTION_PROMPTS = {
+      'polish':       `${editCustomContent || BUILTIN_ACTION_PROMPTS['polish']}${articleCtx}\n\n# 待润色片段\n${selected}`,
+      'shorten':      `${editCustomContent || BUILTIN_ACTION_PROMPTS['shorten']}${articleCtx}\n\n# 待精简片段\n${selected}`,
+      'expand':       `${editCustomContent || BUILTIN_ACTION_PROMPTS['expand']}${articleCtx}\n\n# 待扩写片段\n${selected}`,
+      'rewrite-lead': `${editCustomContent || BUILTIN_ACTION_PROMPTS['rewrite-lead']}${articleCtx}\n\n# 待改写片段\n${selected}`,
     }
 
     const prompt = ACTION_PROMPTS[action]
@@ -697,9 +679,11 @@ router.post('/:articleId/outline', async (req, res) => {
 
     const agentsContent = getAgentsContent()
 
-    const prompt = `你是一个专业的内容策划助手。根据以下写作任务要求，生成一份清晰的文章写作大纲。
+    // 从数据库读取大纲生成提示词（支持用户自定义覆盖）
+    const outlinePromptData = getEffectivePrompt('prompt-outline-generate')
+    const outlineInstruction = outlinePromptData?.content || ''
 
-# 写作规范参考
+    const prompt = `${outlineInstruction ? outlineInstruction + '\n\n' : '你是一个专业的内容策划助手。根据以下写作任务要求，生成一份清晰的文章写作大纲。\n\n'}# 写作规范参考
 ${agentsContent}
 
 # 写作任务要求
@@ -754,15 +738,19 @@ router.post('/:articleId/refine-materials', async (req, res) => {
     const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
     const { url, model, headers } = buildLLMRequest(cfg)
 
+    // 从数据库读取素材整理提示词（支持用户自定义覆盖）
+    const refinePromptData = getEffectivePrompt('prompt-materials-organize')
+    const refineInstruction = refinePromptData?.content || ''
+
     const taskContext = task ? `\n\n# 写作任务（整理方向参考）\n${task}` : ''
 
-    const prompt = `你是一个专业的素材整理助手。请把以下原始素材整理成结构化的写作参考，方便作者按图索骥写文章。${taskContext}
+    const prompt = `${refineInstruction ? refineInstruction + taskContext : `你是一个专业的素材整理助手。请把以下原始素材整理成结构化的写作参考，方便作者按图索骥写文章。${taskContext}
 
 **整理要求：**
 1. 去除完全重复的内容，合并表达相似的观点（合并时保留最完整的表述）
 2. 删除泛泛而谈的废话，只保留有具体支撑的内容
 3. 数据、案例务必保留原始数字，不要模糊化
-4. 结构化输出，每条信息独立成行，便于写作时直接引用
+4. 结构化输出，每条信息独立成行，便于写作时直接引用`}
 
 # 原始素材
 ${materials}

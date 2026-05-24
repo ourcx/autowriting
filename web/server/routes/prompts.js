@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid'
 import {
   upsertPrompt, listPrompts, listPromptsByCategory, getPrompt,
   updatePromptContent, deletePrompt, recordPromptUsage,
-  listPromptVersions, getPromptVersion, db,
+  listPromptVersions, getPromptVersion, getEffectivePrompt, db,
 } from '../db.js'
 
 const router = express.Router()
@@ -100,13 +100,113 @@ router.post('/:id/update', (req, res) => {
     }
     
     if (prompt.isBuiltin) {
-      return res.status(403).json({ success: false, error: '内置提示词不能修改' })
+      return res.status(403).json({ success: false, error: '内置提示词不能直接修改，请使用覆盖接口' })
     }
     
     const updated = updatePromptContent(id, content, changeNote || '')
     res.json({ success: true, data: updated })
   } catch (e) {
     console.error('[Prompts] 更新提示词失败:', e.message)
+    res.status(500).json({ success: false, error: e.message })
+  }
+})
+
+// ── 覆盖内置提示词（创建自定义替换版本或更新已有替换） ──────────────────────
+// 逻辑：若已存在替换版本，直接更新其内容；否则创建新的自定义版本并设为替换
+
+router.post('/:id/override', (req, res) => {
+  try {
+    const { id } = req.params
+    const { content, changeNote } = req.body
+
+    if (!content) {
+      return res.status(400).json({ success: false, error: '缺少必要字段：content' })
+    }
+
+    const prompt = getPrompt(id)
+    if (!prompt) {
+      return res.status(404).json({ success: false, error: '提示词不存在' })
+    }
+
+    if (!prompt.isBuiltin) {
+      return res.status(400).json({ success: false, error: '该接口仅用于覆盖内置提示词' })
+    }
+
+    // 查找已有的替换版本
+    const existingReplacement = db.prepare(
+      'SELECT * FROM prompts WHERE replaces_id = ?'
+    ).get(id)
+
+    let result
+    if (existingReplacement) {
+      // 已有替换版本，直接更新内容
+      result = updatePromptContent(existingReplacement.id, content, changeNote || '覆盖内置提示词')
+    } else {
+      // 创建新的自定义覆盖版本
+      const newId = uuidv4()
+      const now = new Date().toISOString()
+      const existingTags = Array.isArray(prompt.tags) ? prompt.tags : []
+      const tags = JSON.stringify([...existingTags, '自定义覆盖'])
+      db.prepare(`
+        INSERT INTO prompts (id, name, category, description, content, version, tags, is_builtin, usage_count, replaces_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, 1, ?, 0, 0, ?, ?, ?)
+      `).run(
+        newId,
+        `${prompt.name}（自定义）`,
+        prompt.category,
+        `覆盖内置提示词「${prompt.name}」的自定义版本`,
+        content,
+        tags,
+        id,
+        now, now,
+      )
+      result = getPrompt(newId)
+    }
+
+    res.json({ success: true, data: result })
+  } catch (e) {
+    console.error('[Prompts] 覆盖内置提示词失败:', e.message)
+    res.status(500).json({ success: false, error: e.message })
+  }
+})
+
+// ── 获取内置提示词的当前有效版本 ─────────────────────────────────────────────
+
+router.get('/:id/effective', (req, res) => {
+  try {
+    const { id } = req.params
+    const effective = getEffectivePrompt(id)
+    if (!effective) {
+      return res.status(404).json({ success: false, error: '提示词不存在' })
+    }
+    res.json({ success: true, data: effective })
+  } catch (e) {
+    console.error('[Prompts] 获取有效提示词失败:', e.message)
+    res.status(500).json({ success: false, error: e.message })
+  }
+})
+
+// ── 重置内置提示词覆盖（删除替换版本） ────────────────────────────────────────
+
+router.post('/:id/reset-override', (req, res) => {
+  try {
+    const { id } = req.params
+
+    const prompt = getPrompt(id)
+    if (!prompt) {
+      return res.status(404).json({ success: false, error: '提示词不存在' })
+    }
+
+    if (!prompt.isBuiltin) {
+      return res.status(400).json({ success: false, error: '该接口仅用于重置内置提示词的覆盖' })
+    }
+
+    // 删除替换版本
+    db.prepare('DELETE FROM prompts WHERE replaces_id = ?').run(id)
+
+    res.json({ success: true, message: '已重置为内置默认版本' })
+  } catch (e) {
+    console.error('[Prompts] 重置覆盖失败:', e.message)
     res.status(500).json({ success: false, error: e.message })
   }
 })
