@@ -1,6 +1,10 @@
 /**
  * 服务端配置中心
  * 负责 dotenv 加载、路径常量、AI 配置
+ *
+ * 运行环境：
+ *   - 普通 Node.js（web 模式）：从 web/.env 或根目录 .env 加载
+ *   - Electron 桌面应用：ELECTRON_APP=true，数据目录改用系统 userData 路径
  */
 import fs from 'fs'
 import path from 'path'
@@ -13,35 +17,63 @@ const __dirname = path.dirname(__filename)
 // web/ 目录（server/ 的上一级）
 const WEB_DIR = path.join(__dirname, '..')
 
-// 依次尝试：web/.env → 项目根目录 .env
-const envInWebDir = path.join(WEB_DIR, '.env')
-const envInRoot   = path.join(WEB_DIR, '..', '.env')
+// ── Electron 环境检测 ─────────────────────────────────────────────────────────
+const IS_ELECTRON = process.env.ELECTRON_APP === 'true'
+// Electron 主进程在 app.whenReady 之前设置这两个环境变量
+const ELECTRON_USER_DATA = process.env.ELECTRON_USER_DATA || ''
+const ELECTRON_DOCUMENTS = process.env.ELECTRON_DOCUMENTS || ''
 
-if (fs.existsSync(envInWebDir)) {
-  dotenv.config({ path: envInWebDir })
-} else if (fs.existsSync(envInRoot)) {
-  dotenv.config({ path: envInRoot })
-  // 根目录 .env 里的相对路径以项目根目录为基准展开
-  const root = path.join(WEB_DIR, '..')
-  const expandIfRelative = (key) => {
-    if (process.env[key] && !path.isAbsolute(process.env[key])) {
-      process.env[key] = path.join(root, process.env[key])
+// ── dotenv 加载（Electron 打包模式下跳过，配置已通过 settings 表管理）────────
+
+if (!IS_ELECTRON || ELECTRON_USER_DATA === '') {
+  // 依次尝试：web/.env → 项目根目录 .env
+  const envInWebDir = path.join(WEB_DIR, '.env')
+  const envInRoot   = path.join(WEB_DIR, '..', '.env')
+
+  if (fs.existsSync(envInWebDir)) {
+    dotenv.config({ path: envInWebDir })
+  } else if (fs.existsSync(envInRoot)) {
+    dotenv.config({ path: envInRoot })
+    // 根目录 .env 里的相对路径以项目根目录为基准展开
+    const root = path.join(WEB_DIR, '..')
+    const expandIfRelative = (key) => {
+      if (process.env[key] && !path.isAbsolute(process.env[key])) {
+        process.env[key] = path.join(root, process.env[key])
+      }
     }
+    expandIfRelative('DRAFTS_DIR')
+    expandIfRelative('AGENTS_FILE')
+    expandIfRelative('DATA_DIR')
+    expandIfRelative('CACHE_DIR')
+  } else {
+    dotenv.config()
   }
-  expandIfRelative('DRAFTS_DIR')
-  expandIfRelative('AGENTS_FILE')
-  expandIfRelative('DATA_DIR')
-  expandIfRelative('CACHE_DIR')
-} else {
-  dotenv.config()
 }
 
 // ── 路径常量 ─────────────────────────────────────────────────────────────────
 
-export const PROJECT_ROOT = process.env.PROJECT_ROOT || path.join(WEB_DIR, '..')
-export const DRAFTS_DIR   = process.env.DRAFTS_DIR   || path.join(PROJECT_ROOT, '公众号写作', 'drafts')
-export const AGENTS_FILE  = process.env.AGENTS_FILE  || path.join(PROJECT_ROOT, 'AGENTS.md')
-export const DATA_DIR     = process.env.DATA_DIR     || path.join(PROJECT_ROOT, '.cache')
+let PROJECT_ROOT_DEFAULT, DATA_DIR_DEFAULT, DRAFTS_DIR_DEFAULT, AGENTS_FILE_DEFAULT
+
+if (IS_ELECTRON && ELECTRON_USER_DATA) {
+  // Electron 模式：数据存放在系统 userData 目录
+  // Mac: ~/Library/Application Support/autowriting
+  // Win: %APPDATA%/autowriting
+  PROJECT_ROOT_DEFAULT = ELECTRON_USER_DATA
+  DATA_DIR_DEFAULT     = path.join(ELECTRON_USER_DATA, 'data')
+  DRAFTS_DIR_DEFAULT   = path.join(ELECTRON_DOCUMENTS, 'autowriting', 'drafts')
+  AGENTS_FILE_DEFAULT  = path.join(ELECTRON_USER_DATA, 'AGENTS.md')
+} else {
+  // 普通 Web 模式：路径相对于项目根目录
+  PROJECT_ROOT_DEFAULT = path.join(WEB_DIR, '..')
+  DATA_DIR_DEFAULT     = path.join(PROJECT_ROOT_DEFAULT, '.cache')
+  DRAFTS_DIR_DEFAULT   = path.join(PROJECT_ROOT_DEFAULT, '公众号写作', 'drafts')
+  AGENTS_FILE_DEFAULT  = path.join(PROJECT_ROOT_DEFAULT, 'AGENTS.md')
+}
+
+export const PROJECT_ROOT = process.env.PROJECT_ROOT || PROJECT_ROOT_DEFAULT
+export const DRAFTS_DIR   = process.env.DRAFTS_DIR   || DRAFTS_DIR_DEFAULT
+export const AGENTS_FILE  = process.env.AGENTS_FILE  || AGENTS_FILE_DEFAULT
+export const DATA_DIR     = process.env.DATA_DIR     || DATA_DIR_DEFAULT
 export const CACHE_DIR    = path.join(DATA_DIR, 'covers')
 export const HISTORY_FILE = path.join(DATA_DIR, 'cover_history.json')
 
