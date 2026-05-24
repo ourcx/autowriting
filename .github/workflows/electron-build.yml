@@ -19,8 +19,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10.32.1
+        # 不指定 version，自动读 package.json 的 packageManager 字段
 
       - uses: actions/setup-node@v4
         with:
@@ -64,8 +63,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10.32.1
+        # 不指定 version，自动读 package.json 的 packageManager 字段
 
       - uses: actions/setup-node@v4
         with:
