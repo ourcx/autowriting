@@ -1,0 +1,158 @@
+name: Electron Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: '是否创建 Release（否则只上传 artifact）'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: write
+
+jobs:
+  # ─────────────────────────────────────────────
+  # macOS 打包（arm64 + x64，在 macos-latest 上跑）
+  # ─────────────────────────────────────────────
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: 安装依赖
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      - name: 确保 better-sqlite3 为当前 Node 编译
+        working-directory: web
+        run: node scripts/postinstall.cjs
+
+      - name: Vite 构建前端
+        working-directory: web
+        run: ELECTRON=true pnpm build
+
+      - name: electron-builder 打包 macOS（arm64 + x64）
+        working-directory: web
+        env:
+          # 不签名，ad-hoc 签名
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npx electron-builder build --mac --config electron-builder.config.cjs
+
+      - name: 上传 macOS 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-dist
+          path: |
+            web/dist-electron/*.dmg
+            web/dist-electron/*.zip
+          retention-days: 7
+
+  # ─────────────────────────────────────────────
+  # Windows 打包（x64，在 windows-latest 上跑）
+  # ─────────────────────────────────────────────
+  build-win:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: 安装依赖
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      - name: 确保 better-sqlite3 为当前 Node 编译
+        working-directory: web
+        run: node scripts/postinstall.cjs
+
+      - name: Vite 构建前端
+        working-directory: web
+        shell: cmd
+        run: set ELECTRON=true && pnpm build
+
+      - name: electron-builder 打包 Windows（x64）
+        working-directory: web
+        run: npx electron-builder build --win --config electron-builder.config.cjs
+
+      - name: 上传 Windows 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: win-dist
+          path: |
+            web/dist-electron/*.exe
+          retention-days: 7
+
+  # ─────────────────────────────────────────────
+  # 创建 GitHub Release（仅在 tag push 时）
+  # ─────────────────────────────────────────────
+  release:
+    needs: [build-mac, build-win]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.create_release == 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 下载 macOS 产物
+        uses: actions/download-artifact@v4
+        with:
+          name: mac-dist
+          path: ./release-files/mac
+
+      - name: 下载 Windows 产物
+        uses: actions/download-artifact@v4
+        with:
+          name: win-dist
+          path: ./release-files/win
+
+      - name: 列出产物文件
+        run: find ./release-files -type f | sort
+
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: AutoWriting ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            ./release-files/mac/*.dmg
+            ./release-files/mac/*.zip
+            ./release-files/win/*.exe
+          body: |
+            ## 下载说明
+
+            | 平台 | 文件 | 说明 |
+            |------|------|------|
+            | macOS (Apple Silicon) | `*-arm64.dmg` | M 系列芯片 |
+            | macOS (Intel) | `*.dmg`（非 arm64）| Intel 芯片 |
+            | Windows | `*.exe` | Windows 10/11 x64 |
+
+            ### 安装方式
+            - **macOS**：下载 `.dmg`，拖入 Applications 文件夹，首次运行右键「打开」绕过 Gatekeeper
+            - **Windows**：下载 `.exe` 安装程序，按引导安装
+
+            > 应用运行需要本机安装 Node.js（用于启动后端服务）
