@@ -13,6 +13,7 @@ import RegisterPage from './pages/RegisterPage'
 import AdminPage from './pages/AdminPage'
 import MonitoringPage from './pages/MonitoringPage'
 import PromptsPage from './pages/PromptsPage'
+import CronPage from './pages/CronPage'
 import PrivateRoute from './components/PrivateRoute'
 import ToastProvider from './components/Toast'
 import { syncAIConfigFromServer } from './utils/aiConfig'
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="/rag" element={<PrivateRoute><RagPage /></PrivateRoute>} />
         <Route path="/token-usage" element={<PrivateRoute><TokenUsagePage /></PrivateRoute>} />
         <Route path="/prompts" element={<PrivateRoute><PromptsPage /></PrivateRoute>} />
+        <Route path="/cron" element={<PrivateRoute><CronPage /></PrivateRoute>} />
 
         {/* 管理员路由 */}
         <Route path="/admin" element={<PrivateRoute requireAdmin><AdminPage /></PrivateRoute>} />

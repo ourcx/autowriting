@@ -157,6 +157,41 @@ db.exec(`
     total_tokens   INTEGER NOT NULL DEFAULT 0,
     created_at     TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS cron_jobs (
+    id              TEXT PRIMARY KEY,
+    user_id         TEXT NOT NULL,
+    name            TEXT NOT NULL,
+    cron_expr       TEXT NOT NULL,   -- cron 表达式，如 "0 8 * * *"
+    enabled         INTEGER NOT NULL DEFAULT 1,
+    topic           TEXT,            -- 热点主题关键词（留空则自动抓取）
+    style_prompt    TEXT,            -- CSS 样式风格描述
+    cover_prompt    TEXT,            -- 封面生成描述（留空则不生成封面）
+    ai_config       TEXT NOT NULL DEFAULT '{}',  -- JSON：articleProvider/Model/Key 等覆盖配置
+    wx_app_id       TEXT,            -- 微信 appId（定时任务使用服务端保存的凭据）
+    wx_app_secret   TEXT,            -- 微信 appSecret
+    last_run_at     TEXT,
+    next_run_at     TEXT,
+    run_count       INTEGER NOT NULL DEFAULT 0,
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS cron_logs (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id          TEXT NOT NULL,
+    user_id         TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'running',  -- 'running'|'success'|'error'
+    topic           TEXT,
+    article_title   TEXT,
+    article_id      TEXT,
+    media_id        TEXT,            -- 微信草稿 media_id
+    steps           TEXT NOT NULL DEFAULT '[]',  -- JSON 数组：各步骤执行结果
+    error_msg       TEXT,
+    started_at      TEXT NOT NULL,
+    finished_at     TEXT,
+    FOREIGN KEY (job_id) REFERENCES cron_jobs(id) ON DELETE CASCADE
+  );
 `)
 
 // ── 创建索引（分离出来，避免与表创建冲突） ──────────────────────────────────────
@@ -176,6 +211,9 @@ function createIndexes() {
       CREATE INDEX IF NOT EXISTS idx_prompts_category ON prompts(category);
       CREATE INDEX IF NOT EXISTS idx_prompts_tags ON prompts(tags);
       CREATE INDEX IF NOT EXISTS idx_prompt_versions_prompt ON prompt_versions(prompt_id, version DESC);
+      CREATE INDEX IF NOT EXISTS idx_cron_jobs_user ON cron_jobs(user_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_cron_logs_job ON cron_logs(job_id, started_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_cron_logs_user ON cron_logs(user_id, started_at DESC);
     `)
   } catch (e) {
     console.warn('[DB] 创建索引失败:', e.message)
@@ -917,6 +955,117 @@ export function getEffectivePrompt(builtinId) {
     content: builtin.content,
     isReplacement: false,
   }
+}
+
+// ── Cron 任务管理 ─────────────────────────────────────────────────────────────
+
+export function listCronJobs(userId) {
+  return db.prepare('SELECT * FROM cron_jobs WHERE user_id = ? ORDER BY created_at DESC').all(userId).map(r => ({
+    id: r.id, userId: r.user_id, name: r.name, cronExpr: r.cron_expr,
+    enabled: r.enabled === 1, topic: r.topic, stylePrompt: r.style_prompt,
+    coverPrompt: r.cover_prompt,
+    aiConfig: (() => { try { return JSON.parse(r.ai_config) } catch { return {} } })(),
+    wxAppId: r.wx_app_id, wxAppSecret: r.wx_app_secret,
+    lastRunAt: r.last_run_at, nextRunAt: r.next_run_at,
+    runCount: r.run_count, createdAt: r.created_at, updatedAt: r.updated_at,
+  }))
+}
+
+export function getCronJob(id) {
+  const r = db.prepare('SELECT * FROM cron_jobs WHERE id = ?').get(id)
+  if (!r) return null
+  return {
+    id: r.id, userId: r.user_id, name: r.name, cronExpr: r.cron_expr,
+    enabled: r.enabled === 1, topic: r.topic, stylePrompt: r.style_prompt,
+    coverPrompt: r.cover_prompt,
+    aiConfig: (() => { try { return JSON.parse(r.ai_config) } catch { return {} } })(),
+    wxAppId: r.wx_app_id, wxAppSecret: r.wx_app_secret,
+    lastRunAt: r.last_run_at, nextRunAt: r.next_run_at,
+    runCount: r.run_count, createdAt: r.created_at, updatedAt: r.updated_at,
+  }
+}
+
+export function createCronJob({ id, userId, name, cronExpr, enabled = true, topic, stylePrompt, coverPrompt, aiConfig = {}, wxAppId, wxAppSecret, nextRunAt }) {
+  const now = new Date().toISOString()
+  db.prepare(`
+    INSERT INTO cron_jobs (id, user_id, name, cron_expr, enabled, topic, style_prompt, cover_prompt, ai_config, wx_app_id, wx_app_secret, next_run_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, userId, name, cronExpr, enabled ? 1 : 0, topic || null, stylePrompt || null, coverPrompt || null, JSON.stringify(aiConfig), wxAppId || null, wxAppSecret || null, nextRunAt || null, now, now)
+  return getCronJob(id)
+}
+
+export function updateCronJob(id, { name, cronExpr, enabled, topic, stylePrompt, coverPrompt, aiConfig, wxAppId, wxAppSecret, nextRunAt }) {
+  const now = new Date().toISOString()
+  const fields = []
+  const vals = []
+  if (name !== undefined)        { fields.push('name = ?');         vals.push(name) }
+  if (cronExpr !== undefined)    { fields.push('cron_expr = ?');    vals.push(cronExpr) }
+  if (enabled !== undefined)     { fields.push('enabled = ?');      vals.push(enabled ? 1 : 0) }
+  if (topic !== undefined)       { fields.push('topic = ?');        vals.push(topic || null) }
+  if (stylePrompt !== undefined) { fields.push('style_prompt = ?'); vals.push(stylePrompt || null) }
+  if (coverPrompt !== undefined) { fields.push('cover_prompt = ?'); vals.push(coverPrompt || null) }
+  if (aiConfig !== undefined)    { fields.push('ai_config = ?');    vals.push(JSON.stringify(aiConfig)) }
+  if (wxAppId !== undefined)     { fields.push('wx_app_id = ?');    vals.push(wxAppId || null) }
+  if (wxAppSecret !== undefined) { fields.push('wx_app_secret = ?');vals.push(wxAppSecret || null) }
+  if (nextRunAt !== undefined)   { fields.push('next_run_at = ?');  vals.push(nextRunAt || null) }
+  fields.push('updated_at = ?'); vals.push(now)
+  vals.push(id)
+  if (fields.length > 1) db.prepare(`UPDATE cron_jobs SET ${fields.join(', ')} WHERE id = ?`).run(...vals)
+  return getCronJob(id)
+}
+
+export function deleteCronJob(id) {
+  db.prepare('DELETE FROM cron_jobs WHERE id = ?').run(id)
+}
+
+export function updateCronJobRunStats(id, { lastRunAt, nextRunAt, runCount }) {
+  db.prepare('UPDATE cron_jobs SET last_run_at = ?, next_run_at = ?, run_count = ?, updated_at = ? WHERE id = ?')
+    .run(lastRunAt, nextRunAt, runCount, new Date().toISOString(), id)
+}
+
+// ── Cron 执行日志 ─────────────────────────────────────────────────────────────
+
+export function createCronLog({ jobId, userId, topic }) {
+  const now = new Date().toISOString()
+  const result = db.prepare(`
+    INSERT INTO cron_logs (job_id, user_id, status, topic, steps, started_at)
+    VALUES (?, ?, 'running', ?, '[]', ?)
+  `).run(jobId, userId, topic || null, now)
+  return result.lastInsertRowid
+}
+
+export function updateCronLog(logId, { status, topic, articleTitle, articleId, mediaId, steps, errorMsg, finishedAt }) {
+  const fields = []
+  const vals = []
+  if (status !== undefined)       { fields.push('status = ?');        vals.push(status) }
+  if (topic !== undefined)        { fields.push('topic = ?');         vals.push(topic) }
+  if (articleTitle !== undefined) { fields.push('article_title = ?'); vals.push(articleTitle) }
+  if (articleId !== undefined)    { fields.push('article_id = ?');    vals.push(articleId) }
+  if (mediaId !== undefined)      { fields.push('media_id = ?');      vals.push(mediaId) }
+  if (steps !== undefined)        { fields.push('steps = ?');         vals.push(JSON.stringify(steps)) }
+  if (errorMsg !== undefined)     { fields.push('error_msg = ?');     vals.push(errorMsg) }
+  if (finishedAt !== undefined)   { fields.push('finished_at = ?');   vals.push(finishedAt) }
+  if (!fields.length) return
+  vals.push(logId)
+  db.prepare(`UPDATE cron_logs SET ${fields.join(', ')} WHERE id = ?`).run(...vals)
+}
+
+export function listCronLogs(jobId, limit = 20) {
+  return db.prepare('SELECT * FROM cron_logs WHERE job_id = ? ORDER BY started_at DESC LIMIT ?').all(jobId, limit).map(r => ({
+    id: r.id, jobId: r.job_id, userId: r.user_id, status: r.status,
+    topic: r.topic, articleTitle: r.article_title, articleId: r.article_id, mediaId: r.media_id,
+    steps: (() => { try { return JSON.parse(r.steps) } catch { return [] } })(),
+    errorMsg: r.error_msg, startedAt: r.started_at, finishedAt: r.finished_at,
+  }))
+}
+
+export function listAllCronLogs(userId, limit = 50) {
+  return db.prepare('SELECT * FROM cron_logs WHERE user_id = ? ORDER BY started_at DESC LIMIT ?').all(userId, limit).map(r => ({
+    id: r.id, jobId: r.job_id, userId: r.user_id, status: r.status,
+    topic: r.topic, articleTitle: r.article_title, articleId: r.article_id, mediaId: r.media_id,
+    steps: (() => { try { return JSON.parse(r.steps) } catch { return [] } })(),
+    errorMsg: r.error_msg, startedAt: r.started_at, finishedAt: r.finished_at,
+  }))
 }
 
 console.log(`[DB] SQLite 已连接：${DB_PATH}`)

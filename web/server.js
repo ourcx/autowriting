@@ -27,6 +27,10 @@ import authRouter       from './server/routes/auth.js'
 import adminRouter      from './server/routes/admin.js'
 import monitoringRouter from './server/routes/monitoring.js'
 import promptsRouter    from './server/routes/prompts.js'
+import cronRouter        from './server/routes/cron.js'
+
+// Cron 调度器
+import { initCronScheduler } from './server/cronEngine.js'
 
 // 数据库初始化（建表 + 迁移旧数据 + 内置模板 seed）
 import { upsertTemplate, listTemplates, db } from './server/db.js'
@@ -89,6 +93,7 @@ app.use('/api/materials',  materialsRouter) // 素材采集
 app.use('/api/wechat',     wechatRouter)    // 微信公众号绑定
 app.use('/api/monitoring', monitoringRouter) // 日志和监控（仅管理员可访问）
 app.use('/api/prompts',    promptsRouter)   // 提示词管理
+app.use('/api/cron',       cronRouter)      // 定时任务管理
 
 // ── 杂项接口 ──────────────────────────────────────────────────────────────────
 
@@ -135,6 +140,8 @@ seedBuiltinPrompts()
 
 // ── 启动 ──────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
+  // 初始化 Cron 调度器（在服务启动后）
+  initCronScheduler()
   logger.info('SERVER', `服务启动成功`, {
     port: PORT,
     projectRoot: PROJECT_ROOT,
