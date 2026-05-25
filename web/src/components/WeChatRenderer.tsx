@@ -202,6 +202,26 @@ function copyHtmlViaExecCommand(
 
 // ── 主组件 ──────────────────────────────────────────────────────────────────
 
+// ── 从 localStorage 读取公众号凭据 ────────────────────────────────────────────
+const WX_STORAGE_KEY = 'wechat_credentials'
+function getWxHeaders(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(WX_STORAGE_KEY)
+    if (!raw) return {}
+    const { appId, appSecret } = JSON.parse(raw)
+    if (!appId || !appSecret) return {}
+    return { 'X-Wx-AppId': appId, 'X-Wx-AppSecret': appSecret }
+  } catch { return {} }
+}
+function hasWxCreds(): boolean {
+  try {
+    const raw = localStorage.getItem(WX_STORAGE_KEY)
+    if (!raw) return false
+    const { appId, appSecret } = JSON.parse(raw)
+    return !!(appId && appSecret)
+  } catch { return false }
+}
+
 export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }) => {
   const navigate = useNavigate()
 
@@ -254,12 +274,9 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
     document.addEventListener('mouseup', onMouseUp)
   }, [sidebarWidth])
 
-  // 首次挂载：检查公众号绑定状态 + 拉取模板
+  // 首次挂载：从 localStorage 检查公众号凭据是否存在
   useEffect(() => {
-    fetch('/api/wechat/status')
-      .then(r => r.json())
-      .then(d => setWxBound(d.bound))
-      .catch(() => {})
+    setWxBound(hasWxCreds())
   }, [])
 
   useEffect(() => {
@@ -351,7 +368,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
         try {
           const upR = await fetch('/api/wechat/upload-thumb', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...getWxHeaders() },
             body: JSON.stringify({ url: firstImgSrc }),
           })
           const upD = await upR.json()
@@ -368,7 +385,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
 
       const r = await fetch('/api/wechat/draft', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getWxHeaders() },
         body: JSON.stringify({ title: title.trim(), content: inlinedHtml, digest, thumb_media_id }),
       })
       const d = await r.json()

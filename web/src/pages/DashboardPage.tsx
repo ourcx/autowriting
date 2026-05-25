@@ -16,10 +16,14 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchServerStatus()
-    fetch('/api/wechat/status')
-      .then(r => r.json())
-      .then(d => setWxBound(d.bound))
-      .catch(() => {})
+    // 从 localStorage 检查公众号凭据是否存在（不走服务器）
+    try {
+      const raw = localStorage.getItem('wechat_credentials')
+      if (raw) {
+        const { appId, appSecret } = JSON.parse(raw)
+        setWxBound(!!(appId && appSecret))
+      }
+    } catch { /* ignore */ }
 
     // 检查是否需要显示引导（首次访问）
     const hasSeenOnboarding = localStorage.getItem('onboarding-completed')

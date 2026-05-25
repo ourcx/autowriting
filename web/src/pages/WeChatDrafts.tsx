@@ -35,6 +35,26 @@ function wxImg(url: string | null | undefined): string | null {
   return `/api/wechat/proxy-img?url=${encodeURIComponent(url)}`
 }
 
+/* ── 从 localStorage 读取公众号凭据，生成请求 Header ── */
+const WX_STORAGE_KEY = 'wechat_credentials'
+function getWxHeaders(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(WX_STORAGE_KEY)
+    if (!raw) return {}
+    const { appId, appSecret } = JSON.parse(raw)
+    if (!appId || !appSecret) return {}
+    return { 'X-Wx-AppId': appId, 'X-Wx-AppSecret': appSecret }
+  } catch { return {} }
+}
+function hasWxCreds(): boolean {
+  try {
+    const raw = localStorage.getItem(WX_STORAGE_KEY)
+    if (!raw) return false
+    const { appId, appSecret } = JSON.parse(raw)
+    return !!(appId && appSecret)
+  } catch { return false }
+}
+
 /* ── 类型定义 ── */
 interface DraftItem {
   media_id:    string
@@ -127,12 +147,9 @@ export default function WeChatDrafts() {
   const [matType,    setMatType]    = useState<'image'|'voice'|'video'>('image')
   const prevMatType = useRef(matType)
 
-  /* ── 绑定状态检查 ── */
+  /* ── 绑定状态检查（从 localStorage 读取，不走服务器）── */
   useEffect(() => {
-    fetch('/api/wechat/status')
-      .then(r => r.json())
-      .then(d => setBound(d.bound))
-      .catch(() => setBound(false))
+    setBound(hasWxCreds())
   }, [])
 
   /* ══ 草稿箱 ══ */
@@ -140,7 +157,7 @@ export default function WeChatDrafts() {
     setDraftLoading(true)
     setDraftError(null)
     try {
-      const r = await fetch(`/api/wechat/drafts?offset=${off}&count=${PAGE_SIZE}`)
+      const r = await fetch(`/api/wechat/drafts?offset=${off}&count=${PAGE_SIZE}`, { headers: getWxHeaders() })
       const d = await r.json()
       if (!r.ok) { setDraftError(d.error ?? '拉取失败'); return }
       if (off === 0) setDrafts(d.items)
@@ -159,7 +176,7 @@ export default function WeChatDrafts() {
     if (importing) return
     setImporting(item.media_id)
     try {
-      const r = await fetch(`/api/wechat/draft/${item.media_id}`)
+      const r = await fetch(`/api/wechat/draft/${item.media_id}`, { headers: getWxHeaders() })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error ?? '获取失败')
       const mdContent = d.content ? htmlToMarkdown(d.content) : ''
@@ -190,7 +207,7 @@ export default function WeChatDrafts() {
     if (!confirm(`确定删除草稿「${item.title}」？此操作不可撤销。`)) return
     setDeleting(item.media_id)
     try {
-      const r = await fetch(`/api/wechat/draft/${item.media_id}`, { method: 'DELETE' })
+      const r = await fetch(`/api/wechat/draft/${item.media_id}`, { method: 'DELETE', headers: getWxHeaders() })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error ?? '删除失败')
       setDrafts(prev => prev.filter(x => x.media_id !== item.media_id))
@@ -206,7 +223,7 @@ export default function WeChatDrafts() {
     if (!confirm(`确定将「${item.title}」发布到公众号？发布后将对所有关注者可见。`)) return
     setPublishing(item.media_id)
     try {
-      const r = await fetch(`/api/wechat/draft/${item.media_id}/publish`, { method: 'POST' })
+      const r = await fetch(`/api/wechat/draft/${item.media_id}/publish`, { method: 'POST', headers: getWxHeaders() })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error ?? '发布失败')
       toast.success(`「${item.title}」已提交发布，稍后在「已发布」Tab 查看`)
@@ -221,7 +238,7 @@ export default function WeChatDrafts() {
     setPubError(null)
     setPubNoAuth(false)
     try {
-      const r = await fetch(`/api/wechat/published?offset=${off}&count=${PAGE_SIZE}`)
+      const r = await fetch(`/api/wechat/published?offset=${off}&count=${PAGE_SIZE}`, { headers: getWxHeaders() })
       const d = await r.json()
       if (!r.ok) {
         // 48001 = api unauthorized：账号没有 freepublish 权限（需认证服务号）
@@ -246,7 +263,7 @@ export default function WeChatDrafts() {
   const fetchStats = useCallback(async () => {
     setStatsLoading(true)
     try {
-      const r = await fetch('/api/wechat/article-stats')
+      const r = await fetch('/api/wechat/article-stats', { headers: getWxHeaders() })
       const d = await r.json()
       if (!r.ok) return
       const map: Record<string, ArticleStat> = {}
@@ -270,7 +287,7 @@ export default function WeChatDrafts() {
     setMatLoading(true)
     setMatError(null)
     try {
-      const r = await fetch(`/api/wechat/materials?type=${type}&offset=${off}&count=20`)
+      const r = await fetch(`/api/wechat/materials?type=${type}&offset=${off}&count=20`, { headers: getWxHeaders() })
       const d = await r.json()
       if (!r.ok) { setMatError(d.error ?? '拉取失败'); return }
       if (off === 0) setMatItems(d.items)
@@ -299,7 +316,7 @@ export default function WeChatDrafts() {
     if (!confirm(`确定删除素材「${item.name}」？此操作不可撤销。`)) return
     setMatDeleting(item.media_id)
     try {
-      const r = await fetch(`/api/wechat/material/${item.media_id}`, { method: 'DELETE' })
+      const r = await fetch(`/api/wechat/material/${item.media_id}`, { method: 'DELETE', headers: getWxHeaders() })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error ?? '删除失败')
       setMatItems(prev => prev.filter(x => x.media_id !== item.media_id))

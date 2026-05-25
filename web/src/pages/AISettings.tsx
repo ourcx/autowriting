@@ -49,41 +49,57 @@ export default function AISettings() {
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
   const [activeSection, setActiveSection] = useState<Section>('article')
 
-  // ── 微信公众号状态 ──────────────────────────────────────────────────────────
-  const [wxBound, setWxBound]         = useState(false)
-  const [wxAppId, setWxAppId]         = useState('')
-  const [wxBoundAppId, setWxBoundAppId] = useState('')   // 已绑定的 appId（显示用）
-  const [wxAppSecret, setWxAppSecret] = useState('')
-  const [wxBinding, setWxBinding]     = useState(false)
-  const [wxBindErr, setWxBindErr]     = useState<string | null>(null)
-  const [wxAccount, setWxAccount]     = useState<WechatAccount | null>(null)
-  const [wxLoading, setWxLoading]     = useState(false)
-  const [showSecret, setShowSecret]   = useState(false)
+  // ── 微信公众号状态（凭据存浏览器 localStorage，按浏览器隔离）────────────────
+  const WX_STORAGE_KEY = 'wechat_credentials'
 
-  // 拉取绑定状态
-  const fetchWxStatus = useCallback(async () => {
+  const loadWxCreds = (): { appId: string; appSecret: string } | null => {
     try {
-      const r = await fetch('/api/wechat/status')
-      const d = await r.json()
-      setWxBound(d.bound)
-      setWxBoundAppId(d.appId || '')
-      if (d.bound) fetchWxAccount()
-    } catch { /* ignore */ }
-  }, [])
+      const raw = localStorage.getItem(WX_STORAGE_KEY)
+      return raw ? JSON.parse(raw) : null
+    } catch { return null }
+  }
+
+  const saveWxCreds = (appId: string, appSecret: string) => {
+    localStorage.setItem(WX_STORAGE_KEY, JSON.stringify({ appId, appSecret }))
+  }
+
+  const clearWxCreds = () => {
+    localStorage.removeItem(WX_STORAGE_KEY)
+  }
+
+  const [wxBound, setWxBound]           = useState(() => !!loadWxCreds())
+  const [wxAppId, setWxAppId]           = useState('')
+  const [wxBoundAppId, setWxBoundAppId] = useState(() => loadWxCreds()?.appId || '')
+  const [wxAppSecret, setWxAppSecret]   = useState('')
+  const [wxBinding, setWxBinding]       = useState(false)
+  const [wxBindErr, setWxBindErr]       = useState<string | null>(null)
+  const [wxAccount, setWxAccount]       = useState<WechatAccount | null>(null)
+  const [wxLoading, setWxLoading]       = useState(false)
+  const [showSecret, setShowSecret]     = useState(false)
+
+  // 从 localStorage 读取凭据，生成 wechat API 请求 headers
+  const getWxHeaders = (): Record<string, string> => {
+    const creds = loadWxCreds()
+    if (!creds) return {}
+    return {
+      'X-Wx-AppId':     creds.appId,
+      'X-Wx-AppSecret': creds.appSecret,
+    }
+  }
 
   // 拉取账号信息
-  const fetchWxAccount = async () => {
+  const fetchWxAccount = useCallback(async () => {
     setWxLoading(true)
     try {
-      const r = await fetch('/api/wechat/account')
+      const r = await fetch('/api/wechat/account', { headers: getWxHeaders() })
       const d = await r.json()
       if (r.ok) setWxAccount(d)
       else setWxAccount(null)
     } catch { setWxAccount(null) }
     setWxLoading(false)
-  }
+  }, [])
 
-  // 绑定
+  // 绑定：验证凭据有效性后存入 localStorage
   const handleWxBind = async () => {
     if (!wxAppId.trim() || !wxAppSecret.trim()) {
       setWxBindErr('AppID 和 AppSecret 不能为空')
@@ -92,28 +108,35 @@ export default function AISettings() {
     setWxBinding(true)
     setWxBindErr(null)
     try {
-      const r = await fetch('/api/wechat/bind', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ appId: wxAppId.trim(), appSecret: wxAppSecret.trim() }),
+      // 用凭据请求 account 接口验证有效性
+      const r = await fetch('/api/wechat/account', {
+        headers: {
+          'X-Wx-AppId':     wxAppId.trim(),
+          'X-Wx-AppSecret': wxAppSecret.trim(),
+        },
       })
       const d = await r.json()
-      if (!r.ok) { setWxBindErr(d.error); return }
+      if (!r.ok) {
+        setWxBindErr(d.error ?? '凭据验证失败')
+        return
+      }
+      // 验证通过，存入 localStorage
+      saveWxCreds(wxAppId.trim(), wxAppSecret.trim())
       setWxBound(true)
       setWxBoundAppId(wxAppId.trim())
+      setWxAccount(d)
       setWxAppId('')
       setWxAppSecret('')
-      fetchWxAccount()
     } catch (e) {
       setWxBindErr(e instanceof Error ? e.message : '绑定失败')
     }
     setWxBinding(false)
   }
 
-  // 解绑
-  const handleWxUnbind = async () => {
+  // 解绑：清除 localStorage
+  const handleWxUnbind = () => {
     if (!confirm('确认解绑公众号？')) return
-    await fetch('/api/wechat/unbind', { method: 'POST' })
+    clearWxCreds()
     setWxBound(false)
     setWxBoundAppId('')
     setWxAccount(null)
@@ -122,8 +145,8 @@ export default function AISettings() {
   useEffect(() => {
     setConfig(loadAIConfig())
     fetchServerStatus()
-    fetchWxStatus()
-  }, [fetchWxStatus])
+    if (wxBound) fetchWxAccount()
+  }, [fetchWxAccount])
 
   const handleSave = () => {
     setLocalConfig(config)
@@ -776,7 +799,7 @@ export default function AISettings() {
 
                   <div className="as-card-divider" />
                   <p className="as-hint">
-                    AppSecret 仅存储在本机数据库（SQLite），不会上传到任何云端。
+                    AppSecret 仅存储在当前浏览器（localStorage），不会同步到服务器或其他设备。
                     如需重置 AppSecret，请先在公众平台重新生成后再重新绑定。
                   </p>
                 </div>
