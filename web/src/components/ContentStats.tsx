@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   BarChart3, Clock, FileText, Eye,
   Sparkles, AlertCircle, CheckCircle2,
-  ChevronDown, ChevronRight, Circle,
+  ChevronDown, ChevronRight, Circle, Wand2, X,
 } from 'lucide-react'
 import { loadAIConfig } from '../utils/aiConfig'
 import './ContentStats.css'
@@ -12,6 +12,7 @@ interface ContentStatsProps {
   title?: string
   articleId?: string
   task?: string
+  onArticleChange?: (content: string) => void
 }
 
 interface ScoreMap {
@@ -164,7 +165,7 @@ function IssueItem({ issue }: { issue: Issue }) {
 
 // ── 主组件 ────────────────────────────────────────────────────────────────────
 
-export default function ContentStats({ content, title, articleId, task }: ContentStatsProps) {
+export default function ContentStats({ content, title, articleId, task, onArticleChange }: ContentStatsProps) {
   const wordCount   = content.replace(/[#*`\[\]()]/g, '').trim().length
   const readingTime = Math.ceil(wordCount / 200)
   const headings    = content.split('\n').reduce<Array<{ level: number; title: string }>>((acc, line) => {
@@ -181,6 +182,14 @@ export default function ContentStats({ content, title, articleId, task }: Conten
   const [tocOpen, setTocOpen]       = useState(false)
   const [checkOpen, setCheckOpen]   = useState(true)
 
+  // ── 去 AI 味状态 ───────────────────────────────────────────────────────────
+  const [deaiLoading,   setDeaiLoading]   = useState(false)
+  const [deaiError,     setDeaiError]     = useState<string | null>(null)
+  const [deaiResult,    setDeaiResult]    = useState<string>('')
+  const [showDeaiPanel, setShowDeaiPanel] = useState(false)
+  const deaiFullText = useRef('')
+  const deaiStreamRef = useRef<HTMLDivElement>(null)
+
   // 挂载时加载最近一次分析结果
   useEffect(() => {
     if (!articleId) return
@@ -196,6 +205,97 @@ export default function ContentStats({ content, title, articleId, task }: Conten
   }, [articleId])
 
   const checks = runChecks(content, title)
+
+  // 自动滚动到底部
+  const scrollDeaiToBottom = () => {
+    if (deaiStreamRef.current) {
+      deaiStreamRef.current.scrollTop = deaiStreamRef.current.scrollHeight
+    }
+  }
+
+  const handleDeai = async () => {
+    if (!articleId || content.trim().length < 100) {
+      setDeaiError('文章内容太短，无法处理（至少 100 字）')
+      setShowDeaiPanel(true)
+      return
+    }
+    setDeaiLoading(true)
+    setDeaiError(null)
+    setDeaiResult('')
+    setShowDeaiPanel(true)
+    deaiFullText.current = ''
+
+    try {
+      const aiConfig = loadAIConfig()
+      const token = localStorage.getItem('auth_token')
+      const resp = await fetch(`/api/articles/${articleId}/deai/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ article: content, aiConfig }),
+      })
+
+      if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`)
+
+      const reader  = resp.body.getReader()
+      const decoder = new TextDecoder('utf-8')
+      let   lineBuf = ''
+      let   curEvent = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        lineBuf += decoder.decode(value, { stream: true })
+        const lines = lineBuf.split('\n')
+        lineBuf = lines.pop() ?? ''
+
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (!trimmed) { curEvent = ''; continue }
+          if (trimmed.startsWith('event:')) { curEvent = trimmed.slice(6).trim(); continue }
+          if (trimmed.startsWith('data:')) {
+            try {
+              const payload = JSON.parse(trimmed.slice(5).trim()) as Record<string, unknown>
+              const evt = curEvent || (payload.text !== undefined ? 'chunk' : payload.article !== undefined ? 'done' : payload.message !== undefined ? 'error' : '')
+              if (evt === 'chunk') {
+                const t = payload.text as string
+                deaiFullText.current += t
+                setDeaiResult(deaiFullText.current)
+                setTimeout(scrollDeaiToBottom, 0)
+              } else if (evt === 'done') {
+                // done 时 fullText 已完整
+              } else if (evt === 'error') {
+                setDeaiError(payload.message as string)
+              }
+            } catch { /* ignore */ }
+          }
+        }
+      }
+    } catch (e: unknown) {
+      setDeaiError(e instanceof Error ? e.message : '未知错误')
+    } finally {
+      setDeaiLoading(false)
+    }
+  }
+
+  const handleApplyDeai = () => {
+    if (deaiFullText.current && onArticleChange) {
+      onArticleChange(deaiFullText.current)
+      setShowDeaiPanel(false)
+      setDeaiResult('')
+      deaiFullText.current = ''
+    }
+  }
+
+  const handleDiscardDeai = () => {
+    setShowDeaiPanel(false)
+    setDeaiResult('')
+    deaiFullText.current = ''
+    setDeaiError(null)
+  }
 
   const handleAnalyze = async () => {
     if (!articleId || content.trim().length < 100) {
@@ -439,6 +539,69 @@ export default function ContentStats({ content, title, articleId, task }: Conten
           )}
         </div>
       )}
+
+      {/* ── 去 AI 味 ─────────────────────────────────────────────────────────── */}
+      <div className="deai-section">
+        <div className="deai-header">
+          <div className="deai-title">
+            <Wand2 size={15} />
+            去 AI 味复审
+            <span className="deai-subtitle">删套话、改过渡词、修标点</span>
+          </div>
+          <button
+            className={`btn-deai ${deaiLoading ? 'loading' : ''}`}
+            onClick={handleDeai}
+            disabled={deaiLoading || content.trim().length < 100}
+          >
+            {deaiLoading
+              ? <><span className="spinner-sm" />处理中...</>
+              : <><Wand2 size={13} />{showDeaiPanel && deaiResult ? '重新处理' : '开始处理'}</>
+            }
+          </button>
+        </div>
+
+        {showDeaiPanel && (
+          <div className="deai-panel">
+            <div className="deai-panel-head">
+              <span className="deai-panel-label">
+                {deaiLoading ? '正在改写...' : deaiError ? '处理失败' : '改写预览'}
+              </span>
+              <button className="deai-panel-close" onClick={handleDiscardDeai} title="关闭">
+                <X size={13} />
+              </button>
+            </div>
+
+            {deaiError && (
+              <div className="deai-error">
+                <AlertCircle size={14} />
+                {deaiError}
+              </div>
+            )}
+
+            {!deaiError && (
+              <div className="deai-stream" ref={deaiStreamRef}>
+                {deaiResult ? (
+                  <pre className="deai-stream-text">{deaiResult}</pre>
+                ) : (
+                  <div className="deai-stream-empty">
+                    <span className="spinner-sm" />
+                    <span>AI 正在逐字改写...</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!deaiLoading && !deaiError && deaiResult && (
+              <div className="deai-panel-footer">
+                <button className="deai-btn-discard" onClick={handleDiscardDeai}>放弃</button>
+                {onArticleChange && (
+                  <button className="deai-btn-apply" onClick={handleApplyDeai}>应用到编辑器</button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* ── AI 深度分析 ───────────────────────────────────────────────────────── */}
       <div className="analysis-section">

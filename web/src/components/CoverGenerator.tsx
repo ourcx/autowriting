@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { loadAIConfig } from '../utils/aiConfig'
+import { toast } from './Toast'
 import './CoverGenerator.css'
 
 interface CoverGeneratorProps {
@@ -109,6 +110,7 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
   const [generatedImage, setGeneratedImage] = useState<string | null>(null)
   const [error,          setError]          = useState<string | null>(null)
   const [missingKey,     setMissingKey]     = useState<string | null>(null)
+  const [isSavingToLibrary, setIsSavingToLibrary] = useState(false)
 
   // provider 切换时检查 key
   useEffect(() => {
@@ -208,6 +210,31 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
+  }
+
+  const handleSaveToLibrary = async () => {
+    if (!generatedImage) return
+    setIsSavingToLibrary(true)
+    try {
+      const response = await fetch('/api/images/upload-base64', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: generatedImage,
+          mimeType: 'image/png',
+          originalName: `cover-${title}-${Date.now()}.png`,
+        }),
+      })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || '保存失败')
+      }
+      toast.success('已保存到图片库')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '保存到图片库失败')
+    } finally {
+      setIsSavingToLibrary(false)
+    }
   }
 
   const currentProvider = PROVIDERS.find(p => p.id === provider)
@@ -356,6 +383,13 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
             <div className="cg-preview-actions">
               <button className="cg-action-btn cg-action-btn--primary" onClick={handleDownload}>
                 下载封面
+              </button>
+              <button
+                className="cg-action-btn"
+                onClick={handleSaveToLibrary}
+                disabled={isSavingToLibrary}
+              >
+                {isSavingToLibrary ? '保存中...' : '保存到图片库'}
               </button>
               <button
                 className="cg-action-btn"

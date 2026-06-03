@@ -52,6 +52,8 @@ router.post('/generate-cover', async (req, res) => {
       const imageUrl    = `data:image/svg+xml;base64,${Buffer.from(svgContent).toString('base64')}`
       cacheImage(cacheKey, imageUrl, { title, style, color, provider: 'local' })
       const historyItem = addToHistory(title, style, color, provider, imageUrl, cacheKey)
+      // 自动添加到图片库
+      addImageToLibrary(imageUrl, title, 'cover', [style, color], 'local')
       return res.json({ imageUrl, historyId: historyItem.id })
     }
 
@@ -97,6 +99,8 @@ router.post('/generate-cover', async (req, res) => {
       const imageUrl    = `data:image/png;base64,${response.data.artifacts[0].base64}`
       cacheImage(cacheKey, imageUrl, { title, style, color, provider: 'stability' })
       const historyItem = addToHistory(title, style, color, provider, imageUrl, cacheKey)
+      // 自动添加到图片库
+      addImageToLibrary(imageUrl, title, 'cover', [style, color], 'stability')
       return res.json({ imageUrl, historyId: historyItem.id })
     }
 

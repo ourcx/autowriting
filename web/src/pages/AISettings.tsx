@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Save, Check, Eye, EyeOff, AlertCircle, CheckCircle2,
-  Zap, Image, Search, ChevronRight, Link2, Link2Off, RefreshCw, Users,
+  Zap, Image, Search, ChevronRight, Link2, Link2Off, RefreshCw, Users, ShieldAlert,
 } from 'lucide-react'
 import {
   AIConfig,
@@ -273,6 +273,14 @@ export default function AISettings() {
           {saved ? '已保存' : '保存'}
         </button>
       </header>
+
+      {/* ── 安全提示 Banner ── */}
+      <div className="as-security-banner">
+        <ShieldAlert size={14} className="as-security-banner-icon" />
+        <span>
+          API Key 仅保存在<strong>当前浏览器</strong>。定时任务在服务端执行时，会将 Key 同步写入本机数据库供 Cron 使用，读取需要登录鉴权。请勿将 Key 分享给他人。
+        </span>
+      </div>
 
       <div className="as-layout">
 

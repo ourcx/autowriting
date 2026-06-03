@@ -2,10 +2,12 @@
  * RAG 模块：向量索引 + 相似检索
  *
  * 策略：
- *   - 用 OpenAI text-embedding-3-small 或 MaaS 兼容 embedding 接口做向量化
+ *   - 优先使用 OpenAI / MaaS 兼容 embedding 接口做向量化（text-embedding-3-small，1536维）
+ *   - 无 API Key 时自动 fallback 到本地模型 @xenova/transformers
+ *     默认: Xenova/multilingual-e5-large（1024维，支持中文，首次需下载约 1.2GB）
+ *     可在配置中设置 localEmbeddingModel 切换其他模型
  *   - 用 HNSWLib 在本地磁盘持久化向量库（DATA_DIR/rag_index/）
- *   - 扫描 DRAFTS_DIR 下所有 article_raw.md + materials.md，切成 chunk 写入
- *   - 生成文章时，用任务描述检索 top-k 相关片段作为上下文
+ *   - 索引旁存 meta.json 记录维度+模型，切换 embedding 时提示重建
  */
 import fs from 'fs'
 import path from 'path'
@@ -15,28 +17,55 @@ import { Document } from '@langchain/core/documents'
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters'
 import { DATA_DIR, DRAFTS_DIR, SERVER_AI_CONFIG } from './config.js'
 
-// 全局共享索引（无 userId 时的回落）
+// ── 本地向量模型默认配置 ───────────────────────────────────────────────────────
+// multilingual-e5-small: 384维，支持中文，首次下载约 500MB，速度适中
+// 需要更高质量可改为 Xenova/multilingual-e5-large（1024维，约 1.2GB）
+const LOCAL_EMBED_MODEL = 'Xenova/multilingual-e5-small'
+
+// ── 索引目录 ──────────────────────────────────────────────────────────────────
+
 const INDEX_DIR = path.join(DATA_DIR, 'rag_index')
 
-// 按用户隔离的索引目录
 function getUserIndexDir(userId) {
   return userId
     ? path.join(DATA_DIR, 'rag_index_users', String(userId))
     : INDEX_DIR
 }
 
-// 按用户隔离的草稿目录
 function getUserDraftsDir(userId) {
   return userId
     ? path.join(DRAFTS_DIR, String(userId))
     : DRAFTS_DIR
 }
 
-// ── 自定义 Embeddings 类（直接 fetch，不依赖 LangChain OpenAI 封装）─────────
-// 好处：
-//   1. 不会自动附加 encoding_format:'float'（部分服务商不支持）
-//   2. 支持 dimensions / instruction 等扩展参数
-//   3. 支持任意自定义 Header（如 X-Failover-Enabled）
+// ── 索引元数据（meta.json） ───────────────────────────────────────────────────
+// 记录建索引时的 embedKey + 维度，load 时比对，不匹配则提示重建
+
+const META_FILE = 'index_meta.json'
+
+function saveIndexMeta(indexDir, meta) {
+  fs.writeFileSync(path.join(indexDir, META_FILE), JSON.stringify(meta, null, 2))
+}
+
+function loadIndexMeta(indexDir) {
+  const p = path.join(indexDir, META_FILE)
+  if (!fs.existsSync(p)) return null
+  try { return JSON.parse(fs.readFileSync(p, 'utf-8')) } catch { return null }
+}
+
+// 生成当前 embedding 配置的唯一标识（用于比对是否需要重建索引）
+function getEmbeddingKey(cfg) {
+  const apiKey = cfg.embeddingApiKey || cfg.articleApiKey || cfg.coverApiKey || ''
+  if (!apiKey) {
+    const model = cfg.localEmbeddingModel || LOCAL_EMBED_MODEL
+    return `local:${model}`
+  }
+  const model = cfg.embeddingModel || 'text-embedding-3-small'
+  const dims   = cfg.embeddingDimensions || 'native'
+  return `remote:${model}:${dims}`
+}
+
+// ── 远端 Embedding（直接 fetch，不依赖 LangChain OpenAI 封装）─────────────────
 
 class RawEmbeddings extends Embeddings {
   constructor({ apiKey, baseURL, model, dimensions, instruction, extraHeaders = {} }) {
@@ -44,17 +73,13 @@ class RawEmbeddings extends Embeddings {
     this.apiKey       = apiKey
     this.baseURL      = baseURL.replace(/\/$/, '')
     this.model        = model
-    this.dimensions   = dimensions   // 可选，number
-    this.instruction  = instruction  // 可选，string
-    this.extraHeaders = extraHeaders // 可选，object
+    this.dimensions   = dimensions
+    this.instruction  = instruction
+    this.extraHeaders = extraHeaders
   }
 
-  /** 单条文本向量化 */
-  async embedQuery(text) {
-    return this._embed(text)
-  }
+  async embedQuery(text) { return this._embed(text) }
 
-  /** 批量向量化（每批最多 64 条，避免超长） */
   async embedDocuments(texts) {
     const BATCH = 64
     const results = []
@@ -93,36 +118,105 @@ class RawEmbeddings extends Embeddings {
   }
 }
 
-// ── Embeddings 实例（懒加载，配置变化时重建） ─────────────────────────────────
+// ── 本地 Embedding（@xenova/transformers，无需 API Key） ─────────────────────
+// 使用 multilingual-e5-large（1024维）或配置指定的模型
+// e5 系列模型需要在 query/passage 前加前缀以获得最佳效果
 
-let _embeddings = null
-function getEmbeddings(aiConfig = {}) {
-  const cfg = { ...SERVER_AI_CONFIG, ...aiConfig }
+class LocalEmbeddings extends Embeddings {
+  constructor(modelName = LOCAL_EMBED_MODEL) {
+    super({})
+    this.modelName = modelName
+    this._pipeline = null
+    this._dims     = null  // 实际维度（首次推理后记录）
+  }
 
-  // embedding 专用配置优先，其次回落到文章生成的 key/url
-  const apiKey      = cfg.embeddingApiKey  || cfg.articleApiKey || cfg.coverApiKey || ''
-  const baseURL     = cfg.embeddingBaseUrl || (
+  async _getPipeline() {
+    if (!this._pipeline) {
+      let pipeline
+      try {
+        ;({ pipeline } = await import('@xenova/transformers'))
+      } catch {
+        throw new Error(
+          '本地向量模型需要安装依赖，请在 web/ 目录执行：npm install @xenova/transformers'
+        )
+      }
+      console.log(`[RAG] 加载本地向量模型：${this.modelName}（首次运行需下载模型文件，请稍候…）`)
+      this._pipeline = await pipeline('feature-extraction', this.modelName, {
+        quantized: true,   // 量化版本，体积更小、速度更快，精度略有损失
+      })
+      console.log(`[RAG] 本地向量模型加载完成`)
+    }
+    return this._pipeline
+  }
+
+  /** 给 e5 系列模型加 "query: " 前缀，其他模型不加 */
+  _wrapQuery(text) {
+    return this.modelName.toLowerCase().includes('e5') ? `query: ${text}` : text
+  }
+  _wrapPassage(text) {
+    return this.modelName.toLowerCase().includes('e5') ? `passage: ${text}` : text
+  }
+
+  async embedQuery(text) {
+    const pipe   = await this._getPipeline()
+    const output = await pipe(this._wrapQuery(text), { pooling: 'mean', normalize: true })
+    const vec = Array.from(output.data)
+    if (!this._dims) this._dims = vec.length
+    return vec
+  }
+
+  async embedDocuments(texts) {
+    const pipe = await this._getPipeline()
+    const results = []
+    for (const text of texts) {
+      const output = await pipe(this._wrapPassage(text), { pooling: 'mean', normalize: true })
+      const vec = Array.from(output.data)
+      if (!this._dims) this._dims = vec.length
+      results.push(vec)
+    }
+    return results
+  }
+}
+
+// ── Embeddings 实例缓存 ───────────────────────────────────────────────────────
+
+let _embeddings      = null  // 远端
+let _localEmbeddings = null  // 本地
+
+function getLocalEmbeddings(cfg = {}) {
+  const localModel = cfg.localEmbeddingModel || LOCAL_EMBED_MODEL
+  if (!_localEmbeddings || _localEmbeddings.modelName !== localModel) {
+    _localEmbeddings = new LocalEmbeddings(localModel)
+  }
+  return _localEmbeddings
+}
+
+/**
+ * 返回远端 Embeddings 实例（不探测，纯构造）。
+ * 若无 API Key，直接返回 null（调用方负责切本地）。
+ */
+function getRemoteEmbeddings(cfg) {
+  const apiKey = cfg.embeddingApiKey || cfg.articleApiKey || cfg.coverApiKey || ''
+  if (!apiKey) return null
+
+  const baseURL    = cfg.embeddingBaseUrl || (
     cfg.articleBaseUrl && cfg.articleProvider !== 'maas'
       ? cfg.articleBaseUrl
       : 'https://api.openai.com/v1'
   )
-  const model       = cfg.embeddingModel       || 'text-embedding-3-small'
-  const dimensions  = cfg.embeddingDimensions  || undefined
-  const instruction = cfg.embeddingInstruction || undefined
+  const model      = cfg.embeddingModel       || 'text-embedding-3-small'
+  const dimensions = cfg.embeddingDimensions  || undefined
+  const instruction= cfg.embeddingInstruction || undefined
 
-  // extraHeaders：JSON 字符串或对象
   let extraHeaders = {}
   if (cfg.embeddingExtraHeaders) {
     try {
       extraHeaders = typeof cfg.embeddingExtraHeaders === 'string'
         ? JSON.parse(cfg.embeddingExtraHeaders)
         : cfg.embeddingExtraHeaders
-    } catch { /* 解析失败忽略 */ }
+    } catch { /* 忽略 */ }
   }
 
-  if (!apiKey) throw new Error('未配置 Embedding API Key，请在知识库页面填写后重试')
-
-  // 任意参数变化时重建实例
   const cacheKey = JSON.stringify({ apiKey, baseURL, model, dimensions, instruction, extraHeaders })
   if (!_embeddings || _embeddings._cacheKey !== cacheKey) {
     _embeddings = new RawEmbeddings({ apiKey, baseURL, model, dimensions, instruction, extraHeaders })
@@ -131,14 +225,53 @@ function getEmbeddings(aiConfig = {}) {
   return _embeddings
 }
 
+/**
+ * 探测远端 embedding，失败自动降级本地。
+ * - 无 API Key → 直接本地
+ * - 有 API Key 但调用失败（401 / 网络等）→ 打印警告，切本地
+ * 返回: { embeddings, mode: 'remote'|'local', model }
+ */
+async function resolveEmbeddings(aiConfig = {}) {
+  const cfg = { ...SERVER_AI_CONFIG, ...aiConfig }
+  const remote = getRemoteEmbeddings(cfg)
+
+  if (!remote) {
+    // 无 Key，直接本地
+    const emb = getLocalEmbeddings(cfg)
+    console.log(`[RAG] 未配置 Embedding API Key，使用本地模型: ${emb.modelName}`)
+    return { embeddings: emb, mode: 'local', model: emb.modelName }
+  }
+
+  // 有 Key → 先探测一次，确认可用
+  try {
+    await remote.embedQuery('向量化探测')
+    const model = cfg.embeddingModel || 'text-embedding-3-small'
+    const dims  = cfg.embeddingDimensions
+    console.log(`[RAG] 远端 Embedding 可用: ${model}${dims ? `（${dims}维）` : ''}`)
+    return { embeddings: remote, mode: 'remote', model }
+  } catch (e) {
+    const reason = e.message?.slice(0, 160) || String(e)
+    console.warn(`[RAG] 远端 Embedding 不可用（${reason}）`)
+    console.warn(`[RAG] 自动切换到本地模型 fallback，首次运行需下载模型文件（约 500MB），请耐心等待…`)
+    const emb = getLocalEmbeddings(cfg)
+    return { embeddings: emb, mode: 'local', model: emb.modelName }
+  }
+}
+
+// 兼容旧调用（retrieveRelevant 内部用，不探测）
+function getEmbeddings(aiConfig = {}) {
+  const cfg    = { ...SERVER_AI_CONFIG, ...aiConfig }
+  const remote = getRemoteEmbeddings(cfg)
+  if (!remote) return getLocalEmbeddings(cfg)
+  return remote
+}
+
 // ── 文本切割器 ────────────────────────────────────────────────────────────────
-// 优化：减小 chunk 大小以降低 token 消耗
-// 原来 800 字符会导致检索结果过长，现改为 400 字符
-// 这样既能保留足够的上下文，又能减少不必要的 token 消耗
+// 600 字符 / 80 重叠，中文每段约 600 字，保留更完整的语义单元
 
 const splitter = new RecursiveCharacterTextSplitter({
-  chunkSize: 400,      // 从 800 减小到 400，减少 50% token 消耗
-  chunkOverlap: 50,    // 相应减小重叠部分
+  chunkSize:    600,
+  chunkOverlap: 80,
   separators: ['\n\n', '\n', '。', '！', '？', '，', ''],
 })
 
@@ -165,7 +298,7 @@ function collectDocs(userId) {
         }
       }
     }
-    // 处理子目录格式（YYYYMMDD 下还有多个 task*.md）
+    // 子目录格式：YYYYMMDD 下还有多个 task*.md
     const promptDir = path.join(base, 'prompt')
     if (fs.existsSync(promptDir)) {
       for (const f of fs.readdirSync(promptDir)) {
@@ -185,8 +318,10 @@ function collectDocs(userId) {
 // ── 构建/更新索引 ─────────────────────────────────────────────────────────────
 
 export async function buildIndex(aiConfig = {}, userId) {
-  const embeddings = getEmbeddings(aiConfig)
-  const rawDocs    = collectDocs(userId)
+  // resolveEmbeddings 会先探测远端，失败自动降级本地，整个 build 用同一个实例
+  const { embeddings, mode, model } = await resolveEmbeddings(aiConfig)
+
+  const rawDocs = collectDocs(userId)
   if (rawDocs.length === 0) return { indexed: 0, chunks: 0 }
 
   const langchainDocs = []
@@ -202,32 +337,81 @@ export async function buildIndex(aiConfig = {}, userId) {
   const vectorStore = await HNSWLib.fromDocuments(langchainDocs, embeddings)
   await vectorStore.save(indexDir)
 
-  return { indexed: rawDocs.length, chunks: langchainDocs.length }
+  // 实际维度：本地模型建完后可以从实例读；远端调一次
+  let dims = '?'
+  if (mode === 'local' && embeddings._dims) {
+    dims = embeddings._dims
+  } else {
+    try {
+      const sample = await embeddings.embedQuery('维度探测')
+      dims = sample.length
+    } catch { /* 忽略 */ }
+  }
+
+  // embedKey 用实际使用的 mode 而非当前配置（可能已 fallback 到本地）
+  const embedKey = mode === 'local' ? `local:${model}` : getEmbeddingKey({ ...SERVER_AI_CONFIG, ...aiConfig })
+
+  saveIndexMeta(indexDir, {
+    embedKey,
+    embedMode:  mode,
+    model,
+    dimensions: dims,
+    builtAt:    new Date().toISOString(),
+    chunks:     langchainDocs.length,
+    docs:       rawDocs.length,
+  })
+
+  console.log(`[RAG] 索引构建完成：${rawDocs.length} 篇 / ${langchainDocs.length} chunks / 维度 ${dims} / 模型 ${model}`)
+
+  return { indexed: rawDocs.length, chunks: langchainDocs.length, dimensions: dims, model, embedMode: mode }
 }
 
 // ── 检索相关文档 ──────────────────────────────────────────────────────────────
 
-export async function retrieveRelevant(query, { topK = 3, aiConfig = {}, userId } = {}) {
+export async function retrieveRelevant(query, { topK = 5, aiConfig = {}, userId } = {}) {
+  const cfg      = { ...SERVER_AI_CONFIG, ...aiConfig }
   const indexDir = getUserIndexDir(userId)
+
   if (!fs.existsSync(path.join(indexDir, 'hnswlib.index'))) {
     return []  // 未索引，静默返回空
   }
+
+  const meta = loadIndexMeta(indexDir)
+
+  // ── 根据索引元数据决定用哪个 embeddings 实例 ─────────────────────────────
+  // 如果索引是本地模型建的，直接用本地（不再走远端，避免 401）
+  // 如果索引是远端建的，检查当前配置是否一致
+  let embeddings
+  if (meta?.embedMode === 'local') {
+    const localModel = meta.model || LOCAL_EMBED_MODEL
+    embeddings = _localEmbeddings?.modelName === localModel
+      ? _localEmbeddings
+      : new LocalEmbeddings(localModel)
+  } else {
+    const currentKey = getEmbeddingKey(cfg)
+    if (meta && meta.embedKey && meta.embedKey !== currentKey) {
+      console.warn(
+        `[RAG] Embedding 配置已变更，索引需要重建。\n` +
+        `  旧: ${meta.embedKey}（${meta.dimensions}维）\n` +
+        `  新: ${currentKey}\n` +
+        `  请在知识库页面点击「重建索引」`
+      )
+      return []
+    }
+    embeddings = getEmbeddings(aiConfig)
+  }
+
   try {
-    const embeddings = getEmbeddings(aiConfig)
     const vectorStore = await HNSWLib.load(indexDir, embeddings)
-    // 优化：topK 从 5 减小到 3，减少检索结果数量
-    // 这样既能保留最相关的内容，又能显著降低 token 消耗
     const results = await vectorStore.similaritySearchWithScore(query, topK)
-    // 优化：提高相似度阈值从 0.8 到 0.7（更严格的过滤）
-    // 只保留真正相关的内容，避免引入噪声
     return results
-      .filter(([, score]) => score < 0.7)
+      .filter(([, score]) => score < 0.75)
       .map(([doc, score]) => ({
-        content:  doc.pageContent,
-        source:   doc.metadata.source,
-        type:     doc.metadata.type,
-        dir:      doc.metadata.dir,
-        score:    parseFloat(score.toFixed(4)),
+        content: doc.pageContent,
+        source:  doc.metadata.source,
+        type:    doc.metadata.type,
+        dir:     doc.metadata.dir,
+        score:   parseFloat(score.toFixed(4)),
       }))
   } catch (e) {
     console.error('[RAG] 检索失败:', e.message)
@@ -252,11 +436,21 @@ export function getIndexStatus(userId) {
   const indexDir  = getUserIndexDir(userId)
   const indexFile = path.join(indexDir, 'hnswlib.index')
   if (!fs.existsSync(indexFile)) return { indexed: false, size: 0 }
+
   const stat = fs.statSync(indexFile)
+  const meta = loadIndexMeta(indexDir)
+
   return {
-    indexed:   true,
-    size:      stat.size,
-    updatedAt: stat.mtime.toISOString(),
+    indexed:    true,
+    size:       stat.size,
+    updatedAt:  stat.mtime.toISOString(),
     indexDir,
+    // embedding 相关信息
+    embedMode:  meta?.embedMode  || 'unknown',
+    model:      meta?.model      || 'unknown',
+    dimensions: meta?.dimensions || '?',
+    chunks:     meta?.chunks     || '?',
+    docs:       meta?.docs       || '?',
+    embedKey:   meta?.embedKey   || null,
   }
 }

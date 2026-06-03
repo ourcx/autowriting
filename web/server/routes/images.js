@@ -16,7 +16,7 @@
  * POST   /api/images/upload-imgur    上传图片到 Imgur，返回 CDN URL
  */
 import { Router } from 'express'
-import { listImages, deleteImage, updateImage, addUploadedImage, listUploadedImages, deleteUploadedImage } from '../db.js'
+import { listImages, deleteImage, updateImage, addUploadedImage, listUploadedImages, deleteUploadedImage, addImageToLibrary } from '../db.js'
 import { DATA_DIR } from '../config.js'
 import multer from 'multer'
 import fs from 'fs'
@@ -87,6 +87,11 @@ router.post('/upload-base64', (req, res) => {
     const id = randomUUID()
     const record = addUploadedImage({ id, filename, originalName, mimeType, size: buf.length, articleId: articleId || null })
     const url = `/api/images/uploads/${filename}`
+    
+    // 同时添加到图片库
+    const title = originalName.replace(/\.[^.]+$/, '') // 移除扩展名作为标题
+    addImageToLibrary(url, title, 'cover', [], 'upload')
+    
     res.json({ ...record, url })
   } catch (error) {
     res.status(500).json({ error: error.message })

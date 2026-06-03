@@ -59,6 +59,9 @@ importers:
       multer:
         specifier: ^2.1.1
         version: 2.1.1
+      node-cron:
+        specifier: ^4.2.1
+        version: 4.2.1
       react:
         specifier: ^18.2.0
         version: 18.3.1
@@ -2491,6 +2494,10 @@ packages:
 
   node-api-version@0.2.1:
     resolution: {integrity: sha512-2xP/IGGMmmSQpI1+O/k72jF/ykvZ89JeuKX3TLJAYPDVLUalrshrLHkeVcCCZqG/eEa635cr8IBYzgnDvM2O8Q==, tarball: https://artifactory.devops.xiaohongshu.com/artifactory/api/npm/npm-public/node-api-version/-/node-api-version-0.2.1.tgz}
+
+  node-cron@4.2.1:
+    resolution: {integrity: sha512-lgimEHPE/QDgFlywTd8yTR61ptugX3Qer29efeyWw2rv259HtGBNn1vZVmp8lB9uo9wC0t/AT4iGqXxia+CJFg==, tarball: https://artifactory.devops.xiaohongshu.com/artifactory/api/npm/npm-public/node-cron/-/node-cron-4.2.1.tgz}
+    engines: {node: '>=6.0.0'}
 
   node-domexception@1.0.0:
     resolution: {integrity: sha1-aIjbRqH3HAt2s/dVUBa2P+ZHZuU=, tarball: https://artifactory.devops.xiaohongshu.com/artifactory/api/npm/npm-public/node-domexception/download/node-domexception-1.0.0.tgz}
@@ -5838,6 +5845,8 @@ snapshots:
   node-api-version@0.2.1:
     dependencies:
       semver: 7.8.1
+
+  node-cron@4.2.1: {}
 
   node-domexception@1.0.0: {}
 

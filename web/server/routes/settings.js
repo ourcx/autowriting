@@ -13,7 +13,7 @@ import { authMiddleware } from '../authMiddleware.js'
 const router = Router()
 
 // GET /api/settings
-router.get('/', (req, res) => {
+router.get('/', authMiddleware, (req, res) => {
   try {
     res.json(getAllSettings())
   } catch (error) {
@@ -33,7 +33,7 @@ router.get('/token-usage', authMiddleware, (req, res) => {
 })
 
 // GET /api/settings/:key
-router.get('/:key', (req, res) => {
+router.get('/:key', authMiddleware, (req, res) => {
   try {
     const value = getSetting(req.params.key)
     // key 不存在时返回 200 + null，避免浏览器打印红色 404 错误
@@ -44,7 +44,7 @@ router.get('/:key', (req, res) => {
 })
 
 // POST /api/settings（批量写入，body 为 key:value 对象）
-router.post('/', (req, res) => {
+router.post('/', authMiddleware, (req, res) => {
   try {
     const entries = Object.entries(req.body)
     if (entries.length === 0) return res.status(400).json({ error: '请求体不能为空' })
@@ -58,7 +58,7 @@ router.post('/', (req, res) => {
 })
 
 // PUT /api/settings/:key
-router.put('/:key', (req, res) => {
+router.put('/:key', authMiddleware, (req, res) => {
   try {
     const { value } = req.body
     if (value === undefined) return res.status(400).json({ error: 'value 不能为空' })

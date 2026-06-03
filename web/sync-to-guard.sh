@@ -24,7 +24,10 @@ rsync -av \
   --exclude="node_modules/" \
   --exclude=".git/" \
   --exclude="dist/" \
+  --exclude="dist-electron/" \
   --exclude="electron/" \
+  --exclude="electron-builder.config.cjs" \
+  --exclude="scripts/" \
   --exclude=".DS_Store" \
   --exclude="install.sh" \
   --exclude="start.sh" \
@@ -32,6 +35,7 @@ rsync -av \
   --exclude=".npmrc" \
   --exclude="public/" \
   --exclude="server.js" \
+  --exclude="sync-to-guard.sh" \
   "$SRC/" "$GUARD/"
 info "rsync 完成"
 
@@ -142,9 +146,18 @@ with open(src_path) as f:
 # Guard 专属：engines
 pkg["engines"] = {"node": ">=18"}
 
-# Guard 专属：scripts
-pkg["scripts"]["server"] = "node server.js"
-pkg["scripts"]["start"]  = "node server.js"
+# Guard 专属：scripts（只保留 web server 相关，去掉 Electron / postinstall）
+guard_scripts = {
+    "dev":     pkg["scripts"].get("dev",     "vite"),
+    "build":   pkg["scripts"].get("build",   "vite build"),
+    "preview": pkg["scripts"].get("preview", "vite preview"),
+    "server":  "node server.js",
+    "start":   "node server.js",
+}
+pkg["scripts"] = guard_scripts
+
+# 删除 Electron 相关顶层字段
+pkg.pop("main", None)
 
 # runtime deps 必须在 dependencies（Pod npm ci --omit=dev 时才会安装）
 runtime_deps = {
@@ -163,13 +176,20 @@ for name, ver in runtime_deps.items():
 if "@types/react-router-dom" in deps:
     dev["@types/react-router-dom"] = deps.pop("@types/react-router-dom")
 
-# 移除 dev 工具（guard 不需要）
-for d in ["nodemon", "concurrently"]:
+# 移除 Electron / dev 工具（guard 不需要，Pod 也没有）
+electron_pkgs = [
+    "electron", "electron-builder", "@electron/rebuild",
+    "nodemon", "concurrently", "wait-on",
+]
+for d in electron_pkgs:
     dev.pop(d, None)
     deps.pop(d, None)
 
 pkg["dependencies"]    = deps
 pkg["devDependencies"] = dev
+
+# 删除 pnpm 专属配置（guard 用 npm）
+pkg.pop("pnpm", None)
 
 with open(guard_path, "w") as f:
     json.dump(pkg, f, indent=2, ensure_ascii=False)
@@ -179,8 +199,10 @@ print("[sync] package.json: guard 专属改写完成")
 PYEOF
 
 # ── Step 6: npm install + build ───────────────────────────────────────────────
-info "Step 6: npm install..."
+info "Step 6: npm install（重新生成 lockfile，保证与 guard package.json 对齐）..."
 cd "$GUARD"
+# 删除旧 lockfile，避免 npm ci 时因源工程多余包报 EUSAGE
+rm -f package-lock.json
 npm install --legacy-peer-deps 2>&1 | tail -3
 
 info "Step 7: npm run build..."
@@ -218,12 +240,18 @@ import zipfile, os, shutil
 src = '/Users/zhuxinhao/autowriting-guard/web'
 tmp = '/tmp/autowriting-guard-tmp.zip'
 dst = '/Users/zhuxinhao/autowriting-guard.zip'
-excludes = {'node_modules', '.git', '__pycache__'}
+
+# 排除目录名（精确匹配）
+exclude_dirs  = {'node_modules', '.git', '__pycache__', 'dist-electron', 'electron', 'scripts'}
+# 排除文件名
+exclude_files = {'electron-builder.config.cjs', 'sync-to-guard.sh', '.DS_Store'}
 
 with zipfile.ZipFile(tmp, 'w', zipfile.ZIP_DEFLATED) as zf:
     for root, dirs, files in os.walk(src):
-        dirs[:] = [d for d in dirs if d not in excludes]
+        dirs[:] = [d for d in dirs if d not in exclude_dirs]
         for file in files:
+            if file in exclude_files:
+                continue
             abs_path = os.path.join(root, file)
             arc_name = os.path.relpath(abs_path, src)
             zf.write(abs_path, arc_name)

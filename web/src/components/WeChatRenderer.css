@@ -520,3 +520,128 @@
   text-align: center;
   line-height: 1.6;
 }
+
+/* ── 选择封面按钮 ──────────────────────────────────────────────── */
+.wr-cover-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  background: #f5a623;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+  letter-spacing: -0.1px;
+}
+
+.wr-cover-btn:hover {
+  background: #e89a1f;
+  box-shadow: 0 4px 12px rgba(245, 166, 35, 0.25);
+  transform: translateY(-1px);
+}
+
+.wr-cover-btn:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.wr-cover-btn.selected {
+  background: #d68910;
+  box-shadow: 0 4px 12px rgba(214, 137, 16, 0.3);
+}
+
+/* ── 图片库选择器浮层 ────────────────────────────────────────────── */
+.wr-image-library-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: wr-fade-in 0.2s ease-out;
+}
+
+@keyframes wr-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.wr-image-library-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(2px);
+}
+
+.wr-image-library-panel {
+  position: relative;
+  z-index: 1001;
+  width: 90%;
+  max-width: 900px;
+  max-height: 80vh;
+  background: var(--color-canvas);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  animation: wr-slide-up 0.3s ease-out;
+}
+
+@keyframes wr-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.wr-image-library-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--color-hairline);
+  flex-shrink: 0;
+}
+
+.wr-image-library-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.wr-image-library-close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 18px;
+  color: var(--color-muted);
+  transition: background 0.15s, color 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wr-image-library-close:hover {
+  background: var(--color-surface-soft);
+  color: var(--color-ink);
+}
+
+.wr-image-library-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}

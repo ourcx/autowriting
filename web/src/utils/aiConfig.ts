@@ -3,6 +3,17 @@
  * ============================================================ */
 
 const STORAGE_KEY = 'wx-ai-config-v1'
+const TOKEN_KEY   = 'auth_token'
+
+/** 带 JWT Authorization header 的 fetch 封装 */
+function authFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const token = localStorage.getItem(TOKEN_KEY)
+  const headers: Record<string, string> = {
+    ...(init.headers as Record<string, string> ?? {}),
+  }
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  return fetch(url, { ...init, headers })
+}
 
 export type ArticleProvider = 'maas' | 'openai' | 'openai-compat'
 export type CoverProvider = 'local' | 'openai' | 'stability' | 'siliconflow' | 'z-image' | 'qwen-edit'
@@ -145,7 +156,7 @@ export function loadAIConfig(): AIConfig {
  */
 export async function syncAIConfigFromServer(): Promise<AIConfig | null> {
   try {
-    const resp = await fetch('/api/settings/ai-config')
+    const resp = await authFetch('/api/settings/ai-config')
     if (!resp.ok) return null
     const data = await resp.json() as { value?: string | Partial<AIConfig> | null }
     if (!data?.value) return null  // key 不存在时 value 为 null，直接降级到 localStorage
@@ -172,7 +183,7 @@ export function saveAIConfig(config: AIConfig): void {
   } catch { /* ignore */ }
 
   // 异步持久化到服务端 settings 表（setSetting 内部会做 JSON.stringify，直接传对象即可）
-  fetch('/api/settings', {
+  authFetch('/api/settings', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body:    JSON.stringify({ 'ai-config': config }),

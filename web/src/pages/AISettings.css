@@ -88,6 +88,23 @@
 }
 
 /* ── Layout ──────────────────────────────────────────────────────── */
+/* ── 安全提示 Banner ─────────────────────────────────────────── */
+.as-security-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 24px;
+  background: #fff8e6;
+  border-bottom: 1px solid #f0d97a;
+  font-size: 12px;
+  color: #7a5c00;
+  flex-shrink: 0;
+}
+.as-security-banner-icon {
+  flex-shrink: 0;
+  color: #c8900a;
+}
+
 .as-layout {
   display: flex;
   flex: 1;

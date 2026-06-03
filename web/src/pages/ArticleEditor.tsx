@@ -5,7 +5,6 @@ import { ArrowLeft, Zap, Save, Edit3, Palette, Settings, AlertTriangle, Plus, Tr
 import { useAIReadiness, fetchServerStatus } from '../store/useConfigStore'
 import { fetchArticle, saveArticle } from '../utils/apiHelpers'
 import CoverGenerator from '../components/CoverGenerator'
-import CoverHistory from '../components/CoverHistory'
 import ImageLibrary from '../components/ImageLibrary'
 import MarkdownEditor from '../components/MarkdownEditor'
 import ContentStats from '../components/ContentStats'
@@ -26,7 +25,7 @@ interface ArticleData {
   title: string
 }
 
-type TabId = 'task' | 'materials' | 'article' | 'analysis' | 'cover' | 'history' | 'library'
+type TabId = 'task' | 'materials' | 'article' | 'analysis' | 'cover' | 'library'
 
 // 流程步骤定义
 const FLOW_STEPS: { id: TabId; label: string; check: (d: ArticleData) => boolean }[] = [
@@ -361,15 +360,12 @@ export default function ArticleEditor() {
           })}
           {/* 其余 Tab 以普通样式显示 */}
           <div className="flow-extra-tabs">
-            {(['history', 'library'] as TabId[]).map(id => (
-              <button
-                key={id}
-                className={`tab tab-extra ${activeTab === id ? 'active' : ''}`}
-                onClick={() => setActiveTab(id)}
-              >
-                {id === 'history' ? '生成历史' : '图片库'}
-              </button>
-            ))}
+            <button
+              className={`tab tab-extra ${activeTab === 'library' ? 'active' : ''}`}
+              onClick={() => setActiveTab('library')}
+            >
+              图片库
+            </button>
           </div>
         </div>
 
@@ -547,6 +543,7 @@ export default function ArticleEditor() {
                 content={data.article}
                 articleId={articleId}
                 task={data.task}
+                onArticleChange={value => setData(prev => ({ ...prev, article: value }))}
               />
             </div>
           )}
@@ -554,12 +551,6 @@ export default function ArticleEditor() {
           {activeTab === 'cover' && (
             <div className="editor-panel">
               <CoverGenerator title={articleTitle} content={data.article} />
-            </div>
-          )}
-
-          {activeTab === 'history' && (
-            <div className="editor-panel">
-              <CoverHistory />
             </div>
           )}
 

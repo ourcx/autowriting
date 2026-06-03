@@ -1,10 +1,11 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { toast } from './Toast'
-import { Copy, Check, Minus, Plus, ExternalLink, Send, Loader2 } from 'lucide-react'
+import { Copy, Check, Minus, Plus, ExternalLink, Send, Loader2, Image as ImageIcon } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import { fetchAllTemplates, BUILTIN_TEMPLATES, TemplateItem } from '../utils/templateStore'
+import { ImageLibrary } from './ImageLibrary'
 import './WeChatRenderer.css'
 
 interface WeChatRendererProps {
@@ -238,6 +239,10 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
   const [pushing, setPushing]       = useState(false)
   const [pushDone, setPushDone]     = useState(false)
 
+  // 图片库选择器状态
+  const [showImageLibrary, setShowImageLibrary] = useState(false)
+  const [selectedCoverImage, setSelectedCoverImage] = useState<{ id: string; imageUrl: string } | null>(null)
+
   // 拖拽分栏宽度
   const [sidebarWidth, setSidebarWidth] = useState(260)
   const resizerRef = useRef<HTMLDivElement>(null)
@@ -361,15 +366,27 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
         toast.warn(`内联样式后 HTML 约 ${Math.round(byteLen / 1024)}KB，可能超出微信限制，仍尝试推送…`)
       }
 
-      // 尝试提取封面图并上传为微信永久素材（draft/add 需要 thumb_media_id）
+      // 优先使用用户从图片库选择的封面，其次尝试提取文章内容中的第一张图片
       let thumb_media_id: string | undefined
-      const firstImgSrc = extractFirstImageSrc(html)
-      if (firstImgSrc) {
+      let coverImageUrl: string | undefined
+
+      if (selectedCoverImage) {
+        // 使用用户选择的图片库图片
+        coverImageUrl = selectedCoverImage.imageUrl
+      } else {
+        // 尝试从文章内容中提取第一张图片
+        const firstImgSrc = extractFirstImageSrc(html)
+        if (firstImgSrc) {
+          coverImageUrl = firstImgSrc
+        }
+      }
+
+      if (coverImageUrl) {
         try {
           const upR = await fetch('/api/wechat/upload-thumb', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...getWxHeaders() },
-            body: JSON.stringify({ url: firstImgSrc }),
+            body: JSON.stringify({ url: coverImageUrl }),
           })
           const upD = await upR.json()
           if (upR.ok && upD.media_id) {
@@ -407,7 +424,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
     } finally {
       setPushing(false)
     }
-  }, [html, editedCss, fontSize, title, content])
+  }, [html, editedCss, fontSize, title, content, selectedCoverImage])
 
   // 空状态
   if (!content?.trim()) {
@@ -461,23 +478,63 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
 
           {/* 推送草稿按钮：已绑定公众号才显示 */}
           {wxBound && (
-            <button
-              className={`wr-push-btn ${pushDone ? 'success' : ''}`}
-              onClick={handlePushDraft}
-              disabled={pushing || pushDone}
-              title="将文章以 HTML 格式推送到公众号草稿箱"
-            >
-              {pushing
-                ? <Loader2 size={15} className="wr-spin" />
-                : pushDone
-                  ? <Check size={15} />
-                  : <Send size={15} />
-              }
-              {pushing ? '推送中...' : pushDone ? '已推送！' : '推送草稿'}
-            </button>
+            <>
+              {/* 选择封面图片按钮 */}
+              <button
+                className={`wr-cover-btn ${selectedCoverImage ? 'selected' : ''}`}
+                onClick={() => setShowImageLibrary(!showImageLibrary)}
+                title="从图片库选择推文封面"
+              >
+                <ImageIcon size={15} />
+                {selectedCoverImage ? '已选封面' : '选择封面'}
+              </button>
+
+              <button
+                className={`wr-push-btn ${pushDone ? 'success' : ''}`}
+                onClick={handlePushDraft}
+                disabled={pushing || pushDone}
+                title="将文章以 HTML 格式推送到公众号草稿箱"
+              >
+                {pushing
+                  ? <Loader2 size={15} className="wr-spin" />
+                  : pushDone
+                    ? <Check size={15} />
+                    : <Send size={15} />
+                }
+                {pushing ? '推送中...' : pushDone ? '已推送！' : '推送草稿'}
+              </button>
+            </>
           )}
         </div>
       </div>
+
+      {/* ── 图片库选择器（浮层） ── */}
+      {showImageLibrary && (
+        <div className="wr-image-library-modal">
+          <div className="wr-image-library-overlay" onClick={() => setShowImageLibrary(false)} />
+          <div className="wr-image-library-panel">
+            <div className="wr-image-library-header">
+              <h3>选择推文封面</h3>
+              <button
+                className="wr-image-library-close"
+                onClick={() => setShowImageLibrary(false)}
+                title="关闭"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="wr-image-library-content">
+              <ImageLibrary
+                onImageSelect={(image) => {
+                  setSelectedCoverImage({ id: image.id, imageUrl: image.imageUrl })
+                  setShowImageLibrary(false)
+                  toast.success('已选择封面图片')
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── 主体：左侧模板 + 拖拽条 + 右侧预览 ── */}
       <div className="wr-main">

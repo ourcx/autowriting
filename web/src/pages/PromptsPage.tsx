@@ -44,6 +44,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 const PROMPT_USAGE_TIPS: Record<string, string> = {
   'prompt-article-generate':   '点击「生成文章」时作为角色和输出约束注入到 prompt 前段',
   'prompt-article-analyze':    '点击「AI 分析」时作为角色描述注入',
+  'prompt-article-deai':       '在「写作分析」面板点击「去 AI 味」按钮时使用，对全文进行流式改写',
   'prompt-edit-polish':        '内联编辑选择「润色」时使用',
   'prompt-edit-shorten':       '内联编辑选择「精简」时使用',
   'prompt-edit-expand':        '内联编辑选择「扩写」时使用',

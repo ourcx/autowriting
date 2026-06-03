@@ -280,7 +280,9 @@ ${materials}
 
 router.post('/:articleId/generate/stream', async (req, res) => {
   const { articleId } = req.params
-  const { task, materials, aiConfig } = req.body
+  // selectedRagContext: 前端手动选择后由 /api/rag/context 返回的格式化字符串
+  // 若提供则跳过自动 RAG 检索，直接使用
+  const { task, materials, aiConfig, selectedRagContext } = req.body
 
   // SSE 响应头
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
@@ -326,19 +328,10 @@ router.post('/:articleId/generate/stream', async (req, res) => {
       return res.end()
     }
 
-    // ── 1. RAG 检索 ───────────────────────────────────────────────────────────
-    send('status', { step: 'rag', message: '正在检索往期相关文章...' })
-    let ragDocs = []
-    try {
-      // 优化：topK 从 4 减小到 2，进一步降低 token 消耗
-      // 只保留最相关的 2 篇文章作为参考，足以指导风格和结构
-      ragDocs = await retrieveRelevant(task, { topK: 2, aiConfig: cfg, userId: req.user.id })
-      const ragContext = formatRetrievedContext(ragDocs)
-      if (ragDocs.length) send('rag', { docs: ragDocs })
-      var ragSection = ragContext ? `\n\n# 往期相关内容参考\n${ragContext}\n` : ''
-    } catch (e) {
-      console.warn('[Stream] RAG 检索失败（继续生成）:', e.message)
-      var ragSection = ''
+    // ── 1. RAG 上下文（仅使用前端手动选择的，不再自动检索） ──────────────────
+    const ragSection = selectedRagContext ? `\n\n${selectedRagContext}\n` : ''
+    if (selectedRagContext) {
+      send('status', { step: 'rag', message: `已注入 ${selectedRagContext.split('###').length - 1} 篇往期文章` })
     }
 
     // ── 2. 读取写作规范 + 数据库提示词 ──────────────────────────────────────
@@ -424,7 +417,7 @@ ${materials}
         outputTokens: Math.ceil(fullText.length / 1.5),
       })
 
-      send('done', { article: fullText, ragCount: ragDocs.length })
+      send('done', { article: fullText, ragCount: selectedRagContext ? 1 : 0 })
       res.end()
     })
 
@@ -798,6 +791,120 @@ ${materials}
     const msg = error.response?.data?.error?.message || error.message
     console.error('[RefineMaterials] 失败:', msg)
     res.status(500).json({ error: msg })
+  }
+})
+
+// ── POST /api/articles/:articleId/deai/stream  (去 AI 味复审 SSE) ─────────────
+// body: { article: string, aiConfig }
+// SSE events: status | chunk | done | error
+
+router.post('/:articleId/deai/stream', async (req, res) => {
+  const { articleId } = req.params
+  const { article, aiConfig } = req.body
+
+  // SSE 响应头
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
+  res.flushHeaders()
+
+  const send = (event, data) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+  }
+
+  let fullText = ''
+
+  try {
+    if (!article || article.trim().length < 100) {
+      send('error', { message: '文章内容太短，无法进行去 AI 味处理（至少 100 字）' })
+      return res.end()
+    }
+
+    const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
+
+    if (!cfg.articleApiKey && cfg.articleProvider !== 'maas') {
+      send('error', { message: '未配置 API Key，请前往「AI 配置」页面设置后重试' })
+      return res.end()
+    }
+    if (cfg.articleProvider === 'maas' && !cfg.maasApiKey) {
+      send('error', { message: '未配置 MaaS API Key，请前往「AI 配置」页面设置后重试' })
+      return res.end()
+    }
+
+    // 从数据库读取去 AI 味提示词（支持用户自定义覆盖）
+    const deaiPromptData = getEffectivePrompt('prompt-article-deai')
+    const deaiInstruction = deaiPromptData?.content || ''
+
+    const userPrompt = `${deaiInstruction}
+
+# 待处理文章
+
+${article}`
+
+    const { url, model, headers } = buildLLMRequest(cfg)
+
+    send('status', { step: 'deai', message: 'AI 正在去除 AI 腔调...' })
+
+    const upstreamRes = await axios.post(
+      url,
+      {
+        model,
+        messages: [
+          { role: 'system', content: '你是专业的文字编辑，只输出修改后的完整文章（Markdown 格式），不加任何解释或对比说明。' },
+          { role: 'user',   content: userPrompt },
+        ],
+        temperature: 0.6,
+        max_tokens: 4096,
+        stream: true,
+      },
+      { headers, responseType: 'stream' }
+    )
+
+    let buffer = ''
+
+    upstreamRes.data.on('data', (chunk) => {
+      buffer += chunk.toString('utf-8')
+      const lines = buffer.split('\n')
+      buffer = lines.pop()
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed || trimmed === 'data: [DONE]') continue
+        if (!trimmed.startsWith('data:')) continue
+        try {
+          const json    = JSON.parse(trimmed.slice(5).trim())
+          const content = json.choices?.[0]?.delta?.content
+          if (content) {
+            fullText += content
+            send('chunk', { text: content })
+          }
+        } catch { /* 忽略解析失败的行 */ }
+      }
+    })
+
+    upstreamRes.data.on('end', () => {
+      recordTokenUsage({
+        articleId, userId: req.user.id, operation: 'deai', model,
+        outputTokens: Math.ceil(fullText.length / 1.5),
+      })
+      send('done', { article: fullText })
+      res.end()
+    })
+
+    upstreamRes.data.on('error', (e) => {
+      console.error('[DeAI] 上游流错误:', e.message)
+      send('error', { message: e.message })
+      res.end()
+    })
+
+    req.on('close', () => { if (!res.writableEnded) res.end() })
+
+  } catch (error) {
+    console.error('[DeAI] 失败:', error.response?.data || error.message)
+    const msg = error.response?.data?.error?.message || error.message
+    send('error', { message: msg })
+    res.end()
   }
 })
 
