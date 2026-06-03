@@ -29,6 +29,8 @@ jobs:
 
       - name: 安装依赖
         working-directory: web
+        env:
+          npm_config_registry: https://registry.npmjs.org/
         run: pnpm install --frozen-lockfile
 
       - name: 确保 better-sqlite3 为当前 Node 编译
@@ -73,6 +75,8 @@ jobs:
 
       - name: 安装依赖
         working-directory: web
+        env:
+          npm_config_registry: https://registry.npmjs.org/
         run: pnpm install --frozen-lockfile
 
       - name: 确保 better-sqlite3 为当前 Node 编译
