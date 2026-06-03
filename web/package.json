@@ -1,6 +1,6 @@
 {
   "name": "autowriting-web",
-  "version": "1.0.2",
+  "version": "1.0.5",
   "description": "AI 自动写作系统 - Web 版本",
   "type": "module",
   "main": "electron/main.cjs",
