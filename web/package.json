@@ -1,9 +1,16 @@
 {
-  "name": "autowriting-web",
+  "name": "@ourcx/autowriting-web",
   "version": "1.0.5",
   "description": "AI 自动写作系统 - Web 版本",
   "type": "module",
   "main": "electron/main.cjs",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ourcx/autowriting.git"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
