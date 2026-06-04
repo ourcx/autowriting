@@ -132,7 +132,7 @@ jobs:
         working-directory: web
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm publish
+        run: pnpm publish --no-git-checks
 
   # ─────────────────────────────────────────────
   # 创建 GitHub Release（仅在 push tag v* 时）
