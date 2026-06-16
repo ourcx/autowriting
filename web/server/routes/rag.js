@@ -1,9 +1,10 @@
 /**
  * RAG 管理路由
  * POST /api/rag/index      - 异步构建/重建向量索引（立即返回 queued: true）
- * GET  /api/rag/status     - 查询索引状态（含构建进度）
- * POST /api/rag/search     - 手动搜索（调试用）
+ * GET  /api/rag/status     - 查询索引状态（含构建进度 + 混合检索能力标志）
+ * POST /api/rag/search     - 手动搜索调试（支持 scoreThreshold / topK 参数）
  * POST /api/rag/candidates - 按文章维度聚合的候选列表（供用户手动选择）
+ * POST /api/rag/context    - 根据选定目录读取完整文章内容
  */
 import { Router } from 'express'
 import fs from 'fs'
@@ -88,13 +89,27 @@ router.get('/status', (req, res) => {
 })
 
 // POST /api/rag/search（调试接口）
+// body: { query, topK?, scoreThreshold?, aiConfig? }
+// 返回结果包含向量相似度、关键词命中率、综合得分，方便排查检索效果
 router.post('/search', async (req, res) => {
   try {
-    const { query, topK = 5, aiConfig: clientAiConfig } = req.body
+    const { query, topK = 5, scoreThreshold, aiConfig: clientAiConfig } = req.body
     if (!query) return res.status(400).json({ error: '缺少 query' })
     const aiConfig = { ...SERVER_AI_CONFIG, ...(clientAiConfig || {}) }
-    const results = await retrieveRelevant(query, { topK, aiConfig, userId: req.user.id })
-    res.json({ results })
+    const results = await retrieveRelevant(query, {
+      topK,
+      scoreThreshold,
+      aiConfig,
+      userId: req.user.id,
+    })
+    res.json({
+      results,
+      meta: {
+        topK,
+        scoreThreshold: scoreThreshold ?? null,
+        count: results.length,
+      },
+    })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

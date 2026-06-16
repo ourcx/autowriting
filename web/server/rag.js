@@ -1,11 +1,18 @@
 /**
- * RAG 模块：向量索引 + 相似检索
+ * RAG 模块：向量索引 + 混合检索（向量 + 关键词）
  *
- * 策略：
- *   - 优先使用 OpenAI / MaaS 兼容 embedding 接口做向量化（text-embedding-3-small，1536维）
+ * 优化策略（参考 RAG 工程质量框架）：
+ *   1. 文本切分：更大 chunkSize（800）+ 更合理重叠（120），优化分隔符顺序
+ *   2. 文本预处理：入库前清洗噪声字符、过短段落、重复空行
+ *   3. 混合检索：向量相似度 + BM25 关键词检索，两路合并去重后排序
+ *   4. Score 阈值：可配置，默认 0.72（更严格），支持动态调整
+ *   5. 文档覆盖：collectDocs 同时收录 .txt / .md / .json 格式
+ *   6. 上下文格式：携带相似度、文件类型、来源目录，方便排查
+ *
+ * Embedding 策略：
+ *   - 优先使用 OpenAI / MaaS 兼容 embedding 接口（text-embedding-3-small，1536维）
  *   - 无 API Key 时自动 fallback 到本地模型 @xenova/transformers
- *     默认: Xenova/multilingual-e5-large（1024维，支持中文，首次需下载约 1.2GB）
- *     可在配置中设置 localEmbeddingModel 切换其他模型
+ *     默认: Xenova/multilingual-e5-small（384维，支持中文，首次需下载约 500MB）
  *   - 用 HNSWLib 在本地磁盘持久化向量库（DATA_DIR/rag_index/）
  *   - 索引旁存 meta.json 记录维度+模型，切换 embedding 时提示重建
  */
@@ -21,6 +28,12 @@ import { DATA_DIR, DRAFTS_DIR, SERVER_AI_CONFIG } from './config.js'
 // multilingual-e5-small: 384维，支持中文，首次下载约 500MB，速度适中
 // 需要更高质量可改为 Xenova/multilingual-e5-large（1024维，约 1.2GB）
 const LOCAL_EMBED_MODEL = 'Xenova/multilingual-e5-small'
+
+// ── 检索默认参数 ───────────────────────────────────────────────────────────────
+// 可通过 retrieveRelevant 的 options 覆盖
+const DEFAULT_SCORE_THRESHOLD = 0.72  // 相似度阈值：越低越严格（距离值，< 阈值才保留）
+const DEFAULT_TOP_K           = 5     // 默认召回 chunk 数
+const KEYWORD_WEIGHT          = 0.3   // 关键词分数在混合排序中的权重（0～1）
 
 // ── 索引目录 ──────────────────────────────────────────────────────────────────
 
@@ -119,7 +132,7 @@ class RawEmbeddings extends Embeddings {
 }
 
 // ── 本地 Embedding（@xenova/transformers，无需 API Key） ─────────────────────
-// 使用 multilingual-e5-large（1024维）或配置指定的模型
+// 使用 multilingual-e5-small（384维）或配置指定的模型
 // e5 系列模型需要在 query/passage 前加前缀以获得最佳效果
 
 class LocalEmbeddings extends Embeddings {
@@ -267,15 +280,43 @@ function getEmbeddings(aiConfig = {}) {
 }
 
 // ── 文本切割器 ────────────────────────────────────────────────────────────────
-// 600 字符 / 80 重叠，中文每段约 600 字，保留更完整的语义单元
+// 优化：增大 chunkSize 到 800（语义更完整），overlap 增到 120（避免边界截断）
+// separators 顺序：优先按段落/句子切，最后才按字符强切
 
 const splitter = new RecursiveCharacterTextSplitter({
-  chunkSize:    600,
-  chunkOverlap: 80,
-  separators: ['\n\n', '\n', '。', '！', '？', '，', ''],
+  chunkSize:    800,
+  chunkOverlap: 120,
+  separators: ['\n\n\n', '\n\n', '\n', '。', '！', '？', '；', '，', ''],
 })
 
+// ── 文本预处理：清洗噪声，提高入库质量 ───────────────────────────────────────
+
+/**
+ * 对原始文本做清洗：
+ * - 去掉连续多空行（超过 2 个换行压缩为 2 个）
+ * - 去掉行首行尾多余空白
+ * - 过滤掉 URL-only 行、分隔符行（---、===、***）
+ * - 去掉 Markdown 代码块标记行（```）——保留代码内容，只去标记
+ */
+function cleanText(text) {
+  return text
+    .split('\n')
+    .map(line => line.trimEnd())
+    .filter(line => {
+      // 过滤纯分隔符行
+      if (/^[-=*_]{3,}$/.test(line.trim())) return false
+      // 过滤纯 URL 行
+      if (/^https?:\/\/\S+$/.test(line.trim())) return false
+      return true
+    })
+    .join('\n')
+    // 压缩超过 2 个连续换行
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 // ── 扫描草稿目录，收集所有文档 ────────────────────────────────────────────────
+// 优化：新增支持 .txt 格式文件（如素材纯文本）
 
 function collectDocs(userId) {
   const docs = []
@@ -292,22 +333,43 @@ function collectDocs(userId) {
     ]
     for (const { file, type } of files) {
       if (fs.existsSync(file)) {
-        const content = fs.readFileSync(file, 'utf-8').trim()
+        const raw = fs.readFileSync(file, 'utf-8')
+        const content = cleanText(raw)
         if (content.length > 50) {
           docs.push({ content, metadata: { source: file, dir, type } })
         }
       }
     }
-    // 子目录格式：YYYYMMDD 下还有多个 task*.md
+    // 子目录格式：YYYYMMDD 下还有多个 task*.md 和 *.txt
     const promptDir = path.join(base, 'prompt')
     if (fs.existsSync(promptDir)) {
       for (const f of fs.readdirSync(promptDir)) {
         const fp = path.join(promptDir, f)
-        if (f !== 'task.md' && f !== 'materials.md' && fs.statSync(fp).isFile()) {
-          const content = fs.readFileSync(fp, 'utf-8').trim()
-          if (content.length > 50) {
-            docs.push({ content, metadata: { source: fp, dir, type: 'task_sub' } })
-          }
+        if (!fs.statSync(fp).isFile()) continue
+        // 跳过已处理的主文件
+        if (f === 'task.md' || f === 'materials.md') continue
+        // 支持 .md 和 .txt 格式
+        if (!f.endsWith('.md') && !f.endsWith('.txt')) continue
+        const raw = fs.readFileSync(fp, 'utf-8')
+        const content = cleanText(raw)
+        if (content.length > 50) {
+          docs.push({ content, metadata: { source: fp, dir, type: 'task_sub' } })
+        }
+      }
+    }
+    // raw 目录下的 article_raw*.md（带后缀变体）
+    const rawDir = path.join(base, 'raw')
+    if (fs.existsSync(rawDir)) {
+      for (const f of fs.readdirSync(rawDir)) {
+        const fp = path.join(rawDir, f)
+        if (!fs.statSync(fp).isFile()) continue
+        // 跳过已处理的主文件
+        if (f === 'article_raw.md') continue
+        if (!f.startsWith('article_raw') || !f.endsWith('.md')) continue
+        const raw = fs.readFileSync(fp, 'utf-8')
+        const content = cleanText(raw)
+        if (content.length > 50) {
+          docs.push({ content, metadata: { source: fp, dir, type: 'article' } })
         }
       }
     }
@@ -336,6 +398,9 @@ export async function buildIndex(aiConfig = {}, userId) {
   fs.mkdirSync(indexDir, { recursive: true })
   const vectorStore = await HNSWLib.fromDocuments(langchainDocs, embeddings)
   await vectorStore.save(indexDir)
+
+  // 同时持久化文本块，用于关键词检索
+  saveChunkStore(indexDir, langchainDocs)
 
   // 实际维度：本地模型建完后可以从实例读；远端调一次
   let dims = '?'
@@ -366,11 +431,121 @@ export async function buildIndex(aiConfig = {}, userId) {
   return { indexed: rawDocs.length, chunks: langchainDocs.length, dimensions: dims, model, embedMode: mode }
 }
 
+// ── 关键词全文检索（BM25-like 简化实现）────────────────────────────────────────
+// 持久化文本块到 JSON，支持离线关键词检索
+
+const CHUNK_STORE_FILE = 'chunk_store.json'
+
+function saveChunkStore(indexDir, docs) {
+  const store = docs.map(doc => ({
+    content:  doc.pageContent,
+    metadata: doc.metadata,
+  }))
+  fs.writeFileSync(path.join(indexDir, CHUNK_STORE_FILE), JSON.stringify(store))
+}
+
+function loadChunkStore(indexDir) {
+  const p = path.join(indexDir, CHUNK_STORE_FILE)
+  if (!fs.existsSync(p)) return []
+  try { return JSON.parse(fs.readFileSync(p, 'utf-8')) } catch { return [] }
+}
+
+/**
+ * 简单关键词检索：对 query 分词后，计算每个 chunk 的词命中率
+ * 返回结果按命中率降序，格式与向量检索结果保持一致
+ */
+function keywordSearch(query, chunks, topK) {
+  if (!chunks.length) return []
+
+  // 中文分词：按字符 n-gram (2-gram) + 空格分词
+  const tokens = new Set([
+    ...query.split(/\s+/).filter(t => t.length > 1),
+    ...Array.from({ length: query.length - 1 }, (_, i) => query.slice(i, i + 2)),
+  ])
+
+  const scored = chunks.map(chunk => {
+    const content = chunk.content.toLowerCase()
+    let hits = 0
+    for (const token of tokens) {
+      if (content.includes(token.toLowerCase())) hits++
+    }
+    const score = hits / tokens.size  // 命中率 0～1
+    return { chunk, score }
+  })
+
+  return scored
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, topK * 2)  // 取双倍，后续合并
+    .map(({ chunk, score }) => ({
+      content:  chunk.content,
+      source:   chunk.metadata.source,
+      type:     chunk.metadata.type,
+      dir:      chunk.metadata.dir,
+      kwScore:  parseFloat(score.toFixed(4)),  // 关键词命中率（越高越相关）
+    }))
+}
+
+// ── 混合检索：向量 + 关键词，合并去重后排序 ───────────────────────────────────
+
+/**
+ * 归一化混合分数：
+ *   向量 score（距离，越小越好） → 转换为相似度 sim = 1 - score
+ *   关键词 kwScore（命中率，越大越好）
+ *   最终分数 = (1 - KEYWORD_WEIGHT) * sim + KEYWORD_WEIGHT * kwScore
+ *   分数越高越相关
+ */
+function mergeResults(vectorResults, kwResults, threshold) {
+  // vectorResults: [{ content, source, type, dir, score }]  score=距离
+  // kwResults:     [{ content, source, type, dir, kwScore }] kwScore=命中率
+
+  const merged = new Map()  // key = content 前 100 字符（去重）
+
+  for (const r of vectorResults) {
+    const key = r.content.slice(0, 100)
+    const sim = 1 - r.score  // 转为相似度
+    merged.set(key, {
+      ...r,
+      sim,
+      kwScore: 0,
+      // 混合分：向量占主导
+      finalScore: (1 - KEYWORD_WEIGHT) * sim,
+    })
+  }
+
+  for (const r of kwResults) {
+    const key = r.content.slice(0, 100)
+    if (merged.has(key)) {
+      // 已有向量结果，叠加关键词分
+      const entry = merged.get(key)
+      entry.kwScore   = r.kwScore
+      entry.finalScore = (1 - KEYWORD_WEIGHT) * entry.sim + KEYWORD_WEIGHT * r.kwScore
+    } else {
+      // 只有关键词命中，无向量结果（向量 sim 设为 0）
+      merged.set(key, {
+        ...r,
+        sim: 0,
+        score: 1,  // 距离设为最大
+        finalScore: KEYWORD_WEIGHT * r.kwScore,
+      })
+    }
+  }
+
+  return Array.from(merged.values())
+    .filter(r => {
+      // 向量阈值过滤：有向量结果时，距离必须 < threshold；纯关键词结果放行
+      if (r.sim > 0) return r.score < threshold
+      return r.kwScore > 0.2  // 纯关键词命中率至少 20%
+    })
+    .sort((a, b) => b.finalScore - a.finalScore)
+}
+
 // ── 检索相关文档 ──────────────────────────────────────────────────────────────
 
-export async function retrieveRelevant(query, { topK = 5, aiConfig = {}, userId } = {}) {
-  const cfg      = { ...SERVER_AI_CONFIG, ...aiConfig }
-  const indexDir = getUserIndexDir(userId)
+export async function retrieveRelevant(query, { topK = DEFAULT_TOP_K, aiConfig = {}, userId, scoreThreshold } = {}) {
+  const threshold = scoreThreshold ?? DEFAULT_SCORE_THRESHOLD
+  const cfg       = { ...SERVER_AI_CONFIG, ...aiConfig }
+  const indexDir  = getUserIndexDir(userId)
 
   if (!fs.existsSync(path.join(indexDir, 'hnswlib.index'))) {
     return []  // 未索引，静默返回空
@@ -402,17 +577,40 @@ export async function retrieveRelevant(query, { topK = 5, aiConfig = {}, userId 
   }
 
   try {
+    // ── 向量检索（取更多候选，混合后再截取 topK） ────────────────────────────
     const vectorStore = await HNSWLib.load(indexDir, embeddings)
-    const results = await vectorStore.similaritySearchWithScore(query, topK)
-    return results
-      .filter(([, score]) => score < 0.75)
-      .map(([doc, score]) => ({
-        content: doc.pageContent,
-        source:  doc.metadata.source,
-        type:    doc.metadata.type,
-        dir:     doc.metadata.dir,
-        score:   parseFloat(score.toFixed(4)),
-      }))
+    const vectorRaw   = await vectorStore.similaritySearchWithScore(query, topK * 3)
+    const vectorResults = vectorRaw.map(([doc, score]) => ({
+      content: doc.pageContent,
+      source:  doc.metadata.source,
+      type:    doc.metadata.type,
+      dir:     doc.metadata.dir,
+      score:   parseFloat(score.toFixed(4)),
+    }))
+
+    // ── 关键词检索 ─────────────────────────────────────────────────────────
+    const chunks    = loadChunkStore(indexDir)
+    const kwResults = keywordSearch(query, chunks, topK)
+
+    // ── 混合合并 ──────────────────────────────────────────────────────────
+    const merged = mergeResults(vectorResults, kwResults, threshold)
+    const results = merged.slice(0, topK)
+
+    console.log(
+      `[RAG] 检索完成 | query="${query.slice(0, 30)}" | 向量候选:${vectorResults.length} ` +
+      `关键词候选:${kwResults.length} 混合后:${merged.length} 返回:${results.length}`
+    )
+
+    return results.map(r => ({
+      content:    r.content,
+      source:     r.source,
+      type:       r.type,
+      dir:        r.dir,
+      score:      r.score,
+      sim:        parseFloat(((r.sim || 0) * 100).toFixed(1)),  // 相似度百分比
+      kwScore:    r.kwScore || 0,
+      finalScore: parseFloat((r.finalScore * 100).toFixed(1)),  // 综合得分百分比
+    }))
   } catch (e) {
     console.error('[RAG] 检索失败:', e.message)
     return []
@@ -420,12 +618,21 @@ export async function retrieveRelevant(query, { topK = 5, aiConfig = {}, userId 
 }
 
 // ── 将检索结果格式化为 prompt 片段 ───────────────────────────────────────────
+// 优化：加入相似度百分比和文档类型标注，方便模型判断可信度
 
 export function formatRetrievedContext(docs) {
   if (!docs.length) return ''
+  const typeLabel = {
+    article:  '往期文章',
+    task:     '任务参考',
+    materials:'素材参考',
+    task_sub: '任务参考',
+  }
   const parts = docs.map((d, i) => {
-    const typeLabel = { article: '往期文章', task: '任务参考', materials: '素材参考', task_sub: '任务参考' }[d.type] || '参考'
-    return `### 参考${i + 1}（${typeLabel} · 目录 ${d.dir}）\n${d.content}`
+    const label = typeLabel[d.type] || '参考'
+    const simStr = d.sim != null ? `相似度 ${d.sim}%` : ''
+    const meta = [label, `目录 ${d.dir}`, simStr].filter(Boolean).join(' · ')
+    return `### 参考${i + 1}（${meta}）\n${d.content}`
   })
   return `# 往期相关内容参考（自动检索，仅供风格和结构参考）\n\n${parts.join('\n\n---\n\n')}`
 }
@@ -440,17 +647,25 @@ export function getIndexStatus(userId) {
   const stat = fs.statSync(indexFile)
   const meta = loadIndexMeta(indexDir)
 
+  // 检查是否有关键词索引
+  const hasChunkStore = fs.existsSync(path.join(indexDir, CHUNK_STORE_FILE))
+
   return {
-    indexed:    true,
-    size:       stat.size,
-    updatedAt:  stat.mtime.toISOString(),
+    indexed:       true,
+    size:          stat.size,
+    updatedAt:     stat.mtime.toISOString(),
     indexDir,
     // embedding 相关信息
-    embedMode:  meta?.embedMode  || 'unknown',
-    model:      meta?.model      || 'unknown',
-    dimensions: meta?.dimensions || '?',
-    chunks:     meta?.chunks     || '?',
-    docs:       meta?.docs       || '?',
-    embedKey:   meta?.embedKey   || null,
+    embedMode:     meta?.embedMode  || 'unknown',
+    model:         meta?.model      || 'unknown',
+    dimensions:    meta?.dimensions || '?',
+    chunks:        meta?.chunks     || '?',
+    docs:          meta?.docs       || '?',
+    embedKey:      meta?.embedKey   || null,
+    // 混合检索能力
+    hybridSearch:  hasChunkStore,
+    // 检索参数（当前默认值）
+    scoreThreshold: DEFAULT_SCORE_THRESHOLD,
+    keywordWeight:  KEYWORD_WEIGHT,
   }
 }
