@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Save, Check, Eye, EyeOff, AlertCircle, CheckCircle2,
-  Zap, Image, Search, ChevronRight, Link2, Link2Off, RefreshCw, Users, ShieldAlert,
+  Zap, Image, Search, ChevronRight, Link2, Link2Off, RefreshCw, Users, ShieldAlert, Brain,
 } from 'lucide-react'
 import {
   AIConfig,
@@ -15,7 +15,7 @@ import { useConfigStore, setLocalConfig, fetchServerStatus } from '../store/useC
 import { testAIConnection } from '../utils/apiHelpers'
 import './AISettings.css'
 
-type Section = 'article' | 'cover' | 'search' | 'wechat' | 'cdn'
+type Section = 'article' | 'cover' | 'search' | 'wechat' | 'cdn' | 'memory'
 
 const NAV_ITEMS: { id: Section; icon: React.ReactNode; label: string; sub: string }[] = [
   { id: 'article', icon: <Zap size={16} />,    label: '文章生成',    sub: '大语言模型 API' },
@@ -23,6 +23,7 @@ const NAV_ITEMS: { id: Section; icon: React.ReactNode; label: string; sub: strin
   { id: 'search',  icon: <Search size={16} />, label: '素材搜索',    sub: '搜索引擎 API'   },
   { id: 'wechat',  icon: <Link2 size={16} />,  label: '公众号绑定',  sub: '发布 & 数据预览' },
   { id: 'cdn',     icon: <Image size={16} />,  label: '图床配置',    sub: 'Imgur 图片 CDN' },
+  { id: 'memory',  icon: <Brain size={16} />,  label: '永久记忆',    sub: '每次生成都注入' },
 ]
 
 // ── 微信账号信息类型 ──────────────────────────────────────────────────────────
@@ -48,6 +49,46 @@ export default function AISettings() {
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
   const [activeSection, setActiveSection] = useState<Section>('article')
+
+  // ── 永久记忆 ──────────────────────────────────────────────────────────────
+  const [globalMemory, setGlobalMemory]         = useState('')
+  const [memorySaving, setMemorySaving]         = useState(false)
+  const [memorySaved, setMemorySaved]           = useState(false)
+  const [memoryLoadError, setMemoryLoadError]   = useState('')
+
+  const loadGlobalMemory = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('auth_token')
+      const r = await fetch('/api/settings/global_memory', {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      })
+      const d = await r.json()
+      setGlobalMemory(d.value || '')
+    } catch {
+      setMemoryLoadError('加载失败')
+    }
+  }, [])
+
+  const saveGlobalMemory = async () => {
+    setMemorySaving(true)
+    try {
+      const token = localStorage.getItem('auth_token')
+      const r = await fetch('/api/settings/global_memory', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ value: globalMemory }),
+      })
+      if (!r.ok) throw new Error('保存失败')
+      setMemorySaved(true)
+      setTimeout(() => setMemorySaved(false), 2500)
+    } catch {
+      setMemoryLoadError('保存失败，请重试')
+    }
+    setMemorySaving(false)
+  }
 
   // ── 微信公众号状态（凭据存浏览器 localStorage，按浏览器隔离）────────────────
   const WX_STORAGE_KEY = 'wechat_credentials'
@@ -145,8 +186,9 @@ export default function AISettings() {
   useEffect(() => {
     setConfig(loadAIConfig())
     fetchServerStatus()
+    loadGlobalMemory()
     if (wxBound) fetchWxAccount()
-  }, [fetchWxAccount])
+  }, [fetchWxAccount, loadGlobalMemory])
 
   const handleSave = () => {
     setLocalConfig(config)
@@ -969,6 +1011,72 @@ export default function AISettings() {
                   </p>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ════ 永久记忆 ════ */}
+          {activeSection === 'memory' && (
+            <div className="as-panel">
+              <div className="as-panel-header">
+                <h2 className="as-panel-title">永久记忆</h2>
+                <p className="as-panel-desc">这里的内容会在每次生成文章时自动注入到 AI 提示词中，适合放置写作背景、账号定位、常用素材模板等固定信息</p>
+              </div>
+
+              <div className="as-card">
+                <div className="as-card-section-label">全局背景内容</div>
+                <p className="as-card-desc">
+                  支持 Markdown 格式。建议包含：账号定位、目标读者、写作风格偏好、常见禁忌词、固定参考数据等。
+                </p>
+
+                {memoryLoadError && (
+                  <div className="as-memory-error">
+                    <AlertCircle size={13} />
+                    {memoryLoadError}
+                  </div>
+                )}
+
+                <textarea
+                  className="as-memory-editor"
+                  value={globalMemory}
+                  onChange={e => { setGlobalMemory(e.target.value); setMemoryLoadError('') }}
+                  placeholder={`## 账号定位\n- 面向：大学生家长、教师群体\n- 风格：真诚实用，避免官腔\n\n## 常用背景\n- 平台：微信公众号\n- 字数目标：1500-2000 字\n\n## 禁忌词\n- 不得使用「首先其次」「总而言之」等套话\n- 不用「深度」「全面」等空洞修饰词`}
+                  rows={16}
+                />
+
+                <div className="as-memory-footer">
+                  <span className="as-memory-count">
+                    {globalMemory.length} 字
+                    {globalMemory.length > 0 && ' · 已启用，每次生成文章时自动注入'}
+                  </span>
+                  <div className="as-memory-actions">
+                    {globalMemory && (
+                      <button
+                        className="as-btn-ghost"
+                        onClick={() => { if (confirm('清空全部永久记忆内容？')) setGlobalMemory('') }}
+                      >
+                        清空
+                      </button>
+                    )}
+                    <button
+                      className={`as-btn-test${memorySaved ? ' as-btn-test--ok' : ''}`}
+                      onClick={saveGlobalMemory}
+                      disabled={memorySaving}
+                    >
+                      {memorySaving ? '保存中...' : memorySaved ? <><Check size={13} />已保存</> : <><Save size={13} />保存记忆</>}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="as-card as-card--hint">
+                <div className="as-card-section-label">使用建议</div>
+                <ul className="as-memory-tips">
+                  <li>账号定位、目标读者群体放这里，不用每篇文章重复填</li>
+                  <li>常用的竞品对比、行业数据可以放这里作为参考背景</li>
+                  <li>禁止使用的表述方式或必须遵守的格式规则可以在这里强调</li>
+                  <li>内容越精炼越好，控制在 500 字以内效果最佳</li>
+                </ul>
+              </div>
             </div>
           )}
 

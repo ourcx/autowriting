@@ -810,3 +810,88 @@
   align-items: center;
   gap: 6px;
 }
+
+.as-btn-test--ok {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #15803d;
+}
+
+/* ── 永久记忆 panel ──────────────────────────────────────────────── */
+.as-memory-editor {
+  width: 100%;
+  min-height: 280px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-hairline, #e5e5e5);
+  border-radius: 12px;
+  background: var(--color-canvas, #fffaf0);
+  color: var(--color-ink, #0a0a0a);
+  font-size: 13px;
+  font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
+  line-height: 1.7;
+  resize: vertical;
+  transition: border-color 0.12s, box-shadow 0.12s;
+  box-sizing: border-box;
+}
+
+.as-memory-editor:focus {
+  outline: none;
+  border-color: var(--color-ink, #0a0a0a);
+  box-shadow: 0 0 0 3px rgba(10, 10, 10, 0.07);
+}
+
+.as-memory-editor::placeholder {
+  color: var(--color-muted-soft, #9a9a9a);
+  font-family: 'Inter', sans-serif;
+}
+
+.as-memory-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.as-memory-count {
+  font-size: 12px;
+  color: var(--color-muted, #6a6a6a);
+}
+
+.as-memory-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.as-memory-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #fff2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #dc2626;
+}
+
+/* 使用建议 card 变体 */
+.as-card--hint {
+  background: var(--color-surface-soft, #faf5e8);
+  border-color: var(--color-surface-strong, #ebe6d6);
+}
+
+.as-memory-tips {
+  margin: -4px 0 0;
+  padding: 0 0 0 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.as-memory-tips li {
+  font-size: 13px;
+  color: var(--color-body, #3a3a3a);
+  line-height: 1.5;
+}

@@ -10,6 +10,74 @@
   overflow: hidden;
 }
 
+/* ── 时间标签栏 ── */
+.mc-date-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--color-surface-soft);
+  border-bottom: 1px solid var(--color-hairline);
+  flex-shrink: 0;
+}
+
+.mc-date-icon {
+  color: var(--color-body);
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.mc-date-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-body);
+  white-space: nowrap;
+}
+
+.mc-date-input {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--color-hairline);
+  border-radius: 6px;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.mc-date-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.mc-date-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 4px;
+  background: rgba(0,0,0,0.06);
+  color: var(--color-body);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+
+.mc-date-clear:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.mc-date-hint {
+  font-size: 11px;
+  color: var(--color-body);
+  opacity: 0.55;
+  white-space: nowrap;
+}
+
 /* ── 模式切换 tabs ── */
 .mc-mode-tabs {
   display: flex;
@@ -353,6 +421,69 @@
   white-space: pre-wrap;
   word-break: break-word;
   font-family: inherit;
+}
+
+/* ── 素材条目内的时间标签 ── */
+.mc-item-date-wrap {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.mc-item-date-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.mc-item-date-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: #3b82f6;
+  cursor: pointer;
+  margin-left: 2px;
+  transition: background 0.12s;
+  padding: 0;
+}
+
+.mc-item-date-clear:hover {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.mc-item-date-input {
+  height: 22px;
+  padding: 0 6px;
+  border: 1px dashed var(--color-hairline);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-body);
+  font-size: 10px;
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity 0.15s, border-color 0.15s;
+  width: 90px;
+}
+
+.mc-item-date-input:focus,
+.mc-item-date-input:hover {
+  opacity: 1;
+  border-color: var(--color-primary);
+  outline: none;
 }
 
 /* ── 空状态 ── */

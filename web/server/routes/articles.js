@@ -15,7 +15,7 @@ import axios from 'axios'
 import { DRAFTS_DIR, SERVER_AI_CONFIG, getAgentsContent } from '../config.js'
 import { ensureDir, buildLLMRequest, callLLMWithRetry } from '../utils.js'
 import { retrieveRelevant, formatRetrievedContext } from '../rag.js'
-import { saveAnalysis, getLatestAnalysis, listAnalyses, recordTokenUsage, getEffectivePrompt } from '../db.js'
+import { saveAnalysis, getLatestAnalysis, listAnalyses, recordTokenUsage, getEffectivePrompt, getSetting } from '../db.js'
 import { authMiddleware } from '../authMiddleware.js'
 import { triggerBuildIndex } from './rag.js'
 
@@ -228,8 +228,24 @@ router.post('/:articleId/generate', async (req, res) => {
     const generatePromptData = getEffectivePrompt('prompt-article-generate')
     const generateSystemInstruction = generatePromptData?.content || ''
 
+    // 当前时间（北京时间格式）
+    const nowGen = new Date()
+    const formatterGen = new Intl.DateTimeFormat('zh-CN', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', weekday: 'long',
+    })
+    const currentDateTimeGen = formatterGen.format(nowGen)
+
+    // 全局永久记忆
+    const globalMemoryGen = getSetting('global_memory')
+    const globalMemorySectionGen = globalMemoryGen ? `\n\n# 全局背景信息（永久记忆）\n${globalMemoryGen}\n` : ''
+
     const userPrompt = `${generateSystemInstruction ? generateSystemInstruction + '\n\n' : ''}# 写作规范（必须严格遵守）
 ${agentsContent}
+${globalMemorySectionGen}
+# 当前时间
+${currentDateTimeGen}
 
 # 本次任务要求
 ${task}
@@ -341,9 +357,25 @@ router.post('/:articleId/generate/stream', async (req, res) => {
     const streamGeneratePromptData = getEffectivePrompt('prompt-article-generate')
     const streamGenerateInstruction = streamGeneratePromptData?.content || ''
 
+    // 当前时间（北京时间格式）
+    const now = new Date()
+    const formatter = new Intl.DateTimeFormat('zh-CN', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', weekday: 'long',
+    })
+    const currentDateTime = formatter.format(now)
+
+    // 全局永久记忆
+    const globalMemory = getSetting('global_memory')
+    const globalMemorySection = globalMemory ? `\n\n# 全局背景信息（永久记忆）\n${globalMemory}\n` : ''
+
     const userPrompt = `${streamGenerateInstruction ? streamGenerateInstruction + '\n\n' : ''}# 写作规范（必须严格遵守）
 ${agentsContent}
-${ragSection}
+${ragSection}${globalMemorySection}
+# 当前时间
+${currentDateTime}
+
 # 本次任务要求
 ${task}
 
