@@ -1,13 +1,13 @@
 /**
  * MaterialsCollector — 素材采集面板
- * 三种模式：URL 解析（Jina）/ 搜索引擎（Serper/Bing）/ 手动粘贴
- * 采集结果可勾选后一键追加到 materials.md
- * 支持为每条素材指定时间标签（可选）
+ * 三种模式：搜索引擎（Serper/Bing/SearXNG）/ URL 解析（Jina）/ 手动粘贴
+ * 搜索结果支持「读取全文」（单条 & 批量），采集后一键追加到 materials.md
  */
 import { useState } from 'react'
 import {
   Link, Search, ClipboardPaste, Plus, Check,
-  Loader2, ExternalLink, ChevronDown, ChevronUp, AlertCircle, Calendar, X,
+  Loader2, ExternalLink, ChevronDown, ChevronUp, AlertCircle,
+  Calendar, X, BookOpen, Globe,
 } from 'lucide-react'
 import { toast } from './Toast'
 import './MaterialsCollector.css'
@@ -17,26 +17,31 @@ interface SearchResult {
   snippet: string
   url:     string
   source:  string
+  engine?: string
 }
 
 interface CollectedItem {
-  id:       string
-  type:     'url' | 'search' | 'paste'
-  title:    string
-  content:  string
-  url?:     string
-  source?:  string
-  selected: boolean
-  expanded: boolean
-  dateTag:  string   // 可选时间标签，格式 YYYY-MM-DD 或空字符串
+  id:           string
+  type:         'url' | 'search' | 'paste'
+  title:        string
+  content:      string
+  url?:         string
+  source?:      string
+  selected:     boolean
+  expanded:     boolean
+  dateTag:      string    // 可选时间标签，格式 YYYY-MM-DD 或空字符串
+  fetching?:    boolean   // 正在读取全文
+  fullFetched?: boolean   // 已读取全文
 }
 
 interface Props {
-  articleId: string
-  searchApiKey: string
-  searchProvider: 'serper' | 'bing'
-  searchEngine: string
-  onSaved?: () => void
+  articleId:      string
+  searchApiKey:   string
+  searchProvider: 'serper' | 'bing' | 'searxng'
+  searchEngine:   string
+  searxngUrl?:    string
+  jinaApiKey?:    string
+  onSaved?:       () => void
 }
 
 let _idCounter = 0
@@ -58,19 +63,38 @@ export default function MaterialsCollector({
   searchApiKey,
   searchProvider,
   searchEngine,
+  searxngUrl,
+  jinaApiKey,
   onSaved,
 }: Props) {
-  const [mode, setMode]             = useState<'url' | 'search' | 'paste'>('search')
-  const [urlInput, setUrlInput]     = useState('')
+  const [mode, setMode]               = useState<'url' | 'search' | 'paste'>('search')
+  const [urlInput, setUrlInput]       = useState('')
   const [searchQuery, setSearchQuery] = useState('')
-  const [pasteText, setPasteText]   = useState('')
-  const [pasteTitle, setPasteTitle] = useState('')
-  const [loading, setLoading]       = useState(false)
-  const [saving, setSaving]         = useState(false)
-  const [items, setItems]           = useState<CollectedItem[]>([])
+  const [pasteText, setPasteText]     = useState('')
+  const [pasteTitle, setPasteTitle]   = useState('')
+  const [loading, setLoading]         = useState(false)
+  const [saving, setSaving]           = useState(false)
+  const [batchFetching, setBatchFetching] = useState(false)
+  const [items, setItems]             = useState<CollectedItem[]>([])
 
   // 新增素材时的默认时间（可以不填）
   const [defaultDateTag, setDefaultDateTag] = useState('')
+
+  // 是否可以使用搜索（SearXNG 不需要 key）
+  const canSearch = searchProvider === 'searxng' || !!searchApiKey
+
+  // ── 工具：带鉴权的 fetch ───────────────────────────────────────────────────
+  function authFetch(url: string, options: RequestInit = {}) {
+    const token = localStorage.getItem('auth_token')
+    return fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        ...(options.headers as Record<string, string> || {}),
+      },
+    })
+  }
 
   // ── URL 解析 ──────────────────────────────────────────────────────────────
   async function handleFetchUrl() {
@@ -82,10 +106,9 @@ export default function MaterialsCollector({
     }
     setLoading(true)
     try {
-      const res  = await fetch('/api/materials/fetch-url', {
+      const res  = await authFetch('/api/materials/fetch-url', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ url }),
+        body:    JSON.stringify({ url, jinaApiKey: jinaApiKey || '' }),
       })
       const data = await res.json()
       if (data.error) throw new Error(data.error)
@@ -95,15 +118,16 @@ export default function MaterialsCollector({
       const title = firstLine.replace(/^#+\s*/, '').slice(0, 80)
 
       setItems(prev => [{
-        id:       nextId(),
-        type:     'url',
+        id:          nextId(),
+        type:        'url',
         title,
-        content:  data.content,
+        content:     data.content,
         url,
-        source:   hostname,
-        selected: true,
-        expanded: false,
-        dateTag:  defaultDateTag,
+        source:      hostname,
+        selected:    true,
+        expanded:    false,
+        dateTag:     defaultDateTag,
+        fullFetched: true,
       }, ...prev])
       setUrlInput('')
       toast.success('页面解析成功')
@@ -118,22 +142,27 @@ export default function MaterialsCollector({
   async function handleSearch() {
     const query = searchQuery.trim()
     if (!query) return
-    if (!searchApiKey) {
-      toast.error('未配置搜索 API Key，请先在「AI 配置」页面填写')
+    if (!canSearch) {
+      toast.error('未配置搜索 API Key，请先在「AI 配置」页面填写，或切换到 SearXNG（免费）')
       return
     }
     setLoading(true)
     try {
-      const res  = await fetch('/api/materials/search', {
+      const body: Record<string, unknown> = {
+        query,
+        provider:   searchProvider,
+        engine:     searchEngine,
+        num:        10,
+      }
+      if (searchProvider === 'searxng') {
+        body.searxngUrl = searxngUrl || ''
+      } else {
+        body.apiKey = searchApiKey
+      }
+
+      const res  = await authFetch('/api/materials/search', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          query,
-          provider: searchProvider,
-          apiKey:   searchApiKey,
-          engine:   searchEngine,
-          num:      10,
-        }),
+        body:    JSON.stringify(body),
       })
       const data = await res.json()
       if (data.error) throw new Error(data.error)
@@ -145,22 +174,101 @@ export default function MaterialsCollector({
       }
 
       const newItems: CollectedItem[] = results.map(r => ({
-        id:       nextId(),
-        type:     'search' as const,
-        title:    r.title,
-        content:  r.snippet,
-        url:      r.url,
-        source:   r.source,
-        selected: false,
-        expanded: false,
-        dateTag:  defaultDateTag,
+        id:          nextId(),
+        type:        'search' as const,
+        title:       r.title,
+        content:     r.snippet,
+        url:         r.url,
+        source:      r.source,
+        selected:    false,
+        expanded:    false,
+        dateTag:     defaultDateTag,
+        fullFetched: false,
       }))
       setItems(prev => [...newItems, ...prev])
-      toast.success(`找到 ${results.length} 条结果`)
+      toast.success(`找到 ${results.length} 条结果，点击「读全文」可获取完整内容`)
     } catch (e: unknown) {
       toast.error('搜索失败：' + (e as Error).message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // ── 单条读取全文 ─────────────────────────────────────────────────────────
+  async function handleFetchFullText(id: string, url: string) {
+    // 标记 fetching
+    setItems(prev => prev.map(it => it.id === id ? { ...it, fetching: true } : it))
+    try {
+      const res  = await authFetch('/api/materials/fetch-url', {
+        method:  'POST',
+        body:    JSON.stringify({ url, jinaApiKey: jinaApiKey || '' }),
+      })
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+
+      // 用全文替换摘要，并自动勾选
+      setItems(prev => prev.map(it =>
+        it.id === id
+          ? { ...it, content: data.content, fetching: false, fullFetched: true, selected: true, expanded: false }
+          : it
+      ))
+      const methodTip = data.method === 'direct' ? '（直接抓取，部分动态页面内容可能不完整）' : ''
+      toast.success(`全文读取成功${methodTip}`)
+    } catch (e: unknown) {
+      setItems(prev => prev.map(it => it.id === id ? { ...it, fetching: false } : it))
+      const msg = (e as Error).message
+      const tip = msg.includes('fetch failed') || msg.includes('超时')
+        ? '网络连接失败，请检查服务器网络是否正常'
+        : msg
+      toast.error('读取失败：' + tip)
+    }
+  }
+
+  // ── 批量读取全文（已选中且未读全文的 search 条目）────────────────────────
+  async function handleBatchFetchFullText() {
+    const targets = items.filter(it => it.selected && it.type === 'search' && !it.fullFetched && it.url)
+    if (targets.length === 0) {
+      toast.warn('没有可以读取全文的搜索结果（请先勾选搜索结果条目）')
+      return
+    }
+
+    setBatchFetching(true)
+    // 标记所有目标为 fetching
+    setItems(prev => prev.map(it =>
+      targets.find(t => t.id === it.id) ? { ...it, fetching: true } : it
+    ))
+
+    try {
+      const res  = await authFetch('/api/materials/fetch-url-batch', {
+        method:  'POST',
+        body:    JSON.stringify({ urls: targets.map(t => t.url), jinaApiKey: jinaApiKey || '' }),
+      })
+      const data = await res.json()
+      const results: { url: string; content: string; ok: boolean; error?: string }[] = data.results || []
+
+      // 按 url 匹配，更新内容
+      setItems(prev => prev.map(it => {
+        const found = results.find(r => r.url === it.url)
+        if (!found) return it
+        if (found.ok && found.content) {
+          return { ...it, content: found.content, fetching: false, fullFetched: true }
+        }
+        return { ...it, fetching: false }
+      }))
+
+      const successCount = results.filter(r => r.ok && r.content).length
+      const failCount    = results.length - successCount
+      if (failCount > 0) {
+        toast.warn(`${successCount} 条成功，${failCount} 条读取失败（部分网站限制访问）`)
+      } else {
+        toast.success(`批量读取完成，共 ${successCount} 条`)
+      }
+    } catch (e: unknown) {
+      // 失败时清除所有 fetching 状态
+      setItems(prev => prev.map(it => ({ ...it, fetching: false })))
+      toast.error('批量读取失败：' + (e as Error).message)
+    } finally {
+      setBatchFetching(false)
     }
   }
 
@@ -202,6 +310,10 @@ export default function MaterialsCollector({
 
   function selectAll()   { setItems(prev => prev.map(it => ({ ...it, selected: true  }))) }
   function selectNone()  { setItems(prev => prev.map(it => ({ ...it, selected: false }))) }
+
+  // ── 统计 ─────────────────────────────────────────────────────────────────
+  const selectedCount   = items.filter(it => it.selected).length
+  const canBatchFetch   = items.some(it => it.selected && it.type === 'search' && !it.fullFetched && it.url)
 
   // ── 入库 ────────────────────────────────────────────────────────────────
   async function handleSave() {
@@ -253,9 +365,8 @@ export default function MaterialsCollector({
 
       const content = parts.join('\n\n')
 
-      const res  = await fetch(`/api/materials/${articleId}/save`, {
+      const res  = await authFetch(`/api/materials/${articleId}/save`, {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ content, mode: 'append' }),
       })
       const data = await res.json()
@@ -271,8 +382,6 @@ export default function MaterialsCollector({
       setSaving(false)
     }
   }
-
-  const selectedCount = items.filter(it => it.selected).length
 
   return (
     <div className="mc-root">
@@ -324,27 +433,46 @@ export default function MaterialsCollector({
       <div className="mc-input-area">
 
         {mode === 'search' && (
-          <div className="mc-search-row">
-            <input
-              className="mc-input"
-              placeholder={searchApiKey ? '输入关键词，如：AI 效率工具 2025' : '请先在「AI 配置」页面填写搜索 API Key'}
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !loading) handleSearch() }}
-              disabled={loading || !searchApiKey}
-            />
-            <button
-              className="mc-btn mc-btn--primary"
-              onClick={handleSearch}
-              disabled={loading || !searchQuery.trim() || !searchApiKey}
-            >
-              {loading ? <Loader2 size={14} className="mc-spin" /> : <Search size={14} />}
-              {loading ? '搜索中...' : '搜索'}
-            </button>
-            {!searchApiKey && (
-              <div className="mc-warn-inline">
-                <AlertCircle size={13} />
-                未配置搜索 Key
+          <div className="mc-search-wrap">
+            <div className="mc-search-row">
+              <input
+                className="mc-input"
+                placeholder={
+                  searchProvider === 'searxng'
+                    ? '输入关键词，SearXNG 聚合搜索（免费）'
+                    : canSearch
+                    ? '输入关键词，如：AI 效率工具 2025'
+                    : '请先在「AI 配置」页面填写搜索 API Key'
+                }
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !loading) handleSearch() }}
+                disabled={loading || !canSearch}
+              />
+              <button
+                className="mc-btn mc-btn--primary"
+                onClick={handleSearch}
+                disabled={loading || !searchQuery.trim() || !canSearch}
+              >
+                {loading ? <Loader2 size={14} className="mc-spin" /> : <Search size={14} />}
+                {loading ? '搜索中...' : '搜索'}
+              </button>
+            </div>
+            {/* 搜索状态提示 */}
+            {searchProvider === 'searxng' ? (
+              <div className="mc-search-tip mc-search-tip--free">
+                <Globe size={12} />
+                SearXNG 聚合搜索，无需 API Key — 搜索后点击「读全文」获取完整内容
+              </div>
+            ) : !searchApiKey ? (
+              <div className="mc-search-tip mc-search-tip--warn">
+                <AlertCircle size={12} />
+                未配置搜索 Key —— 可在「AI 配置」切换到 SearXNG（免费）方案
+              </div>
+            ) : (
+              <div className="mc-search-tip mc-search-tip--hint">
+                <BookOpen size={12} />
+                搜索结果仅含摘要，点击「读全文」可获取完整正文
               </div>
             )}
           </div>
@@ -408,6 +536,19 @@ export default function MaterialsCollector({
             <div className="mc-list-actions">
               <button className="mc-link-btn" onClick={selectAll}>全选</button>
               <button className="mc-link-btn" onClick={selectNone}>取消</button>
+              {canBatchFetch && (
+                <button
+                  className={`mc-btn mc-btn--fetch${batchFetching ? ' mc-btn--loading' : ''}`}
+                  onClick={handleBatchFetchFullText}
+                  disabled={batchFetching}
+                  title="批量读取已选搜索结果的完整正文"
+                >
+                  {batchFetching
+                    ? <><Loader2 size={13} className="mc-spin" />读取中...</>
+                    : <><BookOpen size={13} />批量读全文</>
+                  }
+                </button>
+              )}
               <button
                 className={`mc-btn mc-btn--save${saving ? ' mc-btn--loading' : ''}`}
                 onClick={handleSave}
@@ -425,7 +566,7 @@ export default function MaterialsCollector({
             {items.map(item => (
               <div
                 key={item.id}
-                className={`mc-item${item.selected ? ' mc-item--selected' : ''} mc-item--${item.type}`}
+                className={`mc-item${item.selected ? ' mc-item--selected' : ''} mc-item--${item.type}${item.fullFetched && item.type === 'search' ? ' mc-item--full' : ''}`}
               >
                 <div className="mc-item-header">
                   <label className="mc-item-check">
@@ -434,12 +575,16 @@ export default function MaterialsCollector({
                       checked={item.selected}
                       onChange={() => toggleSelect(item.id)}
                     />
-                    <span className="mc-item-type-badge mc-badge--${item.type}">
+                    <span className={`mc-item-type-badge mc-badge--${item.type}`}>
                       {item.type === 'url'    && <Link size={11} />}
                       {item.type === 'search' && <Search size={11} />}
                       {item.type === 'paste'  && <ClipboardPaste size={11} />}
                       {item.source || (item.type === 'paste' ? '粘贴' : item.type)}
                     </span>
+                    {/* 全文标记 */}
+                    {item.type === 'search' && item.fullFetched && (
+                      <span className="mc-full-badge">全文</span>
+                    )}
                     <span className="mc-item-title">{item.title}</span>
                   </label>
                   <div className="mc-item-ops">
@@ -467,6 +612,23 @@ export default function MaterialsCollector({
                         />
                       )}
                     </div>
+
+                    {/* 读取全文按钮（仅 search 类型且未读全文时显示） */}
+                    {item.type === 'search' && !item.fullFetched && item.url && (
+                      <button
+                        className="mc-fetch-btn"
+                        onClick={() => handleFetchFullText(item.id, item.url!)}
+                        disabled={item.fetching}
+                        title="用 Jina Reader 读取完整正文"
+                      >
+                        {item.fetching
+                          ? <Loader2 size={12} className="mc-spin" />
+                          : <BookOpen size={12} />
+                        }
+                        {item.fetching ? '读取中' : '读全文'}
+                      </button>
+                    )}
+
                     {item.url && (
                       <a
                         href={item.url}
@@ -501,10 +663,12 @@ export default function MaterialsCollector({
                   </div>
                 )}
 
-                {!item.expanded && item.content && (
+                {!item.expanded && (
                   <div className="mc-item-snippet">
-                    {item.content.slice(0, 200).replace(/\n/g, ' ')}
-                    {item.content.length > 200 && '...'}
+                    {item.content
+                      ? <>{item.content.slice(0, 200).replace(/\n/g, ' ')}{item.content.length > 200 && '...'}</>
+                      : <span className="mc-snippet-empty">暂无摘要，点击「读全文」获取正文</span>
+                    }
                   </div>
                 )}
               </div>
@@ -515,9 +679,27 @@ export default function MaterialsCollector({
 
       {items.length === 0 && (
         <div className="mc-empty">
-          {mode === 'search' && <p>输入关键词搜索，结果会出现在这里</p>}
-          {mode === 'url'    && <p>输入网页链接，Jina AI 会自动提取正文</p>}
-          {mode === 'paste'  && <p>粘贴任意文本内容，如小红书笔记、公众号摘录</p>}
+          {mode === 'search' && (
+            <div className="mc-empty-inner">
+              <Search size={28} className="mc-empty-icon" />
+              <p>输入关键词搜索，获取摘要后可点击「读全文」获取完整内容</p>
+              {searchProvider === 'searxng' && (
+                <span className="mc-empty-badge">SearXNG 免费搜索已启用</span>
+              )}
+            </div>
+          )}
+          {mode === 'url' && (
+            <div className="mc-empty-inner">
+              <Link size={28} className="mc-empty-icon" />
+              <p>输入网页链接，Jina AI 会自动提取正文</p>
+            </div>
+          )}
+          {mode === 'paste' && (
+            <div className="mc-empty-inner">
+              <ClipboardPaste size={28} className="mc-empty-icon" />
+              <p>粘贴任意文本内容，如小红书笔记、公众号摘录</p>
+            </div>
+          )}
         </div>
       )}
     </div>

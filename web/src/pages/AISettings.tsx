@@ -236,7 +236,7 @@ export default function AISettings() {
   const localOpenai      = config.articleProvider !== 'maas' && !!config.articleApiKey
   const localSiliconflow = !!config.siliconflowApiKey
   const localCoverKey    = !!config.coverApiKey
-  const localSearchKey   = !!config.searchApiKey
+  const localSearchKey   = config.searchProvider === 'searxng' || !!config.searchApiKey
   const localCdn = (config.cdnProvider === 'imgur' && !!config.imgurClientId)
                || (config.cdnProvider === 'github' && !!config.githubToken && !!config.githubRepo)
 
@@ -641,15 +641,17 @@ export default function AISettings() {
             <div className="as-panel">
               <div className="as-panel-header">
                 <h2 className="as-panel-title">素材搜索</h2>
-                <p className="as-panel-desc">配置后可在素材采集面板按关键词搜索网页，支持 Google / 百度 / Bing</p>
+                <p className="as-panel-desc">配置后可在素材采集面板按关键词搜索网页，搜索结果可一键读取全文</p>
               </div>
 
               <div className="as-card">
                 <div className="as-card-section-label">搜索服务商</div>
+                <p className="as-card-desc">SearXNG 无需 API Key 即可使用，适合入门；Serper / Bing 需注册获取 Key</p>
                 <div className="as-provider-grid">
                   {[
-                    { id: 'serper', name: 'Serper.dev', desc: '支持 Google / 百度，2500 次/月免费' },
-                    { id: 'bing',   name: 'Bing Search', desc: 'Microsoft，1000 次/月免费' },
+                    { id: 'searxng', name: 'SearXNG（推荐）', desc: '开源聚合，231 个搜索引擎，无需 Key' },
+                    { id: 'serper',  name: 'Serper.dev',       desc: '支持 Google / 百度，2500 次/月免费' },
+                    { id: 'bing',    name: 'Bing Search',      desc: 'Microsoft，1000 次/月免费' },
                   ].map(p => (
                     <button
                       key={p.id}
@@ -663,15 +665,43 @@ export default function AISettings() {
                   ))}
                 </div>
 
+                {/* SearXNG 配置 */}
+                {config.searchProvider === 'searxng' && (
+                  <>
+                    <div className="as-card-divider" />
+                    <div className="as-field">
+                      <label className="as-label">SearXNG 实例 URL <span className="as-label-opt">选填，默认使用公共实例</span></label>
+                      <input
+                        className="as-input as-input-mono"
+                        value={config.searxngUrl || ''}
+                        onChange={e => set({ searxngUrl: e.target.value })}
+                        placeholder="https://paulgo.io（留空使用默认公共实例）"
+                      />
+                      <p className="as-hint">
+                        公共实例列表：<a href="https://searx.space" target="_blank" rel="noreferrer">searx.space</a>。
+                        自建实例参考：<a href="https://docs.searxng.org/admin/installation-docker.html" target="_blank" rel="noreferrer">Docker 安装文档</a>。
+                        公共实例可能偶发限流，自建实例更稳定。
+                      </p>
+                    </div>
+                    <div className="as-test-row">
+                      <span className="as-test-msg as-test-msg--ok">
+                        <CheckCircle2 size={13} />
+                        SearXNG 无需 API Key，直接使用即可
+                      </span>
+                    </div>
+                  </>
+                )}
+
+                {/* Serper engine 选择 */}
                 {config.searchProvider === 'serper' && (
                   <>
                     <div className="as-card-divider" />
                     <div className="as-card-section-label">搜索引擎</div>
                     <div className="as-provider-grid">
                       {[
-                        { id: 'google', name: 'Google',    desc: '全球最大' },
-                        { id: 'baidu',  name: '百度',       desc: '国内最大' },
-                        { id: 'bing',   name: 'Bing',       desc: '微软必应' },
+                        { id: 'google', name: 'Google', desc: '全球最大' },
+                        { id: 'baidu',  name: '百度',    desc: '国内最大' },
+                        { id: 'bing',   name: 'Bing',    desc: '微软必应' },
                       ].map(e => (
                         <button
                           key={e.id}
@@ -687,30 +717,76 @@ export default function AISettings() {
                   </>
                 )}
 
-                <div className="as-card-divider" />
+                {/* Serper / Bing API Key */}
+                {config.searchProvider !== 'searxng' && (
+                  <>
+                    <div className="as-card-divider" />
+                    <div className="as-field">
+                      <label className="as-label">{config.searchProvider === 'serper' ? 'Serper' : 'Bing'} API Key</label>
+                      <div className="as-key-wrap">
+                        <input
+                          className="as-input as-input-mono"
+                          type={showKeys['search'] ? 'text' : 'password'}
+                          value={config.searchApiKey}
+                          onChange={e => set({ searchApiKey: e.target.value })}
+                          placeholder={config.searchProvider === 'serper' ? 'serper.dev 注册后获取' : 'Azure Portal 获取'}
+                        />
+                        <button className="as-eye-btn" onClick={() => toggleKey('search')}>
+                          {showKeys['search'] ? <EyeOff size={14} /> : <Eye size={14} />}
+                        </button>
+                      </div>
+                      <p className="as-hint">
+                        {config.searchProvider === 'serper'
+                          ? <><a href="https://serper.dev" target="_blank" rel="noreferrer">serper.dev</a> 免费注册，赠 2500 次额度，支持 Google / 百度 / Bing</>
+                          : <><a href="https://portal.azure.com" target="_blank" rel="noreferrer">Azure Portal</a> 创建「Bing Search v7」资源，每月 1000 次免费</>
+                        }
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
 
+              {/* Jina Reader 配置 */}
+              <div className="as-card">
+                <div className="as-card-label-row">
+                  <span className="as-card-section-label">Jina Reader（读全文）</span>
+                  <span className="as-card-tag as-card-tag--teal">可选，无 Key 自动降级</span>
+                </div>
+                <p className="as-card-desc">
+                  读全文时优先调用 Jina Reader（返回干净 Markdown），无法访问时自动降级为直接抓取。国内服务器可能无法访问 r.jina.ai，填写 API Key 可走付费通道（更稳定）。
+                </p>
                 <div className="as-field">
-                  <label className="as-label">{config.searchProvider === 'serper' ? 'Serper' : 'Bing'} API Key</label>
+                  <label className="as-label">Jina API Key <span className="as-label-opt">选填，留空走免费通道（可能被墙）</span></label>
                   <div className="as-key-wrap">
                     <input
                       className="as-input as-input-mono"
-                      type={showKeys['search'] ? 'text' : 'password'}
-                      value={config.searchApiKey}
-                      onChange={e => set({ searchApiKey: e.target.value })}
-                      placeholder={config.searchProvider === 'serper' ? 'serper.dev 注册后获取' : 'Azure Portal 获取'}
+                      type={showKeys['jina'] ? 'text' : 'password'}
+                      value={config.jinaApiKey || ''}
+                      onChange={e => set({ jinaApiKey: e.target.value })}
+                      placeholder="jina_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                     />
-                    <button className="as-eye-btn" onClick={() => toggleKey('search')}>
-                      {showKeys['search'] ? <EyeOff size={14} /> : <Eye size={14} />}
+                    <button className="as-eye-btn" onClick={() => toggleKey('jina')}>
+                      {showKeys['jina'] ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
                   </div>
                   <p className="as-hint">
-                    {config.searchProvider === 'serper'
-                      ? <><a href="https://serper.dev" target="_blank" rel="noreferrer">serper.dev</a> 免费注册，赠 2500 次额度，支持 Google / 百度 / Bing</>
-                      : <><a href="https://portal.azure.com" target="_blank" rel="noreferrer">Azure Portal</a> 创建「Bing Search v7」资源，每月 1000 次免费</>
-                    }
+                    前往 <a href="https://jina.ai/reader" target="_blank" rel="noreferrer">jina.ai/reader</a> 注册获取，每天免费 200 次，付费可解锁更多额度
                   </p>
                 </div>
               </div>
+
+              {/* SearXNG 说明卡片 */}
+              {config.searchProvider === 'searxng' && (
+                <div className="as-card as-card--hint">
+                  <div className="as-card-section-label">关于 SearXNG</div>
+                  <ul className="as-memory-tips">
+                    <li>聚合 231 个搜索引擎，包含 Google、Bing、百度、DuckDuckGo 等</li>
+                    <li>无需注册，无需 API Key，开箱即用</li>
+                    <li>公共实例有速率限制，频繁使用建议自建实例（Docker 5 分钟搭好）</li>
+                    <li>搜索结果获得摘要后，点「读全文」用 Jina Reader 获取完整正文</li>
+                  </ul>
+                </div>
+              )}
             </div>
           )}
 

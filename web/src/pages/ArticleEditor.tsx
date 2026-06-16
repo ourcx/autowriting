@@ -457,8 +457,10 @@ export default function ArticleEditor() {
                 <MaterialsCollector
                   articleId={articleId}
                   searchApiKey={aiConfig.searchApiKey || ''}
-                  searchProvider={(aiConfig.searchProvider as 'serper' | 'bing') || 'serper'}
+                  searchProvider={aiConfig.searchProvider || 'serper'}
                   searchEngine={aiConfig.searchEngine || 'google'}
+                  searxngUrl={aiConfig.searxngUrl || ''}
+                  jinaApiKey={aiConfig.jinaApiKey || ''}
                   onSaved={fetchArticleData}
                 />
               </div>

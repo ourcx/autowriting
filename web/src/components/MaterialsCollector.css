@@ -126,6 +126,42 @@
   flex-shrink: 0;
 }
 
+/* 搜索区包装（含搜索行 + 状态提示） */
+.mc-search-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+/* 搜索状态提示条 */
+.mc-search-tip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  line-height: 1.4;
+}
+
+.mc-search-tip--free {
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.mc-search-tip--warn {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.mc-search-tip--hint {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
 .mc-search-row,
 .mc-url-row {
   display: flex;
@@ -226,6 +262,21 @@
   background: #0f766e;
 }
 
+/* 批量读全文按钮 */
+.mc-btn--fetch {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  height: 32px;
+  font-size: 12px;
+  padding: 0 10px;
+}
+
+.mc-btn--fetch:hover:not(:disabled) {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
 .mc-spin {
   animation: mc-spin 0.8s linear infinite;
 }
@@ -316,6 +367,7 @@
   align-items: center;
   gap: 8px;
   padding: 9px 12px;
+  height: 100%
 }
 
 .mc-item-check {
@@ -399,11 +451,70 @@
   color: #dc2626;
 }
 
+/* 单条「读全文」按钮 */
+.mc-fetch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.mc-fetch-btn:hover:not(:disabled) {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.mc-fetch-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 「全文」绿色徽章 */
+.mc-full-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #dcfce7;
+  color: #15803d;
+  font-size: 10px;
+  font-weight: 600;
+  border: 1px solid #bbf7d0;
+  flex-shrink: 0;
+}
+
+/* 已读取全文的条目高亮 */
+.mc-item--full {
+  border-color: #bbf7d0;
+}
+
+.mc-item--full.mc-item--selected {
+  border-color: #4ade80;
+  box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.15);
+}
+
 .mc-item-snippet {
   padding: 0 12px 10px 35px;
   font-size: 12px;
   color: var(--color-body);
   line-height: 1.6;
+}
+
+.mc-snippet-empty {
+  font-style: italic;
+  opacity: 0.45;
+  font-size: 11px;
 }
 
 .mc-item-content {
@@ -498,7 +609,31 @@
   text-align: center;
 }
 
+.mc-empty-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.mc-empty-icon {
+  opacity: 0.25;
+  color: var(--color-primary);
+}
+
 .mc-empty p {
   margin: 0;
   opacity: 0.6;
+}
+
+.mc-empty-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: #dcfce7;
+  color: #15803d;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid #bbf7d0;
 }

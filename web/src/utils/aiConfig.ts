@@ -47,9 +47,11 @@ export interface AIConfig {
   embeddingExtraHeaders:string  // 可选，JSON 格式额外请求头
 
   // 素材搜索
-  searchProvider: 'serper' | 'bing'  // 搜索引擎服务商
-  searchApiKey:   string             // 搜索 API Key
-  searchEngine:   string             // serper engine：google / baidu / bing
+  searchProvider: 'serper' | 'bing' | 'searxng'  // 搜索引擎服务商
+  searchApiKey:   string                          // 搜索 API Key
+  searchEngine:   string                          // serper engine：google / baidu / bing
+  searxngUrl:     string                          // SearXNG 实例地址（可选，默认公共实例）
+  jinaApiKey:     string                          // Jina Reader API Key（可选，有 key 时优先使用）
 
   // 图床
   cdnProvider:   'none' | 'imgur' | 'github'  // 选择图床方案
@@ -86,6 +88,8 @@ export const DEFAULT_CONFIG: AIConfig = {
   searchProvider: 'serper',
   searchApiKey:   '',
   searchEngine:   'google',
+  searxngUrl:     '',
+  jinaApiKey:     '',
 
   cdnProvider:  'none',
   imgurClientId: '',
