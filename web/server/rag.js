@@ -78,30 +78,74 @@ function getEmbeddingKey(cfg) {
   return `remote:${model}:${dims}`
 }
 
+// ── 工具：sleep ───────────────────────────────────────────────────────────────
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+
 // ── 远端 Embedding（直接 fetch，不依赖 LangChain OpenAI 封装）─────────────────
+// 支持 429 指数退避重试 + 批次间限速
 
 class RawEmbeddings extends Embeddings {
-  constructor({ apiKey, baseURL, model, dimensions, instruction, extraHeaders = {} }) {
+  constructor({ apiKey, baseURL, model, dimensions, instruction, extraHeaders = {},
+                batchSize = 1, batchDelayMs = 3000 }) {
     super({})
-    this.apiKey       = apiKey
-    this.baseURL      = baseURL.replace(/\/$/, '')
-    this.model        = model
-    this.dimensions   = dimensions
-    this.instruction  = instruction
-    this.extraHeaders = extraHeaders
+    this.apiKey        = apiKey
+    this.baseURL       = baseURL.replace(/\/$/, '')
+    this.model         = model
+    this.dimensions    = dimensions
+    this.instruction   = instruction
+    this.extraHeaders  = extraHeaders
+    this.batchSize     = batchSize     // 每批并发数，默认 16（保守，避免触发限流）
+    this.batchDelayMs  = batchDelayMs  // 批次间延迟 ms
   }
 
-  async embedQuery(text) { return this._embed(text) }
+  async embedQuery(text) { return this._embedWithRetry(text) }
 
   async embedDocuments(texts) {
-    const BATCH = 64
     const results = []
-    for (let i = 0; i < texts.length; i += BATCH) {
-      const batch = texts.slice(i, i + BATCH)
-      const vecs  = await Promise.all(batch.map(t => this._embed(t)))
+    for (let i = 0; i < texts.length; i += this.batchSize) {
+      const batch = texts.slice(i, i + this.batchSize)
+      // 并发处理当前批次，每个请求独立重试
+      const vecs = await Promise.all(batch.map(t => this._embedWithRetry(t)))
       results.push(...vecs)
+      // 批次间延迟，给 API 限流留出窗口
+      if (i + this.batchSize < texts.length) {
+        await sleep(this.batchDelayMs)
+      }
     }
     return results
+  }
+
+  /**
+   * 带指数退避的单条 embed（处理 429 / 503 等可重试错误）
+   * 重试间隔：500ms → 2s → 8s，最多重试 3 次
+   */
+  async _embedWithRetry(text, maxRetries = 3) {
+    const RETRY_DELAYS = [500, 2000, 8000]
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await this._embed(text)
+      } catch (e) {
+        const is429 = e.message?.startsWith('429')
+        const is503 = e.message?.startsWith('503')
+        const isRetryable = is429 || is503
+
+        if (!isRetryable || attempt === maxRetries) {
+          // 429 且已耗尽重试次数：给出更明确的错误提示
+          if (is429) {
+            throw new Error(
+              `Embedding API 配额已用完（429 Too Many Requests）。\n` +
+              `请等待配额恢复后重试，或切换到「本地向量模型」（无需 API Key，在本页面「本地向量模型」区域选择）。\n` +
+              `原始错误：${e.message}`
+            )
+          }
+          throw e
+        }
+
+        const delay = RETRY_DELAYS[attempt]
+        console.warn(`[RAG] Embedding 请求被限流（${e.message.slice(0, 80)}），${delay}ms 后重试（${attempt + 1}/${maxRetries}）...`)
+        await sleep(delay)
+      }
+    }
   }
 
   async _embed(text) {
@@ -150,14 +194,23 @@ class LocalEmbeddings extends Embeddings {
         ;({ pipeline } = await import('@xenova/transformers'))
       } catch {
         throw new Error(
-          '本地向量模型需要安装依赖，请在 web/ 目录执行：npm install @xenova/transformers'
+          '本地向量模型依赖未安装。请在 web/ 目录执行：pnpm add @xenova/transformers 或 npm install @xenova/transformers'
         )
       }
       console.log(`[RAG] 加载本地向量模型：${this.modelName}（首次运行需下载模型文件，请稍候…）`)
-      this._pipeline = await pipeline('feature-extraction', this.modelName, {
-        quantized: true,   // 量化版本，体积更小、速度更快，精度略有损失
-      })
-      console.log(`[RAG] 本地向量模型加载完成`)
+      try {
+        this._pipeline = await pipeline('feature-extraction', this.modelName, {
+          quantized: true,   // 量化版本，体积更小、速度更快，精度略有损失
+        })
+      } catch (loadErr) {
+        const hint = loadErr.message?.includes('fetch')
+          ? '（网络原因导致模型下载失败，请检查网络或配置代理后重试）'
+          : loadErr.message?.includes('quantized')
+          ? `（模型 ${this.modelName} 不支持量化版本，请尝试其他模型）`
+          : ''
+        throw new Error(`本地向量模型加载失败：${loadErr.message}${hint}`)
+      }
+      console.log(`[RAG] 本地向量模型加载完成：${this.modelName}`)
     }
     return this._pipeline
   }
@@ -217,9 +270,12 @@ function getRemoteEmbeddings(cfg) {
       ? cfg.articleBaseUrl
       : 'https://api.openai.com/v1'
   )
-  const model      = cfg.embeddingModel       || 'text-embedding-3-small'
-  const dimensions = cfg.embeddingDimensions  || undefined
-  const instruction= cfg.embeddingInstruction || undefined
+  const model        = cfg.embeddingModel        || 'text-embedding-3-small'
+  const dimensions   = cfg.embeddingDimensions   || undefined
+  const instruction  = cfg.embeddingInstruction  || undefined
+  // 批量参数：可通过 cfg 覆盖，默认保守值（16并发 + 200ms间隔）
+  const batchSize    = cfg.embeddingBatchSize    || 16
+  const batchDelayMs = cfg.embeddingBatchDelayMs || 200
 
   let extraHeaders = {}
   if (cfg.embeddingExtraHeaders) {
@@ -230,9 +286,9 @@ function getRemoteEmbeddings(cfg) {
     } catch { /* 忽略 */ }
   }
 
-  const cacheKey = JSON.stringify({ apiKey, baseURL, model, dimensions, instruction, extraHeaders })
+  const cacheKey = JSON.stringify({ apiKey, baseURL, model, dimensions, instruction, extraHeaders, batchSize, batchDelayMs })
   if (!_embeddings || _embeddings._cacheKey !== cacheKey) {
-    _embeddings = new RawEmbeddings({ apiKey, baseURL, model, dimensions, instruction, extraHeaders })
+    _embeddings = new RawEmbeddings({ apiKey, baseURL, model, dimensions, instruction, extraHeaders, batchSize, batchDelayMs })
     _embeddings._cacheKey = cacheKey
   }
   return _embeddings
@@ -554,26 +610,42 @@ export async function retrieveRelevant(query, { topK = DEFAULT_TOP_K, aiConfig =
   const meta = loadIndexMeta(indexDir)
 
   // ── 根据索引元数据决定用哪个 embeddings 实例 ─────────────────────────────
-  // 如果索引是本地模型建的，直接用本地（不再走远端，避免 401）
-  // 如果索引是远端建的，检查当前配置是否一致
+  // 优先级规则：
+  //   1. meta 明确记录 embedMode=local  → 用本地模型（不走远端，避免 401）
+  //   2. meta 明确记录 embedMode=remote → 校验当前配置是否与索引一致
+  //   3. meta 不存在或 embedMode 缺失（旧索引）→ 根据当前配置动态选择，不做 embedKey 比对
   let embeddings
   if (meta?.embedMode === 'local') {
+    // 索引是用本地模型建的，检索时也用同一个本地模型
     const localModel = meta.model || LOCAL_EMBED_MODEL
     embeddings = _localEmbeddings?.modelName === localModel
       ? _localEmbeddings
       : new LocalEmbeddings(localModel)
-  } else {
+  } else if (meta?.embedMode === 'remote' && meta?.embedKey) {
+    // 索引是用远端建的，且有 embedKey 记录 → 检查配置是否变更
     const currentKey = getEmbeddingKey(cfg)
-    if (meta && meta.embedKey && meta.embedKey !== currentKey) {
+    if (meta.embedKey !== currentKey) {
       console.warn(
         `[RAG] Embedding 配置已变更，索引需要重建。\n` +
-        `  旧: ${meta.embedKey}（${meta.dimensions}维）\n` +
+        `  旧: ${meta.embedKey}（${meta.dimensions ?? '?'}维）\n` +
         `  新: ${currentKey}\n` +
         `  请在知识库页面点击「重建索引」`
       )
       return []
     }
     embeddings = getEmbeddings(aiConfig)
+  } else {
+    // 旧索引：无 meta 或 embedMode 未知 → 根据当前配置动态决定
+    // 不做 embedKey 比对（旧索引没有该信息），直接用当前配置
+    // 若当前配置有 API Key 走远端，否则走本地（与 buildIndex 逻辑一致）
+    const remote = getRemoteEmbeddings(cfg)
+    if (remote) {
+      embeddings = remote
+      console.log(`[RAG] 旧索引无 embedMode 记录，使用当前远端配置检索`)
+    } else {
+      embeddings = getLocalEmbeddings(cfg)
+      console.log(`[RAG] 旧索引无 embedMode 记录，无 API Key，使用本地模型检索`)
+    }
   }
 
   try {
@@ -650,18 +722,22 @@ export function getIndexStatus(userId) {
   // 检查是否有关键词索引
   const hasChunkStore = fs.existsSync(path.join(indexDir, CHUNK_STORE_FILE))
 
+  // 旧索引可能没有 meta.json 或 meta 字段不完整，统一返回 null 而非占位字符串，
+  // 让前端可以区分「有值」和「未知」，避免显示 "? 篇" "unknown · ? 维"
   return {
     indexed:       true,
     size:          stat.size,
     updatedAt:     stat.mtime.toISOString(),
     indexDir,
-    // embedding 相关信息
-    embedMode:     meta?.embedMode  || 'unknown',
-    model:         meta?.model      || 'unknown',
-    dimensions:    meta?.dimensions || '?',
-    chunks:        meta?.chunks     || '?',
-    docs:          meta?.docs       || '?',
+    // embedding 相关信息（无 meta 时为 null，前端按 null 判断）
+    embedMode:     meta?.embedMode  || null,
+    model:         meta?.model      || null,
+    dimensions:    meta?.dimensions ?? null,
+    chunks:        meta?.chunks     ?? null,
+    docs:          meta?.docs       ?? null,
     embedKey:      meta?.embedKey   || null,
+    // 旧索引没有 meta 时提示需要重建
+    needsRebuild:  !meta,
     // 混合检索能力
     hybridSearch:  hasChunkStore,
     // 检索参数（当前默认值）

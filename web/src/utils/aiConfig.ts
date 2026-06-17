@@ -44,7 +44,10 @@ export interface AIConfig {
   embeddingModel:       string  // 默认 text-embedding-3-small
   embeddingDimensions:  string  // 可选，输出向量维度，如 "1024"
   embeddingInstruction: string  // 可选，任务指令（部分模型支持）
-  embeddingExtraHeaders:string  // 可选，JSON 格式额外请求头
+  embeddingExtraHeaders: string  // 可选，JSON 格式额外请求头
+  localEmbeddingModel:   string  // 可选，本地向量模型 ID（无 API Key 时使用）
+  embeddingBatchSize:    string  // 可选，每批并发数，默认 "16"（遇到 429 可调小）
+  embeddingBatchDelayMs: string  // 可选，批次间延迟 ms，默认 "200"
 
   // 素材搜索
   searchProvider: 'serper' | 'bing' | 'searxng'  // 搜索引擎服务商
@@ -83,7 +86,10 @@ export const DEFAULT_CONFIG: AIConfig = {
   embeddingModel:        'text-embedding-3-small',
   embeddingDimensions:   '',
   embeddingInstruction:  '',
-  embeddingExtraHeaders: '',
+  embeddingExtraHeaders:  '',
+  localEmbeddingModel:    '',
+  embeddingBatchSize:     '1',
+  embeddingBatchDelayMs:  '3000',
 
   searchProvider: 'serper',
   searchApiKey:   '',

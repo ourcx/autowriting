@@ -121,10 +121,16 @@
   cursor: pointer;
   font-family: inherit;
   color: #0a0a0a;
-  transition: background 0.12s;
+  transition: background 0.12s, border-color 0.12s;
   width: 100%;
 }
 .rp-collapsible-header:hover { background: #f5f0e0; }
+/* 无 API Key 时本地模型面板高亮边框 */
+.rp-collapsible-header--highlight {
+  border-color: #15803d55;
+  background: #f0fdf4;
+}
+.rp-collapsible-header--highlight:hover { background: #dcfce7; }
 
 .rp-collapsible-left {
   display: flex;
@@ -136,6 +142,7 @@
 .rp-badge-warn  { font-size: 11px; font-weight: 600; background: #fff3cd; color: #92700a; padding: 2px 8px; border-radius: 9999px; }
 .rp-badge-info  { font-size: 11px; font-weight: 600; background: #e8f0fe; color: #1a56db; padding: 2px 8px; border-radius: 9999px; }
 .rp-badge-dirty { font-size: 11px; font-weight: 600; background: #fff0f0; color: #dc2626; padding: 2px 8px; border-radius: 9999px; }
+.rp-badge-local { font-size: 11px; font-weight: 600; background: #f0fdf4; color: #15803d; padding: 2px 8px; border-radius: 9999px; }
 
 .rp-emb-card {
   background: #fff;
@@ -424,6 +431,12 @@
   color: #dc2626;
 }
 
+.rp-build-log--warn {
+  background: #fff8e8;
+  border-color: #e8b94a66;
+  color: #92700a;
+}
+
 /* ── 搜索区 ── */
 
 .rp-search-row {
@@ -602,6 +615,138 @@
   border-radius: 4px;
 }
 .rp-guide-card--teal code { background: rgba(255,255,255,0.15); }
+
+/* ── 状态区模型标签 ── */
+
+.rp-status-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 11px;
+  background: #ebe6d6;
+  padding: 1px 7px;
+  border-radius: 4px;
+  color: #3a3a3a;
+}
+
+/* ── 本地模型选择列表 ── */
+
+.rp-local-desc {
+  font-size: 13px;
+  line-height: 1.65;
+  color: #5a5a5a;
+  padding: 4px 0 8px;
+}
+
+.rp-local-model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rp-local-model-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1.5px solid #e5e5e5;
+  border-radius: 10px;
+  background: #faf5e8;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.rp-local-model-item:hover { background: #f5f0e0; border-color: #d0c9b5; }
+.rp-local-model-item--active {
+  border-color: #0a0a0a;
+  background: #fff;
+}
+.rp-local-model-item--custom {
+  cursor: default;
+}
+.rp-local-model-item--custom:hover { background: #faf5e8; border-color: #e5e5e5; }
+.rp-local-model-item--custom.rp-local-model-item--active { border-color: #0a0a0a; }
+
+.rp-local-model-radio {
+  display: flex;
+  align-items: center;
+  padding-top: 2px;
+  flex-shrink: 0;
+}
+
+.rp-radio-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #ccc;
+  background: #fff;
+  transition: border-color 0.12s, background 0.12s;
+  flex-shrink: 0;
+}
+.rp-radio-dot--on {
+  border-color: #0a0a0a;
+  background: #0a0a0a;
+  box-shadow: inset 0 0 0 3px #fff;
+}
+
+.rp-local-model-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.rp-local-model-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0a0a0a;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rp-local-model-tag {
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 9999px;
+}
+.rp-local-model-tag--default {
+  background: #e8f0fe;
+  color: #1a56db;
+}
+
+.rp-local-model-meta {
+  font-size: 12px;
+  color: #6a6a6a;
+  margin-top: 3px;
+  line-height: 1.5;
+}
+
+.rp-local-model-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #1a56db;
+  text-decoration: none;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #e8f0fe55;
+  flex-shrink: 0;
+  transition: background 0.12s;
+  margin-top: 1px;
+}
+.rp-local-model-link:hover { background: #e8f0fe; }
+
+.rp-inline-link {
+  color: #1a56db;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.rp-inline-link:hover { color: #1545a0; }
 
 /* ── 按钮 ── */
 

@@ -1,45 +1,53 @@
 /**
  * RAG 管理页  /rag
  * - Embedding 配置（Key / Base URL / 模型）存 localStorage
+ * - 本地模型配置（无 API Key 时降级使用，可选推荐模型）
  * - 索引状态 + 一键重建（异步，轮询进度）
  * - 相似度搜索测试
  */
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, Database, RefreshCw, Search,
+  Database, RefreshCw, Search,
   FileText, Layers, BookOpen, AlertCircle, CheckCircle,
-  Settings2, ChevronDown, ChevronRight,
+  Settings2, ChevronDown, ChevronRight, ExternalLink, Cpu,
 } from 'lucide-react'
 import { toast } from '../components/Toast'
 import { useConfigStore, updateLocalConfig } from '../store/useConfigStore'
 import './RagPage.css'
 
 interface IndexStatus {
-  indexed:     boolean
-  size?:       number
-  updatedAt?:  string
-  indexDir?:   string
-  building?:   boolean
-  progress?:   string
+  indexed: boolean
+  size?: number
+  updatedAt?: string
+  indexDir?: string
+  building?: boolean
+  progress?: string
   buildError?: string | null
   buildResult?: { indexed: number; chunks: number } | null
-  startedAt?:  string | null
+  startedAt?: string | null
+  needsRebuild?: boolean          // 旧索引无 meta，建议重建
+  // embedding 信息（来自 meta.json，旧索引无 meta 时为 null）
+  embedMode?: string | null
+  model?: string | null
+  dimensions?: number | string | null
+  chunks?: number | string | null
+  docs?: number | string | null
 }
 
 interface RagDoc {
   content: string
-  source:  string
-  type:    string
-  dir:     string
-  score:   number
+  source: string
+  type: string
+  dir: string
+  score: number
 }
 
 const TYPE_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-  article:  { label: '往期文章', color: 'peach',    icon: <FileText  size={13} /> },
-  task:     { label: '任务参考', color: 'lavender', icon: <Layers    size={13} /> },
-  materials:{ label: '素材参考', color: 'ochre',    icon: <BookOpen  size={13} /> },
-  task_sub: { label: '任务参考', color: 'lavender', icon: <Layers    size={13} /> },
+  article: { label: '往期文章', color: 'peach', icon: <FileText size={13} /> },
+  task: { label: '任务参考', color: 'lavender', icon: <Layers size={13} /> },
+  materials: { label: '素材参考', color: 'ochre', icon: <BookOpen size={13} /> },
+  task_sub: { label: '任务参考', color: 'lavender', icon: <Layers size={13} /> },
 }
 
 const PRESET_MODELS = [
@@ -48,9 +56,52 @@ const PRESET_MODELS = [
   'text-embedding-ada-002',
 ]
 
+// 推荐本地模型：无需 API Key，首次自动下载
+const LOCAL_MODEL_PRESETS: Array<{
+  id: string
+  label: string
+  dims: number
+  size: string
+  note: string
+  url: string
+}> = [
+    {
+      id: 'Xenova/multilingual-e5-small',
+      label: 'multilingual-e5-small',
+      dims: 384,
+      size: '~120 MB',
+      note: '默认，支持中文，速度快',
+      url: 'https://huggingface.co/intfloat/multilingual-e5-small',
+    },
+    {
+      id: 'Xenova/multilingual-e5-base',
+      label: 'multilingual-e5-base',
+      dims: 768,
+      size: '~280 MB',
+      note: '质量更高，速度适中',
+      url: 'https://huggingface.co/intfloat/multilingual-e5-base',
+    },
+    {
+      id: 'Xenova/multilingual-e5-large',
+      label: 'multilingual-e5-large',
+      dims: 1024,
+      size: '~560 MB',
+      note: '最高质量，首次下载较慢',
+      url: 'https://huggingface.co/intfloat/multilingual-e5-large',
+    },
+    {
+      id: 'Xenova/paraphrase-multilingual-MiniLM-L12-v2',
+      label: 'paraphrase-multilingual-MiniLM-L12-v2',
+      dims: 384,
+      size: '~120 MB',
+      note: '句子语义匹配，中文友好',
+      url: 'https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2',
+    },
+  ]
+
 function fmtSize(bytes: number) {
-  if (bytes < 1024)       return `${bytes} B`
-  if (bytes < 1024 ** 2)  return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / 1024 ** 2).toFixed(2)} MB`
 }
 
@@ -59,30 +110,34 @@ export default function RagPage() {
   const { localConfig } = useConfigStore()
 
   // ── Embedding 配置（读写 localConfig）────────────────────────────────────
-  const [embKey,     setEmbKey]     = useState(localConfig.embeddingApiKey       || '')
-  const [embUrl,     setEmbUrl]     = useState(localConfig.embeddingBaseUrl      || 'https://api.openai.com/v1')
-  const [embModel,   setEmbModel]   = useState(localConfig.embeddingModel        || 'text-embedding-3-small')
-  const [embDims,    setEmbDims]    = useState(localConfig.embeddingDimensions   || '')
-  const [embInstr,   setEmbInstr]   = useState(localConfig.embeddingInstruction  || '')
+  const [embKey, setEmbKey] = useState(localConfig.embeddingApiKey || '')
+  const [embUrl, setEmbUrl] = useState(localConfig.embeddingBaseUrl || 'https://api.openai.com/v1')
+  const [embModel, setEmbModel] = useState(localConfig.embeddingModel || 'text-embedding-3-small')
+  const [embDims, setEmbDims] = useState(localConfig.embeddingDimensions || '')
+  const [embInstr, setEmbInstr] = useState(localConfig.embeddingInstruction || '')
   const [embHeaders, setEmbHeaders] = useState(localConfig.embeddingExtraHeaders || '')
-  const [embOpen,    setEmbOpen]    = useState(!localConfig.embeddingApiKey) // 未配置时默认展开
-  const [embDirty,   setEmbDirty]   = useState(false)
+  const [embBatchSize,  setEmbBatchSize]  = useState(localConfig.embeddingBatchSize    || '1')
+  const [embBatchDelay, setEmbBatchDelay] = useState(localConfig.embeddingBatchDelayMs || '3000')
+  const [localModel, setLocalModel] = useState(localConfig.localEmbeddingModel || '')
+  const [embOpen, setEmbOpen] = useState(!localConfig.embeddingApiKey) // 未配置时默认展开
+  const [localModelOpen, setLocalModelOpen] = useState(!localConfig.localEmbeddingModel)
+  const [embDirty, setEmbDirty] = useState(false)
   const [headersErr, setHeadersErr] = useState(false)
 
   // ── 索引状态 ──────────────────────────────────────────────────────────────
-  const [status,    setStatus]    = useState<IndexStatus | null>(null)
-  const [building,  setBuilding]  = useState(false)
-  const [buildLog,  setBuildLog]  = useState<{ ok: boolean; msg: string } | null>(null)
+  const [status, setStatus] = useState<IndexStatus | null>(null)
+  const [building, setBuilding] = useState(false)
+  const [buildLog, setBuildLog] = useState<{ ok: boolean; msg: string } | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // ── 搜索 ──────────────────────────────────────────────────────────────────
-  const [query,     setQuery]     = useState('')
+  const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
-  const [results,   setResults]   = useState<RagDoc[] | null>(null)
+  const [results, setResults] = useState<RagDoc[] | null>(null)
 
   // 实际生效的 key：专用 > 文章 key 回落
   const effectiveKey = embKey || localConfig.articleApiKey || ''
-  const hasKey       = !!effectiveKey
+  const hasKey = !!effectiveKey
 
   // 校验 extraHeaders JSON
   const headersValid = !embHeaders || (() => {
@@ -91,12 +146,15 @@ export default function RagPage() {
 
   // 组装发给后端的 aiConfig
   const embAiConfig = {
-    embeddingApiKey:      effectiveKey,
-    embeddingBaseUrl:     embUrl         || 'https://api.openai.com/v1',
-    embeddingModel:       embModel       || 'text-embedding-3-small',
-    embeddingDimensions:  embDims        ? Number(embDims) : undefined,
-    embeddingInstruction: embInstr       || undefined,
-    embeddingExtraHeaders:embHeaders     || undefined,
+    embeddingApiKey: effectiveKey,
+    embeddingBaseUrl: embUrl || 'https://api.openai.com/v1',
+    embeddingModel: embModel || 'text-embedding-3-small',
+    embeddingDimensions: embDims ? Number(embDims) : undefined,
+    embeddingInstruction: embInstr || undefined,
+    embeddingExtraHeaders: embHeaders || undefined,
+    localEmbeddingModel: localModel || undefined,
+    embeddingBatchSize: embBatchSize ? Number(embBatchSize) : undefined,
+    embeddingBatchDelayMs: embBatchDelay ? Number(embBatchDelay) : undefined,
   }
 
   useEffect(() => {
@@ -141,12 +199,15 @@ export default function RagPage() {
   function saveEmbConfig() {
     if (embHeaders && !headersValid) { toast.error('Extra Headers 不是合法的 JSON'); return }
     updateLocalConfig({
-      embeddingApiKey:       embKey,
-      embeddingBaseUrl:      embUrl,
-      embeddingModel:        embModel,
-      embeddingDimensions:   embDims,
-      embeddingInstruction:  embInstr,
+      embeddingApiKey: embKey,
+      embeddingBaseUrl: embUrl,
+      embeddingModel: embModel,
+      embeddingDimensions: embDims,
+      embeddingInstruction: embInstr,
       embeddingExtraHeaders: embHeaders,
+      localEmbeddingModel: localModel,
+      embeddingBatchSize: embBatchSize || '16',
+      embeddingBatchDelayMs: embBatchDelay || '200',
     })
     setEmbDirty(false)
     setHeadersErr(false)
@@ -154,15 +215,16 @@ export default function RagPage() {
   }
 
   async function handleBuild() {
-    if (!hasKey) { toast.error('请先配置 Embedding API Key'); return }
-    if (embDirty) { toast.warn('配置有未保存的改动，请先保存'); return }
+    if (!hasKey && !localModel) { toast.error('请先配置 API Key 或选择本地向量模型'); return }
+    if (!hasKey && localModel && embDirty) { toast.warn('配置有未保存的改动，请先保存'); return }
+    if (hasKey && embDirty) { toast.warn('配置有未保存的改动，请先保存'); return }
     setBuilding(true)
     setBuildLog(null)
     try {
-      const res  = await fetch('/api/rag/index', {
-        method:  'POST',
+      const res = await fetch('/api/rag/index', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body:    JSON.stringify({ aiConfig: embAiConfig }),
+        body: JSON.stringify({ aiConfig: embAiConfig }),
       })
       const data = await res.json()
       if (data.error) throw new Error(data.error)
@@ -179,14 +241,14 @@ export default function RagPage() {
 
   async function handleSearch() {
     if (!query.trim()) return
-    if (!hasKey) { toast.error('请先配置 Embedding API Key'); return }
+    if (!hasKey && !localModel) { toast.error('请先配置 API Key 或选择本地向量模型'); return }
     setSearching(true)
     setResults(null)
     try {
-      const res  = await fetch('/api/rag/search', {
-        method:  'POST',
+      const res = await fetch('/api/rag/search', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body:    JSON.stringify({ query: query.trim(), topK: 6, aiConfig: embAiConfig }),
+        body: JSON.stringify({ query: query.trim(), topK: 6, aiConfig: embAiConfig }),
       })
       const data = await res.json()
       if (data.error) throw new Error(data.error)
@@ -197,6 +259,9 @@ export default function RagPage() {
       setSearching(false)
     }
   }
+
+  // 是否可以构建：有 API Key 或选了本地模型，且配置已保存
+  const canBuild = (hasKey || !!localModel) && !embDirty
 
   return (
     <div className="rp-root">
@@ -216,12 +281,12 @@ export default function RagPage() {
 
       <div className="rp-body">
 
-        {/* ══ Embedding 配置 ══ */}
+        {/* ══ 远端 Embedding 配置 ══ */}
         <section className="rp-section">
           <button className="rp-collapsible-header" onClick={() => setEmbOpen(v => !v)}>
             <div className="rp-collapsible-left">
               <Settings2 size={15} />
-              <span className="rp-section-label" style={{ margin: 0 }}>Embedding 配置</span>
+              <span className="rp-section-label" style={{ margin: 0 }}>远端 Embedding（API）</span>
               {!hasKey && <span className="rp-badge-warn">未配置</span>}
               {hasKey && !embKey && <span className="rp-badge-info">使用文章 Key</span>}
               {embDirty && <span className="rp-badge-dirty">未保存</span>}
@@ -342,13 +407,166 @@ export default function RagPage() {
                   {headersErr && <span className="rp-field-error">不是合法的 JSON</span>}
                 </div>
 
+                {/* 限流控制 */}
+                <div className="rp-field" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label className="rp-field-label">
+                      批并发数
+                      <span className="rp-field-hint">遇到 429 时调小，默认 16</span>
+                    </label>
+                    <input
+                      className="rp-input rp-input-mono"
+                      type="number"
+                      min={1}
+                      max={128}
+                      value={embBatchSize}
+                      onChange={e => { setEmbBatchSize(e.target.value); setEmbDirty(true) }}
+                    />
+                  </div>
+                  <div>
+                    <label className="rp-field-label">
+                      批次延迟 (ms)
+                      <span className="rp-field-hint">批次间等待时间，默认 200</span>
+                    </label>
+                    <input
+                      className="rp-input rp-input-mono"
+                      type="number"
+                      min={0}
+                      max={5000}
+                      value={embBatchDelay}
+                      onChange={e => { setEmbBatchDelay(e.target.value); setEmbDirty(true) }}
+                    />
+                  </div>
+                </div>
+
               </div>
 
               <div className="rp-emb-footer">
                 <span className="rp-emb-info">
                   {hasKey
                     ? `当前使用${embKey ? '专用 Key' : '文章 Key 回落'} · ${embModel || 'text-embedding-3-small'}`
-                    : '未配置任何 Key，无法构建索引'}
+                    : '未配置任何 Key，将使用本地模型'}
+                </span>
+                <button
+                  className="rp-btn-primary"
+                  onClick={saveEmbConfig}
+                  disabled={!embDirty}
+                >
+                  保存配置
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* ══ 本地向量模型（无 API Key 时的降级方案） ══ */}
+        <section className="rp-section">
+          <button
+            className={`rp-collapsible-header${!hasKey ? ' rp-collapsible-header--highlight' : ''}`}
+            onClick={() => setLocalModelOpen(v => !v)}
+          >
+            <div className="rp-collapsible-left">
+              <Cpu size={15} />
+              <span className="rp-section-label" style={{ margin: 0 }}>本地向量模型（离线降级）</span>
+              {!hasKey && !localModel && <span className="rp-badge-warn">使用默认</span>}
+              {localModel && <span className="rp-badge-info">{localModel.split('/').pop()}</span>}
+              {!hasKey && <span className="rp-badge-local">无需 API Key</span>}
+            </div>
+            {localModelOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+          </button>
+
+          {localModelOpen && (
+            <div className="rp-emb-card">
+              <div className="rp-local-desc">
+                无远端 API Key 时自动使用本地模型（基于 @xenova/transformers，首次运行自动下载权重文件）。
+                选择模型后保存配置，再重建索引即可生效。切换模型必须重建索引。
+              </div>
+
+              {/* 推荐模型列表 */}
+              <div className="rp-local-model-list">
+                {/* 默认选项：使用系统默认 */}
+                <label
+                  className={`rp-local-model-item${!localModel ? ' rp-local-model-item--active' : ''}`}
+                  onClick={() => { setLocalModel(''); setEmbDirty(true) }}
+                >
+                  <div className="rp-local-model-radio">
+                    <div className={`rp-radio-dot${!localModel ? ' rp-radio-dot--on' : ''}`} />
+                  </div>
+                  <div className="rp-local-model-info">
+                    <div className="rp-local-model-name">
+                      multilingual-e5-small
+                      <span className="rp-local-model-tag rp-local-model-tag--default">默认</span>
+                    </div>
+                    <div className="rp-local-model-meta">384 维 · ~120 MB · 支持中文，速度最快</div>
+                  </div>
+                  <a
+                    href="https://huggingface.co/intfloat/multilingual-e5-small"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rp-local-model-link"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <ExternalLink size={12} />
+                    HF
+                  </a>
+                </label>
+
+                {LOCAL_MODEL_PRESETS.slice(1).map(m => (
+                  <label
+                    key={m.id}
+                    className={`rp-local-model-item${localModel === m.id ? ' rp-local-model-item--active' : ''}`}
+                    onClick={() => { setLocalModel(m.id); setEmbDirty(true) }}
+                  >
+                    <div className="rp-local-model-radio">
+                      <div className={`rp-radio-dot${localModel === m.id ? ' rp-radio-dot--on' : ''}`} />
+                    </div>
+                    <div className="rp-local-model-info">
+                      <div className="rp-local-model-name">{m.label}</div>
+                      <div className="rp-local-model-meta">{m.dims} 维 · {m.size} · {m.note}</div>
+                    </div>
+                    <a
+                      href={m.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rp-local-model-link"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <ExternalLink size={12} />
+                      HF
+                    </a>
+                  </label>
+                ))}
+
+                {/* 自定义输入 */}
+                <div className={`rp-local-model-item rp-local-model-item--custom${localModel && !LOCAL_MODEL_PRESETS.find(m => m.id === localModel) ? ' rp-local-model-item--active' : ''}`}>
+                  <div className="rp-local-model-radio">
+                    <div className={`rp-radio-dot${localModel && !LOCAL_MODEL_PRESETS.find(m => m.id === localModel) ? ' rp-radio-dot--on' : ''}`} />
+                  </div>
+                  <div className="rp-local-model-info" style={{ flex: 1 }}>
+                    <div className="rp-local-model-name">自定义模型 ID</div>
+                    <input
+                      className="rp-input rp-input-mono"
+                      style={{ marginTop: 6, height: 36 }}
+                      placeholder="Xenova/your-custom-model"
+                      value={localModel && !LOCAL_MODEL_PRESETS.find(m => m.id === localModel) ? localModel : ''}
+                      onChange={e => { setLocalModel(e.target.value); setEmbDirty(true) }}
+                      onClick={e => e.stopPropagation()}
+                    />
+                    <div className="rp-local-model-meta" style={{ marginTop: 4 }}>
+                      需使用 Xenova/ 前缀，来自{' '}
+                      <a href="https://huggingface.co/models?library=transformers.js&pipeline_tag=feature-extraction" target="_blank" rel="noreferrer" className="rp-inline-link">
+                        HuggingFace Transformers.js 兼容模型
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rp-emb-footer">
+                <span className="rp-emb-info">
+                  {localModel
+                    ? `已选择: ${localModel}`
+                    : '使用默认模型 Xenova/multilingual-e5-small（384 维）'}
                 </span>
                 <button
                   className="rp-btn-primary"
@@ -368,6 +586,12 @@ export default function RagPage() {
           <span>知识库只索引<strong>服务端存储</strong>的文章。新建文章时选择「本地存储」的草稿不会被收录——如需参考历史风格，请改用服务端模式生成。</span>
         </div>
 
+        {/* ══ 索引能力说明 ══ */}
+        <div className="rp-scope-notice">
+          <span className="rp-scope-notice-icon">ⓘ</span>
+          <span>知识库索引文章存在上限。不能有太多文章被索引</span>
+        </div>
+
         {/* ══ 索引状态 ══ */}
         <section className="rp-section">
           <div className="rp-section-label">索引状态</div>
@@ -384,18 +608,31 @@ export default function RagPage() {
               )}
               <div>
                 <div className="rp-status-title">
-                  {status === null                           && '加载中...'}
+                  {status === null && '加载中...'}
                   {status !== null && (status.building || building) && `构建中：${status.progress || '准备中...'}`}
                   {status !== null && !status.building && !building && !status.indexed && '尚未建立索引'}
-                  {status !== null && !status.building && !building && status.indexed  && '索引已就绪'}
+                  {status !== null && !status.building && !building && status.indexed && '索引已就绪'}
                 </div>
                 <div className="rp-status-meta">
                   {status?.building && status.startedAt && (
                     <span>开始于 {new Date(status.startedAt).toLocaleTimeString('zh-CN')}</span>
                   )}
-                  {!status?.building && !building && status?.indexed && status.size && <span>{fmtSize(status.size)}</span>}
-                  {!status?.building && !building && status?.indexed && status.updatedAt && (
-                    <span>更新于 {new Date(status.updatedAt).toLocaleString('zh-CN')}</span>
+                  {!status?.building && !building && status?.indexed && (
+                    <>
+                      {status.size != null && <span>{fmtSize(status.size)}</span>}
+                      {status.docs != null && <span>{status.docs} 篇</span>}
+                      {status.chunks != null && <span>{status.chunks} 段</span>}
+                      {status.model && status.model !== 'unknown' ? (
+                        <span className="rp-status-model">
+                          {status.embedMode === 'local' ? <Cpu size={11} /> : null}
+                          {status.model.split('/').pop()}
+                          {status.dimensions != null ? ` · ${status.dimensions} 维` : ''}
+                        </span>
+                      ) : null}
+                      {status.updatedAt && (
+                        <span>更新于 {new Date(status.updatedAt).toLocaleString('zh-CN')}</span>
+                      )}
+                    </>
                   )}
                   {!status?.indexed && !status?.building && !building && status !== null && (
                     <span>扫描草稿目录，向量化后存入本地 HNSWLib</span>
@@ -406,8 +643,12 @@ export default function RagPage() {
             <button
               className={`rp-btn-primary${(building || status?.building) ? ' rp-btn-loading' : ''}`}
               onClick={handleBuild}
-              disabled={building || status?.building || !hasKey || embDirty}
-              title={!hasKey ? '请先配置 Key' : embDirty ? '请先保存 Embedding 配置' : ''}
+              disabled={building || status?.building || !canBuild}
+              title={
+                !hasKey && !localModel ? '请先配置 API Key 或选择本地模型'
+                  : embDirty ? '请先保存 Embedding 配置'
+                    : ''
+              }
             >
               <RefreshCw size={14} className={(building || status?.building) ? 'rp-spin' : ''} />
               {(building || status?.building) ? '构建中...' : status?.indexed ? '重新构建' : '立即构建'}
@@ -418,6 +659,13 @@ export default function RagPage() {
           {(building || status?.building) && (
             <div className="rp-progress-bar">
               <div className="rp-progress-bar-inner rp-progress-bar-animate" />
+            </div>
+          )}
+
+          {/* 旧索引提示：无 meta.json，建议重建 */}
+          {status?.indexed && status?.needsRebuild && !building && !status?.building && (
+            <div className="rp-build-log rp-build-log--warn">
+              当前索引是旧版本格式（缺少 meta 记录），检索时会自动适配当前配置，但建议点击「重新构建」生成完整索引。
             </div>
           )}
 
@@ -484,8 +732,8 @@ export default function RagPage() {
           <div className="rp-guide-grid">
             <div className="rp-guide-card rp-guide-card--teal">
               <div className="rp-guide-step">01</div>
-              <div className="rp-guide-title">配置 Embedding</div>
-              <p>填写 API Key 和模型名（兼容任意 OpenAI 格式接口）。留空 Key 时自动回落到文章生成的 Key。</p>
+              <div className="rp-guide-title">配置向量模型</div>
+              <p>有 API Key 时走远端接口（质量更好）；没有 Key 时在「本地向量模型」选一个，首次运行自动下载权重。</p>
             </div>
             <div className="rp-guide-card rp-guide-card--peach">
               <div className="rp-guide-step">02</div>
