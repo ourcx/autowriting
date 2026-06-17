@@ -174,10 +174,10 @@ function copyHtmlViaExecCommand(
     //    用子元素 margin 而非容器 padding 的原因：
     //    微信编辑器在粘贴时会清洗外层 <section> 的 padding，但会保留块级元素自身的 margin。
     const SIDE = '32px'
-    ;(Array.from(section.children) as HTMLElement[]).forEach(child => {
-      child.style.setProperty('margin-left', SIDE)
-      child.style.setProperty('margin-right', SIDE)
-    })
+      ; (Array.from(section.children) as HTMLElement[]).forEach(child => {
+        child.style.setProperty('margin-left', SIDE)
+        child.style.setProperty('margin-right', SIDE)
+      })
 
     // 4. 移除 <style> 标签（样式已内联，不需要再带进剪贴板）
     container.querySelector('style')?.remove()
@@ -235,9 +235,9 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
   const previewRef = useRef<HTMLDivElement>(null)
 
   // 推送草稿状态
-  const [wxBound, setWxBound]       = useState(false)
-  const [pushing, setPushing]       = useState(false)
-  const [pushDone, setPushDone]     = useState(false)
+  const [wxBound, setWxBound] = useState(false)
+  const [pushing, setPushing] = useState(false)
+  const [pushDone, setPushDone] = useState(false)
 
   // 图片库选择器状态
   const [showImageLibrary, setShowImageLibrary] = useState(false)
@@ -289,7 +289,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
       setTemplates(all)
       const def = all.find(t => t.id === 'default') ?? all[0]
       if (def) setEditedCss(def.css)
-    }).catch(() => {})
+    }).catch(() => { })
   }, [])
 
   // 监听 StyleEditor 发出的模板更新事件
@@ -304,7 +304,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
           setTemplateId('default')
           setEditedCss(all[0]?.css ?? '')
         }
-      }).catch(() => {})
+      }).catch(() => { })
     }
     window.addEventListener('wxtemplates-updated', sync)
     return () => window.removeEventListener('wxtemplates-updated', sync)
@@ -350,6 +350,16 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
 
   // 推送草稿到公众号草稿箱
   const handlePushDraft = useCallback(async () => {
+    if (!wxBound) {
+      //没有绑定公众号要提示绑定
+      toast.warn('请先绑定公众号', {
+        duration: 2500,
+        action: {
+          label: '去绑定',
+          onClick: () => navigate('/settings'),
+        },
+      })
+    }
     if (!title?.trim() || !html?.trim()) {
       toast.warn('标题或内容为空，无法推送草稿')
       return
@@ -476,8 +486,8 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
             {copied ? '已复制！' : '复制内容'}
           </button>
 
-          {/* 推送草稿按钮：已绑定公众号才显示 */}
-          {wxBound && (
+          {/* 推送草稿按钮：不绑定公众号也显示 */}
+          {(
             <>
               {/* 选择封面图片按钮 */}
               <button
