@@ -39,7 +39,7 @@ export default function WeChatPreview() {
             返回
           </button>
           <div className="preview-nav-title">
-            <span className="preview-nav-label">公众号预览</span>
+            <span className="preview-nav-label">发布预览</span>
             <span className="preview-nav-article">{title}</span>
           </div>
           <button
@@ -60,7 +60,7 @@ export default function WeChatPreview() {
             <p>加载文章中...</p>
           </div>
         ) : (
-          <WeChatRenderer content={data.article} title={title} />
+          <WeChatRenderer content={data.article} title={title} articleId={articleId} />
         )}
       </main>
     </div>

@@ -548,7 +548,64 @@ ${article}
     "score": <0-100，与往期风格一致性，无往期数据时返回-1>,
     "note": <一句话说明，如「开头较官方，与往期直接切入的习惯有差异」>
   },
-  "topSuggestion": <最重要的一条改进建议，不超过80字>
+  "topSuggestion": <最重要的一条改进建议，不超过80字>,
+  "uiBlocks": [
+    根据文章的实际问题，从以下类型中选择 1-4 个最有价值的 UI 块，按优先级排序。
+
+    如果发现 AI 套话（issues 中有 type 包含"套话"或"AI腔"的 error/warn 级别问题），必须包含：
+    {
+      "type": "cliche-diff",
+      "title": "套话对比修改",
+      "items": [
+        {
+          "original": <原文中的套话句子，完整句子>,
+          "suggestion": <具体的改写建议，给出替换后的句子>
+        }
+      ]
+    }
+
+    如果发现缺乏数据支撑（issues 中有关于"数据""案例""具体"的问题），必须包含：
+    {
+      "type": "data-suggestion",
+      "title": "数据补充建议",
+      "items": [
+        {
+          "claim": <文章中的空泛表述，原文引用>,
+          "dataHint": <建议补充什么类型的数据或案例，具体说明>
+        }
+      ]
+    }
+
+    如果发现结构问题（issues 中有关于"结构""逻辑""段落"的问题），必须包含：
+    {
+      "type": "structure-map",
+      "title": "结构诊断",
+      "sections": [
+        {
+          "heading": <段落标题或「开头」「结尾」>,
+          "status": <"good"|"warn"|"error">,
+          "note": <一句话评价，不超过30字>
+        }
+      ]
+    }
+
+    如果文章开头有套话或不够直接，必须包含：
+    {
+      "type": "lead-rewrite",
+      "title": "开头改写建议",
+      "original": <原文开头段落，完整引用>,
+      "rewritten": <改写后的开头，直接切入主题，保持原意>
+    }
+
+    如果文章整体质量不错（overall >= 75），可以包含：
+    {
+      "type": "highlight-quote",
+      "title": "文章金句",
+      "quotes": [<文章中最有力的 1-3 句话，原文引用>]
+    }
+
+    注意：uiBlocks 数组只包含真正适用的块，不要强行凑数。如果文章质量很好，可以只返回 highlight-quote。
+  ]
 }`
 
     // ── 3. 调用 LLM（带重试）──────────────────────────────────────────────────
@@ -561,13 +618,20 @@ ${article}
         { role: 'user',   content: prompt },
       ],
       temperature: 0.3,
-      max_tokens: 2048,
+      max_tokens: 3500,
     }, headers)
 
     const raw = llmRes.data.choices[0].message.content.trim()
     // 去掉可能的 ```json 包裹
     const cleaned = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
-    const result  = JSON.parse(cleaned)
+    let result
+    try {
+      result = JSON.parse(cleaned)
+    } catch {
+      // JSON 解析失败时尝试截断修复（uiBlocks 过长可能被截断）
+      const truncated = cleaned.replace(/,?\s*"uiBlocks"\s*:[\s\S]*$/, '') + '}'
+      result = JSON.parse(truncated)
+    }
 
     const fullResult = { ...result, ragCount: similarArticles.length }
 

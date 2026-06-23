@@ -645,3 +645,513 @@
   overflow-y: auto;
   padding: 20px 24px;
 }
+
+/* ── 平台切换 Tab ─────────────────────────────────────────────── */
+.wr-platform-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 16px;
+  background: var(--color-surface-soft);
+  border-bottom: 1px solid var(--color-hairline);
+  flex-shrink: 0;
+}
+
+.wr-platform-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.wr-platform-tab:hover {
+  background: var(--color-surface-card);
+  color: var(--color-ink);
+}
+
+.wr-platform-tab.active {
+  background: #e8f4f0;
+  border-color: #a4d4c5;
+  color: #1a3a3a;
+  font-weight: 600;
+}
+
+/* ── 今日头条 Tab 激活态（Clay peach 调） ──────────────────── */
+.wr-platform-tab--toutiao.active {
+  background: #fff4ec;
+  border-color: #ffb084;
+  color: #c45000;
+}
+
+/* ── 今日头条工具栏提示 ──────────────────────────────────────── */
+.wr-tt-tip {
+  font-size: 12px;
+  color: #7a6a5a;
+  background: #fff8f2;
+  border: 1px solid #ffd4b0;
+  border-radius: 8px;
+  padding: 3px 10px;
+  white-space: nowrap;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* ── 今日头条复制按钮（Clay peach 调） ──────────────────────── */
+.wr-copy-btn--toutiao {
+  background: #ffb084 !important;
+  color: #1a3a3a !important;
+}
+
+.wr-copy-btn--toutiao:hover {
+  background: #ff9060 !important;
+  box-shadow: 0 4px 16px rgba(255, 144, 96, 0.35) !important;
+}
+
+.wr-copy-btn--toutiao.success {
+  background: #4caf7d !important;
+  color: #fff !important;
+}
+
+/* ── 打开头条编辑器按钮 ──────────────────────────────────────── */
+.wr-tt-open-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 18px;
+  background: transparent;
+  color: #c45000;
+  border: 1.5px solid #ffb084;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'Inter', system-ui, sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+
+.wr-tt-open-btn:hover {
+  background: #fff4ec;
+  border-color: #ff9060;
+  box-shadow: 0 2px 10px rgba(255, 144, 96, 0.2);
+  transform: translateY(-1px);
+}
+
+/* ── 今日头条预览区 ───────────────────────────────────────────── */
+.wr-tt-preview {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  justify-content: center;
+  padding: 40px clamp(32px, 8vw, 100px) 80px;
+  background: #f0ebe0;
+  min-width: 0;
+}
+
+.wr-tt-preview::-webkit-scrollbar { width: 6px; }
+.wr-tt-preview::-webkit-scrollbar-track { background: transparent; }
+.wr-tt-preview::-webkit-scrollbar-thumb { background: #c8bfb0; border-radius: 3px; }
+
+/* ── 预览卡片（Clay surface-card 风格） ─────────────────────── */
+.wr-tt-card {
+  width: 100%;
+  max-width: 680px;
+  background: #fffaf0;
+  border-radius: 24px;
+  border: 1.5px solid #e8e0d0;
+  box-shadow:
+    0 2px 0 #e0d8c8,
+    0 8px 24px rgba(26, 58, 58, 0.08),
+    0 24px 48px rgba(26, 58, 58, 0.06);
+  overflow: hidden;
+  height: fit-content;
+  animation: card-in 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* 顶部 peach 装饰条 */
+.wr-tt-card::before {
+  content: '';
+  display: block;
+  height: 4px;
+  background: linear-gradient(90deg, #ffb084 0%, #ff9060 60%, #e8b94a 100%);
+  border-radius: 0;
+}
+
+.wr-tt-header {
+  padding: 32px 32px 20px;
+  border-bottom: 1.5px solid #ede5d8;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── 头条 badge（Clay ochre 调） ────────────────────────────── */
+.wr-tt-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: #c45000;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  background: #fff4ec;
+  border: 1px solid #ffd4b0;
+  padding: 3px 10px;
+  border-radius: 6px;
+  width: fit-content;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.wr-tt-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #1a3a3a;
+  line-height: 1.4;
+  letter-spacing: -0.3px;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.wr-tt-body {
+  padding: 28px 32px;
+}
+
+/* ── 今日头条 Markdown 渲染（模拟头条阅读器风格） ────────────── */
+.wr-tt-md-render {
+  font-size: 16px;
+  line-height: 1.85;
+  color: #2d2d2d;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.wr-tt-md-render h1,
+.wr-tt-md-render h2,
+.wr-tt-md-render h3 {
+  font-weight: 700;
+  color: #1a3a3a;
+  margin: 1.5em 0 0.6em;
+  line-height: 1.4;
+}
+
+.wr-tt-md-render h1 { font-size: 1.5em; }
+.wr-tt-md-render h2 { font-size: 1.25em; }
+.wr-tt-md-render h3 { font-size: 1.1em; }
+
+.wr-tt-md-render p {
+  margin: 0.8em 0;
+}
+
+.wr-tt-md-render strong {
+  font-weight: 700;
+  color: #1a3a3a;
+}
+
+.wr-tt-md-render em {
+  font-style: italic;
+  color: #5a5a5a;
+}
+
+.wr-tt-md-render ul,
+.wr-tt-md-render ol {
+  padding-left: 1.5em;
+  margin: 0.8em 0;
+}
+
+.wr-tt-md-render li {
+  margin: 0.4em 0;
+}
+
+.wr-tt-md-render blockquote {
+  margin: 1em 0;
+  padding: 14px 18px;
+  border-left: 4px solid #ffb084;
+  background: #fff8f2;
+  color: #5a5a5a;
+  border-radius: 0 12px 12px 0;
+}
+
+.wr-tt-md-render code {
+  font-family: "Menlo", "Monaco", "Courier New", monospace;
+  font-size: 0.88em;
+  background: #f0ebe0;
+  padding: 2px 7px;
+  border-radius: 6px;
+  color: #c45000;
+}
+
+.wr-tt-md-render pre {
+  background: #1a3a3a;
+  color: #d4e8e0;
+  padding: 18px 22px;
+  border-radius: 14px;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+.wr-tt-md-render pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font-size: 0.9em;
+}
+
+.wr-tt-md-render hr {
+  border: none;
+  border-top: 1.5px solid #ede5d8;
+  margin: 1.5em 0;
+}
+
+.wr-tt-md-render a {
+  color: #c45000;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.wr-tt-md-render img {
+  max-width: 100%;
+  border-radius: 12px;
+}
+
+/* ── 原始 Markdown 源码展示区 ───────────────────────────────── */
+.wr-tt-md-source {
+  border-top: 1.5px solid #ede5d8;
+  background: #f5f0e8;
+}
+
+.wr-tt-source-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 32px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #9a8a7a;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border-bottom: 1px solid #ede5d8;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.wr-tt-md-pre {
+  margin: 0;
+  padding: 20px 32px;
+  font-family: "Menlo", "Monaco", "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #6a5a4a;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.wr-tt-md-pre::-webkit-scrollbar { width: 4px; }
+.wr-tt-md-pre::-webkit-scrollbar-thumb { background: #d0c8b8; border-radius: 2px; }
+
+/* ── 今日头条：Cookie 配置按钮 ───────────────────────────────── */
+.wr-tt-cookie-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 16px;
+  background: transparent;
+  color: #7a6a5a;
+  border: 1.5px solid #d8d0c4;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'Inter', system-ui, sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.wr-tt-cookie-btn:hover {
+  background: #f5f0e8;
+  border-color: #b8b0a4;
+  color: #3a3a3a;
+}
+
+.wr-tt-cookie-btn.bound {
+  color: #2a6a3a;
+  border-color: #8ad4a8;
+  background: #f0f8f2;
+}
+
+.wr-tt-cookie-btn.bound:hover {
+  background: #e4f4ea;
+  border-color: #5ab87a;
+  box-shadow: 0 2px 8px rgba(90, 184, 122, 0.2);
+}
+
+/* ── 今日头条：自动推送按钮（Clay peach 主色） ───────────────── */
+.wr-push-btn--toutiao {
+  background: #ffb084 !important;
+  color: #1a3a3a !important;
+  border-radius: 12px !important;
+}
+
+.wr-push-btn--toutiao:hover:not(:disabled) {
+  background: #ff9060 !important;
+  box-shadow: 0 4px 16px rgba(255, 144, 96, 0.35) !important;
+  transform: translateY(-1px);
+}
+
+.wr-push-btn--toutiao.success {
+  background: #4caf7d !important;
+  color: #fff !important;
+}
+
+.wr-push-btn--toutiao.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── 今日头条：Cookie 配置弹窗（Clay modal 风格） ────────────── */
+.wr-tt-cookie-panel {
+  position: relative;
+  z-index: 1001;
+  background: #fffaf0;
+  border-radius: 24px;
+  border: 1.5px solid #e8e0d0;
+  box-shadow:
+    0 2px 0 #e0d8c8,
+    0 12px 40px rgba(26, 58, 58, 0.16),
+    0 32px 64px rgba(26, 58, 58, 0.08);
+  width: 560px;
+  max-width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modal-in 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.wr-tt-cookie-body {
+  padding: 24px 28px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+}
+
+/* ── Cookie 操作指引（Clay info card） ──────────────────────── */
+.wr-tt-cookie-guide {
+  background: #fff8f2;
+  border: 1.5px solid #ffd4b0;
+  border-radius: 14px;
+  padding: 16px 18px;
+}
+
+.wr-tt-cookie-guide-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #c45000;
+  margin: 0 0 10px;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.wr-tt-cookie-guide ol {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.wr-tt-cookie-guide li {
+  font-size: 13px;
+  color: #5a5a5a;
+  line-height: 1.65;
+}
+
+.wr-tt-cookie-guide a {
+  color: #c45000;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ── Cookie 输入框 ──────────────────────────────────────────── */
+.wr-tt-cookie-textarea {
+  width: 100%;
+  height: 160px;
+  padding: 14px 16px;
+  font-family: "Menlo", "Monaco", "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.65;
+  color: #2d2d2d;
+  background: #f5f0e8;
+  border: 1.5px solid #d8d0c4;
+  border-radius: 12px;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.wr-tt-cookie-textarea:focus {
+  border-color: #ffb084;
+  background: #fffaf0;
+  box-shadow: 0 0 0 3px rgba(255, 176, 132, 0.2);
+}
+
+.wr-tt-cookie-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ── 清除按钮 ───────────────────────────────────────────────── */
+.wr-tt-cookie-clear {
+  height: 44px;
+  padding: 0 18px;
+  background: transparent;
+  color: #9a8a7a;
+  border: 1.5px solid #d8d0c4;
+  border-radius: 12px;
+  font-size: 13px;
+  font-family: 'Inter', system-ui, sans-serif;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.wr-tt-cookie-clear:hover {
+  color: #c0392b;
+  border-color: #f0a0a0;
+  background: #fff5f5;
+}
+
+/* ── 保存按钮（Clay brand-teal 主色） ───────────────────────── */
+.wr-tt-cookie-save {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 22px;
+  background: #1a3a3a;
+  color: #fffaf0;
+  border: none;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'Inter', system-ui, sans-serif;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+
+.wr-tt-cookie-save:hover {
+  background: #0f2828;
+  box-shadow: 0 4px 16px rgba(26, 58, 58, 0.3);
+  transform: translateY(-1px);
+}

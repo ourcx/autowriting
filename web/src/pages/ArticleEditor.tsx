@@ -27,12 +27,12 @@ interface ArticleData {
 
 type TabId = 'task' | 'materials' | 'article' | 'analysis' | 'cover' | 'library'
 
-// 流程步骤定义
-const FLOW_STEPS: { id: TabId; label: string; check: (d: ArticleData) => boolean }[] = [
+// 流程步骤定义（cover 的 check 在组件内动态注入）
+const BASE_FLOW_STEPS: { id: TabId; label: string; check: (d: ArticleData) => boolean }[] = [
   { id: 'task',      label: '任务要求', check: d => d.task.trim().length >= 20 },
   { id: 'materials', label: '素材采集', check: d => d.materials.trim().length >= 30 },
   { id: 'article',   label: '生成文章', check: d => d.article.trim().length > 100 },
-  { id: 'cover',     label: '生成封面', check: () => false }, // 无自动完成态
+  { id: 'cover',     label: '生成封面', check: () => false }, // 由组件内 hasCover 覆盖
   { id: 'analysis',  label: '内容分析', check: () => false },
 ]
 
@@ -46,6 +46,14 @@ export default function ArticleEditor() {
   const [activeTab, setActiveTab] = useState<TabId>('task')
   const [showGenerateModal, setShowGenerateModal] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
+  // 封面是否已存在（从 localStorage 读取，CoverGenerator 生成/粘贴后更新）
+  const [hasCover, setHasCover] = useState(false)
+
+  // articleId 确定后同步检查封面状态（刷新后也能正确勾选）
+  useEffect(() => {
+    if (!articleId) return
+    setHasCover(!!localStorage.getItem(`cover_image_${articleId}`))
+  }, [articleId])
 
   // 写作任务模板
   const [taskTemplates, setTaskTemplates] = useState<TaskTemplate[]>(() => loadAllTaskTemplates())
@@ -328,9 +336,9 @@ export default function ArticleEditor() {
             <button
               className="btn btn-success"
               onClick={() => navigate(`/preview/${articleId}`)}
-              title="公众号预览 (Cmd+P)"
+              title="发布预览 (Cmd+P)"
             >
-              公众号预览
+              发布预览
             </button>
           )}
         </div>
@@ -341,8 +349,8 @@ export default function ArticleEditor() {
 
         {/* ── 流程进度条 ── */}
         <div className="editor-flow-bar">
-          {FLOW_STEPS.map((step, idx) => {
-            const done = step.check(data)
+          {BASE_FLOW_STEPS.map((step, idx) => {
+            const done = step.id === 'cover' ? hasCover : step.check(data)
             const isActive = activeTab === step.id
             return (
               <button
@@ -354,7 +362,7 @@ export default function ArticleEditor() {
                   {done ? <CheckCircle size={13} /> : idx + 1}
                 </span>
                 <span className="flow-step-label">{step.label}</span>
-                {idx < FLOW_STEPS.length - 1 && <ChevronRight size={12} className="flow-step-sep" />}
+                {idx < BASE_FLOW_STEPS.length - 1 && <ChevronRight size={12} className="flow-step-sep" />}
               </button>
             )
           })}
@@ -552,7 +560,12 @@ export default function ArticleEditor() {
 
           {activeTab === 'cover' && (
             <div className="editor-panel">
-              <CoverGenerator title={articleTitle} content={data.article} />
+              <CoverGenerator
+                title={articleTitle}
+                content={data.article}
+                articleId={articleId}
+                onCoverGenerated={() => setHasCover(true)}
+              />
             </div>
           )}
 

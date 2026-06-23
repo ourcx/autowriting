@@ -30,6 +30,41 @@ interface Issue {
   suggestion: string
 }
 
+// ── a2ui 风格：动态 UI 块类型定义 ────────────────────────────────────────────
+
+interface UIBlockClicheDiff {
+  type: 'cliche-diff'
+  title: string
+  items: Array<{ original: string; suggestion: string }>
+}
+
+interface UIBlockDataSuggestion {
+  type: 'data-suggestion'
+  title: string
+  items: Array<{ claim: string; dataHint: string }>
+}
+
+interface UIBlockStructureMap {
+  type: 'structure-map'
+  title: string
+  sections: Array<{ heading: string; status: 'good' | 'warn' | 'error'; note: string }>
+}
+
+interface UIBlockLeadRewrite {
+  type: 'lead-rewrite'
+  title: string
+  original: string
+  rewritten: string
+}
+
+interface UIBlockHighlightQuote {
+  type: 'highlight-quote'
+  title: string
+  quotes: string[]
+}
+
+type UIBlock = UIBlockClicheDiff | UIBlockDataSuggestion | UIBlockStructureMap | UIBlockLeadRewrite | UIBlockHighlightQuote
+
 interface AnalysisResult {
   scores: ScoreMap
   wordCount: number
@@ -39,6 +74,7 @@ interface AnalysisResult {
   styleMatch: { score: number; note: string }
   topSuggestion: string
   ragCount: number
+  uiBlocks?: UIBlock[]
 }
 
 // ── AGENTS.md 规范核查（纯本地，即时） ────────────────────────────────────────
@@ -159,6 +195,157 @@ function IssueItem({ issue }: { issue: Issue }) {
           <div className="issue-suggestion">建议：{issue.suggestion}</div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── 动态 UI 块渲染器（a2ui 思路：AI 决定渲染什么） ────────────────────────────
+
+function UIBlockClicheDiffRenderer({ block }: { block: UIBlockClicheDiff }) {
+  return (
+    <div className="uib uib--cliche-diff">
+      <div className="uib-header">
+        <span className="uib-icon">✂</span>
+        <span className="uib-title">{block.title}</span>
+        <span className="uib-badge uib-badge--error">{block.items.length} 处</span>
+      </div>
+      <div className="uib-body">
+        {block.items.map((item, i) => (
+          <div key={i} className="cliche-row">
+            <div className="cliche-original">
+              <span className="cliche-label">原文</span>
+              <span className="cliche-text cliche-text--bad">「{item.original}」</span>
+            </div>
+            <div className="cliche-arrow">→</div>
+            <div className="cliche-suggestion">
+              <span className="cliche-label">改为</span>
+              <span className="cliche-text cliche-text--good">{item.suggestion}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function UIBlockDataSuggestionRenderer({ block }: { block: UIBlockDataSuggestion }) {
+  return (
+    <div className="uib uib--data-suggestion">
+      <div className="uib-header">
+        <span className="uib-icon">📊</span>
+        <span className="uib-title">{block.title}</span>
+        <span className="uib-badge uib-badge--warn">{block.items.length} 处</span>
+      </div>
+      <div className="uib-body">
+        {block.items.map((item, i) => (
+          <div key={i} className="data-row">
+            <div className="data-claim">
+              <span className="data-label">空泛表述</span>
+              <span className="data-quote">「{item.claim}」</span>
+            </div>
+            <div className="data-hint">
+              <span className="data-label">建议补充</span>
+              <span className="data-hint-text">{item.dataHint}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function UIBlockStructureMapRenderer({ block }: { block: UIBlockStructureMap }) {
+  const statusIcon = { good: '✓', warn: '△', error: '✕' }
+  const statusClass = { good: 'struct-good', warn: 'struct-warn', error: 'struct-error' }
+  return (
+    <div className="uib uib--structure-map">
+      <div className="uib-header">
+        <span className="uib-icon">🗺</span>
+        <span className="uib-title">{block.title}</span>
+      </div>
+      <div className="uib-body">
+        <div className="struct-timeline">
+          {block.sections.map((sec, i) => (
+            <div key={i} className={`struct-node ${statusClass[sec.status]}`}>
+              <div className="struct-node-dot">
+                <span>{statusIcon[sec.status]}</span>
+              </div>
+              <div className="struct-node-content">
+                <div className="struct-node-heading">{sec.heading}</div>
+                <div className="struct-node-note">{sec.note}</div>
+              </div>
+              {i < block.sections.length - 1 && <div className="struct-connector" />}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function UIBlockLeadRewriteRenderer({ block }: { block: UIBlockLeadRewrite }) {
+  const [copied, setCopied] = useState(false)
+  const handleCopy = () => {
+    navigator.clipboard.writeText(block.rewritten).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+  return (
+    <div className="uib uib--lead-rewrite">
+      <div className="uib-header">
+        <span className="uib-icon">✍</span>
+        <span className="uib-title">{block.title}</span>
+      </div>
+      <div className="uib-body">
+        <div className="lead-panel lead-panel--original">
+          <div className="lead-panel-label">原开头</div>
+          <div className="lead-panel-text lead-panel-text--bad">{block.original}</div>
+        </div>
+        <div className="lead-divider">AI 改写 ↓</div>
+        <div className="lead-panel lead-panel--rewritten">
+          <div className="lead-panel-label">改写后</div>
+          <div className="lead-panel-text lead-panel-text--good">{block.rewritten}</div>
+          <button className="lead-copy-btn" onClick={handleCopy}>
+            {copied ? '已复制' : '复制'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function UIBlockHighlightQuoteRenderer({ block }: { block: UIBlockHighlightQuote }) {
+  return (
+    <div className="uib uib--highlight-quote">
+      <div className="uib-header">
+        <span className="uib-icon">✨</span>
+        <span className="uib-title">{block.title}</span>
+      </div>
+      <div className="uib-body">
+        {block.quotes.map((q, i) => (
+          <blockquote key={i} className="hq-quote">{q}</blockquote>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function DynamicUIBlocks({ blocks }: { blocks: UIBlock[] }) {
+  if (!blocks || blocks.length === 0) return null
+  return (
+    <div className="dynamic-ui-blocks">
+      <div className="uib-section-label">AI 生成诊断面板</div>
+      {blocks.map((block, i) => {
+        switch (block.type) {
+          case 'cliche-diff':      return <UIBlockClicheDiffRenderer      key={i} block={block} />
+          case 'data-suggestion':  return <UIBlockDataSuggestionRenderer  key={i} block={block} />
+          case 'structure-map':    return <UIBlockStructureMapRenderer    key={i} block={block} />
+          case 'lead-rewrite':     return <UIBlockLeadRewriteRenderer     key={i} block={block} />
+          case 'highlight-quote':  return <UIBlockHighlightQuoteRenderer  key={i} block={block} />
+          default:                 return null
+        }
+      })}
     </div>
   )
 }
@@ -720,6 +907,11 @@ export default function ContentStats({ content, title, articleId, task, onArticl
                   ))}
                 </div>
               </div>
+            )}
+
+            {/* ── 动态 UI 块（a2ui 思路：AI 根据问题决定渲染什么） ── */}
+            {result.uiBlocks && result.uiBlocks.length > 0 && (
+              <DynamicUIBlocks blocks={result.uiBlocks} />
             )}
 
           </div>

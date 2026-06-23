@@ -28,6 +28,7 @@ import adminRouter      from './server/routes/admin.js'
 import monitoringRouter from './server/routes/monitoring.js'
 import promptsRouter    from './server/routes/prompts.js'
 import cronRouter        from './server/routes/cron.js'
+import toutiaoRouter    from './server/routes/toutiao.js'
 
 // Cron 调度器
 import { initCronScheduler } from './server/cronEngine.js'
@@ -94,6 +95,7 @@ app.use('/api/wechat',     wechatRouter)    // 微信公众号绑定
 app.use('/api/monitoring', monitoringRouter) // 日志和监控（仅管理员可访问）
 app.use('/api/prompts',    promptsRouter)   // 提示词管理
 app.use('/api/cron',       cronRouter)      // 定时任务管理
+app.use('/api/toutiao',    toutiaoRouter)   // 今日头条自动推送
 
 // ── 杂项接口 ──────────────────────────────────────────────────────────────────
 

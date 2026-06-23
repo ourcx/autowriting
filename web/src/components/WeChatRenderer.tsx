@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { toast } from './Toast'
-import { Copy, Check, Minus, Plus, ExternalLink, Send, Loader2, Image as ImageIcon } from 'lucide-react'
+import { Copy, Check, Minus, Plus, ExternalLink, Send, Loader2, Image as ImageIcon, Settings } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
@@ -11,7 +11,10 @@ import './WeChatRenderer.css'
 interface WeChatRendererProps {
   content: string
   title?: string
+  articleId?: string
 }
+
+type PlatformMode = 'wechat' | 'toutiao'
 
 // ── Markdown ──────────────────────────────────────────────────────────────────
 
@@ -203,6 +206,21 @@ function copyHtmlViaExecCommand(
 
 // ── 主组件 ──────────────────────────────────────────────────────────────────
 
+// ── 今日头条 Cookie 工具函数 ──────────────────────────────────────────────────
+const TT_COOKIE_KEY = 'toutiao_cookies'
+
+function getTtCookies(): string {
+  return localStorage.getItem(TT_COOKIE_KEY) ?? ''
+}
+function saveTtCookies(raw: string) {
+  localStorage.setItem(TT_COOKIE_KEY, raw)
+}
+function hasTtCookies(): boolean {
+  const raw = getTtCookies().trim()
+  if (!raw) return false
+  try { const arr = JSON.parse(raw); return Array.isArray(arr) && arr.length > 0 } catch { return false }
+}
+
 // ── 从 localStorage 读取公众号凭据 ────────────────────────────────────────────
 const WX_STORAGE_KEY = 'wechat_credentials'
 function getWxHeaders(): Record<string, string> {
@@ -223,8 +241,11 @@ function hasWxCreds(): boolean {
   } catch { return false }
 }
 
-export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }) => {
+export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, articleId }) => {
   const navigate = useNavigate()
+
+  // 平台模式切换
+  const [platformMode, setPlatformMode] = useState<PlatformMode>('wechat')
 
   // 从服务端加载模板，初始用内置副本保证无白屏
   const [templates, setTemplates] = useState<TemplateItem[]>(BUILTIN_TEMPLATES)
@@ -232,16 +253,32 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
   const [editedCss, setEditedCss] = useState(() => BUILTIN_TEMPLATES[0]?.css ?? '')
   const [fontSize, setFontSize] = useState(16)
   const [copied, setCopied] = useState(false)
+  const [ttCopied, setTtCopied] = useState(false)
   const previewRef = useRef<HTMLDivElement>(null)
 
-  // 推送草稿状态
+  // 推送草稿状态（公众号）
   const [wxBound, setWxBound] = useState(false)
   const [pushing, setPushing] = useState(false)
   const [pushDone, setPushDone] = useState(false)
 
+  // 今日头条：Cookie 配置弹窗 + 自动推送状态
+  const [showTtCookieModal, setShowTtCookieModal] = useState(false)
+  const [ttCookieDraft, setTtCookieDraft] = useState('')
+  const [ttCookieBound, setTtCookieBound] = useState(false)
+  const [ttPushing, setTtPushing] = useState(false)
+  const [ttPushDone, setTtPushDone] = useState(false)
+
   // 图片库选择器状态
   const [showImageLibrary, setShowImageLibrary] = useState(false)
-  const [selectedCoverImage, setSelectedCoverImage] = useState<{ id: string; imageUrl: string } | null>(null)
+  // 初始化时从 localStorage 读取封面（CoverGenerator 粘贴/生成后会写入）
+  const [selectedCoverImage, setSelectedCoverImage] = useState<{ id: string; imageUrl: string } | null>(() => {
+    if (!articleId) return null
+    try {
+      const saved = localStorage.getItem(`cover_image_${articleId}`)
+      if (saved) return { id: 'pasted', imageUrl: saved }
+    } catch { /* ignore */ }
+    return null
+  })
 
   // 拖拽分栏宽度
   const [sidebarWidth, setSidebarWidth] = useState(260)
@@ -279,9 +316,10 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
     document.addEventListener('mouseup', onMouseUp)
   }, [sidebarWidth])
 
-  // 首次挂载：从 localStorage 检查公众号凭据是否存在
+  // 首次挂载：从 localStorage 检查公众号凭据 + 头条 Cookie 是否存在
   useEffect(() => {
     setWxBound(hasWxCreds())
+    setTtCookieBound(hasTtCookies())
   }, [])
 
   useEffect(() => {
@@ -341,6 +379,115 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
       toast.warn('复制失败，请手动全选 (Ctrl+A) 后复制')
     }
   }, [html, editedCss, fontSize])
+
+  // 今日头条：复制原始 Markdown
+  const handleCopyMarkdown = useCallback(async () => {
+    if (!content?.trim()) return
+    try {
+      await navigator.clipboard.writeText(content)
+      setTtCopied(true)
+      setTimeout(() => setTtCopied(false), 2500)
+      toast.success('Markdown 已复制，打开今日头条编辑器 → 直接 Ctrl+V 粘贴')
+    } catch {
+      // 降级：execCommand
+      const ta = document.createElement('textarea')
+      ta.value = content
+      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0'
+      document.body.appendChild(ta)
+      ta.select()
+      const ok = document.execCommand('copy')
+      document.body.removeChild(ta)
+      if (ok) {
+        setTtCopied(true)
+        setTimeout(() => setTtCopied(false), 2500)
+        toast.success('Markdown 已复制，打开今日头条编辑器 → 直接 Ctrl+V 粘贴')
+      } else {
+        toast.warn('复制失败，请手动全选后复制')
+      }
+    }
+  }, [content])
+
+  // 今日头条：保存 Cookie 配置
+  const handleSaveTtCookie = useCallback(() => {
+    const raw = ttCookieDraft.trim()
+    if (!raw) {
+      toast.warn('Cookie 不能为空')
+      return
+    }
+    try {
+      const arr = JSON.parse(raw)
+      if (!Array.isArray(arr) || arr.length === 0) {
+        toast.warn('Cookie 格式不正确，需要是 JSON 数组格式')
+        return
+      }
+      saveTtCookies(raw)
+      setTtCookieBound(true)
+      setShowTtCookieModal(false)
+      toast.success(`已保存 ${arr.length} 个 Cookie`)
+    } catch {
+      toast.warn('Cookie 格式不正确，请粘贴从浏览器导出的 JSON 数组')
+    }
+  }, [ttCookieDraft])
+
+  // 今日头条：自动推送
+  const handleTtPublish = useCallback(async () => {
+    if (!ttCookieBound) {
+      toast.warn('请先配置今日头条 Cookie')
+      setShowTtCookieModal(true)
+      return
+    }
+    if (!title?.trim()) {
+      toast.warn('文章标题不能为空')
+      return
+    }
+    if (title.trim().length > 30) {
+      toast.warn('今日头条标题不能超过 30 个字，请先修改标题')
+      return
+    }
+    if (!content?.trim()) {
+      toast.warn('文章内容不能为空')
+      return
+    }
+    setTtPushing(true)
+    try {
+      // Cookie 放 body 而非 Header，避免 Header 超长导致 fetch 报错
+      const cookiesJson = getTtCookies()
+      const r = await fetch('/api/toutiao/publish', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token') ?? ''}`,
+        },
+        body: JSON.stringify({
+          title: title.trim(),
+          content,
+          cookies: cookiesJson,
+          coverImageUrl: selectedCoverImage?.imageUrl ?? null,
+        }),
+      })
+      const d = await r.json()
+      if (!r.ok) {
+        if (r.status === 401 && d.error?.includes('Cookie')) {
+          toast.error('Cookie 已失效，请重新配置', {
+            duration: 0,
+            action: { label: '重新配置', onClick: () => setShowTtCookieModal(true) },
+          })
+        } else {
+          toast.error(d.error ?? '推送失败')
+        }
+        return
+      }
+      setTtPushDone(true)
+      toast.success(d.message ?? '文章已保存为今日头条草稿！', {
+        duration: 0,
+        action: { label: '去草稿箱', onClick: () => window.open('https://mp.toutiao.com/profile_v4/graphic/articles?type=draft', '_blank') },
+      })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '推送失败，请检查网络')
+    } finally {
+      setTtPushing(false)
+    }
+  }, [ttCookieBound, title, content])
 
   // 从 HTML 字符串提取第一张图片的 src
   function extractFirstImageSrc(htmlStr: string): string | null {
@@ -456,39 +603,62 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
 
   return (
     <div className="wr-root">
-      {/* ── 顶部工具栏 ── */}
-      <div className="wr-toolbar">
-        <div className="wr-toolbar-left">
-          {/* 字号控制 */}
-          <div className="wr-fontsize">
-            <button className="wr-fontsize-btn" onClick={() => setFontSize(s => Math.max(12, s - 1))} title="减小字号">
-              <Minus size={11} />
-            </button>
-            <span className="wr-fontsize-value">{fontSize}px</span>
-            <button className="wr-fontsize-btn" onClick={() => setFontSize(s => Math.min(22, s + 1))} title="增大字号">
-              <Plus size={11} />
-            </button>
-          </div>
-          <span className="wr-stat">{charCount.toLocaleString()} 字</span>
-        </div>
-        <div className="wr-toolbar-right">
-          {copied ? (
-            <span className="wr-copy-hint wr-copy-hint-success">
-              已复制富文本，打开公众号编辑器 → 直接 Ctrl+V 粘贴
-            </span>
-          ) : (
-            <span className="wr-copy-hint">
-              点击复制 → 粘贴到公众号编辑器，样式自动带入
-            </span>
-          )}
-          <button className={`wr-copy-btn ${copied ? 'success' : ''}`} onClick={handleCopy}>
-            {copied ? <Check size={15} /> : <Copy size={15} />}
-            {copied ? '已复制！' : '复制内容'}
-          </button>
+      {/* ── 平台切换 Tab ── */}
+      <div className="wr-platform-tabs">
+        <button
+          className={`wr-platform-tab ${platformMode === 'wechat' ? 'active' : ''}`}
+          onClick={() => setPlatformMode('wechat')}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M8.5 13.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm7 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/>
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15H9v-2h2v2zm4 0h-2v-2h2v2zm1.07-7.75-.9.92C14.45 10.9 14 11.5 14 13h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H9c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/>
+          </svg>
+          微信公众号
+        </button>
+        <button
+          className={`wr-platform-tab wr-platform-tab--toutiao ${platformMode === 'toutiao' ? 'active' : ''}`}
+          onClick={() => setPlatformMode('toutiao')}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+          今日头条
+        </button>
+      </div>
 
-          {/* 推送草稿按钮：不绑定公众号也显示 */}
-          {(
-            <>
+      {/* ── 公众号模式 ── */}
+      {platformMode === 'wechat' && (
+        <>
+          {/* 顶部工具栏 */}
+          <div className="wr-toolbar">
+            <div className="wr-toolbar-left">
+              {/* 字号控制 */}
+              <div className="wr-fontsize">
+                <button className="wr-fontsize-btn" onClick={() => setFontSize(s => Math.max(12, s - 1))} title="减小字号">
+                  <Minus size={11} />
+                </button>
+                <span className="wr-fontsize-value">{fontSize}px</span>
+                <button className="wr-fontsize-btn" onClick={() => setFontSize(s => Math.min(22, s + 1))} title="增大字号">
+                  <Plus size={11} />
+                </button>
+              </div>
+              <span className="wr-stat">{charCount.toLocaleString()} 字</span>
+            </div>
+            <div className="wr-toolbar-right">
+              {copied ? (
+                <span className="wr-copy-hint wr-copy-hint-success">
+                  已复制富文本，打开公众号编辑器 → 直接 Ctrl+V 粘贴
+                </span>
+              ) : (
+                <span className="wr-copy-hint">
+                  点击复制 → 粘贴到公众号编辑器，样式自动带入
+                </span>
+              )}
+              <button className={`wr-copy-btn ${copied ? 'success' : ''}`} onClick={handleCopy}>
+                {copied ? <Check size={15} /> : <Copy size={15} />}
+                {copied ? '已复制！' : '复制内容'}
+              </button>
+
               {/* 选择封面图片按钮 */}
               <button
                 className={`wr-cover-btn ${selectedCoverImage ? 'selected' : ''}`}
@@ -513,112 +683,264 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title }
                 }
                 {pushing ? '推送中...' : pushDone ? '已推送！' : '推送草稿'}
               </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* ── 图片库选择器（浮层） ── */}
-      {showImageLibrary && (
-        <div className="wr-image-library-modal">
-          <div className="wr-image-library-overlay" onClick={() => setShowImageLibrary(false)} />
-          <div className="wr-image-library-panel">
-            <div className="wr-image-library-header">
-              <h3>选择推文封面</h3>
-              <button
-                className="wr-image-library-close"
-                onClick={() => setShowImageLibrary(false)}
-                title="关闭"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="wr-image-library-content">
-              <ImageLibrary
-                onImageSelect={(image) => {
-                  setSelectedCoverImage({ id: image.id, imageUrl: image.imageUrl })
-                  setShowImageLibrary(false)
-                  toast.success('已选择封面图片')
-                }}
-              />
             </div>
           </div>
-        </div>
+
+          {/* 图片库选择器（浮层） */}
+          {showImageLibrary && (
+            <div className="wr-image-library-modal">
+              <div className="wr-image-library-overlay" onClick={() => setShowImageLibrary(false)} />
+              <div className="wr-image-library-panel">
+                <div className="wr-image-library-header">
+                  <h3>选择推文封面</h3>
+                  <button
+                    className="wr-image-library-close"
+                    onClick={() => setShowImageLibrary(false)}
+                    title="关闭"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="wr-image-library-content">
+                  <ImageLibrary
+                    onImageSelect={(image) => {
+                      setSelectedCoverImage({ id: image.id, imageUrl: image.imageUrl })
+                      setShowImageLibrary(false)
+                      toast.success('已选择封面图片')
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 主体：左侧模板 + 拖拽条 + 右侧预览 */}
+          <div className="wr-main">
+            {/* 左侧边栏 */}
+            <div className="wr-sidebar" style={{ width: sidebarWidth }}>
+              <div className="wr-sidebar-header">
+                <p className="wr-sidebar-section-label">样式模板</p>
+                <button
+                  className="wr-manage-styles-btn"
+                  onClick={() => navigate('/styles')}
+                  title="管理样式模板"
+                >
+                  <ExternalLink size={12} />
+                  管理
+                </button>
+              </div>
+              <div className="wr-template-list">
+                {templates.map(t => (
+                  <button
+                    key={t.id}
+                    className={`wr-tmpl-item ${templateId === t.id ? 'active' : ''}`}
+                    onClick={() => handleSelectTemplate(t)}
+                  >
+                    <span className="wr-tmpl-dot" style={{ background: t.accentColor }} />
+                    <div className="wr-tmpl-info">
+                      <span className="wr-tmpl-name">{t.name}</span>
+                      <span className="wr-tmpl-desc">{t.desc}</span>
+                    </div>
+                    {templateId === t.id && <span className="wr-tmpl-check"><Check size={12} /></span>}
+                  </button>
+                ))}
+              </div>
+
+              <div className="wr-css-editor-wrap">
+                <p className="wr-sidebar-section-label" style={{ marginBottom: 8 }}>
+                  自定义 CSS
+                  <span className="wr-css-hint">实时预览</span>
+                </p>
+                <textarea
+                  className="wr-css-textarea"
+                  value={editedCss}
+                  onChange={e => { setEditedCss(e.target.value); setTemplateId('custom') }}
+                  spellCheck={false}
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                />
+              </div>
+            </div>
+
+            {/* 拖拽手柄 */}
+            <div
+              className="wr-resizer"
+              ref={resizerRef}
+              onMouseDown={handleResizerMouseDown}
+              title="拖拽调整宽度"
+            />
+
+            {/* 右侧预览 */}
+            <div className="wr-preview">
+              <div className="wr-article-card">
+                {title && (
+                  <div className="wr-article-header">
+                    <span className="wr-article-badge">公众号预览</span>
+                    <h2 className="wr-article-title">{title}</h2>
+                  </div>
+                )}
+                <div
+                  id="wemd"
+                  ref={previewRef}
+                  dangerouslySetInnerHTML={{ __html: html }}
+                />
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
-      {/* ── 主体：左侧模板 + 拖拽条 + 右侧预览 ── */}
-      <div className="wr-main">
-        {/* 左侧边栏 */}
-        <div className="wr-sidebar" style={{ width: sidebarWidth }}>
-          <div className="wr-sidebar-header">
-            <p className="wr-sidebar-section-label">样式模板</p>
-            <button
-              className="wr-manage-styles-btn"
-              onClick={() => navigate('/styles')}
-              title="管理样式模板"
-            >
-              <ExternalLink size={12} />
-              管理
-            </button>
-          </div>
-          <div className="wr-template-list">
-            {templates.map(t => (
-              <button
-                key={t.id}
-                className={`wr-tmpl-item ${templateId === t.id ? 'active' : ''}`}
-                onClick={() => handleSelectTemplate(t)}
-              >
-                <span className="wr-tmpl-dot" style={{ background: t.accentColor }} />
-                <div className="wr-tmpl-info">
-                  <span className="wr-tmpl-name">{t.name}</span>
-                  <span className="wr-tmpl-desc">{t.desc}</span>
+      {/* ── 今日头条模式 ── */}
+      {platformMode === 'toutiao' && (
+        <>
+          {/* Cookie 配置弹窗 */}
+          {showTtCookieModal && (
+            <div className="wr-image-library-modal">
+              <div className="wr-image-library-overlay" onClick={() => setShowTtCookieModal(false)} />
+              <div className="wr-tt-cookie-panel">
+                <div className="wr-image-library-header">
+                  <h3>配置今日头条 Cookie</h3>
+                  <button className="wr-image-library-close" onClick={() => setShowTtCookieModal(false)}>✕</button>
                 </div>
-                {templateId === t.id && <span className="wr-tmpl-check"><Check size={12} /></span>}
-              </button>
-            ))}
-          </div>
-
-          <div className="wr-css-editor-wrap">
-            <p className="wr-sidebar-section-label" style={{ marginBottom: 8 }}>
-              自定义 CSS
-              <span className="wr-css-hint">实时预览</span>
-            </p>
-            <textarea
-              className="wr-css-textarea"
-              value={editedCss}
-              onChange={e => { setEditedCss(e.target.value); setTemplateId('custom') }}
-              spellCheck={false}
-              autoCorrect="off"
-              autoCapitalize="off"
-            />
-          </div>
-        </div>
-
-        {/* 拖拽手柄 */}
-        <div
-          className="wr-resizer"
-          ref={resizerRef}
-          onMouseDown={handleResizerMouseDown}
-          title="拖拽调整宽度"
-        />
-
-        {/* 右侧预览 */}
-        <div className="wr-preview">
-          <div className="wr-article-card">
-            {title && (
-              <div className="wr-article-header">
-                <span className="wr-article-badge">公众号预览</span>
-                <h2 className="wr-article-title">{title}</h2>
+                <div className="wr-tt-cookie-body">
+                  <div className="wr-tt-cookie-guide">
+                    <p className="wr-tt-cookie-guide-title">如何获取 Cookie？</p>
+                    <ol>
+                      <li>在浏览器中登录 <a href="https://mp.toutiao.com" target="_blank" rel="noopener noreferrer">mp.toutiao.com</a></li>
+                      <li>安装浏览器插件 <strong>EditThisCookie</strong> 或 <strong>Cookie-Editor</strong></li>
+                      <li>在头条后台页面点击插件图标 → 选择「导出」→ 复制 JSON</li>
+                      <li>将 JSON 粘贴到下方文本框</li>
+                    </ol>
+                  </div>
+                  <textarea
+                    className="wr-tt-cookie-textarea"
+                    placeholder={'粘贴 Cookie JSON 数组，格式如：\n[{"name":"sessionid","value":"xxx","domain":".toutiao.com",...}]'}
+                    value={ttCookieDraft}
+                    onChange={e => setTtCookieDraft(e.target.value)}
+                    spellCheck={false}
+                  />
+                  <div className="wr-tt-cookie-actions">
+                    {ttCookieBound && (
+                      <button
+                        className="wr-tt-cookie-clear"
+                        onClick={() => {
+                          localStorage.removeItem(TT_COOKIE_KEY)
+                          setTtCookieBound(false)
+                          setTtCookieDraft('')
+                          setTtPushDone(false)
+                          toast.success('Cookie 已清除')
+                          setShowTtCookieModal(false)
+                        }}
+                      >
+                        清除已保存的 Cookie
+                      </button>
+                    )}
+                    <button className="wr-tt-cookie-save" onClick={handleSaveTtCookie}>
+                      <Check size={14} />
+                      保存 Cookie
+                    </button>
+                  </div>
+                </div>
               </div>
-            )}
-            <div
-              id="wemd"
-              ref={previewRef}
-              dangerouslySetInnerHTML={{ __html: html }}
-            />
+            </div>
+          )}
+
+          {/* 今日头条工具栏 */}
+          <div className="wr-toolbar">
+            <div className="wr-toolbar-left">
+              <span className="wr-stat">{charCount.toLocaleString()} 字</span>
+              <span className="wr-tt-tip">今日头条编辑器支持直接粘贴 Markdown</span>
+            </div>
+            <div className="wr-toolbar-right">
+              {ttCopied ? (
+                <span className="wr-copy-hint wr-copy-hint-success">
+                  已复制 Markdown，打开头条编辑器 → 直接 Ctrl+V 粘贴
+                </span>
+              ) : (
+                <span className="wr-copy-hint">
+                  复制后粘贴到今日头条编辑器，格式自动识别
+                </span>
+              )}
+              <button
+                className={`wr-copy-btn wr-copy-btn--toutiao ${ttCopied ? 'success' : ''}`}
+                onClick={handleCopyMarkdown}
+              >
+                {ttCopied ? <Check size={15} /> : <Copy size={15} />}
+                {ttCopied ? '已复制！' : '复制 Markdown'}
+              </button>
+
+              {/* Cookie 配置按钮 */}
+              <button
+                className={`wr-tt-cookie-btn ${ttCookieBound ? 'bound' : ''}`}
+                onClick={() => {
+                  setTtCookieDraft(getTtCookies())
+                  setShowTtCookieModal(true)
+                }}
+                title={ttCookieBound ? 'Cookie 已配置，点击修改' : '配置 Cookie 以启用自动推送'}
+              >
+                <Settings size={14} />
+                {ttCookieBound ? 'Cookie 已配置' : '配置 Cookie'}
+              </button>
+
+              {/* 存为草稿按钮 */}
+              <button
+                className={`wr-push-btn wr-push-btn--toutiao ${ttPushDone ? 'success' : ''} ${!ttCookieBound ? 'disabled' : ''}`}
+                onClick={handleTtPublish}
+                disabled={ttPushing || ttPushDone}
+                title={ttCookieBound ? '自动登录头条，将文章存为草稿（需手动添加封面后发布）' : '请先配置 Cookie'}
+              >
+                {ttPushing
+                  ? <Loader2 size={15} className="wr-spin" />
+                  : ttPushDone
+                    ? <Check size={15} />
+                    : <Send size={15} />
+                }
+                {ttPushing ? '保存中...' : ttPushDone ? '已存草稿！' : '存为草稿'}
+              </button>
+
+              <a
+                href="https://mp.toutiao.com/profile_v4/graphic/publish"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="wr-tt-open-btn"
+              >
+                <ExternalLink size={14} />
+                打开头条编辑器
+              </a>
+            </div>
           </div>
-        </div>
-      </div>
+
+          {/* 今日头条预览主体 */}
+          <div className="wr-main">
+            <div className="wr-tt-preview">
+              <div className="wr-tt-card">
+                {title && (
+                  <div className="wr-tt-header">
+                    <span className="wr-tt-badge">今日头条预览</span>
+                    <h2 className="wr-tt-title">{title}</h2>
+                  </div>
+                )}
+                <div className="wr-tt-body">
+                  <div
+                    className="wr-tt-md-render"
+                    dangerouslySetInnerHTML={{ __html: html }}
+                  />
+                </div>
+                <div className="wr-tt-md-source">
+                  <div className="wr-tt-source-label">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="16 18 22 12 16 6"/>
+                      <polyline points="8 6 2 12 8 18"/>
+                    </svg>
+                    原始 Markdown（点击上方按钮复制）
+                  </div>
+                  <pre className="wr-tt-md-pre">{content}</pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { loadAIConfig } from '../utils/aiConfig'
 import { toast } from './Toast'
@@ -7,6 +7,7 @@ import './CoverGenerator.css'
 interface CoverGeneratorProps {
   title: string
   content: string
+  articleId?: string
   onCoverGenerated?: (imageUrl: string) => void
 }
 
@@ -95,9 +96,14 @@ const PROVIDERS: ProviderOption[] = [
   },
 ]
 
+// localStorage key for persisting cover image per article
+const coverStorageKey = (id?: string) =>
+  id ? `cover_image_${id}` : null
+
 export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
   title,
   content,
+  articleId,
   onCoverGenerated,
 }) => {
   const navigate = useNavigate()
@@ -111,6 +117,19 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
   const [error,          setError]          = useState<string | null>(null)
   const [missingKey,     setMissingKey]     = useState<string | null>(null)
   const [isSavingToLibrary, setIsSavingToLibrary] = useState(false)
+  const [isDragOver,        setIsDragOver]        = useState(false)
+  const pasteZoneRef = useRef<HTMLDivElement>(null)
+
+  // 挂载时从 localStorage 恢复封面（刷新后保持）
+  useEffect(() => {
+    const key = coverStorageKey(articleId)
+    if (!key) return
+    const saved = localStorage.getItem(key)
+    if (saved) {
+      setGeneratedImage(saved)
+      onCoverGenerated?.(saved)
+    }
+  }, [articleId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // provider 切换时检查 key
   useEffect(() => {
@@ -194,7 +213,7 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
       }
 
       setGeneratedImage(data.imageUrl)
-      onCoverGenerated?.(data.imageUrl)
+      persistCover(data.imageUrl)
     } catch (err) {
       setError(err instanceof Error ? err.message : '生成封面失败，请重试')
     } finally {
@@ -238,6 +257,88 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
   }
 
   const currentProvider = PROVIDERS.find(p => p.id === provider)
+
+  // 将封面图片 URL 持久化到 localStorage，供发布预览页读取
+  const persistCover = useCallback((dataUrl: string) => {
+    const key = coverStorageKey(articleId)
+    if (key) {
+      try { localStorage.setItem(key, dataUrl) } catch { /* quota exceeded */ }
+    }
+    onCoverGenerated?.(dataUrl)
+  }, [articleId, onCoverGenerated])
+
+  // 将 File 对象读成 base64 data URL，上传图床后设为当前封面
+  const applyImageFile = useCallback((file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast.error('只支持图片文件')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      const dataUrl = e.target?.result as string
+      // 先本地预览，让用户立刻看到图片
+      setGeneratedImage(dataUrl)
+      try {
+        const ext = file.type.split('/')[1] || 'png'
+        const res = await fetch('/api/images/upload-base64', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            data: dataUrl,
+            mimeType: file.type,
+            originalName: `cover-paste-${Date.now()}.${ext}`,
+            articleId,
+          }),
+        })
+        const d = await res.json() as { url?: string; error?: string }
+        if (res.ok && d.url) {
+          const serverUrl = d.url.startsWith('http')
+            ? d.url
+            : `${window.location.origin}${d.url}`
+          setGeneratedImage(serverUrl)
+          persistCover(serverUrl)
+          toast.success('封面已上传到图床，发布预览页将自动使用此封面')
+        } else {
+          // 上传失败降级：用 base64 本地预览
+          persistCover(dataUrl)
+          toast.warn('图床上传失败，使用本地预览（发布时可能无法显示）')
+        }
+      } catch {
+        persistCover(dataUrl)
+        toast.warn('图床上传失败，使用本地预览（发布时可能无法显示）')
+      }
+    }
+    reader.readAsDataURL(file)
+  }, [persistCover, articleId])
+
+  // 全局 paste 监听（聚焦到粘贴区时生效）
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLDivElement>) => {
+    const items = Array.from(e.clipboardData.items)
+    const imgItem = items.find(i => i.type.startsWith('image/'))
+    if (imgItem) {
+      e.preventDefault()
+      const file = imgItem.getAsFile()
+      if (file) applyImageFile(file)
+    }
+  }, [applyImageFile])
+
+  // 拖拽
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(true)
+  }, [])
+  const handleDragLeave = useCallback(() => setIsDragOver(false), [])
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+    const file = e.dataTransfer.files[0]
+    if (file) applyImageFile(file)
+  }, [applyImageFile])
+
+  // 点击粘贴区 → 聚焦，让用户直接 Ctrl+V
+  const handlePasteZoneClick = useCallback(() => {
+    pasteZoneRef.current?.focus()
+  }, [])
 
   return (
     <div className="cg-root">
@@ -399,14 +500,50 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
                 重新生成
               </button>
             </div>
+            {/* 已有封面时也保留粘贴区，方便替换 */}
+            <div
+              ref={pasteZoneRef}
+              className={`cg-paste-zone cg-paste-zone--compact ${isDragOver ? 'drag-over' : ''}`}
+              tabIndex={0}
+              onClick={handlePasteZoneClick}
+              onPaste={handlePaste}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              粘贴或拖入图片替换封面（Ctrl+V）
+            </div>
           </>
         ) : (
-          <div className="cg-preview-empty">
-            <div className="cg-empty-inner">
-              <p className="cg-empty-title">配置左侧选项后点击「生成封面」</p>
-              <p className="cg-empty-hint">公众号推荐比例 2.35:1 · 1024×576px</p>
+          <>
+            {/* 空状态：粘贴区作为主入口 */}
+            <div
+              ref={pasteZoneRef}
+              className={`cg-paste-zone ${isDragOver ? 'drag-over' : ''}`}
+              tabIndex={0}
+              onClick={handlePasteZoneClick}
+              onPaste={handlePaste}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              <div className="cg-paste-icon">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="2" width="6" height="4" rx="1"/>
+                  <path d="M9 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2h-3"/>
+                  <path d="M12 11v6M9 14l3-3 3 3"/>
+                </svg>
+              </div>
+              <p className="cg-paste-title">粘贴剪贴板图片</p>
+              <p className="cg-paste-hint">点击此处后按 Ctrl+V，或直接拖入图片文件</p>
             </div>
-          </div>
+            <div className="cg-preview-empty">
+              <div className="cg-empty-inner">
+                <p className="cg-empty-title">或配置左侧选项后点击「生成封面」</p>
+                <p className="cg-empty-hint">公众号推荐比例 2.35:1 · 1024×576px</p>
+              </div>
+            </div>
+          </>
         )}
       </div>
 
