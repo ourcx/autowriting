@@ -1,0 +1,7 @@
+.env
+*.pyc
+__pycache__/
+build/
+dist/
+*.spec
+.DS_Store
