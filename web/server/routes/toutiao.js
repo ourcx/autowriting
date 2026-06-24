@@ -10,7 +10,7 @@
  */
 import { Router } from 'express'
 import { chromium } from 'playwright'
-import { execSync } from 'child_process'
+import { spawn, execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
@@ -59,34 +59,93 @@ async function downloadImageToTemp(imageUrl, baseOrigin) {
 const EDGE_PATH = '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge'
 const EDGE_USER_DATA = `${process.env.HOME}/Library/Application Support/Microsoft Edge`
 
+// Chromium 安装状态（供 /status 接口返回给前端）
+// 'checking' | 'ready' | 'installing' | 'failed'
+let chromiumStatus = 'checking'
+let chromiumStatusMsg = '正在检测浏览器环境...'
+
 /**
- * 确保 Playwright Chromium 已安装，若未安装则后台安装
- * 在服务启动时调用一次，避免在请求时才安装导致超时
+ * 确保 Playwright Chromium 已安装，若未安装则用 spawn 后台安装
+ * 完全异步，不阻塞服务启动和健康检查
  */
 async function ensureChromiumInstalled() {
+  /**
+   * 执行安装命令，实时把 stdout/stderr 打到日志，返回 { code, output }
+   */
+  const tryInstall = (args) => new Promise((resolve) => {
+    const label = `npx playwright install ${args.join(' ')}`
+    logger.info('TOUTIAO', `执行: ${label}`)
+
+    const proc = spawn('npx', ['playwright', 'install', ...args], {
+      stdio: 'pipe',
+      detached: false,
+      env: { ...process.env },
+    })
+
+    let output = ''
+    const onData = (chunk) => {
+      const line = chunk.toString().trimEnd()
+      if (line) {
+        output += line + '\n'
+        logger.info('TOUTIAO', `[install] ${line}`)
+      }
+    }
+    proc.stdout?.on('data', onData)
+    proc.stderr?.on('data', onData)
+
+    proc.on('close', code => {
+      logger.info('TOUTIAO', `${label} 退出码: ${code}`)
+      resolve({ code, output })
+    })
+    proc.on('error', err => {
+      logger.warn('TOUTIAO', `spawn 失败: ${err.message}`)
+      resolve({ code: -1, output: err.message })
+    })
+  })
+
+  // ── Step 1：检测是否已安装 ────────────────────────────────────────────────
   try {
-    // 尝试启动一次，如果成功说明已安装
     const b = await chromium.launch({ headless: true, args: ['--no-sandbox'] })
     await b.close()
-    logger.info('TOUTIAO', 'Playwright Chromium 已就绪')
-  } catch {
-    logger.info('TOUTIAO', 'Playwright Chromium 未安装，开始后台安装（约 1-2 分钟）...')
-    try {
-      execSync('npx playwright install chromium --with-deps', {
-        stdio: 'pipe',
-        timeout: 300000, // 5 分钟
-      })
-      logger.info('TOUTIAO', 'Playwright Chromium 安装完成')
-    } catch (installErr) {
-      logger.warn('TOUTIAO', 'Playwright Chromium 安装失败，发布功能可能不可用', {
-        error: installErr.message,
-      })
-    }
+    chromiumStatus = 'ready'
+    chromiumStatusMsg = 'Chromium 已就绪'
+    logger.info('TOUTIAO', 'Playwright Chromium 已就绪，无需安装')
+    return
+  } catch (e) {
+    logger.info('TOUTIAO', `Chromium 未就绪（${e.message.split('\n')[0]}），开始安装...`)
+  }
+
+  chromiumStatus = 'installing'
+  chromiumStatusMsg = '正在后台安装 Chromium（约 1-2 分钟）...'
+
+  // ── Step 2：不带 --with-deps（避免 apt-get 权限问题）────────────────────
+  const r1 = await tryInstall(['chromium'])
+  if (r1.code === 0) {
+    chromiumStatus = 'ready'
+    chromiumStatusMsg = 'Chromium 安装完成，发布功能已就绪'
+    logger.info('TOUTIAO', 'Playwright Chromium 安装完成（不带系统依赖）')
+    return
+  }
+
+  // ── Step 3：带 --with-deps（尝试安装系统依赖）────────────────────────────
+  logger.warn('TOUTIAO', `Step 2 失败（退出码 ${r1.code}），尝试带 --with-deps...`)
+  const r2 = await tryInstall(['chromium', '--with-deps'])
+  if (r2.code === 0) {
+    chromiumStatus = 'ready'
+    chromiumStatusMsg = 'Chromium 安装完成，发布功能已就绪'
+    logger.info('TOUTIAO', 'Playwright Chromium 安装完成（带系统依赖）')
+  } else {
+    chromiumStatus = 'failed'
+    chromiumStatusMsg = 'Chromium 安装失败，请查看服务日志了解详情'
+    logger.warn('TOUTIAO', 'Playwright Chromium 两种方式均安装失败，最后输出：')
+    // 把最后 20 行输出打到日志，方便排查
+    const lastLines = r2.output.trim().split('\n').slice(-20).join('\n')
+    logger.warn('TOUTIAO', lastLines || '（无输出）')
   }
 }
 
-// 服务启动时异步预检，不阻塞启动
-ensureChromiumInstalled().catch(() => {})
+// 服务启动时后台预检，完全不阻塞
+ensureChromiumInstalled()
 
 /**
  * 启动浏览器并返回 { browser, context }
@@ -182,7 +241,38 @@ function parseCookies(req) {
 
 // ── GET /api/toutiao/status ──────────────────────────────────────────────────
 router.get('/status', (req, res) => {
-  res.json({ available: true })
+  res.json({
+    available: chromiumStatus === 'ready',
+    status: chromiumStatus,       // 'checking' | 'ready' | 'installing' | 'failed'
+    message: chromiumStatusMsg,
+  })
+})
+
+// ── GET /api/toutiao/install-logs ────────────────────────────────────────────
+// 返回今天日志文件里 TOUTIAO 模块的最近 100 条记录，方便前端展示安装进度
+router.get('/install-logs', (req, res) => {
+  try {
+    const logDir = path.join(path.dirname(new URL(import.meta.url).pathname), '..', '..', 'logs')
+    const today = new Date().toISOString().split('T')[0]
+    const logFile = path.join(logDir, `app-${today}.log`)
+
+    if (!fs.existsSync(logFile)) {
+      return res.json({ lines: [] })
+    }
+
+    const raw = fs.readFileSync(logFile, 'utf8')
+    const lines = raw
+      .split('\n')
+      .filter(l => l.trim())
+      .map(l => { try { return JSON.parse(l) } catch { return null } })
+      .filter(l => l && l.module === 'TOUTIAO')
+      .slice(-100)  // 最近 100 条
+      .map(l => `[${l.timestamp}] [${l.level}] ${l.message}`)
+
+    res.json({ lines, status: chromiumStatus, message: chromiumStatusMsg })
+  } catch (e) {
+    res.json({ lines: [`读取日志失败: ${e.message}`], status: chromiumStatus, message: chromiumStatusMsg })
+  }
 })
 
 // ── POST /api/toutiao/publish ────────────────────────────────────────────────

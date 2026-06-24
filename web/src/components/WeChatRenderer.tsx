@@ -267,6 +267,11 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
   const [ttCookieBound, setTtCookieBound] = useState(false)
   const [ttPushing, setTtPushing] = useState(false)
   const [ttPushDone, setTtPushDone] = useState(false)
+  // 今日头条：Chromium 安装状态 + 日志面板
+  const [chromiumStatus, setChromiumStatus] = useState<'checking' | 'ready' | 'installing' | 'failed'>('checking')
+  const [chromiumMsg, setChromiumMsg] = useState('正在检测浏览器环境...')
+  const [showInstallLogs, setShowInstallLogs] = useState(false)
+  const [installLogs, setInstallLogs] = useState<string[]>([])
 
   // 图片库选择器状态
   const [showImageLibrary, setShowImageLibrary] = useState(false)
@@ -350,6 +355,40 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
 
   const html = renderMarkdown(content)
   const charCount = content?.replace(/\s/g, '').length ?? 0
+
+  // 今日头条：轮询 Chromium 安装状态，直到 ready 或 failed
+  useEffect(() => {
+    if (platformMode !== 'toutiao') return
+    let timer: ReturnType<typeof setInterval>
+    const authHeader = { 'Authorization': `Bearer ${localStorage.getItem('auth_token') ?? ''}` }
+
+    const poll = async () => {
+      try {
+        const r = await fetch('/api/toutiao/status', { headers: authHeader })
+        const d = await r.json()
+        setChromiumStatus(d.status ?? 'failed')
+        setChromiumMsg(d.message ?? '')
+        if (d.status === 'ready' || d.status === 'failed') {
+          clearInterval(timer)
+        }
+      } catch {
+        // 网络错误忽略，继续轮询
+      }
+    }
+
+    const fetchLogs = async () => {
+      try {
+        const r = await fetch('/api/toutiao/install-logs', { headers: authHeader })
+        const d = await r.json()
+        if (d.lines?.length) setInstallLogs(d.lines)
+      } catch { /* 忽略 */ }
+    }
+
+    poll()
+    fetchLogs()
+    timer = setInterval(() => { poll(); fetchLogs() }, 5000)
+    return () => clearInterval(timer)
+  }, [platformMode])
 
   // 实时把 CSS 注入到 <head>，驱动预览
   useEffect(() => {
@@ -856,11 +895,45 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
             </div>
           )}
 
+          {/* 安装日志面板（浮层） */}
+          {showInstallLogs && (
+            <div className="wr-image-library-modal">
+              <div className="wr-image-library-overlay" onClick={() => setShowInstallLogs(false)} />
+              <div className="wr-install-log-panel">
+                <div className="wr-image-library-header">
+                  <h3>Chromium 安装日志</h3>
+                  <button className="wr-image-library-close" onClick={() => setShowInstallLogs(false)}>✕</button>
+                </div>
+                <div className={`wr-install-log-status wr-chromium-status--${chromiumStatus}`}>
+                  {(chromiumStatus === 'checking' || chromiumStatus === 'installing') && <Loader2 size={13} className="wr-spin" />}
+                  {chromiumStatus === 'ready' && <Check size={13} />}
+                  {chromiumStatus === 'failed' && <span>✕</span>}
+                  {chromiumMsg}
+                </div>
+                <pre className="wr-install-log-pre">
+                  {installLogs.length ? installLogs.join('\n') : '暂无日志，等待安装开始...'}
+                </pre>
+              </div>
+            </div>
+          )}
+
           {/* 今日头条工具栏 */}
           <div className="wr-toolbar">
             <div className="wr-toolbar-left">
               <span className="wr-stat">{charCount.toLocaleString()} 字</span>
-              <span className="wr-tt-tip">复制富文本后粘贴到头条编辑器，标题/加粗格式自动保留</span>
+              {/* Chromium 安装状态指示器 + 查看日志按钮 */}
+              <span
+                className={`wr-chromium-status wr-chromium-status--${chromiumStatus}`}
+                onClick={() => setShowInstallLogs(true)}
+                title="点击查看安装日志"
+                style={{ cursor: 'pointer' }}
+              >
+                {chromiumStatus === 'checking' && <Loader2 size={12} className="wr-spin" />}
+                {chromiumStatus === 'installing' && <Loader2 size={12} className="wr-spin" />}
+                {chromiumStatus === 'ready' && <Check size={12} />}
+                {chromiumStatus === 'failed' && <span style={{ fontSize: 12 }}>✕</span>}
+                {chromiumMsg}
+              </span>
             </div>
             <div className="wr-toolbar-right">
               {ttCopied ? (

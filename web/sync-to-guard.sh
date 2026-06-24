@@ -146,15 +146,14 @@ with open(src_path) as f:
 # Guard 专属：engines
 pkg["engines"] = {"node": ">=18"}
 
-# Guard 专属：scripts（只保留 web server 相关，去掉 Electron）
-# postinstall 保留：npm install 后自动下载 Playwright Chromium
+# Guard 专属：scripts（只保留 web server 相关，去掉 Electron / postinstall）
+# Playwright Chromium 由服务启动时的 ensureChromiumInstalled() 按需安装
 guard_scripts = {
-    "dev":         pkg["scripts"].get("dev",     "vite"),
-    "build":       pkg["scripts"].get("build",   "vite build"),
-    "preview":     pkg["scripts"].get("preview", "vite preview"),
-    "server":      "node server.js",
-    "start":       "node server.js",
-    "postinstall": "npx playwright install chromium --with-deps || true",
+    "dev":     pkg["scripts"].get("dev",     "vite"),
+    "build":   pkg["scripts"].get("build",   "vite build"),
+    "preview": pkg["scripts"].get("preview", "vite preview"),
+    "server":  "node server.js",
+    "start":   "node server.js",
 }
 pkg["scripts"] = guard_scripts
 

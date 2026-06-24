@@ -705,6 +705,77 @@
   font-family: 'Inter', system-ui, sans-serif;
 }
 
+/* Chromium 安装状态指示器 */
+.wr-chromium-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  border-radius: 8px;
+  padding: 3px 10px;
+  white-space: nowrap;
+  font-family: 'Inter', system-ui, sans-serif;
+  transition: all 0.3s;
+}
+.wr-chromium-status--checking {
+  color: #888;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+}
+.wr-chromium-status--installing {
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+}
+.wr-chromium-status--ready {
+  color: #15803d;
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+}
+.wr-chromium-status--failed {
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+}
+
+/* 安装日志面板 */
+.wr-install-log-panel {
+  position: relative;
+  background: #fff;
+  border-radius: 12px;
+  width: 680px;
+  max-width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  overflow: hidden;
+}
+
+.wr-install-log-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 10px 20px;
+  border-bottom: 1px solid #f0f0f0;
+  font-weight: 500;
+}
+
+.wr-install-log-pre {
+  flex: 1;
+  overflow-y: auto;
+  margin: 0;
+  padding: 16px 20px;
+  font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #1a1a1a;
+  background: #f8f9fa;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
 /* ── 今日头条复制按钮（Clay peach 调） ──────────────────────── */
 .wr-copy-btn--toutiao {
   background: #ffb084 !important;
