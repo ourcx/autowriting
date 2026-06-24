@@ -37,11 +37,11 @@ export default function LoginPage() {
         </div>
 
         <div className="auth-brand-body">
-          <h1 className="auth-brand-title">公众号写作，<br />交给 AI</h1>
+          <h1 className="auth-brand-title">公众号/头条写作，<br />交给 AI</h1>
           <p className="auth-brand-desc">从选题到成文，一站式 AI 辅助写作工具，帮你高效产出有质感的内容。</p>
           <div className="auth-brand-pills">
             <span className="auth-brand-pill">AI 生成</span>
-            <span className="auth-brand-pill">公众号排版</span>
+            <span className="auth-brand-pill">文章排版</span>
             <span className="auth-brand-pill">草稿管理</span>
             <span className="auth-brand-pill">多账号协作</span>
           </div>
