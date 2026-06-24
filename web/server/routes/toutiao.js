@@ -91,7 +91,7 @@ async function launchBrowserWithContext(extraContextOptions = {}) {
 
     const context = await chromium.launchPersistentContext(tmpProfileDir, {
       executablePath: EDGE_PATH,
-      headless: false,
+      headless: true,
       args: commonArgs,
       ...extraContextOptions,
     })
@@ -106,11 +106,11 @@ async function launchBrowserWithContext(extraContextOptions = {}) {
   // ── 回退：Playwright 内置 Chromium ───────────────────────────────────────
   let browser
   try {
-    browser = await chromium.launch({ headless: false, args: commonArgs })
+    browser = await chromium.launch({ headless: true, args: commonArgs })
   } catch (e) {
     logger.warn('TOUTIAO', 'Chromium 启动失败，尝试自动安装...', { error: e.message })
     execSync('npx playwright install chromium --with-deps', { stdio: 'inherit', timeout: 120000 })
-    browser = await chromium.launch({ headless: false, args: commonArgs })
+    browser = await chromium.launch({ headless: true, args: commonArgs })
   }
   const context = await browser.newContext(extraContextOptions)
   return { browser, context }
