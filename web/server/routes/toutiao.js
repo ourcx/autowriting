@@ -60,47 +60,79 @@ const EDGE_PATH = '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edg
 const EDGE_USER_DATA = `${process.env.HOME}/Library/Application Support/Microsoft Edge`
 
 /**
+ * 确保 Playwright Chromium 已安装，若未安装则后台安装
+ * 在服务启动时调用一次，避免在请求时才安装导致超时
+ */
+async function ensureChromiumInstalled() {
+  try {
+    // 尝试启动一次，如果成功说明已安装
+    const b = await chromium.launch({ headless: true, args: ['--no-sandbox'] })
+    await b.close()
+    logger.info('TOUTIAO', 'Playwright Chromium 已就绪')
+  } catch {
+    logger.info('TOUTIAO', 'Playwright Chromium 未安装，开始后台安装（约 1-2 分钟）...')
+    try {
+      execSync('npx playwright install chromium --with-deps', {
+        stdio: 'pipe',
+        timeout: 300000, // 5 分钟
+      })
+      logger.info('TOUTIAO', 'Playwright Chromium 安装完成')
+    } catch (installErr) {
+      logger.warn('TOUTIAO', 'Playwright Chromium 安装失败，发布功能可能不可用', {
+        error: installErr.message,
+      })
+    }
+  }
+}
+
+// 服务启动时异步预检，不阻塞启动
+ensureChromiumInstalled().catch(() => {})
+
+/**
  * 启动浏览器并返回 { browser, context }
  *
- * 策略：用 Edge 可执行文件 + 独立临时 profile（从真实 Default profile 复制）
- * 这样既有真实浏览器的指纹，又不会和已运行的 Edge 冲突。
- * 失败时回退到 Playwright 内置 Chromium。
+ * 策略：
+ * 1. 本地 macOS：优先用 Edge + 独立临时 profile（真实浏览器指纹）
+ * 2. 线上 Linux：直接用 Playwright 内置 Chromium（headless）
  */
 async function launchBrowserWithContext(extraContextOptions = {}) {
   const commonArgs = [
     '--no-sandbox',
     '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
     '--window-size=1440,900',
   ]
 
-  // ── 优先：Edge + 独立临时 profile ────────────────────────────────────────
-  const tmpProfileDir = path.join(os.tmpdir(), `edge_profile_${Date.now()}`)
-  const realDefaultProfile = path.join(EDGE_USER_DATA, 'Default')
-  try {
-    fs.mkdirSync(path.join(tmpProfileDir, 'Default'), { recursive: true })
-    for (const f of ['Cookies', 'Preferences', 'Local State']) {
-      const src = f === 'Local State'
-        ? path.join(EDGE_USER_DATA, f)
-        : path.join(realDefaultProfile, f)
-      const dst = f === 'Local State'
-        ? path.join(tmpProfileDir, f)
-        : path.join(tmpProfileDir, 'Default', f)
-      if (fs.existsSync(src)) fs.copyFileSync(src, dst)
-    }
-    logger.info('TOUTIAO', `临时 Edge profile 已创建: ${tmpProfileDir}`)
+  // ── 优先（仅 macOS）：Edge + 独立临时 profile ─────────────────────────
+  if (fs.existsSync(EDGE_PATH)) {
+    const tmpProfileDir = path.join(os.tmpdir(), `edge_profile_${Date.now()}`)
+    const realDefaultProfile = path.join(EDGE_USER_DATA, 'Default')
+    try {
+      fs.mkdirSync(path.join(tmpProfileDir, 'Default'), { recursive: true })
+      for (const f of ['Cookies', 'Preferences', 'Local State']) {
+        const src = f === 'Local State'
+          ? path.join(EDGE_USER_DATA, f)
+          : path.join(realDefaultProfile, f)
+        const dst = f === 'Local State'
+          ? path.join(tmpProfileDir, f)
+          : path.join(tmpProfileDir, 'Default', f)
+        if (fs.existsSync(src)) fs.copyFileSync(src, dst)
+      }
+      logger.info('TOUTIAO', `临时 Edge profile 已创建: ${tmpProfileDir}`)
 
-    const context = await chromium.launchPersistentContext(tmpProfileDir, {
-      executablePath: EDGE_PATH,
-      headless: true,
-      args: commonArgs,
-      ...extraContextOptions,
-    })
-    logger.info('TOUTIAO', '使用 Edge + 临时 profile 启动成功')
-    context.once('close', () => fs.rmSync(tmpProfileDir, { recursive: true, force: true }))
-    return { browser: null, context }
-  } catch (e) {
-    logger.warn('TOUTIAO', `Edge 临时 profile 启动失败，回退到 Chromium: ${e.message}`)
-    fs.rmSync(tmpProfileDir, { recursive: true, force: true })
+      const context = await chromium.launchPersistentContext(tmpProfileDir, {
+        executablePath: EDGE_PATH,
+        headless: true,
+        args: commonArgs,
+        ...extraContextOptions,
+      })
+      logger.info('TOUTIAO', '使用 Edge + 临时 profile 启动成功')
+      context.once('close', () => fs.rmSync(tmpProfileDir, { recursive: true, force: true }))
+      return { browser: null, context }
+    } catch (e) {
+      logger.warn('TOUTIAO', `Edge 临时 profile 启动失败，回退到 Chromium: ${e.message}`)
+      fs.rmSync(tmpProfileDir, { recursive: true, force: true })
+    }
   }
 
   // ── 回退：Playwright 内置 Chromium ───────────────────────────────────────
@@ -108,9 +140,20 @@ async function launchBrowserWithContext(extraContextOptions = {}) {
   try {
     browser = await chromium.launch({ headless: true, args: commonArgs })
   } catch (e) {
-    logger.warn('TOUTIAO', 'Chromium 启动失败，尝试自动安装...', { error: e.message })
-    execSync('npx playwright install chromium --with-deps', { stdio: 'inherit', timeout: 120000 })
-    browser = await chromium.launch({ headless: true, args: commonArgs })
+    // Chromium 未安装（postinstall 未执行或失败），尝试同步安装
+    logger.warn('TOUTIAO', 'Chromium 启动失败，尝试安装...', { error: e.message })
+    try {
+      execSync('npx playwright install chromium --with-deps', {
+        stdio: 'pipe',
+        timeout: 300000,
+      })
+      browser = await chromium.launch({ headless: true, args: commonArgs })
+    } catch (installErr) {
+      throw new Error(
+        `Playwright Chromium 未安装且自动安装失败：${installErr.message}。` +
+        '请在服务器上手动运行：npx playwright install chromium --with-deps'
+      )
+    }
   }
   const context = await browser.newContext(extraContextOptions)
   return { browser, context }
@@ -225,10 +268,13 @@ router.post('/publish', async (req, res) => {
     await fillTitle(page, title)
     await sleep(500, 1000)
 
-    // ── 5. 注入正文（Markdown → HTML → ClipboardEvent paste）──────────────
+    // ── 5. 注入正文（三级降级策略：execCommand → ClipboardEvent → keyboard）──
     logger.info('TOUTIAO', '正在注入正文内容...')
     await injectContent(page, content)
-    await sleep(500, 1000)
+    // 等待编辑器识别内容变化，触发自动保存（避免保存失败弹窗）
+    await sleep(2000, 3000)
+    // 处理可能出现的保存失败弹窗
+    await dismissSaveFailDialog(page)
 
     // ── 6. 上传封面图 ──────────────────────────────────────────────────────
     let coverUploaded = false
@@ -247,7 +293,11 @@ router.post('/publish', async (req, res) => {
 
     // ── 7. 点击「预览并发布」→「确认发布」直接发布 ────────────────────────
     logger.info('TOUTIAO', '正在点击「预览并发布」按钮...')
+
+    // 先处理「保存失败」弹窗（头条自动保存草稿失败时会弹出，阻挡发布按钮）
+    await dismissSaveFailDialog(page)
     await dismissOverlays(page)
+    await sleep(500, 800)
 
     const publishBtn = page.locator('button:has-text("预览并发布")').first()
     await publishBtn.scrollIntoViewIfNeeded().catch(() => {})
@@ -255,6 +305,9 @@ router.post('/publish', async (req, res) => {
     await publishBtn.click({ force: true, timeout: 10000 })
     logger.info('TOUTIAO', '已点击「预览并发布」，等待预览页加载...')
     await sleep(3000, 5000)
+
+    // 预览页可能也有「保存失败」弹窗，再处理一次
+    await dismissSaveFailDialog(page)
 
     // 预览页面需要再次点击「确认发布」
     const confirmPublish = page.locator('button:has-text("确认发布"), button:has-text("发布")').first()
@@ -291,13 +344,13 @@ router.post('/publish', async (req, res) => {
 
 /**
  * 关闭页面上可能出现的遮罩/弹窗（Cookie 提示、引导弹窗等）
+ * 注意：不包含「取消」，避免误关发布确认弹窗
  */
 async function dismissOverlays(page) {
   const overlaySelectors = [
     'button:has-text("我知道了")',
     'button:has-text("知道了")',
     'button:has-text("关闭")',
-    'button:has-text("取消")',
     '.byte-modal-close',
     '.byte-dialog-close',
   ]
@@ -312,6 +365,43 @@ async function dismissOverlays(page) {
     } catch {
       // 忽略
     }
+  }
+}
+
+/**
+ * 专门处理「保存失败」弹窗
+ * 头条编辑器在内容注入后会自动触发草稿保存，失败时弹出提示
+ * 需要点「重试」或「忽略」关掉它，否则会阻挡发布按钮
+ */
+async function dismissSaveFailDialog(page) {
+  // 可能的按钮文案：重试、忽略、我知道了、确定
+  const saveFailSelectors = [
+    'button:has-text("重试")',
+    'button:has-text("忽略")',
+    'button:has-text("我知道了")',
+    'button:has-text("确定")',
+  ]
+  // 先判断是否有「保存失败」相关文字
+  try {
+    const hasFailText = await page.locator('text=保存失败, text=保存出错, text=网络异常').first()
+      .isVisible({ timeout: 2000 }).catch(() => false)
+    if (!hasFailText) return
+    logger.warn('TOUTIAO', '检测到「保存失败」弹窗，尝试关闭...')
+    for (const sel of saveFailSelectors) {
+      const btn = page.locator(sel).first()
+      if (await btn.isVisible({ timeout: 1000 }).catch(() => false)) {
+        await btn.click()
+        logger.info('TOUTIAO', `关闭保存失败弹窗: ${sel}`)
+        await sleep(500, 800)
+        return
+      }
+    }
+    // 兜底：按 Escape
+    await page.keyboard.press('Escape')
+    logger.info('TOUTIAO', '用 Escape 关闭保存失败弹窗')
+    await sleep(300, 500)
+  } catch {
+    // 忽略
   }
 }
 
@@ -338,69 +428,131 @@ async function fillTitle(page, title) {
 }
 
 /**
- * 将 Markdown 内容转为 HTML，通过 ClipboardEvent paste 注入到 ProseMirror 编辑器
- * 这是最可靠的富文本注入方式，参考 mf-yang/toutiao-ops 实现
+ * 将 Markdown 内容注入到头条 ProseMirror 编辑器
+ *
+ * 策略（按可靠性排序）：
+ * 1. execCommand insertHTML（最兼容 ProseMirror，触发真实 DOM mutation）
+ * 2. ClipboardEvent paste（富文本，但无头浏览器可能被拦截）
+ * 3. keyboard.type 逐字符输入（纯文本兜底，100% 可靠但无格式）
  */
 async function injectContent(page, markdownContent) {
-  const editorSelector = '[contenteditable="true"]'
+  // 找到正文编辑区（排除标题输入框）
+  // 头条编辑器：正文区是第二个 contenteditable，或带 article-editor class
+  const editorSelectors = [
+    '.article-editor [contenteditable="true"]',
+    '.ProseMirror',
+    '[contenteditable="true"]:not([placeholder*="标题"])',
+    '[contenteditable="true"]',
+  ]
 
-  try {
-    await page.waitForSelector(editorSelector, { timeout: 15000 })
-    await sleep(300, 600)
-    await page.click(editorSelector, { force: true })
-    await sleep(200, 400)
-
-    // Markdown → HTML
-    const html = marked.parse(markdownContent, { breaks: true, gfm: true })
-
-    // 通过 ClipboardEvent paste 注入富文本
-    await page.evaluate(
-      ({ html, selector }) => {
-        const editor = document.querySelector(selector)
-        if (!editor) return
-        editor.focus()
-        const dt = new DataTransfer()
-        dt.setData('text/html', html)
-        dt.setData('text/plain', editor.textContent)
-        const evt = new ClipboardEvent('paste', {
-          clipboardData: dt,
-          bubbles: true,
-          cancelable: true,
-        })
-        editor.dispatchEvent(evt)
-      },
-      { html, selector: editorSelector }
-    )
-
-    await sleep(800, 1500)
-
-    // 验证内容是否注入成功
-    const contentLength = await page.evaluate((selector) => {
-      const el = document.querySelector(selector)
-      return el ? el.innerText.trim().length : 0
-    }, editorSelector)
-
-    if (contentLength > 10) {
-      logger.info('TOUTIAO', `正文注入成功，编辑器内容长度: ${contentLength}`)
-    } else {
-      // 降级：直接设置 innerHTML
-      logger.warn('TOUTIAO', 'ClipboardEvent 注入内容为空，降级使用 innerHTML 注入')
-      await page.evaluate(
-        ({ html, selector }) => {
-          const editor = document.querySelector(selector)
-          if (!editor) return
-          editor.focus()
-          editor.innerHTML = html
-          editor.dispatchEvent(new InputEvent('input', { bubbles: true }))
-          editor.dispatchEvent(new Event('change', { bubbles: true }))
-        },
-        { html, selector: editorSelector }
-      )
-      await sleep(500, 1000)
+  let editorEl = null
+  for (const sel of editorSelectors) {
+    try {
+      await page.waitForSelector(sel, { timeout: 5000 })
+      editorEl = sel
+      break
+    } catch {
+      // 继续尝试下一个
     }
-  } catch (e) {
-    logger.warn('TOUTIAO', `正文注入失败: ${e.message}`)
   }
+
+  if (!editorEl) {
+    logger.warn('TOUTIAO', '未找到正文编辑器，跳过内容注入')
+    return
+  }
+
+  // 预处理 Markdown：移除所有图片（头条不接受外部图片 URL，会报「URL 非法」）
+  const cleanedMarkdown = markdownContent
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
+    .replace(/\n{3,}/g, '\n\n') // 清理多余空行
+
+  // Markdown → HTML（用于富文本注入）
+  const html = marked.parse(cleanedMarkdown, { breaks: true, gfm: true })
+  // Markdown → 纯文本（用于键盘输入兜底）
+  const plainText = cleanedMarkdown
+
+  await page.click(editorEl, { force: true })
+  await sleep(300, 500)
+
+  // ── 方案 1：execCommand insertHTML（最可靠，直接触发 ProseMirror mutation）──
+  logger.info('TOUTIAO', '尝试 execCommand insertHTML 注入...')
+  await page.evaluate(
+    ({ html, selector }) => {
+      const editor = document.querySelector(selector)
+      if (!editor) return
+      editor.focus()
+      // 清空现有内容
+      document.execCommand('selectAll', false, null)
+      document.execCommand('delete', false, null)
+      // 插入 HTML
+      document.execCommand('insertHTML', false, html)
+    },
+    { html, selector: editorEl }
+  )
+  await sleep(1000, 1500)
+
+  // 验证方案 1 是否成功
+  let contentLength = await page.evaluate((selector) => {
+    const el = document.querySelector(selector)
+    return el ? el.innerText.trim().length : 0
+  }, editorEl)
+
+  if (contentLength > 10) {
+    logger.info('TOUTIAO', `execCommand 注入成功，内容长度: ${contentLength}`)
+    return
+  }
+
+  // ── 方案 2：ClipboardEvent paste（富文本，无头浏览器可能被拦截）────────────
+  logger.warn('TOUTIAO', 'execCommand 注入失败，尝试 ClipboardEvent paste...')
+  await page.evaluate(
+    ({ html, selector }) => {
+      const editor = document.querySelector(selector)
+      if (!editor) return
+      editor.focus()
+      const dt = new DataTransfer()
+      dt.setData('text/html', html)
+      dt.setData('text/plain', editor.textContent)
+      editor.dispatchEvent(new ClipboardEvent('paste', {
+        clipboardData: dt,
+        bubbles: true,
+        cancelable: true,
+      }))
+    },
+    { html, selector: editorEl }
+  )
+  await sleep(1000, 1500)
+
+  contentLength = await page.evaluate((selector) => {
+    const el = document.querySelector(selector)
+    return el ? el.innerText.trim().length : 0
+  }, editorEl)
+
+  if (contentLength > 10) {
+    logger.info('TOUTIAO', `ClipboardEvent 注入成功，内容长度: ${contentLength}`)
+    return
+  }
+
+  // ── 方案 3：keyboard.type 逐字符输入（纯文本兜底，100% 可靠）────────────────
+  logger.warn('TOUTIAO', 'ClipboardEvent 注入失败，降级为键盘逐字符输入（纯文本）...')
+  await page.click(editorEl, { force: true })
+  await sleep(200, 300)
+  // 先全选清空
+  await page.keyboard.press('Meta+A')
+  await page.keyboard.press('Control+A')
+  await page.keyboard.press('Delete')
+  await sleep(200, 300)
+  // 分段输入，避免单次 type 太长超时
+  const chunks = plainText.match(/.{1,500}/gs) || [plainText]
+  for (const chunk of chunks) {
+    await page.keyboard.type(chunk, { delay: 5 })
+    await sleep(100, 200)
+  }
+
+  contentLength = await page.evaluate((selector) => {
+    const el = document.querySelector(selector)
+    return el ? el.innerText.trim().length : 0
+  }, editorEl)
+  logger.info('TOUTIAO', `键盘输入完成，内容长度: ${contentLength}`)
 }
 
 /**
