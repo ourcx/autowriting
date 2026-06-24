@@ -383,27 +383,38 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
   // 今日头条：复制原始 Markdown
   const handleCopyMarkdown = useCallback(async () => {
     if (!content?.trim()) return
+
+    // 用 markdown-it 把 Markdown 转成 HTML，粘贴到头条编辑器时会识别为富文本
+    const mdRenderer = new MarkdownIt({ html: false, breaks: true, linkify: true })
+    const htmlContent = mdRenderer.render(content)
+
     try {
-      await navigator.clipboard.writeText(content)
+      // 同时写入 text/html 和 text/plain
+      // 头条 ProseMirror 编辑器粘贴时会优先使用 text/html
+      const clipItem = new ClipboardItem({
+        'text/html': new Blob([htmlContent], { type: 'text/html' }),
+        'text/plain': new Blob([content], { type: 'text/plain' }),
+      })
+      await navigator.clipboard.write([clipItem])
       setTtCopied(true)
       setTimeout(() => setTtCopied(false), 2500)
-      toast.success('Markdown 已复制，打开今日头条编辑器 → 直接 Ctrl+V 粘贴')
+      toast.success('已复制富文本，打开今日头条编辑器 → 直接 Ctrl+V 粘贴')
     } catch {
-      // 降级：execCommand
-      const ta = document.createElement('textarea')
-      ta.value = content
-      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0'
-      document.body.appendChild(ta)
-      ta.select()
-      const ok = document.execCommand('copy')
-      document.body.removeChild(ta)
-      if (ok) {
-        setTtCopied(true)
-        setTimeout(() => setTtCopied(false), 2500)
-        toast.success('Markdown 已复制，打开今日头条编辑器 → 直接 Ctrl+V 粘贴')
-      } else {
-        toast.warn('复制失败，请手动全选后复制')
+      // 降级：只复制纯文本（部分浏览器不支持 ClipboardItem）
+      try {
+        await navigator.clipboard.writeText(content)
+      } catch {
+        const ta = document.createElement('textarea')
+        ta.value = content
+        ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0'
+        document.body.appendChild(ta)
+        ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
       }
+      setTtCopied(true)
+      setTimeout(() => setTtCopied(false), 2500)
+      toast.success('已复制（纯文本模式），粘贴后格式可能需要手动调整')
     }
   }, [content])
 
@@ -478,9 +489,9 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
         return
       }
       setTtPushDone(true)
-      toast.success(d.message ?? '文章已保存为今日头条草稿！', {
+      toast.success(d.message ?? '文章已发布到今日头条！', {
         duration: 0,
-        action: { label: '去草稿箱', onClick: () => window.open('https://mp.toutiao.com/profile_v4/graphic/articles?type=draft', '_blank') },
+        action: { label: '去头条号', onClick: () => window.open('https://mp.toutiao.com/profile_v4/graphic/articles', '_blank') },
       })
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '推送失败，请检查网络')
@@ -849,16 +860,16 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
           <div className="wr-toolbar">
             <div className="wr-toolbar-left">
               <span className="wr-stat">{charCount.toLocaleString()} 字</span>
-              <span className="wr-tt-tip">今日头条编辑器支持直接粘贴 Markdown</span>
+              <span className="wr-tt-tip">复制富文本后粘贴到头条编辑器，标题/加粗格式自动保留</span>
             </div>
             <div className="wr-toolbar-right">
               {ttCopied ? (
                 <span className="wr-copy-hint wr-copy-hint-success">
-                  已复制 Markdown，打开头条编辑器 → 直接 Ctrl+V 粘贴
+                  已复制富文本，打开头条编辑器 → 直接 Ctrl+V 粘贴
                 </span>
               ) : (
                 <span className="wr-copy-hint">
-                  复制后粘贴到今日头条编辑器，格式自动识别
+                  复制富文本后粘贴到今日头条编辑器，标题/加粗等格式自动保留
                 </span>
               )}
               <button
@@ -866,7 +877,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                 onClick={handleCopyMarkdown}
               >
                 {ttCopied ? <Check size={15} /> : <Copy size={15} />}
-                {ttCopied ? '已复制！' : '复制 Markdown'}
+                {ttCopied ? '已复制！' : '复制富文本'}
               </button>
 
               {/* Cookie 配置按钮 */}
