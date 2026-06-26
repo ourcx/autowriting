@@ -138,3 +138,48 @@
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* 今日头条空状态 */
+.preview-empty-toutiao {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 100%;
+  min-height: 300px;
+  text-align: center;
+  padding: 40px;
+}
+
+.preview-empty-toutiao p {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.preview-empty-toutiao span {
+  font-size: 13px;
+  color: #9a9a9a;
+  max-width: 280px;
+  line-height: 1.6;
+}
+
+.preview-empty-toutiao button {
+  margin-top: 8px;
+  height: 40px;
+  padding: 0 20px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  background: #0a0a0a;
+  color: #fff;
+  transition: background 0.12s;
+}
+
+.preview-empty-toutiao button:hover {
+  background: #1f1f1f;
+}

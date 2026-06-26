@@ -23,15 +23,17 @@ interface ArticleData {
   materials: string
   article: string
   title: string
+  articleToutiao: string
 }
 
-type TabId = 'task' | 'materials' | 'article' | 'analysis' | 'cover' | 'library'
+type TabId = 'task' | 'materials' | 'article' | 'toutiao' | 'analysis' | 'cover' | 'library'
 
 // 流程步骤定义（cover 的 check 在组件内动态注入）
 const BASE_FLOW_STEPS: { id: TabId; label: string; check: (d: ArticleData) => boolean }[] = [
   { id: 'task',      label: '任务要求', check: d => d.task.trim().length >= 20 },
   { id: 'materials', label: '素材采集', check: d => d.materials.trim().length >= 30 },
-  { id: 'article',   label: '生成文章', check: d => d.article.trim().length > 100 },
+  { id: 'article',   label: '公众号',   check: d => d.article.trim().length > 100 },
+  { id: 'toutiao',   label: '今日头条', check: d => d.articleToutiao.trim().length > 100 },
   { id: 'cover',     label: '生成封面', check: () => false }, // 由组件内 hasCover 覆盖
   { id: 'analysis',  label: '内容分析', check: () => false },
 ]
@@ -40,7 +42,7 @@ export default function ArticleEditor() {
   const { articleId = '' } = useParams<{ articleId: string }>()
   const navigate = useNavigate()
 
-  const [data, setData] = useState<ArticleData>({ task: '', materials: '', article: '', title: '' })
+  const [data, setData] = useState<ArticleData>({ task: '', materials: '', article: '', title: '', articleToutiao: '' })
   const [loading, setLoading] = useState(false)
   const [generateError, setGenerateError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabId>('task')
@@ -116,9 +118,9 @@ export default function ArticleEditor() {
 
   function loadLocalData(): ArticleData {
     try {
-      return JSON.parse(localStorage.getItem(localStorageKey) || 'null') || { task: '', materials: '', article: '', title: '' }
+      return JSON.parse(localStorage.getItem(localStorageKey) || 'null') || { task: '', materials: '', article: '', title: '', articleToutiao: '' }
     } catch {
-      return { task: '', materials: '', article: '', title: '' }
+      return { task: '', materials: '', article: '', title: '', articleToutiao: '' }
     }
   }
 
@@ -230,15 +232,27 @@ export default function ArticleEditor() {
     setShowGenerateModal(true)
   }
 
-  const handleGenerateComplete = (article: string) => {
+  const handleGenerateComplete = (article: string, articleToutiao: string, platforms: 'both' | 'wechat' | 'toutiao') => {
     setData(prev => {
-      const next = { ...prev, article }
+      const next = {
+        ...prev,
+        ...(article ? { article } : {}),
+        ...(articleToutiao ? { articleToutiao } : {}),
+      }
       // 本地模式下生成完成后自动存到 localStorage
       if (isLocalArticle) saveLocalData(next)
       return next
     })
-    setActiveTab('article')
-    toast.success('文章生成成功')
+    // 跳转到对应 tab
+    if (platforms === 'toutiao') {
+      setActiveTab('toutiao')
+    } else {
+      setActiveTab('article')
+    }
+    const msg = platforms === 'wechat' ? '公众号文章已生成'
+      : platforms === 'toutiao' ? '今日头条文章已生成'
+      : '公众号 + 今日头条两篇文章已生成'
+    toast.success(msg)
   }
 
   const articleTitle = data.title || data.article.split('\n')[0]?.replace(/^#+\s*/, '') || `文章 ${articleId}`
@@ -536,10 +550,24 @@ export default function ArticleEditor() {
 
           {activeTab === 'article' && (
             <div className="editor-panel">
+              <div className="editor-platform-label editor-platform-label--wechat">公众号版本</div>
               <MarkdownEditor
                 value={data.article}
                 onChange={value => setData(prev => ({ ...prev, article: value }))}
-                placeholder="文章将在这里显示..."
+                placeholder="公众号文章将在这里显示..."
+                height="600px"
+                articleId={articleId}
+              />
+            </div>
+          )}
+
+          {activeTab === 'toutiao' && (
+            <div className="editor-panel">
+              <div className="editor-platform-label editor-platform-label--toutiao">今日头条版本</div>
+              <MarkdownEditor
+                value={data.articleToutiao}
+                onChange={value => setData(prev => ({ ...prev, articleToutiao: value }))}
+                placeholder="今日头条文章将在这里显示..."
                 height="600px"
                 articleId={articleId}
               />

@@ -151,16 +151,19 @@ router.get('/:articleId', (req, res) => {
     const materialsPath = getArticlePath(articleId, 'materials', uid)
     const articlePath   = getArticlePath(articleId, 'article',   uid)
     const titlePath     = getArticlePath(articleId, 'title',     uid)
+    // 今日头条文章路径（article_raw.md → article_toutiao.md）
+    const toutiaoPath   = articlePath ? articlePath.replace('article_raw', 'article_toutiao') : null
 
     ensureDir(path.dirname(taskPath))
     ensureDir(path.dirname(materialsPath))
     ensureDir(path.dirname(articlePath))
 
     res.json({
-      task:      fs.existsSync(taskPath)      ? fs.readFileSync(taskPath,      'utf-8') : '',
-      materials: fs.existsSync(materialsPath) ? fs.readFileSync(materialsPath, 'utf-8') : '',
-      article:   fs.existsSync(articlePath)   ? fs.readFileSync(articlePath,   'utf-8') : '',
-      title:     fs.existsSync(titlePath)     ? fs.readFileSync(titlePath,     'utf-8') : '',
+      task:           fs.existsSync(taskPath)      ? fs.readFileSync(taskPath,      'utf-8') : '',
+      materials:      fs.existsSync(materialsPath) ? fs.readFileSync(materialsPath, 'utf-8') : '',
+      article:        fs.existsSync(articlePath)   ? fs.readFileSync(articlePath,   'utf-8') : '',
+      title:          fs.existsSync(titlePath)     ? fs.readFileSync(titlePath,     'utf-8') : '',
+      articleToutiao: toutiaoPath && fs.existsSync(toutiaoPath) ? fs.readFileSync(toutiaoPath, 'utf-8') : '',
     })
   } catch (error) {
     console.error('Error fetching article:', error)
@@ -173,22 +176,24 @@ router.get('/:articleId', (req, res) => {
 router.post('/:articleId', (req, res) => {
   try {
     const { articleId } = req.params
-    const { task, materials, article, title } = req.body
+    const { task, materials, article, title, articleToutiao } = req.body
     const uid = req.user.id
 
     const taskPath      = getArticlePath(articleId, 'task',      uid)
     const materialsPath = getArticlePath(articleId, 'materials', uid)
     const articlePath   = getArticlePath(articleId, 'article',   uid)
     const titlePath     = getArticlePath(articleId, 'title',     uid)
+    const toutiaoPath   = articlePath ? articlePath.replace('article_raw', 'article_toutiao') : null
 
     ensureDir(path.dirname(taskPath))
     ensureDir(path.dirname(materialsPath))
     ensureDir(path.dirname(articlePath))
 
-    if (task)      fs.writeFileSync(taskPath,      task,      'utf-8')
-    if (materials) fs.writeFileSync(materialsPath, materials, 'utf-8')
-    if (article)   fs.writeFileSync(articlePath,   article,   'utf-8')
-    if (title)     fs.writeFileSync(titlePath,     title,     'utf-8')
+    if (task)           fs.writeFileSync(taskPath,      task,           'utf-8')
+    if (materials)      fs.writeFileSync(materialsPath, materials,      'utf-8')
+    if (article)        fs.writeFileSync(articlePath,   article,        'utf-8')
+    if (title)          fs.writeFileSync(titlePath,     title,          'utf-8')
+    if (articleToutiao && toutiaoPath) fs.writeFileSync(toutiaoPath, articleToutiao, 'utf-8')
 
     // 文章内容有更新时，异步触发增量 RAG 索引（不阻塞响应）
     if (article || materials) {
@@ -293,12 +298,17 @@ ${materials}
 })
 
 // ── POST /api/articles/:articleId/generate/stream  (SSE) ─────────────────────
+// 支持同时生成公众号 + 今日头条两篇文章
+// SSE 事件区分：
+//   platform: 'wechat'   → 公众号文章 chunk/done
+//   platform: 'toutiao'  → 今日头条文章 chunk/done
 
 router.post('/:articleId/generate/stream', async (req, res) => {
   const { articleId } = req.params
   // selectedRagContext: 前端手动选择后由 /api/rag/context 返回的格式化字符串
   // 若提供则跳过自动 RAG 检索，直接使用
-  const { task, materials, aiConfig, selectedRagContext } = req.body
+  // platforms: 'both' | 'wechat' | 'toutiao'，控制生成哪些平台
+  const { task, materials, aiConfig, selectedRagContext, platforms = 'both' } = req.body
 
   // SSE 响应头
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
@@ -314,6 +324,7 @@ router.post('/:articleId/generate/stream', async (req, res) => {
 
   // 已生成内容（用于中断时恢复）
   let fullText = ''
+  let fullTextToutiao = ''
 
   // 中断时将已生成内容持久化到磁盘
   const savePartial = () => {
@@ -357,6 +368,10 @@ router.post('/:articleId/generate/stream', async (req, res) => {
     const streamGeneratePromptData = getEffectivePrompt('prompt-article-generate')
     const streamGenerateInstruction = streamGeneratePromptData?.content || ''
 
+    // 今日头条提示词
+    const toutiaoPromptData = getEffectivePrompt('prompt-article-generate-toutiao')
+    const toutiaoInstruction = toutiaoPromptData?.content || ''
+
     // 当前时间（北京时间格式）
     const now = new Date()
     const formatter = new Intl.DateTimeFormat('zh-CN', {
@@ -370,7 +385,8 @@ router.post('/:articleId/generate/stream', async (req, res) => {
     const globalMemory = getSetting('global_memory')
     const globalMemorySection = globalMemory ? `\n\n# 全局背景信息（永久记忆）\n${globalMemory}\n` : ''
 
-    const userPrompt = `${streamGenerateInstruction ? streamGenerateInstruction + '\n\n' : ''}# 写作规范（必须严格遵守）
+    // ── 公众号 prompt ──────────────────────────────────────────────────────────
+    const wechatPrompt = `${streamGenerateInstruction ? streamGenerateInstruction + '\n\n' : ''}# 写作规范（必须严格遵守）
 ${agentsContent}
 ${ragSection}${globalMemorySection}
 # 当前时间
@@ -386,84 +402,137 @@ ${materials}
 
 现在请直接输出完整的文章内容（纯 Markdown，只有 1 个 H1，所有 H2 带 emoji）：`
 
+    // ── 今日头条 prompt（不注入 RAG，使用相同素材但不同提示词）──────────────
+    const toutiaoPrompt = `${toutiaoInstruction ? toutiaoInstruction + '\n\n' : ''}${globalMemorySection}
+# 当前时间
+${currentDateTime}
+
+# 本次任务要求
+${task}
+
+# 素材参考
+${materials}
+
+---
+
+现在请直接输出完整的今日头条文章内容（纯 Markdown，只有 1 个 H1，H2 可带 emoji，标题要有吸引力）：`
+
     // ── 3. 构造请求参数（统一函数）──────────────────────────────────────────
     const { url, model, headers } = buildLLMRequest(cfg)
 
-    // ── 4. 流式请求上游 LLM ───────────────────────────────────────────────────
-    send('status', { step: 'generate', message: 'AI 正在生成文章...' })
+    // ── 4. 按需生成各平台文章 ─────────────────────────────────────────────────
 
-    const upstreamRes = await axios.post(
-      url,
-      {
-        model,
-        messages: [
-          { role: 'system', content: '你是一个专业的内容创作助手，擅长按照规范和要求生成高质量的文章内容。' },
-          { role: 'user',   content: userPrompt },
-        ],
-        temperature: 0.9,
-        max_tokens: 4096,
-        stream: true,
-      },
-      { headers, responseType: 'stream' }
-    )
+    // 辅助：流式生成单个平台
+    async function streamPlatform(prompt, systemMsg, platformKey, isLast) {
+      send('status', { step: 'generate', message: `AI 正在生成${platformKey === 'wechat' ? '公众号' : '今日头条'}文章...`, platform: platformKey })
 
-    // ── 5. 逐行解析 OpenAI SSE，转发给前端 ───────────────────────────────────
-    let buffer = ''
+      const res2 = await axios.post(
+        url,
+        {
+          model,
+          messages: [
+            { role: 'system', content: systemMsg },
+            { role: 'user',   content: prompt },
+          ],
+          temperature: 0.9,
+          max_tokens: 4096,
+          stream: true,
+        },
+        { headers, responseType: 'stream' }
+      )
 
-    upstreamRes.data.on('data', (chunk) => {
-      buffer += chunk.toString('utf-8')
-      const lines = buffer.split('\n')
-      buffer = lines.pop() // 保留未完整的最后一行
+      await new Promise((resolve, reject) => {
+        let buffer = ''
+        let fullContent = ''
 
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed || trimmed === 'data: [DONE]') continue
-        if (!trimmed.startsWith('data:')) continue
+        res2.data.on('data', (chunk) => {
+          buffer += chunk.toString('utf-8')
+          const lines = buffer.split('\n')
+          buffer = lines.pop()
 
-        try {
-          const json    = JSON.parse(trimmed.slice(5).trim())
-          const content = json.choices?.[0]?.delta?.content
-          if (content) {
-            fullText += content
-            send('chunk', { text: content })
+          for (const line of lines) {
+            const trimmed = line.trim()
+            if (!trimmed || trimmed === 'data: [DONE]') continue
+            if (!trimmed.startsWith('data:')) continue
+            try {
+              const json    = JSON.parse(trimmed.slice(5).trim())
+              const content = json.choices?.[0]?.delta?.content
+              if (content) {
+                fullContent += content
+                if (platformKey === 'wechat') fullText = fullContent
+                else fullTextToutiao = fullContent
+                send('chunk', { text: content, platform: platformKey })
+              }
+            } catch { /* ignore */ }
           }
-        } catch {
-          // 忽略解析失败的行
-        }
-      }
-    })
+        })
 
-    upstreamRes.data.on('end', () => {
-      // ── 6. 持久化到磁盘 ───────────────────────────────────────────────────
-      try {
-        const articlePath = getArticlePath(articleId, 'article', req.user.id)
-        ensureDir(path.dirname(articlePath))
-        fs.writeFileSync(articlePath, fullText, 'utf-8')
-      } catch (e) {
-        console.error('[Stream] 写入文章失败:', e.message)
-      }
+        res2.data.on('end', () => {
+          // 持久化
+          try {
+            const articlePath = getArticlePath(articleId, 'article', req.user.id)
+            if (platformKey === 'wechat') {
+              ensureDir(path.dirname(articlePath))
+              fs.writeFileSync(articlePath, fullContent, 'utf-8')
+            } else {
+              const toutiaoPath = articlePath.replace('article_raw', 'article_toutiao')
+              ensureDir(path.dirname(toutiaoPath))
+              fs.writeFileSync(toutiaoPath, fullContent, 'utf-8')
+            }
+          } catch (e) {
+            console.error(`[Stream] 写入${platformKey}文章失败:`, e.message)
+          }
+          recordTokenUsage({
+            articleId, userId: req.user.id, operation: 'generate', model,
+            outputTokens: Math.ceil(fullContent.length / 1.5),
+          })
+          send('done', { article: fullContent, platform: platformKey, ragCount: platformKey === 'wechat' && selectedRagContext ? 1 : 0 })
+          if (isLast) res.end()
+          resolve()
+        })
 
-      // 流式结束时 token 数无法精确获取，记录估算值（1 token ≈ 1.5 个汉字）
-      recordTokenUsage({
-        articleId, userId: req.user.id, operation: 'generate', model,
-        outputTokens: Math.ceil(fullText.length / 1.5),
+        res2.data.on('error', (e) => {
+          console.error(`[Stream] ${platformKey}上游流错误:`, e.message)
+          reject(e)
+        })
+
+        req.on('close', () => {
+          if (!res.writableEnded) savePartial()
+        })
       })
+    }
 
-      send('done', { article: fullText, ragCount: selectedRagContext ? 1 : 0 })
-      res.end()
-    })
-
-    upstreamRes.data.on('error', (e) => {
-      console.error('[Stream] 上游流错误:', e.message)
-      savePartial()  // 中断时保存已生成内容
-      send('error', { message: e.message, partial: fullText.length > 0 })
-      res.end()
-    })
-
-    // 客户端主动断开时也保存
-    req.on('close', () => {
-      if (!res.writableEnded) savePartial()
-    })
+    if (platforms === 'wechat') {
+      // 只生成公众号
+      await streamPlatform(
+        wechatPrompt,
+        '你是一个专业的内容创作助手，擅长按照规范和要求生成高质量的文章内容。',
+        'wechat',
+        true
+      )
+    } else if (platforms === 'toutiao') {
+      // 只生成今日头条
+      await streamPlatform(
+        toutiaoPrompt,
+        '你是一个专业的今日头条内容创作者，擅长写热点、情感、故事类文章，标题吸引人，内容接地气。',
+        'toutiao',
+        true
+      )
+    } else {
+      // 两者都生成：先公众号，再今日头条
+      await streamPlatform(
+        wechatPrompt,
+        '你是一个专业的内容创作助手，擅长按照规范和要求生成高质量的文章内容。',
+        'wechat',
+        false
+      )
+      await streamPlatform(
+        toutiaoPrompt,
+        '你是一个专业的今日头条内容创作者，擅长写热点、情感、故事类文章，标题吸引人，内容接地气。',
+        'toutiao',
+        true
+      )
+    }
 
   } catch (error) {
     console.error('[Stream] 生成失败:', error.response?.data || error.message)

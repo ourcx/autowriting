@@ -41,7 +41,8 @@ const CATEGORY_LABELS: Record<string, string> = {
 }
 
 const PROMPT_USAGE_TIPS: Record<string, string> = {
-  'prompt-article-generate': '点击「生成文章」时作为角色和输出约束注入到 prompt 前段',
+  'prompt-article-generate': '点击「生成文章」时作为公众号文章的角色和输出约束注入到 prompt 前段',
+  'prompt-article-generate-toutiao': '点击「生成文章」时同步生成今日头条版本，使用此提示词；风格偏热点、情感、故事，标题要有吸引力',
   'prompt-article-analyze': '点击「AI 分析」时作为角色描述注入',
   'prompt-article-deai': '在「写作分析」面板点击「去 AI 味」按钮时使用，对全文进行流式改写',
   'prompt-edit-polish': '内联编辑选择「润色」时使用',

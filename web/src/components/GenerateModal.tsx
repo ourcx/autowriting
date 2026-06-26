@@ -3,7 +3,7 @@
  *
  * 三阶段 UI：
  *   1. pick     — 查询 RAG 候选文章，用户手动勾选要注入的往期文章
- *   2. generate — AI 流式输出（实时文本滚动）
+ *   2. generate — AI 流式输出（公众号 + 今日头条双平台并行展示）
  *   3. done     — 完成（应用按钮）
  */
 import { useEffect, useRef, useState, useCallback } from 'react'
@@ -34,7 +34,7 @@ interface Props {
   task:       string
   materials:  string
   aiConfig:   Record<string, unknown>
-  onComplete: (article: string) => void
+  onComplete: (article: string, articleToutiao: string, platforms: 'both' | 'wechat' | 'toutiao') => void
   onClose:    () => void
 }
 
@@ -51,7 +51,17 @@ function simColor(sim: number) {
 export default function GenerateModal({ articleId, task, materials, aiConfig, onComplete, onClose }: Props) {
   const [phase,        setPhase]       = useState<Phase>('pick')
   const [statusMsg,    setStatusMsg]   = useState('')
-  const [streamText,   setStreamText]  = useState('')
+  // 平台选择：both / wechat / toutiao
+  const [platforms,    setPlatforms]   = useState<'both' | 'wechat' | 'toutiao'>('both')
+  // 公众号流式文本
+  const [streamTextWechat,   setStreamTextWechat]  = useState('')
+  // 今日头条流式文本
+  const [streamTextToutiao,  setStreamTextToutiao] = useState('')
+  // 当前激活的平台 tab（生成阶段）
+  const [activeTab,    setActiveTab]   = useState<'wechat' | 'toutiao'>('wechat')
+  // 哪个平台已完成
+  const [wechatDone,   setWechatDone]  = useState(false)
+  const [toutiaoDone,  setToutiaoDone] = useState(false)
   const [errorMsg,     setErrorMsg]    = useState('')
 
   // ── RAG 候选 & 选择 ────────────────────────────────────────────────────────
@@ -69,10 +79,12 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
   const [loadingCtxPanel,   setLoadingCtxPanel]   = useState(false)
   const [ctxPanelError,     setCtxPanelError]     = useState(false)
   const [contextArticles, setContextArticles]   = useState<ContextArticle[]>([])
-  const [ragContext,   setRagContext]  = useState<string>('')   // 格式化好的上下文字符串
+  const [ragContext,   setRagContext]  = useState<string>('')
 
-  const streamRef  = useRef<HTMLDivElement>(null)
-  const fullText   = useRef('')
+  const streamRefWechat   = useRef<HTMLDivElement>(null)
+  const streamRefToutiao  = useRef<HTMLDivElement>(null)
+  const fullTextWechat    = useRef('')
+  const fullTextToutiao   = useRef('')
   const abortRef   = useRef<AbortController | null>(null)
 
   const token = localStorage.getItem('auth_token')
@@ -86,10 +98,23 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
 
   // 自动滚动到底部
   useEffect(() => {
-    if (streamRef.current) {
-      streamRef.current.scrollTop = streamRef.current.scrollHeight
+    if (streamRefWechat.current) {
+      streamRefWechat.current.scrollTop = streamRefWechat.current.scrollHeight
     }
-  }, [streamText])
+  }, [streamTextWechat])
+
+  useEffect(() => {
+    if (streamRefToutiao.current) {
+      streamRefToutiao.current.scrollTop = streamRefToutiao.current.scrollHeight
+    }
+  }, [streamTextToutiao])
+
+  // 公众号完成后自动切到今日头条 tab（仅在两者都生成时）
+  useEffect(() => {
+    if (wechatDone && !toutiaoDone && platforms !== 'wechat') {
+      setActiveTab('toutiao')
+    }
+  }, [wechatDone, toutiaoDone, platforms])
 
   async function fetchCandidates() {
     setLoadingCands(true)
@@ -103,7 +128,6 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
       const data = await resp.json()
       if (!resp.ok) throw new Error(data.error || '查询失败')
       setCandidates(data.candidates || [])
-      // 默认勾选相似度最高的前 2 篇
       const topDirs = (data.candidates || []).slice(0, 2).map((c: RagCandidate) => c.dir)
       setSelected(new Set(topDirs))
     } catch (e: unknown) {
@@ -117,7 +141,7 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
   const fetchPreview = useCallback(async (dir: string) => {
     if (previewDir === dir) { setPreviewDir(null); setPreviewData(null); return }
     setPreviewDir(dir)
-    setPreviewData(null)   // 先清空旧数据
+    setPreviewData(null)
     setPreviewError(false)
     setLoadingPreview(true)
     try {
@@ -137,7 +161,7 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
     setLoadingPreview(false)
   }, [previewDir])
 
-  // ── 加载选中文章的完整上下文（用于可视化 + 注入） ────────────────────────
+  // ── 加载选中文章的完整上下文 ──────────────────────────────────────────────
 
   async function loadSelectedContext() {
     const dirs = [...selected]
@@ -149,7 +173,7 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
     }
     setLoadingCtxPanel(true)
     setCtxPanelError(false)
-    setShowContextPanel(true)   // 先打开面板，显示 loading
+    setShowContextPanel(true)
     try {
       const resp = await fetch('/api/rag/context', {
         method:  'POST',
@@ -170,7 +194,6 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
   // ── 用户点击「开始生成」 ──────────────────────────────────────────────────
 
   const handleStartGenerate = async () => {
-    // 先拉取选中文章的上下文字符串（如果有选中的话）
     let ctxString = ''
     if (selected.size > 0) {
       try {
@@ -186,12 +209,14 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
     }
     setRagContext(ctxString)
     setPhase('generate')
+    // 初始 tab：只生成今日头条时直接显示今日头条
+    setActiveTab(platforms === 'toutiao' ? 'toutiao' : 'wechat')
     const ctrl = new AbortController()
     abortRef.current = ctrl
     startStream(ctrl.signal, ctxString)
   }
 
-  // ── 流式生成 ──────────────────────────────────────────────────────────────
+  // ── 流式生成（双平台） ────────────────────────────────────────────────────
 
   async function startStream(signal: AbortSignal, selectedRagContext: string) {
     try {
@@ -201,6 +226,7 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
         body:    JSON.stringify({
           task, materials, aiConfig,
           selectedRagContext: selectedRagContext || undefined,
+          platforms,
         }),
         signal,
       })
@@ -249,18 +275,34 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
   }
 
   function dispatch(event: string, payload: Record<string, unknown>) {
+    const platform = payload.platform as string | undefined
     switch (event) {
       case 'status':
         setStatusMsg(payload.message as string)
+        // 切换到正在生成的平台 tab
+        if (platform === 'toutiao') setActiveTab('toutiao')
+        else if (platform === 'wechat') setActiveTab('wechat')
         break
       case 'chunk': {
         const t = payload.text as string
-        fullText.current += t
-        setStreamText(fullText.current)
+        if (platform === 'toutiao') {
+          fullTextToutiao.current += t
+          setStreamTextToutiao(fullTextToutiao.current)
+        } else {
+          fullTextWechat.current += t
+          setStreamTextWechat(fullTextWechat.current)
+        }
         break
       }
       case 'done':
-        setPhase('done')
+        if (platform === 'toutiao') {
+          setToutiaoDone(true)
+          setPhase('done')
+        } else {
+          setWechatDone(true)
+          // 只生成公众号时，公众号完成即进入 done
+          if (platforms === 'wechat') setPhase('done')
+        }
         break
       case 'error':
         setPhase('error')
@@ -269,7 +311,10 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
     }
   }
 
-  const handleApply = () => { onComplete(fullText.current); onClose() }
+  const handleApply = () => {
+    onComplete(fullTextWechat.current, fullTextToutiao.current, platforms)
+    onClose()
+  }
   const handleClose = () => { abortRef.current?.abort(); onClose() }
 
   const toggleSelect = (dir: string) => {
@@ -280,6 +325,11 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
       return next
     })
   }
+
+  // 根据选择的平台判断是否全部完成
+  const bothDone = platforms === 'wechat' ? wechatDone
+    : platforms === 'toutiao' ? toutiaoDone
+    : wechatDone && toutiaoDone
 
   // ── 渲染 ──────────────────────────────────────────────────────────────────
 
@@ -294,7 +344,7 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
             {phase === 'pick' && (
               <span className="gm-pill gm-pill-rag">选择参考</span>
             )}
-            {phase === 'generate' && (
+            {phase === 'generate' && !bothDone && (
               <span className="gm-pill gm-pill-generate">生成中</span>
             )}
             {phase === 'done' && (
@@ -424,11 +474,38 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
                   )}
               </div>
 
+              {/* 平台选择 */}
+              <div className="gm-platform-selector">
+                <span className="gm-platform-selector-label">生成平台</span>
+                <div className="gm-platform-selector-btns">
+                  <button
+                    className={`gm-platform-selector-btn ${platforms === 'both' ? 'gm-platform-selector-btn--active' : ''}`}
+                    onClick={() => setPlatforms('both')}
+                  >
+                    <span className="gm-platform-badge gm-platform-badge--wechat">公众号</span>
+                    <span>+</span>
+                    <span className="gm-platform-badge gm-platform-badge--toutiao">今日头条</span>
+                  </button>
+                  <button
+                    className={`gm-platform-selector-btn ${platforms === 'wechat' ? 'gm-platform-selector-btn--active' : ''}`}
+                    onClick={() => setPlatforms('wechat')}
+                  >
+                    <span className="gm-platform-badge gm-platform-badge--wechat">仅公众号</span>
+                  </button>
+                  <button
+                    className={`gm-platform-selector-btn ${platforms === 'toutiao' ? 'gm-platform-selector-btn--active' : ''}`}
+                    onClick={() => setPlatforms('toutiao')}
+                  >
+                    <span className="gm-platform-badge gm-platform-badge--toutiao">仅今日头条</span>
+                  </button>
+                </div>
+              </div>
+
               {selected.size === 0 ? (
                 <div className="gm-ctx-empty">
                   <FileText size={28} className="gm-ctx-empty-icon" />
-                  <p>左侧勾选往期文章，AI 会把它们作为风格和结构参考注入到 prompt 中</p>
-                  <p className="gm-ctx-hint">也可以不选，直接点「开始生成」</p>
+                  <p>左侧勾选往期文章，AI 会把它们作为风格和结构参考注入到公众号 prompt 中</p>
+                  <p className="gm-ctx-hint">今日头条文章不注入往期参考，直接按平台风格生成</p>
                 </div>
               ) : (
                 <div className="gm-ctx-selected">
@@ -468,7 +545,7 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
         )}
 
         {/* ══════════════════════════════════════════════════════
-            阶段 2/3：流式生成区
+            阶段 2/3：双平台流式生成区
         ══════════════════════════════════════════════════════ */}
         {(phase === 'generate' || phase === 'done' || phase === 'error') && (
           <div className="gm-body">
@@ -509,32 +586,108 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
                   <span>加载中...</span>
                 </div>
               )}
-            </div>
 
-            {/* 右：流式输出区 */}
-            <div className="gm-right">
-              <div className="gm-section-label">
-                生成内容
-                {phase === 'generate' && <span className="gm-spinner gm-spinner-sm" />}
-                {phase === 'done'     && <CheckCircle size={13} className="gm-icon-ok" />}
-                {phase === 'error'    && <AlertCircle size={13} className="gm-icon-err" />}
-              </div>
-
-              <div className="gm-stream" ref={streamRef}>
-                {phase === 'error' ? (
-                  <div className="gm-error-msg">
-                    <AlertCircle size={16} />
-                    {errorMsg}
+              {/* 生成进度状态 */}
+              <div className="gm-gen-progress">
+                {platforms !== 'toutiao' && (
+                  <div className={`gm-gen-progress-item ${wechatDone ? 'gm-gen-progress-item--done' : (phase === 'generate' && !wechatDone ? 'gm-gen-progress-item--active' : '')}`}>
+                    <span className="gm-platform-badge gm-platform-badge--wechat">公众号</span>
+                    {wechatDone
+                      ? <CheckCircle size={13} className="gm-icon-ok" />
+                      : (phase === 'generate' && !wechatDone ? <span className="gm-spinner gm-spinner-sm" /> : null)
+                    }
                   </div>
-                ) : streamText ? (
-                  <pre className="gm-stream-text">{streamText}</pre>
-                ) : (
-                  <div className="gm-stream-empty">
-                    <span className="gm-spinner" />
-                    <p>{statusMsg || 'AI 正在生成文章...'}</p>
+                )}
+                {platforms !== 'wechat' && (
+                  <div className={`gm-gen-progress-item ${toutiaoDone ? 'gm-gen-progress-item--done' : (phase === 'generate' && (platforms === 'toutiao' || wechatDone) && !toutiaoDone ? 'gm-gen-progress-item--active' : '')}`}>
+                    <span className="gm-platform-badge gm-platform-badge--toutiao">今日头条</span>
+                    {toutiaoDone
+                      ? <CheckCircle size={13} className="gm-icon-ok" />
+                      : ((platforms === 'toutiao' || wechatDone) && !toutiaoDone ? <span className="gm-spinner gm-spinner-sm" /> : null)
+                    }
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* 右：双平台流式输出区 */}
+            <div className="gm-right">
+              {/* 平台切换 Tab（只在两者都生成时显示） */}
+              {platforms === 'both' && (
+                <div className="gm-platform-tabs">
+                  <button
+                    className={`gm-platform-tab ${activeTab === 'wechat' ? 'gm-platform-tab--active' : ''}`}
+                    onClick={() => setActiveTab('wechat')}
+                  >
+                    <span className="gm-platform-badge gm-platform-badge--wechat">公众号</span>
+                    {wechatDone && <CheckCircle size={12} className="gm-icon-ok" />}
+                    {!wechatDone && phase === 'generate' && <span className="gm-spinner gm-spinner-sm" />}
+                  </button>
+                  <button
+                    className={`gm-platform-tab ${activeTab === 'toutiao' ? 'gm-platform-tab--active' : ''}`}
+                    onClick={() => setActiveTab('toutiao')}
+                  >
+                    <span className="gm-platform-badge gm-platform-badge--toutiao">今日头条</span>
+                    {toutiaoDone && <CheckCircle size={12} className="gm-icon-ok" />}
+                    {!toutiaoDone && wechatDone && phase === 'generate' && <span className="gm-spinner gm-spinner-sm" />}
+                  </button>
+                  <div className="gm-section-label" style={{ marginLeft: 'auto' }}>
+                    {phase === 'generate' && <span className="gm-spinner gm-spinner-sm" />}
+                    {phase === 'done'     && <CheckCircle size={13} className="gm-icon-ok" />}
+                    {phase === 'error'    && <AlertCircle size={13} className="gm-icon-err" />}
+                  </div>
+                </div>
+              )}
+
+              {/* 公众号内容（单平台时无 tab，直接显示） */}
+              {platforms !== 'toutiao' && (
+                <div
+                  className="gm-stream"
+                  ref={streamRefWechat}
+                  style={{ display: platforms === 'wechat' || activeTab === 'wechat' ? 'block' : 'none' }}
+                >
+                  {phase === 'error' ? (
+                    <div className="gm-error-msg">
+                      <AlertCircle size={16} />
+                      {errorMsg}
+                    </div>
+                  ) : streamTextWechat ? (
+                    <pre className="gm-stream-text">{streamTextWechat}</pre>
+                  ) : (
+                    <div className="gm-stream-empty">
+                      <span className="gm-spinner" />
+                      <p>{statusMsg || 'AI 正在生成公众号文章...'}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 今日头条内容（单平台时无 tab，直接显示） */}
+              {platforms !== 'wechat' && (
+                <div
+                  className="gm-stream"
+                  ref={streamRefToutiao}
+                  style={{ display: platforms === 'toutiao' || activeTab === 'toutiao' ? 'block' : 'none' }}
+                >
+                  {phase === 'error' ? (
+                    <div className="gm-error-msg">
+                      <AlertCircle size={16} />
+                      {errorMsg}
+                    </div>
+                  ) : streamTextToutiao ? (
+                    <pre className="gm-stream-text">{streamTextToutiao}</pre>
+                  ) : wechatDone || platforms === 'toutiao' ? (
+                    <div className="gm-stream-empty">
+                      <span className="gm-spinner" />
+                      <p>AI 正在生成今日头条文章...</p>
+                    </div>
+                  ) : (
+                    <div className="gm-stream-empty gm-stream-empty--waiting">
+                      <p>公众号文章生成完成后，将自动开始生成今日头条版本</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
           </div>
@@ -546,12 +699,17 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
             {phase === 'pick' && !loadingCands && (
               <span className="gm-footer-note">
                 {selected.size > 0
-                  ? `已选 ${selected.size} 篇作为参考`
+                  ? `已选 ${selected.size} 篇作为公众号参考`
                   : '不选则跳过往期参考，直接生成'}
               </span>
             )}
-            {phase === 'done' && contextArticles.length > 0 && (
-              <span className="gm-footer-note">参考了 {contextArticles.length} 篇往期文章</span>
+            {phase === 'done' && (
+              <span className="gm-footer-note">
+                {platforms === 'wechat' ? '公众号文章已生成完毕'
+                  : platforms === 'toutiao' ? '今日头条文章已生成完毕'
+                  : '公众号 + 今日头条两篇文章已生成完毕'}
+                {contextArticles.length > 0 && `，参考了 ${contextArticles.length} 篇往期文章`}
+              </span>
             )}
           </div>
           <div className="gm-footer-actions">

@@ -1025,3 +1025,27 @@
     flex: 1;
   }
 }
+
+/* ── 平台标签（公众号 / 今日头条） ── */
+.editor-platform-label {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  margin-bottom: 10px;
+  letter-spacing: 0;
+}
+
+.editor-platform-label--wechat {
+  background: #07c16018;
+  color: #07a050;
+  border: 1px solid #07c16035;
+}
+
+.editor-platform-label--toutiao {
+  background: #ff4d4d14;
+  color: #cc2200;
+  border: 1px solid #ff4d4d35;
+}

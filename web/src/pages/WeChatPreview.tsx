@@ -10,6 +10,7 @@ interface ArticleData {
   materials: string
   article: string
   title: string
+  articleToutiao: string
 }
 
 type PlatformMode = 'wechat' | 'toutiao'
@@ -17,7 +18,7 @@ type PlatformMode = 'wechat' | 'toutiao'
 export default function WeChatPreview() {
   const { articleId } = useParams<{ articleId: string }>()
   const navigate = useNavigate()
-  const [data, setData] = useState<ArticleData>({ task: '', materials: '', article: '', title: '' })
+  const [data, setData] = useState<ArticleData>({ task: '', materials: '', article: '', title: '', articleToutiao: '' })
   const [loading, setLoading] = useState(true)
   const [platformMode, setPlatformMode] = useState<PlatformMode>('wechat')
 
@@ -30,7 +31,12 @@ export default function WeChatPreview() {
       .finally(() => setLoading(false))
   }, [articleId])
 
-  const title = data.title || data.article.split('\n')[0]?.replace(/^#+\s*/, '') || '未命名文章'
+  // 根据平台模式选择对应内容
+  const activeContent = platformMode === 'toutiao' && data.articleToutiao
+    ? data.articleToutiao
+    : data.article
+
+  const title = data.title || activeContent.split('\n')[0]?.replace(/^#+\s*/, '') || '未命名文章'
 
   return (
     <div className="wechat-preview-page">
@@ -81,8 +87,14 @@ export default function WeChatPreview() {
             <div className="preview-spinner" />
             <p>加载文章中...</p>
           </div>
+        ) : platformMode === 'toutiao' && !data.articleToutiao ? (
+          <div className="preview-empty-toutiao">
+            <p>今日头条版本尚未生成</p>
+            <span>点击「生成文章」后会同时生成公众号和今日头条两个版本</span>
+            <button onClick={() => navigate(-1)}>返回编辑器生成</button>
+          </div>
         ) : (
-          <WeChatRenderer content={data.article} title={title} articleId={articleId} platformMode={platformMode} />
+          <WeChatRenderer content={activeContent} title={title} articleId={articleId} platformMode={platformMode} />
         )}
       </main>
     </div>
