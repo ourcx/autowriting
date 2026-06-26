@@ -1,8 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { toast } from './Toast'
-import { Eye, Edit2, Copy, Download, Sparkles, Check, X, RotateCcw, ImagePlus, Loader2, Zap } from 'lucide-react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { Edit2, Copy, Download, Sparkles, Check, X, RotateCcw, ImagePlus, Loader2, Zap } from 'lucide-react'
 import { loadAIConfig } from '../utils/aiConfig'
 import PromptSelector from './PromptSelector'
 import './MarkdownEditor.css'
@@ -18,9 +16,9 @@ interface MarkdownEditorProps {
 type AIAction = 'polish' | 'shorten' | 'expand' | 'rewrite-lead'
 
 const AI_ACTIONS: { id: AIAction; label: string; desc: string }[] = [
-  { id: 'polish',       label: '润色',   desc: '去 AI 腔，保持意思' },
-  { id: 'shorten',      label: '缩短',   desc: '精简到 60%，去废话' },
-  { id: 'expand',       label: '扩写',   desc: '补具体案例或数据' },
+  { id: 'polish', label: '润色', desc: '去 AI 腔，保持意思' },
+  { id: 'shorten', label: '缩短', desc: '精简到 60%，去废话' },
+  { id: 'expand', label: '扩写', desc: '补具体案例或数据' },
   { id: 'rewrite-lead', label: '改开头', desc: '直接切入，去掉铺垫' },
 ]
 
@@ -39,15 +37,14 @@ export default function MarkdownEditor({
   height = '500px',
   articleId = '',
 }: MarkdownEditorProps) {
-  const [mode, setMode] = useState<'edit' | 'preview' | 'split'>('edit')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // ── AI 内联助手状态 ──
-  const [floatMenu, setFloatMenu]     = useState<FloatMenu | null>(null)
-  const [aiLoading, setAiLoading]     = useState(false)
-  const [aiResult, setAiResult]       = useState<string | null>(null)
-  const [aiAction, setAiAction]       = useState<AIAction | null>(null)
+  const [floatMenu, setFloatMenu] = useState<FloatMenu | null>(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiResult, setAiResult] = useState<string | null>(null)
+  const [aiAction, setAiAction] = useState<AIAction | null>(null)
   const floatRef = useRef<HTMLDivElement>(null)
 
   // ── 图片上传状态 ──
@@ -61,7 +58,7 @@ export default function MarkdownEditor({
     const ta = textareaRef.current
     if (!ta) return
     const start = ta.selectionStart
-    const end   = ta.selectionEnd
+    const end = ta.selectionEnd
     if (end <= start + 5) { setFloatMenu(null); return }
 
     const selectedText = value.substring(start, end)
@@ -69,19 +66,19 @@ export default function MarkdownEditor({
 
     // 用隐藏镜像 div 精确测量选区末尾坐标
     const mirror = document.createElement('div')
-    const style  = window.getComputedStyle(ta)
-    ;['fontFamily','fontSize','fontWeight','lineHeight','letterSpacing',
-      'paddingTop','paddingLeft','paddingRight','paddingBottom',
-      'borderTopWidth','borderLeftWidth','borderRightWidth','borderBottomWidth',
-      'boxSizing','wordWrap','whiteSpace','tabSize',
-    ].forEach(p => { (mirror.style as unknown as Record<string,string>)[p] = style[p as keyof CSSStyleDeclaration] as string })
-    mirror.style.position   = 'fixed'
+    const style = window.getComputedStyle(ta)
+      ;['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing',
+        'paddingTop', 'paddingLeft', 'paddingRight', 'paddingBottom',
+        'borderTopWidth', 'borderLeftWidth', 'borderRightWidth', 'borderBottomWidth',
+        'boxSizing', 'wordWrap', 'whiteSpace', 'tabSize',
+      ].forEach(p => { (mirror.style as unknown as Record<string, string>)[p] = style[p as keyof CSSStyleDeclaration] as string })
+    mirror.style.position = 'fixed'
     mirror.style.visibility = 'hidden'
-    mirror.style.overflow   = 'hidden'
-    mirror.style.width      = `${ta.clientWidth}px`
-    mirror.style.height     = 'auto'
-    mirror.style.top        = '0'
-    mirror.style.left       = '0'
+    mirror.style.overflow = 'hidden'
+    mirror.style.width = `${ta.clientWidth}px`
+    mirror.style.height = 'auto'
+    mirror.style.top = '0'
+    mirror.style.left = '0'
     mirror.style.whiteSpace = 'pre-wrap'
 
     const textBefore = document.createElement('span')
@@ -92,23 +89,23 @@ export default function MarkdownEditor({
     mirror.appendChild(caret)
     document.body.appendChild(mirror)
 
-    const taRect     = ta.getBoundingClientRect()
-    const caretRect  = caret.getBoundingClientRect()
+    const taRect = ta.getBoundingClientRect()
+    const caretRect = caret.getBoundingClientRect()
     document.body.removeChild(mirror)
 
     // 将镜像坐标映射回 textarea 视口坐标（减去滚动偏移）
     const rawY = taRect.top + (caretRect.top - ta.scrollTop)
 
     // 浮窗出现在选区末尾下方 8px，超出 viewport 底部则向上翻转
-    const POPUP_H  = 52
-    const viewH    = window.innerHeight
+    const POPUP_H = 52
+    const viewH = window.innerHeight
     const flippedY = rawY + caretRect.height + 8
-    const finalY   = flippedY + POPUP_H > viewH - 12 ? rawY - POPUP_H - 6 : flippedY
+    const finalY = flippedY + POPUP_H > viewH - 12 ? rawY - POPUP_H - 6 : flippedY
 
     // X 轴：跟随光标，右侧超出则右对齐
     const POPUP_W = 340
-    const rawX    = caretRect.left
-    const finalX  = rawX + POPUP_W > window.innerWidth - 12 ? window.innerWidth - POPUP_W - 12 : rawX
+    const rawX = caretRect.left
+    const finalX = rawX + POPUP_W > window.innerWidth - 12 ? window.innerWidth - POPUP_W - 12 : rawX
 
     setFloatMenu({
       x: finalX,
@@ -162,10 +159,10 @@ export default function MarkdownEditor({
           const resp = await fetch('/api/images/upload-github', {
             method: 'POST',
             headers: {
-              'x-github-token':  cfg.githubToken,
-              'x-github-repo':   cfg.githubRepo,
+              'x-github-token': cfg.githubToken,
+              'x-github-repo': cfg.githubRepo,
               'x-github-branch': cfg.githubBranch || 'main',
-              'x-github-path':   cfg.githubPath   || 'images/',
+              'x-github-path': cfg.githubPath || 'images/',
               ...authHeader,
             },
             body: formData,
@@ -306,7 +303,7 @@ export default function MarkdownEditor({
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          selected:    floatMenu.selectedText,
+          selected: floatMenu.selectedText,
           fullArticle: value,           // 整篇文章，供后端做上下文感知
           action,
           aiConfig,
@@ -353,7 +350,7 @@ export default function MarkdownEditor({
     const textarea = textareaRef.current
     if (!textarea) return
     const start = textarea.selectionStart
-    const end   = textarea.selectionEnd
+    const end = textarea.selectionEnd
     const selectedText = value.substring(start, end)
     const newValue =
       value.substring(0, start) + before + selectedText + after + value.substring(end)
@@ -415,16 +412,14 @@ export default function MarkdownEditor({
       {/* ── Toolbar ── */}
       <div className="editor-toolbar">
         <div className="toolbar-left">
-          <button className={`toolbar-btn ${mode === 'edit'    ? 'active' : ''}`} onClick={() => setMode('edit')}    title="编辑模式"><Edit2 size={18} />编辑</button>
-          <button className={`toolbar-btn ${mode === 'preview' ? 'active' : ''}`} onClick={() => setMode('preview')} title="预览模式"><Eye   size={18} />预览</button>
-          <button className={`toolbar-btn ${mode === 'split'   ? 'active' : ''}`} onClick={() => setMode('split')}   title="分屏模式"><div className="split-icon">⊞</div>分屏</button>
+          <button className={`toolbar-btn active`} title="编辑模式"><Edit2 size={18} />编辑</button>
         </div>
         <div className="toolbar-right">
-          <button className="toolbar-btn" onClick={() => insertMarkdown('# ')}       title="标题 1">H1</button>
-          <button className="toolbar-btn" onClick={() => insertMarkdown('## ')}      title="标题 2">H2</button>
+          <button className="toolbar-btn" onClick={() => insertMarkdown('# ')} title="标题 1">H1</button>
+          <button className="toolbar-btn" onClick={() => insertMarkdown('## ')} title="标题 2">H2</button>
           <button className="toolbar-btn" onClick={() => insertMarkdown('**', '**')} title="加粗 (Ctrl+B)"><strong>B</strong></button>
-          <button className="toolbar-btn" onClick={() => insertMarkdown('*', '*')}   title="斜体 (Ctrl+I)"><em>I</em></button>
-          <button className="toolbar-btn" onClick={() => insertMarkdown('- ')}       title="列表">≡</button>
+          <button className="toolbar-btn" onClick={() => insertMarkdown('*', '*')} title="斜体 (Ctrl+I)"><em>I</em></button>
+          <button className="toolbar-btn" onClick={() => insertMarkdown('- ')} title="列表">≡</button>
           <button className="toolbar-btn" onClick={() => insertMarkdown('[', '](url)')} title="链接">🔗</button>
           <button className="toolbar-btn" onClick={() => insertMarkdown('```\n', '\n```')} title="代码块">{'<>'}</button>
           <div className="toolbar-divider" />
@@ -449,37 +444,27 @@ export default function MarkdownEditor({
             提示词
           </button>
           <div className="toolbar-divider" />
-          <button className="toolbar-btn" onClick={handleCopy}     title="复制"><Copy     size={18} /></button>
+          <button className="toolbar-btn" onClick={handleCopy} title="复制"><Copy size={18} /></button>
           <button className="toolbar-btn" onClick={handleDownload} title="下载"><Download size={18} /></button>
         </div>
       </div>
 
       {/* ── Editor area ── */}
       <div className="editor-container" style={{ height, position: 'relative' }}>
-        {(mode === 'edit' || mode === 'split') && (
-          <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={e => { onChange(e.target.value); setFloatMenu(null) }}
-            onKeyDown={handleKeyDown}
-            onMouseUp={handleSelect}
-            onKeyUp={handleSelect}
-            onPaste={handlePaste}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            placeholder={placeholder}
-            className={`editor-textarea${uploading ? ' editor-textarea--uploading' : ''}`}
-            spellCheck={false}
-          />
-        )}
-
-        {(mode === 'preview' || mode === 'split') && (
-          <div className="editor-preview markdown-body">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {value || '*预览内容将显示在这里*'}
-            </ReactMarkdown>
-          </div>
-        )}
+        <textarea
+          ref={textareaRef}
+          value={value}
+          onChange={e => { onChange(e.target.value); setFloatMenu(null) }}
+          onKeyDown={handleKeyDown}
+          onMouseUp={handleSelect}
+          onKeyUp={handleSelect}
+          onPaste={handlePaste}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          placeholder={placeholder}
+          className={`editor-textarea${uploading ? ' editor-textarea--uploading' : ''}`}
+          spellCheck={false}
+        />
 
         {/* 上传遮罩 */}
         {uploading && (
@@ -490,7 +475,7 @@ export default function MarkdownEditor({
         )}
 
         {/* ── AI 浮窗（fixed 跟随选区末尾） ── */}
-        {floatMenu && (mode === 'edit' || mode === 'split') && (
+        {floatMenu && (
           <div
             ref={floatRef}
             className={`ai-float-menu${aiResult ? ' ai-float-menu--result' : ''}`}
