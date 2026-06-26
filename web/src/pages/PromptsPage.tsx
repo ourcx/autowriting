@@ -15,7 +15,6 @@ interface Prompt {
   version: number
   tags: string[]
   isBuiltin: boolean
-  usageCount: number
   createdAt: string
   updatedAt: string
   replacesId?: string | null
@@ -31,47 +30,47 @@ interface PromptVersion {
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
-  article:   '文章生成',
-  analysis:  '文章分析',
-  edit:      '内联编辑',
-  outline:   '大纲生成',
+  article: '文章生成',
+  analysis: '文章分析',
+  edit: '内联编辑',
+  outline: '大纲生成',
   materials: '素材整理',
-  style:     '样式生成',
-  cover:     '封面生成',
-  other:     '其他',
+  style: '样式生成',
+  cover: '封面生成',
+  other: '其他',
 }
 
 const PROMPT_USAGE_TIPS: Record<string, string> = {
-  'prompt-article-generate':   '点击「生成文章」时作为角色和输出约束注入到 prompt 前段',
-  'prompt-article-analyze':    '点击「AI 分析」时作为角色描述注入',
-  'prompt-article-deai':       '在「写作分析」面板点击「去 AI 味」按钮时使用，对全文进行流式改写',
-  'prompt-edit-polish':        '内联编辑选择「润色」时使用',
-  'prompt-edit-shorten':       '内联编辑选择「精简」时使用',
-  'prompt-edit-expand':        '内联编辑选择「扩写」时使用',
-  'prompt-edit-rewrite-lead':  '内联编辑选择「重写开头」时使用',
-  'prompt-outline-generate':   '点击「生成大纲」时作为角色描述注入',
+  'prompt-article-generate': '点击「生成文章」时作为角色和输出约束注入到 prompt 前段',
+  'prompt-article-analyze': '点击「AI 分析」时作为角色描述注入',
+  'prompt-article-deai': '在「写作分析」面板点击「去 AI 味」按钮时使用，对全文进行流式改写',
+  'prompt-edit-polish': '内联编辑选择「润色」时使用',
+  'prompt-edit-shorten': '内联编辑选择「精简」时使用',
+  'prompt-edit-expand': '内联编辑选择「扩写」时使用',
+  'prompt-edit-rewrite-lead': '内联编辑选择「重写开头」时使用',
+  'prompt-outline-generate': '点击「生成大纲」时作为角色描述注入',
   'prompt-materials-organize': '点击「整理素材」时作为角色描述注入',
-  'prompt-style-generate':     '点击「生成样式」时作为 system prompt 使用（完整替换）',
-  'prompt-cover-generate':     '封面生成时使用',
+  'prompt-style-generate': '点击「生成样式」时作为 system prompt 使用（完整替换）',
+  'prompt-cover-generate': '封面生成时使用',
 }
 
 export default function PromptsPage() {
   const navigate = useNavigate()
-  const [prompts, setPrompts]               = useState<Prompt[]>([])
-  const [loading, setLoading]               = useState(true)
+  const [prompts, setPrompts] = useState<Prompt[]>([])
+  const [loading, setLoading] = useState(true)
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
-  const [searchText, setSearchText]         = useState('')
+  const [searchText, setSearchText] = useState('')
   const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null)
-  const [showEditor, setShowEditor]         = useState(false)
-  const [showVersions, setShowVersions]     = useState(false)
-  const [versions, setVersions]             = useState<PromptVersion[]>([])
+  const [showEditor, setShowEditor] = useState(false)
+  const [showVersions, setShowVersions] = useState(false)
+  const [versions, setVersions] = useState<PromptVersion[]>([])
   const [editingContent, setEditingContent] = useState('')
-  const [changeNote, setChangeNote]         = useState('')
-  const [showPreview, setShowPreview]       = useState(true)
-  const [saving, setSaving]                 = useState(false)
-  const [toast, setToast]                   = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
-  const [isCreating, setIsCreating]         = useState(false)
-  const [newPrompt, setNewPrompt]           = useState<Partial<Prompt>>({
+  const [changeNote, setChangeNote] = useState('')
+  const [showPreview, setShowPreview] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
+  const [isCreating, setIsCreating] = useState(false)
+  const [newPrompt, setNewPrompt] = useState<Partial<Prompt>>({
     name: '', category: 'article', description: '', content: '', tags: [],
   })
 
@@ -83,7 +82,7 @@ export default function PromptsPage() {
   const fetchPrompts = async () => {
     try {
       setLoading(true)
-      const res  = await fetch('/api/prompts/list')
+      const res = await fetch('/api/prompts/list')
       const data = await res.json()
       if (data.success) setPrompts(data.data)
     } catch (e) {
@@ -95,7 +94,7 @@ export default function PromptsPage() {
 
   const fetchVersions = async (promptId: string) => {
     try {
-      const res  = await fetch(`/api/prompts/${promptId}/versions`)
+      const res = await fetch(`/api/prompts/${promptId}/versions`)
       const data = await res.json()
       if (data.success) setVersions(data.data)
     } catch (e) {
@@ -107,7 +106,7 @@ export default function PromptsPage() {
 
   const filteredPrompts = prompts.filter(p => {
     const matchCategory = selectedCategory === 'all' || p.category === selectedCategory
-    const matchSearch   = p.name.includes(searchText) || p.description.includes(searchText)
+    const matchSearch = p.name.includes(searchText) || p.description.includes(searchText)
     return matchCategory && matchSearch
   })
 
@@ -143,7 +142,7 @@ export default function PromptsPage() {
         ? `/api/prompts/${selectedPrompt.id}/override`
         : `/api/prompts/${selectedPrompt.id}/update`
 
-      const res  = await fetch(endpoint, {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: editingContent, changeNote }),
@@ -167,7 +166,7 @@ export default function PromptsPage() {
   const handleResetOverride = async (builtinId: string) => {
     if (!confirm('确定要重置为内置默认版本吗？自定义修改将被删除。')) return
     try {
-      const res  = await fetch(`/api/prompts/${builtinId}/reset-override`, { method: 'POST' })
+      const res = await fetch(`/api/prompts/${builtinId}/reset-override`, { method: 'POST' })
       const data = await res.json()
       if (data.success) {
         await fetchPrompts()
@@ -183,7 +182,7 @@ export default function PromptsPage() {
   const handleDelete = async (promptId: string) => {
     if (!confirm('确定要删除这个提示词吗？')) return
     try {
-      const res  = await fetch(`/api/prompts/${promptId}/delete`, { method: 'POST' })
+      const res = await fetch(`/api/prompts/${promptId}/delete`, { method: 'POST' })
       const data = await res.json()
       if (data.success) {
         setSelectedPrompt(null)
@@ -204,7 +203,7 @@ export default function PromptsPage() {
     if (!selectedPrompt) return
     if (!confirm(`确定要恢复到版本 ${version} 吗？`)) return
     try {
-      const res  = await fetch(`/api/prompts/${selectedPrompt.id}/restore/${version}`, { method: 'POST' })
+      const res = await fetch(`/api/prompts/${selectedPrompt.id}/restore/${version}`, { method: 'POST' })
       const data = await res.json()
       if (data.success) {
         setSelectedPrompt(data.data)
@@ -231,15 +230,15 @@ export default function PromptsPage() {
     }
     setSaving(true)
     try {
-      const res  = await fetch('/api/prompts/create', {
+      const res = await fetch('/api/prompts/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name:        newPrompt.name,
-          category:    newPrompt.category,
+          name: newPrompt.name,
+          category: newPrompt.category,
           description: newPrompt.description,
-          content:     newPrompt.content,
-          tags:        newPrompt.tags || [],
+          content: newPrompt.content,
+          tags: newPrompt.tags || [],
         }),
       })
       const data = await res.json()
@@ -381,7 +380,7 @@ export default function PromptsPage() {
 
     /* 详情 */
     if (selectedPrompt) {
-      const override    = selectedPrompt.isBuiltin ? findOverride(selectedPrompt.id) : null
+      const override = selectedPrompt.isBuiltin ? findOverride(selectedPrompt.id) : null
       const activeContent = override ? override.content : selectedPrompt.content
       return (
         <div className="pp-detail">
@@ -391,7 +390,7 @@ export default function PromptsPage() {
               <h2 className="pp-detail-name">{selectedPrompt.name}</h2>
               <div className="pp-detail-badges">
                 {selectedPrompt.isBuiltin && <span className="pp-badge pp-badge--builtin">内置</span>}
-                {override              && <span className="pp-badge pp-badge--override">已覆盖</span>}
+                {override && <span className="pp-badge pp-badge--override">已覆盖</span>}
                 <span className="pp-badge pp-badge--cat">{CATEGORY_LABELS[selectedPrompt.category] || selectedPrompt.category}</span>
               </div>
             </div>
@@ -509,10 +508,6 @@ export default function PromptsPage() {
                 <span className="pp-info-val">v{selectedPrompt.version}</span>
               </div>
               <div className="pp-info-item">
-                <span className="pp-info-label">调用次数</span>
-                <span className="pp-info-val">{selectedPrompt.usageCount}</span>
-              </div>
-              <div className="pp-info-item">
                 <span className="pp-info-label">创建时间</span>
                 <span className="pp-info-val">{new Date(selectedPrompt.createdAt).toLocaleDateString()}</span>
               </div>
@@ -564,8 +559,8 @@ export default function PromptsPage() {
 
       {/* Header */}
       <header className="pp-header">
-        <button className="pp-back-btn" onClick={() => navigate('/')}>
-          <ArrowLeft size={14} />
+        <button className="wd-back-btn" onClick={() => navigate(-1)}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
           返回
         </button>
         <div className="pp-header-title">
@@ -613,7 +608,7 @@ export default function PromptsPage() {
             ) : (
               filteredPrompts.map(prompt => {
                 const hasOverride = prompt.isBuiltin && !!findOverride(prompt.id)
-                const isActive    = selectedPrompt?.id === prompt.id
+                const isActive = selectedPrompt?.id === prompt.id
                 return (
                   <div
                     key={prompt.id}
@@ -624,13 +619,12 @@ export default function PromptsPage() {
                       <span className="pp-item-name">{prompt.name}</span>
                       <div className="pp-item-badges">
                         {prompt.isBuiltin && <span className="pp-badge pp-badge--builtin">内置</span>}
-                        {hasOverride       && <span className="pp-badge pp-badge--override">已覆盖</span>}
+                        {hasOverride && <span className="pp-badge pp-badge--override">已覆盖</span>}
                       </div>
                     </div>
                     <p className="pp-item-desc">{prompt.description}</p>
                     <div className="pp-item-foot">
                       <span className="pp-item-cat">{CATEGORY_LABELS[prompt.category] || prompt.category}</span>
-                      <span className="pp-item-usage">{prompt.usageCount} 次调用</span>
                     </div>
                   </div>
                 )

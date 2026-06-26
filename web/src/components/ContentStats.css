@@ -757,313 +757,291 @@
   .score-bar-row { grid-template-columns: 64px 1fr 28px; }
 }
 
-/* ── 动态 UI 块（a2ui 风格） ─────────────────────────────────────────────── */
+/* ── Clay 设计系统：动态 UI 块 ───────────────────────────────────────────── */
 
-.dynamic-ui-blocks {
+.clay-ui-blocks {
+  margin-top: 8px;
+}
+
+.clay-ui-blocks-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  padding: 0 2px 10px;
+  border-bottom: 1px solid var(--color-hairline);
+  margin-bottom: 12px;
+}
+
+.clay-ui-blocks-grid {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin-top: 4px;
 }
 
-.uib-section-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-muted);
-  padding: 0 2px 6px;
-  border-bottom: 1px solid var(--color-hairline);
-  margin-bottom: 4px;
+/* ── 通用卡片容器（Clay feature-card 风格） ── */
+.clay-card {
+  border-radius: 20px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: clayCardIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
-/* 通用 UI 块容器 */
-.uib {
-  border-radius: var(--rounded-md);
-  border: 1px solid var(--color-hairline);
-  overflow: hidden;
-  background: var(--color-canvas);
+@keyframes clayCardIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-.uib-header {
+.clay-card-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 14px;
-  background: var(--color-surface-soft);
-  border-bottom: 1px solid var(--color-hairline);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-heading);
 }
 
-.uib-icon {
-  font-size: 14px;
-  line-height: 1;
-}
-
-.uib-title {
-  flex: 1;
-}
-
-.uib-badge {
+.clay-card-label {
   font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+.clay-card-count {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
+
+.clay-card-title {
+  font-size: 15px;
   font-weight: 600;
-  padding: 2px 7px;
-  border-radius: 20px;
+  line-height: 1.35;
+  letter-spacing: -0.2px;
 }
 
-.uib-badge--error {
-  background: #fee2e2;
-  color: #dc2626;
-}
-
-.uib-badge--warn {
-  background: #fef3c7;
-  color: #d97706;
-}
-
-.uib-body {
-  padding: 12px 14px;
+/* ── cliche-diff：套话对比（粉色卡片） ── */
+.clay-cliche-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-/* ── cliche-diff：套话对比 ── */
-.uib--cliche-diff .uib-header {
-  background: #fff5f5;
-  border-bottom-color: #fca5a5;
-}
-
-.cliche-row {
-  display: grid;
-  grid-template-columns: 1fr 20px 1fr;
-  align-items: start;
-  gap: 8px;
-  padding: 8px 10px;
-  background: var(--color-surface-soft);
-  border-radius: var(--rounded-sm);
-  border: 1px solid var(--color-hairline);
-}
-
-.cliche-label {
-  display: block;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--color-muted);
-  margin-bottom: 4px;
-}
-
-.cliche-text {
-  font-size: 12.5px;
-  line-height: 1.55;
-}
-
-.cliche-text--bad {
-  color: #dc2626;
-  text-decoration: line-through;
-  text-decoration-color: #fca5a5;
-}
-
-.cliche-text--good {
-  color: #16a34a;
-}
-
-.cliche-arrow {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-muted);
-  font-size: 14px;
-  padding-top: 18px;
-}
-
-/* ── data-suggestion：数据补充 ── */
-.uib--data-suggestion .uib-header {
-  background: #fffbeb;
-  border-bottom-color: #fcd34d;
-}
-
-.data-row {
-  padding: 8px 10px;
-  background: var(--color-surface-soft);
-  border-radius: var(--rounded-sm);
-  border: 1px solid var(--color-hairline);
+.clay-cliche-item {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
-.data-label {
+.clay-cliche-bad,
+.clay-cliche-good {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+}
+
+.clay-cliche-tag {
   font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--color-muted);
-  margin-right: 6px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
-.data-quote {
-  font-size: 12.5px;
-  color: #d97706;
-  font-style: italic;
-}
-
-.data-hint-text {
-  font-size: 12.5px;
-  color: var(--color-body);
+.clay-cliche-text {
+  font-size: 13px;
   line-height: 1.5;
 }
 
-/* ── structure-map：结构诊断 ── */
-.uib--structure-map .uib-header {
-  background: #f0f9ff;
-  border-bottom-color: #7dd3fc;
+.clay-cliche-arrow {
+  text-align: center;
+  font-size: 13px;
+  padding: 0 10px;
+  opacity: 0.7;
 }
 
-.struct-timeline {
+/* ── data-suggestion：数据补充（薰衣草卡片） ── */
+.clay-data-list {
   display: flex;
   flex-direction: column;
-  gap: 0;
-  position: relative;
+  gap: 8px;
 }
 
-.struct-node {
+.clay-data-item {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.clay-data-claim {
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+.clay-data-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(0,0,0,0.12);
+  padding: 1px 6px;
+  border-radius: 5px;
+  margin-right: 6px;
+}
+
+.clay-data-hint {
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* ── structure-map：结构诊断（深青色卡片） ── */
+.clay-struct-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.clay-struct-item {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  position: relative;
-  padding-bottom: 4px;
 }
 
-.struct-node-dot {
-  width: 22px;
-  height: 22px;
+.clay-struct-dot {
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
   flex-shrink: 0;
-  margin-top: 1px;
-  position: relative;
-  z-index: 1;
+  margin-top: 4px;
 }
 
-.struct-good .struct-node-dot  { background: #dcfce7; color: #16a34a; }
-.struct-warn  .struct-node-dot { background: #fef3c7; color: #d97706; }
-.struct-error .struct-node-dot { background: #fee2e2; color: #dc2626; }
-
-.struct-node-content {
+.clay-struct-content {
   flex: 1;
-  padding-bottom: 12px;
 }
 
-.struct-node-heading {
-  font-size: 12.5px;
+.clay-struct-heading {
+  font-size: 13px;
   font-weight: 600;
-  color: var(--color-heading);
-  margin-bottom: 2px;
+  line-height: 1.4;
 }
 
-.struct-node-note {
+.clay-struct-note {
   font-size: 12px;
-  color: var(--color-muted);
-  line-height: 1.45;
+  line-height: 1.5;
+  margin-top: 2px;
 }
 
-.struct-connector {
-  position: absolute;
-  left: 10px;
-  top: 23px;
-  bottom: 0;
-  width: 2px;
-  background: var(--color-hairline);
+/* ── lead-rewrite：开头改写（桃色卡片） ── */
+.clay-lead-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-/* ── lead-rewrite：开头改写 ── */
-.uib--lead-rewrite .uib-header {
-  background: #faf5ff;
-  border-bottom-color: #c4b5fd;
-}
-
-.lead-panel {
-  border-radius: var(--rounded-sm);
-  padding: 10px 12px;
+.clay-lead-panel {
+  border-radius: 12px;
+  padding: 12px 14px;
   position: relative;
 }
 
-.lead-panel--original {
-  background: #fff5f5;
-  border: 1px solid #fca5a5;
-}
-
-.lead-panel--rewritten {
-  background: #f0fdf4;
-  border: 1px solid #86efac;
-}
-
-.lead-panel-label {
+.clay-lead-tag {
   font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--color-muted);
   margin-bottom: 6px;
 }
 
-.lead-panel-text {
+.clay-lead-text {
   font-size: 13px;
   line-height: 1.6;
   white-space: pre-wrap;
 }
 
-.lead-panel-text--bad  { color: #dc2626; }
-.lead-panel-text--good { color: #15803d; }
-
-.lead-divider {
+.clay-lead-divider {
   text-align: center;
   font-size: 11px;
-  color: var(--color-muted);
-  padding: 4px 0;
+  font-weight: 600;
+  opacity: 0.6;
 }
 
-.lead-copy-btn {
+.clay-lead-copy {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 10px;
+  right: 10px;
   font-size: 11px;
-  padding: 3px 8px;
-  border-radius: var(--rounded-sm);
-  border: 1px solid #86efac;
-  background: white;
-  color: #15803d;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: none;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: opacity 0.15s;
 }
 
-.lead-copy-btn:hover {
-  background: #dcfce7;
+.clay-lead-copy:hover { opacity: 0.8; }
+
+/* ── highlight-quote：金句（赭石色卡片） ── */
+.clay-quote-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-/* ── highlight-quote：金句 ── */
-.uib--highlight-quote .uib-header {
-  background: #fffbeb;
-  border-bottom-color: #fde68a;
+.clay-quote-item {
+  border-left: 3px solid;
+  padding: 8px 12px;
+  border-radius: 0 10px 10px 0;
+  background: rgba(0,0,0,0.08);
 }
 
-.hq-quote {
-  margin: 0;
-  padding: 10px 14px;
-  border-left: 3px solid #f59e0b;
-  background: #fffbeb;
-  border-radius: 0 var(--rounded-sm) var(--rounded-sm) 0;
-  font-size: 13px;
+.clay-quote-text {
+  font-size: 14px;
+  font-weight: 500;
   line-height: 1.6;
-  color: var(--color-heading);
   font-style: italic;
+}
+
+/* ── Skeleton 加载动画 ── */
+.clay-card--skeleton {
+  opacity: 0.7;
+}
+
+.clay-skeleton-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.clay-skel-line {
+  height: 12px;
+  border-radius: 6px;
+  background: var(--accent, rgba(255,255,255,0.25));
+  animation: claySkelPulse 1.4s ease-in-out infinite;
+}
+
+.clay-skel-line--title {
+  height: 16px;
+  width: 60%;
+  animation-delay: 0s;
+}
+
+.clay-skel-line--short {
+  width: 40%;
+  animation-delay: 0.2s;
+}
+
+@keyframes claySkelPulse {
+  0%, 100% { opacity: 0.5; }
+  50%       { opacity: 1; }
 }

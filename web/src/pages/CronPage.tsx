@@ -70,10 +70,10 @@ const CRON_PRESETS = [
 
 const PIPELINE_STEPS = [
   { key: 'trending', label: '热点抓取', icon: TrendingUp, color: 'peach' },
-  { key: 'generate', label: '文章生成', icon: FileText,   color: 'lavender' },
-  { key: 'style',    label: '样式生成', icon: Paintbrush, color: 'ochre' },
-  { key: 'html',     label: 'HTML 转换', icon: FileText,  color: 'mint' },
-  { key: 'publish',  label: '推送草稿箱', icon: Send,     color: 'pink' },
+  { key: 'generate', label: '文章生成', icon: FileText, color: 'lavender' },
+  { key: 'style', label: '样式生成', icon: Paintbrush, color: 'ochre' },
+  { key: 'html', label: 'HTML 转换', icon: FileText, color: 'mint' },
+  { key: 'publish', label: '推送草稿箱', icon: Send, color: 'pink' },
 ]
 
 // ── 工具函数 ──────────────────────────────────────────────────────────────────
@@ -94,14 +94,14 @@ function fmtDuration(startedAt: string, finishedAt: string | null) {
 
 function cronToHuman(expr: string) {
   const map: Record<string, string> = {
-    '0 8 * * *':   '每天 08:00',
-    '0 12 * * *':  '每天 12:00',
-    '0 20 * * *':  '每天 20:00',
-    '0 8 * * 1':   '每周一 08:00',
-    '0 8 * * 3':   '每周三 08:00',
-    '0 8 * * 5':   '每周五 08:00',
+    '0 8 * * *': '每天 08:00',
+    '0 12 * * *': '每天 12:00',
+    '0 20 * * *': '每天 20:00',
+    '0 8 * * 1': '每周一 08:00',
+    '0 8 * * 3': '每周三 08:00',
+    '0 8 * * 5': '每周五 08:00',
     '0 8 * * 1-5': '工作日 08:00',
-    '0 * * * *':   '每小时',
+    '0 * * * *': '每小时',
   }
   return map[expr] || expr
 }
@@ -116,7 +116,7 @@ function PipelineViz({ steps, compact = false }: { steps: CronStep[], compact?: 
   return (
     <div className={`pipeline${compact ? ' pipeline--compact' : ''}`}>
       {PIPELINE_STEPS.map((def, i) => {
-        const found  = steps.find(s => s.step === def.key)
+        const found = steps.find(s => s.step === def.key)
         const status = found?.status ?? 'pending'
         const isDone = status === 'success'
         const hasNext = i < PIPELINE_STEPS.length - 1
@@ -145,8 +145,8 @@ function PipelineViz({ steps, compact = false }: { steps: CronStep[], compact?: 
 
 function StatusBadge({ status }: { status: CronLog['status'] }) {
   const map = {
-    success: { cls: 'badge--ok',  label: '成功' },
-    error:   { cls: 'badge--err', label: '失败' },
+    success: { cls: 'badge--ok', label: '成功' },
+    error: { cls: 'badge--err', label: '失败' },
     running: { cls: 'badge--run', label: '运行中' },
   }
   const { cls, label } = map[status]
@@ -162,21 +162,21 @@ export default function CronPage() {
   const { articleReady } = useAIReadiness()
   useEffect(() => { fetchServerStatus() }, [])
 
-  const [jobs, setJobs]         = useState<CronJob[]>([])
-  const [logs, setLogs]         = useState<CronLog[]>([])
-  const [loading, setLoading]   = useState(false)
-  const [jobLogs, setJobLogs]   = useState<Record<string, CronLog[]>>({})
+  const [jobs, setJobs] = useState<CronJob[]>([])
+  const [logs, setLogs] = useState<CronLog[]>([])
+  const [loading, setLoading] = useState(false)
+  const [jobLogs, setJobLogs] = useState<Record<string, CronLog[]>>({})
   const [expanded, setExpanded] = useState<string | null>(null)
   const [expandedLog, setExpandedLog] = useState<number | null>(null)
 
   const [showForm, setShowForm] = useState(false)
-  const [editing, setEditing]   = useState<string | null>(null)
-  const [form, setForm]         = useState<Partial<CronJob>>(emptyForm())
-  const [saving, setSaving]     = useState(false)
-  const [formErr, setFormErr]   = useState<string | null>(null)
+  const [editing, setEditing] = useState<string | null>(null)
+  const [form, setForm] = useState<Partial<CronJob>>(emptyForm())
+  const [saving, setSaving] = useState(false)
+  const [formErr, setFormErr] = useState<string | null>(null)
   const [showSecret, setShowSecret] = useState(false)
-  const [showAiKey, setShowAiKey]   = useState(false)
-  const [running, setRunning]   = useState<string | null>(null)
+  const [showAiKey, setShowAiKey] = useState(false)
+  const [running, setRunning] = useState<string | null>(null)
 
   // ── 数据 ──────────────────────────────────────────────────────────────────
 
@@ -207,19 +207,21 @@ export default function CronPage() {
     const localAI = loadAIConfig()
     const preAiConfig: Record<string, string> = {}
     if (localAI.articleProvider) preAiConfig.articleProvider = localAI.articleProvider
-    if (localAI.articleApiKey)   preAiConfig.articleApiKey   = localAI.articleApiKey
-    if (localAI.articleBaseUrl)  preAiConfig.articleBaseUrl  = localAI.articleBaseUrl
-    if (localAI.articleModel)    preAiConfig.articleModel    = localAI.articleModel
-    if (localAI.maasApiKey)      preAiConfig.maasApiKey      = localAI.maasApiKey
-    if (localAI.maasBaseUrl)     preAiConfig.maasBaseUrl     = localAI.maasBaseUrl
-    if (localAI.maasUserEmail)   preAiConfig.maasUserEmail   = localAI.maasUserEmail
+    if (localAI.articleApiKey) preAiConfig.articleApiKey = localAI.articleApiKey
+    if (localAI.articleBaseUrl) preAiConfig.articleBaseUrl = localAI.articleBaseUrl
+    if (localAI.articleModel) preAiConfig.articleModel = localAI.articleModel
+    if (localAI.maasApiKey) preAiConfig.maasApiKey = localAI.maasApiKey
+    if (localAI.maasBaseUrl) preAiConfig.maasBaseUrl = localAI.maasBaseUrl
+    if (localAI.maasUserEmail) preAiConfig.maasUserEmail = localAI.maasUserEmail
     setForm({ ...emptyForm(), aiConfig: preAiConfig })
     setFormErr(null); setShowForm(true)
   }
   const openEdit = (job: CronJob) => {
     setEditing(job.id)
-    setForm({ name: job.name, cronExpr: job.cronExpr, topic: job.topic, stylePrompt: job.stylePrompt,
-              coverPrompt: job.coverPrompt, wxAppId: job.wxAppId, wxAppSecret: job.wxAppSecret, aiConfig: job.aiConfig })
+    setForm({
+      name: job.name, cronExpr: job.cronExpr, topic: job.topic, stylePrompt: job.stylePrompt,
+      coverPrompt: job.coverPrompt, wxAppId: job.wxAppId, wxAppSecret: job.wxAppSecret, aiConfig: job.aiConfig
+    })
     setFormErr(null); setShowForm(true)
   }
 
@@ -228,12 +230,14 @@ export default function CronPage() {
     if (!form.cronExpr?.trim()) { setFormErr('cron 表达式不能为空'); return }
     setSaving(true); setFormErr(null)
     try {
-      const payload = { name: form.name?.trim(), cronExpr: form.cronExpr?.trim(),
+      const payload = {
+        name: form.name?.trim(), cronExpr: form.cronExpr?.trim(),
         topic: form.topic?.trim() || '', stylePrompt: form.stylePrompt?.trim() || '',
         coverPrompt: form.coverPrompt?.trim() || '', wxAppId: form.wxAppId?.trim() || '',
-        wxAppSecret: form.wxAppSecret?.trim() || '', aiConfig: form.aiConfig || {} }
+        wxAppSecret: form.wxAppSecret?.trim() || '', aiConfig: form.aiConfig || {}
+      }
       if (editing) await axios.put(`/api/cron/jobs/${editing}`, payload)
-      else         await axios.post('/api/cron/jobs', payload)
+      else await axios.post('/api/cron/jobs', payload)
       setShowForm(false); await loadJobs()
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error
@@ -261,7 +265,7 @@ export default function CronPage() {
   }
 
   // ── 统计 ──────────────────────────────────────────────────────────────────
-  const totalRuns    = jobs.reduce((a, j) => a + j.runCount, 0)
+  const totalRuns = jobs.reduce((a, j) => a + j.runCount, 0)
   const enabledCount = jobs.filter(j => j.enabled).length
   const successCount = logs.filter(l => l.status === 'success').length
 
@@ -274,8 +278,9 @@ export default function CronPage() {
 
       {/* ── Topbar ── */}
       <header className="cp-topbar">
-        <button className="cp-back" onClick={() => navigate(-1)}>
-          <ArrowLeft size={14} /> 返回
+        <button className="wd-back-btn" onClick={() => navigate(-1)}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
+          返回
         </button>
         <div className="cp-topbar-title">
           <Clock size={15} />
@@ -364,7 +369,7 @@ export default function CronPage() {
             {/* 任务卡片 */}
             <div className="cp-job-list">
               {jobs.map((job, idx) => {
-                const color    = STRIPE_COLORS[idx % STRIPE_COLORS.length]
+                const color = STRIPE_COLORS[idx % STRIPE_COLORS.length]
                 const latestLog = (jobLogs[job.id] || [])[0] || logs.find(l => l.jobId === job.id)
                 const isExpanded = expanded === job.id
 
@@ -591,8 +596,8 @@ export default function CronPage() {
                 <label className="cp-label">接口类型 <span className="cp-req">*</span></label>
                 <div className="cp-presets">
                   {[
-                    { v: 'maas',          label: 'MaaS（内网）' },
-                    { v: 'openai',        label: 'OpenAI' },
+                    { v: 'maas', label: 'MaaS（内网）' },
+                    { v: 'openai', label: 'OpenAI' },
                     { v: 'openai-compat', label: '兼容接口' },
                   ].map(p => (
                     <button

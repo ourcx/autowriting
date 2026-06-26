@@ -551,7 +551,7 @@ export default function ArticleEditor() {
               <ContentStats
                 title={articleTitle}
                 content={data.article}
-                articleId={articleId}
+                articleId={isLocalArticle ? articleId.slice(6) : articleId}
                 task={data.task}
                 onArticleChange={value => setData(prev => ({ ...prev, article: value }))}
               />

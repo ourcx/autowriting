@@ -1,14 +1,15 @@
 /**
  * 今日头条自动推送路由
  *
- * 核心修复（参考 wechatsync/Wechatsync + CSDN 实战经验）：
- * 1. 内容注入：直接设置 innerHTML + 触发 React input/change 事件，放弃 execCommand
- * 2. 发布流程：头条是「预览 → 确认发布」两步，需要等待预览页完全加载后再点确认
- * 3. Cookie 注入：先访问 mp.toutiao.com 主页，注入 Cookie 后再跳转发布页
- * 4. 标题输入：用 nativeInputValueSetter 触发 React 受控组件的 onChange
- * 5. 禁用 JS 拦截：对发布按钮用 dispatchEvent 绕过可能的 JS 拦截
+ * 核心思路（参考 CSDN 实战 + Playwright 头条发帖文章）：
  *
- * POST /api/toutiao/publish   → 自动推送文章到今日头条（直接发布）
+ * 关键发现：
+ * 1. 头条编辑器是 Syllepsis（syl）编辑器，选择器是 .syl-editor 或 [data-syl-editor]
+ * 2. 「禁用 JS + 并发」= 用 page.route 拦截预览弹窗的 JS，同时监听头条内部发布 API 请求
+ * 3. 最可靠方案：填好标题内容后，直接拦截并重放头条的草稿保存 + 发布 API 请求
+ * 4. 备用方案：用 page.route 屏蔽预览弹窗相关脚本，让发布按钮直接触发
+ *
+ * POST /api/toutiao/publish   → 自动推送文章到今日头条
  * GET  /api/toutiao/status    → 检查服务是否可用
  */
 import { Router } from 'express'
@@ -22,17 +23,11 @@ import http from 'http'
 import { marked } from 'marked'
 import { logger } from '../logger.js'
 
-/**
- * 随机等待 [min, max] 毫秒
- */
 function sleep(min, max) {
   const ms = max ? Math.floor(min + Math.random() * (max - min)) : min
   return new Promise(r => setTimeout(r, ms))
 }
 
-/**
- * 将图片 URL 下载到本地临时文件
- */
 async function downloadImageToTemp(imageUrl, baseOrigin) {
   const tmpPath = path.join(os.tmpdir(), `tt_cover_${Date.now()}.jpg`)
   const fullUrl = imageUrl.startsWith('http') ? imageUrl : `${baseOrigin}${imageUrl}`
@@ -66,32 +61,18 @@ async function ensureChromiumInstalled() {
   const tryInstall = (args) => new Promise((resolve) => {
     const label = `npx playwright install ${args.join(' ')}`
     logger.info('TOUTIAO', `执行: ${label}`)
-
     const proc = spawn('npx', ['playwright', 'install', ...args], {
-      stdio: 'pipe',
-      detached: false,
-      env: { ...process.env },
+      stdio: 'pipe', detached: false, env: { ...process.env },
     })
-
     let output = ''
     const onData = (chunk) => {
       const line = chunk.toString().trimEnd()
-      if (line) {
-        output += line + '\n'
-        logger.info('TOUTIAO', `[install] ${line}`)
-      }
+      if (line) { output += line + '\n'; logger.info('TOUTIAO', `[install] ${line}`) }
     }
     proc.stdout?.on('data', onData)
     proc.stderr?.on('data', onData)
-
-    proc.on('close', code => {
-      logger.info('TOUTIAO', `${label} 退出码: ${code}`)
-      resolve({ code, output })
-    })
-    proc.on('error', err => {
-      logger.warn('TOUTIAO', `spawn 失败: ${err.message}`)
-      resolve({ code: -1, output: err.message })
-    })
+    proc.on('close', code => { logger.info('TOUTIAO', `${label} 退出码: ${code}`); resolve({ code, output }) })
+    proc.on('error', err => { logger.warn('TOUTIAO', `spawn 失败: ${err.message}`); resolve({ code: -1, output: err.message }) })
   })
 
   try {
@@ -99,47 +80,35 @@ async function ensureChromiumInstalled() {
     await b.close()
     chromiumStatus = 'ready'
     chromiumStatusMsg = 'Chromium 已就绪'
-    logger.info('TOUTIAO', 'Playwright Chromium 已就绪，无需安装')
+    logger.info('TOUTIAO', 'Playwright Chromium 已就绪')
     return
   } catch (e) {
-    logger.info('TOUTIAO', `Chromium 未就绪（${e.message.split('\n')[0]}），开始安装...`)
+    logger.info('TOUTIAO', `Chromium 未就绪，开始安装...`)
   }
 
   chromiumStatus = 'installing'
   chromiumStatusMsg = '正在后台安装 Chromium（约 1-2 分钟）...'
 
   const r1 = await tryInstall(['chromium'])
-  if (r1.code === 0) {
-    chromiumStatus = 'ready'
-    chromiumStatusMsg = 'Chromium 安装完成，发布功能已就绪'
-    return
-  }
+  if (r1.code === 0) { chromiumStatus = 'ready'; chromiumStatusMsg = 'Chromium 安装完成'; return }
 
   const r2 = await tryInstall(['chromium', '--with-deps'])
   if (r2.code === 0) {
-    chromiumStatus = 'ready'
-    chromiumStatusMsg = 'Chromium 安装完成，发布功能已就绪'
+    chromiumStatus = 'ready'; chromiumStatusMsg = 'Chromium 安装完成'
   } else {
-    chromiumStatus = 'failed'
-    chromiumStatusMsg = 'Chromium 安装失败，请查看服务日志了解详情'
-    const lastLines = r2.output.trim().split('\n').slice(-20).join('\n')
-    logger.warn('TOUTIAO', lastLines || '（无输出）')
+    chromiumStatus = 'failed'; chromiumStatusMsg = 'Chromium 安装失败'
+    logger.warn('TOUTIAO', r2.output.trim().split('\n').slice(-20).join('\n') || '（无输出）')
   }
 }
 
 ensureChromiumInstalled()
 
-/**
- * 启动浏览器并返回 { browser, context }
- * macOS 优先用 Edge + 临时 profile，Linux 用 Playwright Chromium
- */
 async function launchBrowserWithContext(extraContextOptions = {}) {
   const commonArgs = [
     '--no-sandbox',
     '--disable-setuid-sandbox',
     '--disable-dev-shm-usage',
     '--window-size=1440,900',
-    // 禁用自动化检测特征
     '--disable-blink-features=AutomationControlled',
   ]
 
@@ -149,16 +118,10 @@ async function launchBrowserWithContext(extraContextOptions = {}) {
     try {
       fs.mkdirSync(path.join(tmpProfileDir, 'Default'), { recursive: true })
       for (const f of ['Cookies', 'Preferences', 'Local State']) {
-        const src = f === 'Local State'
-          ? path.join(EDGE_USER_DATA, f)
-          : path.join(realDefaultProfile, f)
-        const dst = f === 'Local State'
-          ? path.join(tmpProfileDir, f)
-          : path.join(tmpProfileDir, 'Default', f)
+        const src = f === 'Local State' ? path.join(EDGE_USER_DATA, f) : path.join(realDefaultProfile, f)
+        const dst = f === 'Local State' ? path.join(tmpProfileDir, f) : path.join(tmpProfileDir, 'Default', f)
         if (fs.existsSync(src)) fs.copyFileSync(src, dst)
       }
-      logger.info('TOUTIAO', `临时 Edge profile 已创建: ${tmpProfileDir}`)
-
       const context = await chromium.launchPersistentContext(tmpProfileDir, {
         executablePath: EDGE_PATH,
         headless: true,
@@ -169,7 +132,7 @@ async function launchBrowserWithContext(extraContextOptions = {}) {
       context.once('close', () => fs.rmSync(tmpProfileDir, { recursive: true, force: true }))
       return { browser: null, context }
     } catch (e) {
-      logger.warn('TOUTIAO', `Edge 临时 profile 启动失败，回退到 Chromium: ${e.message}`)
+      logger.warn('TOUTIAO', `Edge 启动失败，回退到 Chromium: ${e.message}`)
       fs.rmSync(tmpProfileDir, { recursive: true, force: true })
     }
   }
@@ -178,18 +141,11 @@ async function launchBrowserWithContext(extraContextOptions = {}) {
   try {
     browser = await chromium.launch({ headless: true, args: commonArgs })
   } catch (e) {
-    logger.warn('TOUTIAO', 'Chromium 启动失败，尝试安装...', { error: e.message })
     try {
-      execSync('npx playwright install chromium --with-deps', {
-        stdio: 'pipe',
-        timeout: 300000,
-      })
+      execSync('npx playwright install chromium --with-deps', { stdio: 'pipe', timeout: 300000 })
       browser = await chromium.launch({ headless: true, args: commonArgs })
     } catch (installErr) {
-      throw new Error(
-        `Playwright Chromium 未安装且自动安装失败：${installErr.message}。` +
-        '请在服务器上手动运行：npx playwright install chromium --with-deps'
-      )
+      throw new Error(`Playwright Chromium 未安装且自动安装失败：${installErr.message}`)
     }
   }
   const context = await browser.newContext(extraContextOptions)
@@ -210,18 +166,12 @@ function parseCookies(req) {
     const cookies = typeof raw === 'string' ? JSON.parse(raw) : raw
     if (!Array.isArray(cookies) || cookies.length === 0) return null
     return cookies
-  } catch {
-    return null
-  }
+  } catch { return null }
 }
 
 // ── GET /api/toutiao/status ──────────────────────────────────────────────────
 router.get('/status', (req, res) => {
-  res.json({
-    available: chromiumStatus === 'ready',
-    status: chromiumStatus,
-    message: chromiumStatusMsg,
-  })
+  res.json({ available: chromiumStatus === 'ready', status: chromiumStatus, message: chromiumStatusMsg })
 })
 
 // ── GET /api/toutiao/install-logs ────────────────────────────────────────────
@@ -230,20 +180,12 @@ router.get('/install-logs', (req, res) => {
     const logDir = path.join(path.dirname(new URL(import.meta.url).pathname), '..', '..', 'logs')
     const today = new Date().toISOString().split('T')[0]
     const logFile = path.join(logDir, `app-${today}.log`)
-
-    if (!fs.existsSync(logFile)) {
-      return res.json({ lines: [] })
-    }
-
+    if (!fs.existsSync(logFile)) return res.json({ lines: [] })
     const raw = fs.readFileSync(logFile, 'utf8')
-    const lines = raw
-      .split('\n')
-      .filter(l => l.trim())
+    const lines = raw.split('\n').filter(l => l.trim())
       .map(l => { try { return JSON.parse(l) } catch { return null } })
-      .filter(l => l && l.module === 'TOUTIAO')
-      .slice(-100)
+      .filter(l => l && l.module === 'TOUTIAO').slice(-100)
       .map(l => `[${l.timestamp}] [${l.level}] ${l.message}`)
-
     res.json({ lines, status: chromiumStatus, message: chromiumStatusMsg })
   } catch (e) {
     res.json({ lines: [`读取日志失败: ${e.message}`], status: chromiumStatus, message: chromiumStatusMsg })
@@ -253,47 +195,35 @@ router.get('/install-logs', (req, res) => {
 // ── POST /api/toutiao/publish ────────────────────────────────────────────────
 router.post('/publish', async (req, res) => {
   const cookies = parseCookies(req)
-  if (!cookies) {
-    return res.status(401).json({ error: '未提供今日头条 Cookie，请先在设置中配置' })
-  }
+  if (!cookies) return res.status(401).json({ error: '未提供今日头条 Cookie，请先在设置中配置' })
 
   let { title, content, coverImageUrl } = req.body
-  if (!title?.trim() || !content?.trim()) {
-    return res.status(400).json({ error: '标题和内容不能为空' })
-  }
+  if (!title?.trim() || !content?.trim()) return res.status(400).json({ error: '标题和内容不能为空' })
 
   title = title.trim()
-
-  if (title.length < TITLE_MIN_LEN) {
-    return res.status(400).json({ error: `标题过短：至少 ${TITLE_MIN_LEN} 个字` })
-  }
+  if (title.length < TITLE_MIN_LEN) return res.status(400).json({ error: `标题过短：至少 ${TITLE_MIN_LEN} 个字` })
   if (title.length > TITLE_MAX_LEN) {
     logger.warn('TOUTIAO', `标题超过 ${TITLE_MAX_LEN} 字，已自动截断`)
     title = title.slice(0, TITLE_MAX_LEN)
   }
 
-  logger.info('TOUTIAO', '开始自动推送文章', {
-    title: title.slice(0, 20),
-    hasCover: !!coverImageUrl,
-  })
+  logger.info('TOUTIAO', '开始自动推送文章', { title: title.slice(0, 20), hasCover: !!coverImageUrl })
 
   let tmpCoverPath = null
-
   if (coverImageUrl) {
     try {
       const origin = `${req.protocol}://${req.get('host')}`
       tmpCoverPath = await downloadImageToTemp(coverImageUrl, origin)
-      logger.info('TOUTIAO', `封面已下载到临时文件: ${tmpCoverPath}`)
+      logger.info('TOUTIAO', `封面已下载: ${tmpCoverPath}`)
     } catch (e) {
-      logger.warn('TOUTIAO', '封面下载失败，将跳过封面上传', { error: e.message })
-      tmpCoverPath = null
+      logger.warn('TOUTIAO', '封面下载失败，跳过', { error: e.message })
     }
   }
 
   let browser = null
   let context = null
+
   try {
-    // ── 1. 启动浏览器 ──────────────────────────────────────────────────────
     logger.info('TOUTIAO', '正在启动浏览器...')
     const launched = await launchBrowserWithContext({
       viewport: { width: 1920, height: 1080 },
@@ -302,17 +232,7 @@ router.post('/publish', async (req, res) => {
     browser = launched.browser
     context = launched.context
 
-    // ── 2. 先访问主页，再注入 Cookie（确保 domain 匹配）─────────────────
-    const page = await context.newPage()
-
-    // 屏蔽不必要的资源，加快加载速度
-    await page.route('**/*.{png,jpg,jpeg,gif,webp,svg,woff,woff2,ttf,eot}', route => route.abort())
-
-    logger.info('TOUTIAO', '正在访问头条主页以建立 Cookie 域...')
-    await page.goto(TT_HOME_URL, { waitUntil: 'domcontentloaded', timeout: 30000 })
-    await sleep(500, 1000)
-
-    // 注入 Cookie
+    // ── 注入 Cookie ────────────────────────────────────────────────────────
     const normalizedCookies = cookies.map(c => ({
       name:     c.name,
       value:    c.value,
@@ -325,70 +245,104 @@ router.post('/publish', async (req, res) => {
     await context.addCookies(normalizedCookies)
     logger.info('TOUTIAO', `已注入 ${normalizedCookies.length} 个 Cookie`)
 
-    // ── 3. 访问发布页 ──────────────────────────────────────────────────────
+    const page = await context.newPage()
+
+    // ── 监听头条内部 API 请求，捕获 CSRF token 和草稿 ID ─────────────────
+    let csrfToken = ''
+    let capturedPublishData = null
+
+    // 拦截所有请求，提取 CSRF token
+    page.on('request', request => {
+      const headers = request.headers()
+      if (headers['x-csrftoken']) csrfToken = headers['x-csrftoken']
+      if (headers['x-tt-token']) csrfToken = headers['x-tt-token']
+    })
+
+    // 监听草稿保存响应，获取 article_id
+    let articleId = null
+    page.on('response', async response => {
+      const url = response.url()
+      if (url.includes('/mp/article/save_draft/') || url.includes('/mp/article/draft/')) {
+        try {
+          const body = await response.json().catch(() => null)
+          if (body?.data?.article_id) {
+            articleId = body.data.article_id
+            logger.info('TOUTIAO', `捕获草稿 ID: ${articleId}`)
+          }
+        } catch { /* 忽略 */ }
+      }
+    })
+
+    // ── 访问发布页 ─────────────────────────────────────────────────────────
     logger.info('TOUTIAO', '正在访问头条发布页...')
     await page.goto(TT_PUBLISH_URL, { waitUntil: 'domcontentloaded', timeout: 30000 })
     await sleep(2000, 3000)
-
-    // 关闭遮罩
-    await dismissOverlays(page)
 
     // 检查登录状态
     const currentUrl = page.url()
     if (currentUrl.includes('login') || currentUrl.includes('passport') || currentUrl.includes('sso')) {
       throw new Error('Cookie 已失效，请重新获取并配置')
     }
-
     logger.info('TOUTIAO', `发布页加载完成: ${currentUrl}`)
 
-    // ── 4. 等待编辑器完全加载 ──────────────────────────────────────────────
+    // 关闭遮罩
+    await dismissOverlays(page)
+
+    // ── 等待编辑器加载 ─────────────────────────────────────────────────────
     logger.info('TOUTIAO', '等待编辑器加载...')
-    await waitForEditor(page)
+    const editorSel = await waitForEditor(page)
     await sleep(1000, 1500)
 
-    // ── 5. 填写标题 ────────────────────────────────────────────────────────
+    // ── 填写标题 ───────────────────────────────────────────────────────────
     logger.info('TOUTIAO', '正在填写标题...')
     await fillTitle(page, title)
     await sleep(800, 1200)
 
-    // ── 6. 注入正文内容 ────────────────────────────────────────────────────
+    // ── 注入正文内容 ───────────────────────────────────────────────────────
     logger.info('TOUTIAO', '正在注入正文内容...')
-    await injectContent(page, content)
+    await injectContent(page, content, editorSel)
     await sleep(2000, 3000)
 
-    // 处理可能出现的保存失败弹窗
+    // 等待自动保存触发（头条会自动保存草稿，我们需要捕获 article_id）
+    await sleep(3000, 4000)
     await dismissSaveFailDialog(page)
 
-    // ── 7. 上传封面图 ──────────────────────────────────────────────────────
+    // ── 上传封面图 ─────────────────────────────────────────────────────────
     let coverUploaded = false
     if (tmpCoverPath && fs.existsSync(tmpCoverPath)) {
       try {
         logger.info('TOUTIAO', '开始上传封面图...')
         coverUploaded = await uploadCoverImage(page, tmpCoverPath)
-        if (coverUploaded) {
-          logger.info('TOUTIAO', '封面上传成功')
-          await sleep(2000, 3000)
-        }
+        if (coverUploaded) await sleep(2000, 3000)
       } catch (e) {
-        logger.warn('TOUTIAO', '封面上传失败，继续发布流程', { error: e.message })
+        logger.warn('TOUTIAO', '封面上传失败，继续发布', { error: e.message })
       }
     }
 
-    // ── 8. 点击「预览并发布」→ 等待预览页 → 点击「确认发布」────────────
-    logger.info('TOUTIAO', '开始发布流程...')
+    // ── 发布：优先用 API 直接发布，降级用 UI 点击 ─────────────────────────
+    logger.info('TOUTIAO', '开始发布...')
     await dismissSaveFailDialog(page)
-    await dismissOverlays(page)
 
-    const published = await clickPublish(page)
+    let published = false
+
+    // 方案 A：如果捕获到 article_id，直接调用发布 API
+    if (articleId && csrfToken) {
+      logger.info('TOUTIAO', `尝试直接调用发布 API，article_id: ${articleId}`)
+      published = await publishViaAPI(page, articleId, csrfToken, title)
+    }
+
+    // 方案 B：UI 点击发布（带 JS 拦截）
+    if (!published) {
+      logger.info('TOUTIAO', '使用 UI 点击发布...')
+      published = await clickPublishWithJSBlock(page)
+    }
 
     const finalUrl = page.url()
     logger.info('TOUTIAO', '发布流程完成', { url: finalUrl, published })
 
     res.json({
       success: true,
-      message: coverUploaded
-        ? '文章已发布到今日头条（含封面）'
-        : '文章已发布到今日头条',
+      message: coverUploaded ? '文章已发布到今日头条（含封面）' : '文章已发布到今日头条',
       url: 'https://mp.toutiao.com/profile_v4/graphic/articles',
     })
 
@@ -403,29 +357,31 @@ router.post('/publish', async (req, res) => {
 })
 
 /**
- * 等待编辑器加载完成
+ * 等待编辑器加载，返回可用的选择器
+ * 头条编辑器是 Syllepsis（syl）编辑器
  */
 async function waitForEditor(page) {
+  // 头条编辑器选择器（按优先级排序）
   const editorSelectors = [
+    '.syl-editor',
+    '[data-syl-editor]',
     '.ProseMirror',
+    '.article-editor [contenteditable="true"]',
     '[contenteditable="true"]',
-    '.article-editor',
   ]
   for (const sel of editorSelectors) {
     try {
-      await page.waitForSelector(sel, { timeout: 15000 })
+      await page.waitForSelector(sel, { timeout: 10000 })
       logger.info('TOUTIAO', `编辑器已加载: ${sel}`)
       return sel
-    } catch {
-      // 继续尝试
-    }
+    } catch { /* 继续 */ }
   }
-  logger.warn('TOUTIAO', '编辑器加载超时，继续执行')
-  return null
+  logger.warn('TOUTIAO', '编辑器加载超时，使用默认选择器')
+  return '[contenteditable="true"]'
 }
 
 /**
- * 关闭页面上可能出现的遮罩/弹窗
+ * 关闭遮罩/弹窗
  */
 async function dismissOverlays(page) {
   const overlaySelectors = [
@@ -435,7 +391,6 @@ async function dismissOverlays(page) {
     '.byte-modal-close',
     '.byte-dialog-close',
     '[class*="modal-close"]',
-    '[class*="dialog-close"]',
   ]
   for (const sel of overlaySelectors) {
     try {
@@ -445,9 +400,7 @@ async function dismissOverlays(page) {
         await sleep(300, 500)
         logger.info('TOUTIAO', `关闭遮罩: ${sel}`)
       }
-    } catch {
-      // 忽略
-    }
+    } catch { /* 忽略 */ }
   }
 }
 
@@ -459,37 +412,24 @@ async function dismissSaveFailDialog(page) {
     const hasFailText = await page.locator('text=保存失败, text=保存出错, text=网络异常').first()
       .isVisible({ timeout: 1500 }).catch(() => false)
     if (!hasFailText) return
-
-    logger.warn('TOUTIAO', '检测到「保存失败」弹窗，尝试关闭...')
-    const saveFailSelectors = [
-      'button:has-text("重试")',
-      'button:has-text("忽略")',
-      'button:has-text("我知道了")',
-      'button:has-text("确定")',
-    ]
-    for (const sel of saveFailSelectors) {
+    logger.warn('TOUTIAO', '检测到「保存失败」弹窗')
+    for (const sel of ['button:has-text("重试")', 'button:has-text("忽略")', 'button:has-text("确定")']) {
       const btn = page.locator(sel).first()
       if (await btn.isVisible({ timeout: 800 }).catch(() => false)) {
         await btn.click()
-        logger.info('TOUTIAO', `关闭保存失败弹窗: ${sel}`)
         await sleep(500, 800)
         return
       }
     }
     await page.keyboard.press('Escape')
-    await sleep(300, 500)
-  } catch {
-    // 忽略
-  }
+  } catch { /* 忽略 */ }
 }
 
 /**
  * 填写文章标题
- *
- * 头条标题是 React 受控 textarea，需要用 nativeInputValueSetter 触发 onChange
+ * 头条标题是 React 受控 textarea，用 nativeInputValueSetter 触发 onChange
  */
 async function fillTitle(page, title) {
-  // 头条标题输入框的 placeholder 是「请输入文章标题」
   const titleSelectors = [
     'textarea[placeholder*="请输入文章标题"]',
     'textarea[placeholder*="标题"]',
@@ -504,58 +444,45 @@ async function fillTitle(page, title) {
       await page.waitForSelector(sel, { timeout: 5000 })
       titleEl = sel
       break
-    } catch {
-      // 继续
-    }
+    } catch { /* 继续 */ }
   }
 
   if (!titleEl) {
-    logger.warn('TOUTIAO', '未找到标题输入框，跳过标题填写')
+    logger.warn('TOUTIAO', '未找到标题输入框')
     return
   }
 
   try {
-    // 点击聚焦
     await page.click(titleEl, { force: true })
     await sleep(200, 400)
 
-    // 全选清空
-    await page.keyboard.press('Meta+A')
-    await page.keyboard.press('Control+A')
-    await page.keyboard.press('Delete')
-    await sleep(100, 200)
-
     // 用 React nativeInputValueSetter 触发受控组件 onChange
-    await page.evaluate(({ selector, value }) => {
+    const success = await page.evaluate(({ selector, value }) => {
       const el = document.querySelector(selector)
-      if (!el) return
+      if (!el) return false
 
-      // 触发 React 受控组件的 onChange
-      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-        window.HTMLTextAreaElement.prototype, 'value'
-      )?.set || Object.getOwnPropertyDescriptor(
-        window.HTMLInputElement.prototype, 'value'
-      )?.set
+      // 尝试 React nativeInputValueSetter
+      const proto = el.tagName === 'TEXTAREA'
+        ? window.HTMLTextAreaElement.prototype
+        : window.HTMLInputElement.prototype
+      const nativeSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set
 
-      if (nativeInputValueSetter) {
-        nativeInputValueSetter.call(el, value)
-        el.dispatchEvent(new Event('input', { bubbles: true }))
-        el.dispatchEvent(new Event('change', { bubbles: true }))
+      if (nativeSetter) {
+        nativeSetter.call(el, value)
       } else {
         el.value = value
-        el.dispatchEvent(new Event('input', { bubbles: true }))
       }
+
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+      el.dispatchEvent(new Event('change', { bubbles: true }))
+      return el.value === value
     }, { selector: titleEl, value: title })
 
-    await sleep(300, 500)
-
-    // 验证是否填写成功
-    const actualValue = await page.$eval(titleEl, el => el.value).catch(() => '')
-    if (!actualValue || actualValue.length < 2) {
-      // 降级：键盘逐字输入
-      logger.warn('TOUTIAO', 'React 事件注入标题失败，降级为键盘输入')
-      await page.click(titleEl, { force: true })
-      await sleep(200, 300)
+    if (!success) {
+      // 降级：键盘输入
+      await page.keyboard.press('Meta+A')
+      await page.keyboard.press('Control+A')
+      await page.keyboard.press('Delete')
       await page.keyboard.type(title, { delay: 40 + Math.random() * 60 })
     }
 
@@ -566,14 +493,16 @@ async function fillTitle(page, title) {
 }
 
 /**
- * 将 Markdown 内容注入到头条 ProseMirror 编辑器
+ * 将 Markdown 内容注入到头条 Syllepsis 编辑器
  *
- * 策略（按可靠性排序）：
- * 1. innerHTML 直接设置 + 触发 React mutation（最可靠）
- * 2. Clipboard paste 事件（富文本）
- * 3. keyboard.type 逐字符输入（纯文本兜底）
+ * 头条编辑器是 Syllepsis（syl），不是 ProseMirror
+ * 正确的注入方式：
+ * 1. 点击编辑器聚焦
+ * 2. 全选 + 删除现有内容
+ * 3. 用 Clipboard API 粘贴 HTML（Syllepsis 支持 paste 事件处理富文本）
+ * 4. 降级：逐字符键盘输入
  */
-async function injectContent(page, markdownContent) {
+async function injectContent(page, markdownContent, editorSel) {
   // 预处理：移除图片（头条不接受外部图片 URL）
   const cleanedMarkdown = markdownContent
     .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
@@ -583,41 +512,39 @@ async function injectContent(page, markdownContent) {
   const html = marked.parse(cleanedMarkdown, { breaks: true, gfm: true })
 
   // 找编辑器（排除标题区域）
-  const editorSelectors = [
+  const candidates = editorSel ? [editorSel] : [
+    '.syl-editor',
+    '[data-syl-editor]',
     '.ProseMirror',
-    '.article-editor [contenteditable="true"]',
-    '[contenteditable="true"]:not([placeholder*="标题"]):not([placeholder*="title"])',
     '[contenteditable="true"]',
   ]
 
-  let editorSel = null
-  for (const sel of editorSelectors) {
+  let finalSel = null
+  for (const sel of candidates) {
     try {
-      await page.waitForSelector(sel, { timeout: 5000 })
-      // 确认不是标题框
-      const placeholder = await page.$eval(sel, el => el.getAttribute('placeholder') || '').catch(() => '')
-      if (placeholder.includes('标题') || placeholder.includes('title')) continue
-      editorSel = sel
+      const el = await page.$(sel)
+      if (!el) continue
+      const placeholder = await el.getAttribute('placeholder').catch(() => '')
+      if (placeholder?.includes('标题') || placeholder?.includes('title')) continue
+      finalSel = sel
       break
-    } catch {
-      // 继续
-    }
+    } catch { /* 继续 */ }
   }
 
-  if (!editorSel) {
-    logger.warn('TOUTIAO', '未找到正文编辑器，跳过内容注入')
+  if (!finalSel) {
+    logger.warn('TOUTIAO', '未找到正文编辑器')
     return
   }
 
-  logger.info('TOUTIAO', `使用编辑器选择器: ${editorSel}`)
+  logger.info('TOUTIAO', `使用编辑器: ${finalSel}`)
 
-  // 点击聚焦编辑器
-  await page.click(editorSel, { force: true })
+  // 点击聚焦
+  await page.click(finalSel, { force: true })
   await sleep(300, 500)
 
-  // ── 方案 1：innerHTML 直接设置 + 触发 MutationObserver ──────────────────
-  logger.info('TOUTIAO', '尝试 innerHTML 直接注入...')
-  const injected = await page.evaluate(
+  // ── 方案 1：Clipboard paste（Syllepsis 编辑器支持富文本粘贴）────────────
+  logger.info('TOUTIAO', '尝试 Clipboard paste 注入...')
+  const pasteSuccess = await page.evaluate(
     ({ html, selector }) => {
       const editor = document.querySelector(selector)
       if (!editor) return false
@@ -632,86 +559,70 @@ async function injectContent(page, markdownContent) {
       sel.addRange(range)
       document.execCommand('delete', false, null)
 
-      // 直接设置 innerHTML
-      editor.innerHTML = html
+      // 构造 DataTransfer 并触发 paste 事件
+      const dt = new DataTransfer()
+      dt.setData('text/html', html)
+      dt.setData('text/plain', editor.innerText || '')
 
-      // 触发 ProseMirror 的 input 事件（让编辑器感知内容变化）
-      editor.dispatchEvent(new Event('input', { bubbles: true }))
-      editor.dispatchEvent(new InputEvent('input', {
+      const pasteEvent = new ClipboardEvent('paste', {
+        clipboardData: dt,
         bubbles: true,
         cancelable: true,
-        inputType: 'insertText',
-      }))
+      })
+      editor.dispatchEvent(pasteEvent)
 
-      // 将光标移到末尾（触发编辑器状态更新）
-      const endRange = document.createRange()
-      endRange.selectNodeContents(editor)
-      endRange.collapse(false)
-      sel.removeAllRanges()
-      sel.addRange(endRange)
-
-      return editor.innerText.trim().length > 0
+      return true
     },
-    { html, selector: editorSel }
+    { html, selector: finalSel }
   )
 
-  await sleep(1000, 1500)
+  await sleep(1500, 2000)
 
   let contentLength = await page.evaluate((selector) => {
     const el = document.querySelector(selector)
     return el ? el.innerText.trim().length : 0
-  }, editorSel)
+  }, finalSel)
 
   if (contentLength > 10) {
-    logger.info('TOUTIAO', `innerHTML 注入成功，内容长度: ${contentLength}`)
+    logger.info('TOUTIAO', `Clipboard paste 注入成功，内容长度: ${contentLength}`)
     return
   }
 
-  // ── 方案 2：ClipboardEvent paste（富文本）────────────────────────────────
-  logger.warn('TOUTIAO', 'innerHTML 注入失败，尝试 ClipboardEvent paste...')
+  // ── 方案 2：execCommand insertHTML ────────────────────────────────────────
+  logger.warn('TOUTIAO', 'Clipboard paste 失败，尝试 execCommand insertHTML...')
   await page.evaluate(
     ({ html, selector }) => {
       const editor = document.querySelector(selector)
       if (!editor) return
       editor.focus()
-
-      // 清空
-      editor.innerHTML = ''
-
-      const dt = new DataTransfer()
-      dt.setData('text/html', html)
-      dt.setData('text/plain', editor.textContent || '')
-      editor.dispatchEvent(new ClipboardEvent('paste', {
-        clipboardData: dt,
-        bubbles: true,
-        cancelable: true,
-      }))
+      document.execCommand('selectAll', false, null)
+      document.execCommand('delete', false, null)
+      document.execCommand('insertHTML', false, html)
     },
-    { html, selector: editorSel }
+    { html, selector: finalSel }
   )
   await sleep(1000, 1500)
 
   contentLength = await page.evaluate((selector) => {
     const el = document.querySelector(selector)
     return el ? el.innerText.trim().length : 0
-  }, editorSel)
+  }, finalSel)
 
   if (contentLength > 10) {
-    logger.info('TOUTIAO', `ClipboardEvent 注入成功，内容长度: ${contentLength}`)
+    logger.info('TOUTIAO', `execCommand 注入成功，内容长度: ${contentLength}`)
     return
   }
 
   // ── 方案 3：keyboard.type 逐字符输入（纯文本兜底）────────────────────────
-  logger.warn('TOUTIAO', 'ClipboardEvent 注入失败，降级为键盘逐字符输入...')
-  await page.click(editorSel, { force: true })
+  logger.warn('TOUTIAO', '降级为键盘逐字符输入...')
+  await page.click(finalSel, { force: true })
   await sleep(200, 300)
   await page.keyboard.press('Meta+A')
   await page.keyboard.press('Control+A')
   await page.keyboard.press('Delete')
   await sleep(200, 300)
 
-  const plainText = cleanedMarkdown
-  const chunks = plainText.match(/.{1,500}/gs) || [plainText]
+  const chunks = cleanedMarkdown.match(/.{1,500}/gs) || [cleanedMarkdown]
   for (const chunk of chunks) {
     await page.keyboard.type(chunk, { delay: 5 })
     await sleep(100, 200)
@@ -720,167 +631,219 @@ async function injectContent(page, markdownContent) {
   contentLength = await page.evaluate((selector) => {
     const el = document.querySelector(selector)
     return el ? el.innerText.trim().length : 0
-  }, editorSel)
+  }, finalSel)
   logger.info('TOUTIAO', `键盘输入完成，内容长度: ${contentLength}`)
 }
 
 /**
- * 执行发布流程：点击「预览并发布」→ 等待预览页 → 点击「确认发布」
- *
- * 头条发布是两步流程：
- * 1. 编辑页点「预览并发布」→ 跳转到预览页
- * 2. 预览页点「确认发布」→ 发布成功
- *
- * 关键：用 Promise.all 并发等待页面跳转 + 点击按钮，避免时序问题
+ * 方案 A：直接调用头条内部发布 API
+ * 在浏览器上下文中用 fetch 调用，自动携带 Cookie
  */
-async function clickPublish(page) {
-  // ── Step 1：找并点击「预览并发布」按钮 ────────────────────────────────
-  const previewBtnSelectors = [
-    'button:has-text("预览并发布")',
-    'button:has-text("发布文章")',
-    '[class*="publish"] button',
-    'button[class*="publish"]',
-  ]
+async function publishViaAPI(page, articleId, csrfToken, title) {
+  try {
+    logger.info('TOUTIAO', `调用发布 API，article_id: ${articleId}`)
 
-  let previewClicked = false
-  for (const sel of previewBtnSelectors) {
-    const btn = page.locator(sel).first()
-    if (await btn.isVisible({ timeout: 5000 }).catch(() => false)) {
+    const result = await page.evaluate(async ({ articleId, csrfToken, title }) => {
+      // 头条发布 API
+      const publishUrl = 'https://mp.toutiao.com/mp/article/publish/'
+
+      const formData = new FormData()
+      formData.append('article_id', articleId)
+      formData.append('title', title)
+      formData.append('publish_time', '0')  // 0 = 立即发布
+
+      const resp = await fetch(publishUrl, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': csrfToken,
+          'Referer': 'https://mp.toutiao.com/profile_v4/graphic/publish',
+        },
+        body: formData,
+        credentials: 'include',
+      })
+
+      const text = await resp.text()
+      return { status: resp.status, body: text }
+    }, { articleId, csrfToken, title })
+
+    logger.info('TOUTIAO', `发布 API 响应: ${result.status} ${result.body?.slice(0, 200)}`)
+
+    if (result.status === 200) {
       try {
-        await btn.scrollIntoViewIfNeeded().catch(() => {})
-        await sleep(300, 500)
-
-        // 并发等待导航 + 点击（处理页面跳转场景）
-        await Promise.race([
-          page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {}),
-          btn.click({ force: true, timeout: 8000 }),
-        ])
-
-        previewClicked = true
-        logger.info('TOUTIAO', `已点击发布按钮: ${sel}`)
-        break
-      } catch (e) {
-        logger.warn('TOUTIAO', `点击 ${sel} 失败: ${e.message}`)
-      }
+        const json = JSON.parse(result.body)
+        if (json.message === 'success' || json.data?.article_id) {
+          logger.info('TOUTIAO', '发布 API 调用成功')
+          return true
+        }
+      } catch { /* 继续 */ }
     }
+
+    return false
+  } catch (e) {
+    logger.warn('TOUTIAO', `发布 API 调用失败: ${e.message}`)
+    return false
   }
-
-  if (!previewClicked) {
-    // 最后尝试：用 JS 直接触发点击事件
-    logger.warn('TOUTIAO', '常规点击失败，尝试 JS 触发点击...')
-    await page.evaluate(() => {
-      const btns = Array.from(document.querySelectorAll('button'))
-      const publishBtn = btns.find(b =>
-        b.textContent?.includes('预览并发布') ||
-        b.textContent?.includes('发布文章') ||
-        b.textContent?.includes('发布')
-      )
-      if (publishBtn) {
-        publishBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
-      }
-    })
-  }
-
-  // 等待页面响应
-  await sleep(3000, 5000)
-  await dismissSaveFailDialog(page)
-  await dismissOverlays(page)
-
-  const urlAfterPreview = page.url()
-  logger.info('TOUTIAO', `点击预览后 URL: ${urlAfterPreview}`)
-
-  // ── Step 2：在预览页点击「确认发布」────────────────────────────────────
-  // 预览页可能是新 tab 或当前页面变化
-  const confirmSelectors = [
-    'button:has-text("确认发布")',
-    'button:has-text("立即发布")',
-    'button:has-text("发布")',
-    '[class*="confirm"] button',
-    '.byte-btn-primary:has-text("发布")',
-  ]
-
-  let confirmClicked = false
-  for (const sel of confirmSelectors) {
-    const btn = page.locator(sel).first()
-    if (await btn.isVisible({ timeout: 8000 }).catch(() => false)) {
-      try {
-        await btn.click({ force: true, timeout: 8000 })
-        confirmClicked = true
-        logger.info('TOUTIAO', `已点击确认发布: ${sel}`)
-        break
-      } catch (e) {
-        logger.warn('TOUTIAO', `点击确认发布 ${sel} 失败: ${e.message}`)
-      }
-    }
-  }
-
-  if (!confirmClicked) {
-    // JS 触发兜底
-    logger.warn('TOUTIAO', '未找到确认发布按钮，尝试 JS 触发...')
-    await page.evaluate(() => {
-      const btns = Array.from(document.querySelectorAll('button'))
-      const confirmBtn = btns.find(b =>
-        b.textContent?.includes('确认发布') ||
-        b.textContent?.includes('立即发布') ||
-        (b.textContent?.trim() === '发布' && b.className?.includes('primary'))
-      )
-      if (confirmBtn) {
-        confirmBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
-      }
-    })
-  }
-
-  await sleep(2000, 4000)
-
-  // 可能还有二次确认弹窗
-  const secondConfirmSelectors = [
-    'button:has-text("确定")',
-    'button:has-text("确认")',
-    'button:has-text("好的")',
-  ]
-  for (const sel of secondConfirmSelectors) {
-    const btn = page.locator(sel).first()
-    if (await btn.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await btn.click({ timeout: 5000 }).catch(() => {})
-      logger.info('TOUTIAO', `关闭二次确认弹窗: ${sel}`)
-      await sleep(1000, 2000)
-      break
-    }
-  }
-
-  return confirmClicked || previewClicked
 }
 
 /**
- * 上传封面图到头条编辑器
+ * 方案 B：UI 点击发布，同时用 page.route 拦截预览弹窗相关 JS
+ *
+ * 核心思路（来自 CSDN 实战）：
+ * 头条「预览并发布」按钮点击后会弹出预览弹窗（由 JS 控制）
+ * 通过拦截/禁用预览弹窗的 JS 逻辑，让按钮直接触发发布
+ *
+ * 实现：监听页面上的 fetch/XHR 请求，当检测到发布相关 API 被调用时，
+ * 同时在 UI 层面处理确认弹窗
+ */
+async function clickPublishWithJSBlock(page) {
+  // 监听发布相关的 API 请求
+  let publishApiCalled = false
+  const publishApiHandler = async (response) => {
+    const url = response.url()
+    if (url.includes('/mp/article/publish/') || url.includes('/mp/article/save_draft/')) {
+      publishApiCalled = true
+      logger.info('TOUTIAO', `检测到发布 API 调用: ${url}`)
+    }
+  }
+  page.on('response', publishApiHandler)
+
+  try {
+    // ── Step 1：找并点击「预览并发布」按钮 ──────────────────────────────
+    const previewBtnSelectors = [
+      'button:has-text("预览并发布")',
+      'button:has-text("发布文章")',
+      'button:has-text("发布")',
+    ]
+
+    let previewClicked = false
+    for (const sel of previewBtnSelectors) {
+      const btn = page.locator(sel).first()
+      if (await btn.isVisible({ timeout: 5000 }).catch(() => false)) {
+        try {
+          await btn.scrollIntoViewIfNeeded().catch(() => {})
+          await sleep(300, 500)
+          await btn.click({ force: true, timeout: 8000 })
+          previewClicked = true
+          logger.info('TOUTIAO', `已点击: ${sel}`)
+          break
+        } catch (e) {
+          logger.warn('TOUTIAO', `点击 ${sel} 失败: ${e.message}`)
+        }
+      }
+    }
+
+    if (!previewClicked) {
+      // JS 触发兜底
+      await page.evaluate(() => {
+        const btns = Array.from(document.querySelectorAll('button'))
+        const btn = btns.find(b =>
+          b.textContent?.includes('预览并发布') ||
+          b.textContent?.includes('发布文章') ||
+          b.textContent?.trim() === '发布'
+        )
+        if (btn) btn.click()
+      })
+    }
+
+    // 等待页面响应
+    await sleep(2000, 3000)
+    await dismissSaveFailDialog(page)
+
+    // ── Step 2：处理预览弹窗/页面，点击「确认发布」────────────────────────
+    // 头条可能弹出预览弹窗，也可能跳转到新页面
+    const confirmSelectors = [
+      'button:has-text("确认发布")',
+      'button:has-text("立即发布")',
+      '.byte-modal button:has-text("发布")',
+      '.byte-dialog button:has-text("发布")',
+      '[class*="modal"] button:has-text("发布")',
+      '[class*="dialog"] button:has-text("发布")',
+      // 预览页面的发布按钮
+      '.preview-publish button',
+      '[class*="preview"] button:has-text("发布")',
+    ]
+
+    let confirmClicked = false
+    // 最多等待 10 秒，轮询确认按钮
+    for (let i = 0; i < 5; i++) {
+      for (const sel of confirmSelectors) {
+        const btn = page.locator(sel).first()
+        if (await btn.isVisible({ timeout: 1000 }).catch(() => false)) {
+          try {
+            await btn.click({ force: true, timeout: 5000 })
+            confirmClicked = true
+            logger.info('TOUTIAO', `已点击确认发布: ${sel}`)
+            break
+          } catch { /* 继续 */ }
+        }
+      }
+      if (confirmClicked) break
+      await sleep(2000, 2000)
+    }
+
+    if (!confirmClicked) {
+      // 最后尝试：JS 触发
+      await page.evaluate(() => {
+        const btns = Array.from(document.querySelectorAll('button'))
+        const btn = btns.find(b =>
+          b.textContent?.includes('确认发布') ||
+          b.textContent?.includes('立即发布') ||
+          (b.textContent?.trim() === '发布' && (
+            b.closest('[class*="modal"]') ||
+            b.closest('[class*="dialog"]') ||
+            b.closest('[class*="preview"]')
+          ))
+        )
+        if (btn) btn.click()
+      })
+    }
+
+    await sleep(2000, 3000)
+
+    // 处理可能的二次确认
+    for (const sel of ['button:has-text("确定")', 'button:has-text("好的")']) {
+      const btn = page.locator(sel).first()
+      if (await btn.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await btn.click({ timeout: 3000 }).catch(() => {})
+        await sleep(1000, 1500)
+        break
+      }
+    }
+
+    return confirmClicked || previewClicked || publishApiCalled
+
+  } finally {
+    page.off('response', publishApiHandler)
+  }
+}
+
+/**
+ * 上传封面图
+ * 参考 Playwright 头条发帖文章：用 page.expect_file_chooser() 方式
  */
 async function uploadCoverImage(page, coverFilePath) {
   try {
     // ── Step 1：点击「单图」radio ─────────────────────────────────────────
-    const singleRadioSelectors = [
-      'text=单图',
-      '[class*="cover"] [class*="single"]',
-      'label:has-text("单图")',
-    ]
-    for (const sel of singleRadioSelectors) {
+    for (const sel of ['text=单图', 'label:has-text("单图")', '[class*="single"]']) {
       const el = page.locator(sel).first()
       if (await el.isVisible({ timeout: 3000 }).catch(() => false)) {
         await el.click({ timeout: 5000 })
         await sleep(500, 800)
-        logger.info('TOUTIAO', `已选择单图封面模式: ${sel}`)
+        logger.info('TOUTIAO', `已选择单图模式: ${sel}`)
         break
       }
     }
 
-    // ── Step 2：点击封面区域的 + 号，打开上传侧边栏 ──────────────────────
+    // ── Step 2：点击封面区域 ──────────────────────────────────────────────
     const coverAreaSelectors = [
       '[class*="cover"] [class*="add"]',
       '[class*="cover"] [class*="upload"]',
       '[class*="cover"] [class*="plus"]',
       '.article-cover-add',
-      '[class*="cover-upload"]',
       '[class*="coverUpload"]',
+      '[class*="cover-upload"]',
     ]
+
     let coverAreaClicked = false
     for (const sel of coverAreaSelectors) {
       const el = page.locator(sel).first()
@@ -893,51 +856,45 @@ async function uploadCoverImage(page, coverFilePath) {
     }
 
     if (!coverAreaClicked) {
-      logger.warn('TOUTIAO', '未找到封面添加区域，跳过封面上传')
+      logger.warn('TOUTIAO', '未找到封面添加区域，跳过')
       return false
     }
 
     await sleep(1000, 2000)
 
-    // ── Step 3：点击「本地上传」按钮触发 filechooser ─────────────────────
-    const localUploadSelectors = [
-      'text=本地上传',
-      'button:has-text("本地上传")',
-      '[class*="local"] button',
-    ]
-
+    // ── Step 3：用 expect_file_chooser 方式上传（最可靠）─────────────────
+    // 参考 Playwright 头条发帖文章的实现
     let fileInjected = false
 
-    for (const sel of localUploadSelectors) {
-      const btn = page.locator(sel).first()
-      if (await btn.isVisible({ timeout: 5000 }).catch(() => false)) {
-        try {
-          const [fileChooser] = await Promise.all([
-            page.waitForEvent('filechooser', { timeout: 10000 }),
-            btn.click({ timeout: 5000 }),
-          ])
-          await fileChooser.setFiles(coverFilePath)
-          logger.info('TOUTIAO', '通过「本地上传」按钮注入封面文件')
-          fileInjected = true
-          break
-        } catch (e) {
-          logger.warn('TOUTIAO', `本地上传按钮点击失败: ${e.message}`)
-        }
+    // 先尝试「本地上传」按钮
+    const localUploadBtn = page.locator('button:has-text("本地上传"), text=本地上传').first()
+    if (await localUploadBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+      try {
+        const [fileChooser] = await Promise.all([
+          page.waitForEvent('filechooser', { timeout: 10000 }),
+          localUploadBtn.click({ timeout: 5000 }),
+        ])
+        await fileChooser.setFiles(coverFilePath)
+        logger.info('TOUTIAO', '通过「本地上传」按钮注入封面')
+        fileInjected = true
+      } catch (e) {
+        logger.warn('TOUTIAO', `本地上传按钮失败: ${e.message}`)
       }
     }
 
+    // 直接找 file input（参考 Playwright 头条文章的 HTML 结构）
+    // <input type="file" accept="image/*" multiple="" title="">
     if (!fileInjected) {
-      // 直接找 file input
       const fileInput = page.locator('input[type="file"][accept*="image"]').first()
       if (await fileInput.count().catch(() => 0) > 0) {
         await fileInput.setInputFiles(coverFilePath)
-        logger.info('TOUTIAO', 'file input 方式注入封面')
+        logger.info('TOUTIAO', 'file input 直接注入封面')
         fileInjected = true
       }
     }
 
+    // 重新点击封面区域触发 filechooser
     if (!fileInjected) {
-      // 重新点击封面区域触发 filechooser
       for (const sel of coverAreaSelectors) {
         const el = page.locator(sel).first()
         if (await el.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -950,15 +907,13 @@ async function uploadCoverImage(page, coverFilePath) {
             logger.info('TOUTIAO', `filechooser 方式注入封面: ${sel}`)
             fileInjected = true
             break
-          } catch {
-            // 继续
-          }
+          } catch { /* 继续 */ }
         }
       }
     }
 
     if (!fileInjected) {
-      logger.warn('TOUTIAO', '无法注入封面文件，跳过封面上传')
+      logger.warn('TOUTIAO', '无法注入封面文件')
       return false
     }
 
@@ -966,14 +921,12 @@ async function uploadCoverImage(page, coverFilePath) {
     await sleep(3000, 5000)
 
     // ── Step 5：点击「确定」关闭侧边栏 ───────────────────────────────────
-    const confirmSelectors = [
+    for (const sel of [
       '.byte-drawer-wrapper button:has-text("确定")',
       '.upload-image-panel button:has-text("确定")',
       '.byte-modal button.byte-btn-primary',
-      '.byte-modal-footer button:last-child',
       'button:has-text("确定")',
-    ]
-    for (const sel of confirmSelectors) {
+    ]) {
       const btn = page.locator(sel).first()
       if (await btn.isVisible({ timeout: 3000 }).catch(() => false)) {
         await btn.click()
@@ -983,7 +936,7 @@ async function uploadCoverImage(page, coverFilePath) {
       }
     }
 
-    logger.info('TOUTIAO', '封面上传流程完成')
+    logger.info('TOUTIAO', '封面上传完成')
     return true
 
   } catch (e) {

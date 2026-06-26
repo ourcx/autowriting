@@ -276,8 +276,15 @@
   flex-direction: column;
   gap: 2px;
   padding: 0 8px 8px;
-  flex-shrink: 0;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
+
+.wr-template-list::-webkit-scrollbar { width: 4px; }
+.wr-template-list::-webkit-scrollbar-track { background: transparent; }
+.wr-template-list::-webkit-scrollbar-thumb { background: #c8c0b0; border-radius: 2px; }
+.wr-template-list::-webkit-scrollbar-thumb:hover { background: #a4d4c5; }
 
 .wr-tmpl-item {
   display: flex;
@@ -398,6 +405,11 @@
   background: #f8fdf8;
   color: #1a2a1a;
 }
+
+.wr-css-textarea::-webkit-scrollbar { width: 4px; }
+.wr-css-textarea::-webkit-scrollbar-track { background: transparent; }
+.wr-css-textarea::-webkit-scrollbar-thumb { background: #c8c0b0; border-radius: 2px; }
+.wr-css-textarea::-webkit-scrollbar-thumb:hover { background: #a4d4c5; }
 
 /* ── 右侧预览 ────────────────────────────────────────────────── */
 .wr-preview {

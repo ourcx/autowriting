@@ -199,27 +199,54 @@ function IssueItem({ issue }: { issue: Issue }) {
   )
 }
 
-// ── 动态 UI 块渲染器（a2ui 思路：AI 决定渲染什么） ────────────────────────────
+// ── Clay 设计系统：动态 UI 块渲染器 ──────────────────────────────────────────
+// 每种 block 对应一张饱和色卡片，颜色循环：pink → lavender → peach → teal → ochre
+
+const BLOCK_THEMES = {
+  'cliche-diff':     { bg: '#ff4d8b', text: '#fff',    accent: 'rgba(255,255,255,0.25)', label: '套话修改' },
+  'data-suggestion': { bg: '#b8a4ed', text: '#0a0a0a', accent: 'rgba(10,10,10,0.12)',   label: '数据补充' },
+  'lead-rewrite':    { bg: '#ffb084', text: '#0a0a0a', accent: 'rgba(10,10,10,0.12)',   label: '开头改写' },
+  'structure-map':   { bg: '#1a3a3a', text: '#fff',    accent: 'rgba(255,255,255,0.2)', label: '结构诊断' },
+  'highlight-quote': { bg: '#e8b94a', text: '#0a0a0a', accent: 'rgba(10,10,10,0.12)',   label: '文章金句' },
+} as const
+
+// Skeleton 占位块（流式加载中）
+function UIBlockSkeleton({ type }: { type: string }) {
+  const theme = BLOCK_THEMES[type as keyof typeof BLOCK_THEMES] || BLOCK_THEMES['cliche-diff']
+  return (
+    <div className="clay-card clay-card--skeleton" style={{ background: theme.bg }}>
+      <div className="clay-card-label" style={{ color: theme.text, opacity: 0.6 }}>{theme.label}</div>
+      <div className="clay-skeleton-lines" style={{ '--accent': theme.accent } as React.CSSProperties}>
+        <div className="clay-skel-line clay-skel-line--title" />
+        <div className="clay-skel-line" />
+        <div className="clay-skel-line clay-skel-line--short" />
+      </div>
+    </div>
+  )
+}
 
 function UIBlockClicheDiffRenderer({ block }: { block: UIBlockClicheDiff }) {
+  const theme = BLOCK_THEMES['cliche-diff']
   return (
-    <div className="uib uib--cliche-diff">
-      <div className="uib-header">
-        <span className="uib-icon">✂</span>
-        <span className="uib-title">{block.title}</span>
-        <span className="uib-badge uib-badge--error">{block.items.length} 处</span>
+    <div className="clay-card clay-card--cliche" style={{ background: theme.bg }}>
+      <div className="clay-card-header">
+        <span className="clay-card-label" style={{ color: theme.text }}>{theme.label}</span>
+        <span className="clay-card-count" style={{ background: theme.accent, color: theme.text }}>
+          {block.items.length} 处
+        </span>
       </div>
-      <div className="uib-body">
+      <div className="clay-card-title" style={{ color: theme.text }}>{block.title}</div>
+      <div className="clay-cliche-list">
         {block.items.map((item, i) => (
-          <div key={i} className="cliche-row">
-            <div className="cliche-original">
-              <span className="cliche-label">原文</span>
-              <span className="cliche-text cliche-text--bad">「{item.original}」</span>
+          <div key={i} className="clay-cliche-item">
+            <div className="clay-cliche-bad">
+              <span className="clay-cliche-tag" style={{ background: 'rgba(0,0,0,0.2)', color: theme.text }}>原文</span>
+              <span className="clay-cliche-text" style={{ color: theme.text }}>「{item.original}」</span>
             </div>
-            <div className="cliche-arrow">→</div>
-            <div className="cliche-suggestion">
-              <span className="cliche-label">改为</span>
-              <span className="cliche-text cliche-text--good">{item.suggestion}</span>
+            <div className="clay-cliche-arrow" style={{ color: theme.text }}>↓</div>
+            <div className="clay-cliche-good" style={{ background: 'rgba(255,255,255,0.18)', borderRadius: 10 }}>
+              <span className="clay-cliche-tag" style={{ background: 'rgba(255,255,255,0.3)', color: theme.text }}>改为</span>
+              <span className="clay-cliche-text" style={{ color: theme.text }}>{item.suggestion}</span>
             </div>
           </div>
         ))}
@@ -229,23 +256,24 @@ function UIBlockClicheDiffRenderer({ block }: { block: UIBlockClicheDiff }) {
 }
 
 function UIBlockDataSuggestionRenderer({ block }: { block: UIBlockDataSuggestion }) {
+  const theme = BLOCK_THEMES['data-suggestion']
   return (
-    <div className="uib uib--data-suggestion">
-      <div className="uib-header">
-        <span className="uib-icon">📊</span>
-        <span className="uib-title">{block.title}</span>
-        <span className="uib-badge uib-badge--warn">{block.items.length} 处</span>
+    <div className="clay-card clay-card--data" style={{ background: theme.bg }}>
+      <div className="clay-card-header">
+        <span className="clay-card-label" style={{ color: theme.text }}>{theme.label}</span>
+        <span className="clay-card-count" style={{ background: theme.accent, color: theme.text }}>
+          {block.items.length} 处
+        </span>
       </div>
-      <div className="uib-body">
+      <div className="clay-card-title" style={{ color: theme.text }}>{block.title}</div>
+      <div className="clay-data-list">
         {block.items.map((item, i) => (
-          <div key={i} className="data-row">
-            <div className="data-claim">
-              <span className="data-label">空泛表述</span>
-              <span className="data-quote">「{item.claim}」</span>
+          <div key={i} className="clay-data-item" style={{ background: theme.accent, borderRadius: 12 }}>
+            <div className="clay-data-claim" style={{ color: theme.text }}>
+              <span className="clay-data-tag">空泛</span>「{item.claim}」
             </div>
-            <div className="data-hint">
-              <span className="data-label">建议补充</span>
-              <span className="data-hint-text">{item.dataHint}</span>
+            <div className="clay-data-hint" style={{ color: theme.text, opacity: 0.85 }}>
+              建议补充：{item.dataHint}
             </div>
           </div>
         ))}
@@ -255,35 +283,38 @@ function UIBlockDataSuggestionRenderer({ block }: { block: UIBlockDataSuggestion
 }
 
 function UIBlockStructureMapRenderer({ block }: { block: UIBlockStructureMap }) {
-  const statusIcon = { good: '✓', warn: '△', error: '✕' }
-  const statusClass = { good: 'struct-good', warn: 'struct-warn', error: 'struct-error' }
+  const theme = BLOCK_THEMES['structure-map']
+  const statusDot = {
+    good:  { bg: '#22c55e', label: '好' },
+    warn:  { bg: '#f59e0b', label: '注意' },
+    error: { bg: '#ef4444', label: '问题' },
+  }
   return (
-    <div className="uib uib--structure-map">
-      <div className="uib-header">
-        <span className="uib-icon">🗺</span>
-        <span className="uib-title">{block.title}</span>
+    <div className="clay-card clay-card--structure" style={{ background: theme.bg }}>
+      <div className="clay-card-header">
+        <span className="clay-card-label" style={{ color: theme.text }}>{theme.label}</span>
       </div>
-      <div className="uib-body">
-        <div className="struct-timeline">
-          {block.sections.map((sec, i) => (
-            <div key={i} className={`struct-node ${statusClass[sec.status]}`}>
-              <div className="struct-node-dot">
-                <span>{statusIcon[sec.status]}</span>
+      <div className="clay-card-title" style={{ color: theme.text }}>{block.title}</div>
+      <div className="clay-struct-list">
+        {block.sections.map((sec, i) => {
+          const dot = statusDot[sec.status] || statusDot.warn
+          return (
+            <div key={i} className="clay-struct-item">
+              <div className="clay-struct-dot" style={{ background: dot.bg }} title={dot.label} />
+              <div className="clay-struct-content">
+                <div className="clay-struct-heading" style={{ color: theme.text }}>{sec.heading}</div>
+                <div className="clay-struct-note" style={{ color: theme.text, opacity: 0.75 }}>{sec.note}</div>
               </div>
-              <div className="struct-node-content">
-                <div className="struct-node-heading">{sec.heading}</div>
-                <div className="struct-node-note">{sec.note}</div>
-              </div>
-              {i < block.sections.length - 1 && <div className="struct-connector" />}
             </div>
-          ))}
-        </div>
+          )
+        })}
       </div>
     </div>
   )
 }
 
 function UIBlockLeadRewriteRenderer({ block }: { block: UIBlockLeadRewrite }) {
+  const theme = BLOCK_THEMES['lead-rewrite']
   const [copied, setCopied] = useState(false)
   const handleCopy = () => {
     navigator.clipboard.writeText(block.rewritten).then(() => {
@@ -292,21 +323,25 @@ function UIBlockLeadRewriteRenderer({ block }: { block: UIBlockLeadRewrite }) {
     })
   }
   return (
-    <div className="uib uib--lead-rewrite">
-      <div className="uib-header">
-        <span className="uib-icon">✍</span>
-        <span className="uib-title">{block.title}</span>
+    <div className="clay-card clay-card--lead" style={{ background: theme.bg }}>
+      <div className="clay-card-header">
+        <span className="clay-card-label" style={{ color: theme.text }}>{theme.label}</span>
       </div>
-      <div className="uib-body">
-        <div className="lead-panel lead-panel--original">
-          <div className="lead-panel-label">原开头</div>
-          <div className="lead-panel-text lead-panel-text--bad">{block.original}</div>
+      <div className="clay-card-title" style={{ color: theme.text }}>{block.title}</div>
+      <div className="clay-lead-panels">
+        <div className="clay-lead-panel clay-lead-panel--before" style={{ background: 'rgba(0,0,0,0.1)' }}>
+          <div className="clay-lead-tag" style={{ color: theme.text, opacity: 0.6 }}>原开头</div>
+          <div className="clay-lead-text" style={{ color: theme.text, opacity: 0.8 }}>{block.original}</div>
         </div>
-        <div className="lead-divider">AI 改写 ↓</div>
-        <div className="lead-panel lead-panel--rewritten">
-          <div className="lead-panel-label">改写后</div>
-          <div className="lead-panel-text lead-panel-text--good">{block.rewritten}</div>
-          <button className="lead-copy-btn" onClick={handleCopy}>
+        <div className="clay-lead-divider" style={{ color: theme.text }}>AI 改写 ↓</div>
+        <div className="clay-lead-panel clay-lead-panel--after" style={{ background: 'rgba(255,255,255,0.22)' }}>
+          <div className="clay-lead-tag" style={{ color: theme.text }}>改写后</div>
+          <div className="clay-lead-text" style={{ color: theme.text, fontWeight: 500 }}>{block.rewritten}</div>
+          <button
+            className="clay-lead-copy"
+            onClick={handleCopy}
+            style={{ background: theme.text, color: theme.bg }}
+          >
             {copied ? '已复制' : '复制'}
           </button>
         </div>
@@ -316,36 +351,67 @@ function UIBlockLeadRewriteRenderer({ block }: { block: UIBlockLeadRewrite }) {
 }
 
 function UIBlockHighlightQuoteRenderer({ block }: { block: UIBlockHighlightQuote }) {
+  const theme = BLOCK_THEMES['highlight-quote']
   return (
-    <div className="uib uib--highlight-quote">
-      <div className="uib-header">
-        <span className="uib-icon">✨</span>
-        <span className="uib-title">{block.title}</span>
+    <div className="clay-card clay-card--quote" style={{ background: theme.bg }}>
+      <div className="clay-card-header">
+        <span className="clay-card-label" style={{ color: theme.text }}>{theme.label}</span>
       </div>
-      <div className="uib-body">
+      <div className="clay-card-title" style={{ color: theme.text }}>{block.title}</div>
+      <div className="clay-quote-list">
         {block.quotes.map((q, i) => (
-          <blockquote key={i} className="hq-quote">{q}</blockquote>
+          <div key={i} className="clay-quote-item" style={{ borderLeftColor: theme.text }}>
+            <span className="clay-quote-text" style={{ color: theme.text }}>{q}</span>
+          </div>
         ))}
       </div>
     </div>
   )
 }
 
-function DynamicUIBlocks({ blocks }: { blocks: UIBlock[] }) {
-  if (!blocks || blocks.length === 0) return null
+// 流式渲染：analyzing 时显示 skeleton，result 到来后逐块替换
+function DynamicUIBlocks({
+  blocks,
+  analyzing,
+}: {
+  blocks?: UIBlock[]
+  analyzing?: boolean
+}) {
+  // 已知的 block 类型顺序（用于 skeleton 占位）
+  const SKELETON_TYPES = ['cliche-diff', 'data-suggestion', 'lead-rewrite']
+
+  if (!blocks || blocks.length === 0) {
+    if (!analyzing) return null
+    // 分析中但还没有任何 block：显示 skeleton
+    return (
+      <div className="clay-ui-blocks">
+        <div className="clay-ui-blocks-label">AI 正在生成诊断面板...</div>
+        <div className="clay-ui-blocks-grid">
+          {SKELETON_TYPES.map(t => <UIBlockSkeleton key={t} type={t} />)}
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="dynamic-ui-blocks">
-      <div className="uib-section-label">AI 生成诊断面板</div>
-      {blocks.map((block, i) => {
-        switch (block.type) {
-          case 'cliche-diff':      return <UIBlockClicheDiffRenderer      key={i} block={block} />
-          case 'data-suggestion':  return <UIBlockDataSuggestionRenderer  key={i} block={block} />
-          case 'structure-map':    return <UIBlockStructureMapRenderer    key={i} block={block} />
-          case 'lead-rewrite':     return <UIBlockLeadRewriteRenderer     key={i} block={block} />
-          case 'highlight-quote':  return <UIBlockHighlightQuoteRenderer  key={i} block={block} />
-          default:                 return null
-        }
-      })}
+    <div className="clay-ui-blocks">
+      <div className="clay-ui-blocks-label">AI 诊断面板</div>
+      <div className="clay-ui-blocks-grid">
+        {blocks.map((block, i) => {
+          switch (block.type) {
+            case 'cliche-diff':     return <UIBlockClicheDiffRenderer     key={i} block={block} />
+            case 'data-suggestion': return <UIBlockDataSuggestionRenderer key={i} block={block} />
+            case 'structure-map':   return <UIBlockStructureMapRenderer   key={i} block={block} />
+            case 'lead-rewrite':    return <UIBlockLeadRewriteRenderer    key={i} block={block} />
+            case 'highlight-quote': return <UIBlockHighlightQuoteRenderer key={i} block={block} />
+            default:                return null
+          }
+        })}
+        {/* 分析中：已有部分 block，剩余位置显示 skeleton */}
+        {analyzing && blocks.length < 3 && (
+          SKELETON_TYPES.slice(blocks.length).map(t => <UIBlockSkeleton key={`sk-${t}`} type={t} />)
+        )}
+      </div>
     </div>
   )
 }
@@ -484,6 +550,11 @@ export default function ContentStats({ content, title, articleId, task, onArticl
     setDeaiError(null)
   }
 
+  // 流式分析进度文字
+  const [analyzeProgress, setAnalyzeProgress] = useState<string>('')
+  // 流式 JSON 累积文本（用于实时预览）
+  const [streamText, setStreamText]           = useState<string>('')
+
   const handleAnalyze = async () => {
     if (!articleId || content.trim().length < 100) {
       setError('文章内容太短，无法分析（至少 100 字）')
@@ -492,6 +563,9 @@ export default function ContentStats({ content, title, articleId, task, onArticl
     setAnalyzing(true)
     setError(null)
     setResult(null)
+    setAnalyzeProgress('')
+    setStreamText('')
+
     try {
       const aiConfig = loadAIConfig()
       const token = localStorage.getItem('auth_token')
@@ -503,15 +577,67 @@ export default function ContentStats({ content, title, articleId, task, onArticl
         },
         body: JSON.stringify({ article: content, task, aiConfig }),
       })
-      const data = await resp.json()
-      if (!resp.ok) throw new Error(data.error || '分析失败')
-      setResult(data as AnalysisResult)
-      setSaved(true)
-      setTimeout(() => setSaved(false), 3000)
+
+      if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`)
+
+      const reader  = resp.body.getReader()
+      const decoder = new TextDecoder('utf-8')
+      let   lineBuf  = ''
+      let   curEvent = ''
+      let   accumulated = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        lineBuf += decoder.decode(value, { stream: true })
+        const lines = lineBuf.split('\n')
+        lineBuf = lines.pop() ?? ''
+
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (!trimmed) { curEvent = ''; continue }
+          if (trimmed.startsWith('event:')) { curEvent = trimmed.slice(6).trim(); continue }
+          if (!trimmed.startsWith('data:')) continue
+
+          try {
+            const payload = JSON.parse(trimmed.slice(5).trim()) as Record<string, unknown>
+            const evt = curEvent
+
+            if (evt === 'progress') {
+              setAnalyzeProgress(payload.message as string)
+            } else if (evt === 'chunk') {
+              accumulated += payload.text as string
+              setStreamText(accumulated)
+            } else if (evt === 'partial-result') {
+              // 增量更新：流式渲染已解析的部分
+              setResult(prev => ({
+                scores: { overall: 0, style: 0, structure: 0, actionability: 0, originality: 0 },
+                wordCount: 0, readingMinutes: 0, strengths: [], issues: [],
+                styleMatch: { score: 0, note: '' }, topSuggestion: '', ragCount: 0,
+                ...prev,
+                ...(payload as unknown as Partial<AnalysisResult>),
+              }))
+            } else if (evt === 'result') {
+              setResult(payload as unknown as AnalysisResult)
+              setStreamText('')
+              setAnalyzeProgress('')
+              setSaved(true)
+              setTimeout(() => setSaved(false), 3000)
+            } else if (evt === 'error') {
+              throw new Error(payload.message as string)
+            }
+          } catch (parseErr) {
+            // 只有 event:error 时才抛出
+            if (curEvent === 'error') throw parseErr
+          }
+        }
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '未知错误')
     } finally {
       setAnalyzing(false)
+      setAnalyzeProgress('')
     }
   }
 
@@ -806,7 +932,7 @@ export default function ContentStats({ content, title, articleId, task, onArticl
               disabled={analyzing || content.trim().length < 100}
             >
               {analyzing
-                ? <><span className="spinner-sm" />分析中...</>
+                ? <><span className="spinner-sm" />{analyzeProgress || '分析中...'}</>
                 : <><Sparkles size={13} />{result ? '重新分析' : '开始分析'}</>
               }
             </button>
@@ -829,6 +955,11 @@ export default function ContentStats({ content, title, articleId, task, onArticl
           </div>
         )}
 
+        {/* 分析中且还没有 result：只显示 skeleton UI 块 */}
+        {analyzing && !result && (
+          <DynamicUIBlocks blocks={undefined} analyzing={true} />
+        )}
+
         {result && (
           <div className="analysis-result">
 
@@ -843,7 +974,7 @@ export default function ContentStats({ content, title, articleId, task, onArticl
                     strokeDasharray={`${(result.scores.overall / 100) * 163} 163`}
                   />
                 </svg>
-                <span className="ring-label">{result.scores.overall}</span>
+                <span className="ring-label">{result.scores.overall || '…'}</span>
               </div>
               <div className="overall-meta">
                 <div className="overall-verdict">
@@ -851,7 +982,9 @@ export default function ContentStats({ content, title, articleId, task, onArticl
                     ? '质量不错，小改即可'
                     : result.scores.overall >= 60
                       ? '基本达标，有改进空间'
-                      : '需要较多修改'}
+                      : result.scores.overall > 0
+                        ? '需要较多修改'
+                        : analyzing ? '分析中...' : ''}
                 </div>
                 {result.ragCount > 0 && (
                   <div className="rag-badge">对比了 {result.ragCount} 篇往期文章</div>
@@ -872,7 +1005,7 @@ export default function ContentStats({ content, title, articleId, task, onArticl
                   dim={key}
                 />
               ))}
-              {result.styleMatch.score >= 0 && (
+              {result.styleMatch?.score >= 0 && result.styleMatch?.note && (
                 <div className="style-match-note">
                   风格一致性 {result.styleMatch.score}/100 — {result.styleMatch.note}
                 </div>
@@ -880,7 +1013,7 @@ export default function ContentStats({ content, title, articleId, task, onArticl
             </div>
 
             {/* 亮点 */}
-            {result.strengths.length > 0 && (
+            {result.strengths?.length > 0 && (
               <div className="strengths-block">
                 <div className="block-title"><CheckCircle2 size={14} />文章亮点</div>
                 <ul className="strengths-list">
@@ -890,7 +1023,7 @@ export default function ContentStats({ content, title, articleId, task, onArticl
             )}
 
             {/* 问题 */}
-            {result.issues.length > 0 && (
+            {result.issues?.length > 0 && (
               <div className="issues-block">
                 <div className="block-title">
                   <AlertCircle size={14} />
@@ -909,10 +1042,8 @@ export default function ContentStats({ content, title, articleId, task, onArticl
               </div>
             )}
 
-            {/* ── 动态 UI 块（a2ui 思路：AI 根据问题决定渲染什么） ── */}
-            {result.uiBlocks && result.uiBlocks.length > 0 && (
-              <DynamicUIBlocks blocks={result.uiBlocks} />
-            )}
+            {/* ── 动态 UI 块（Clay 设计系统，流式渲染） ── */}
+            <DynamicUIBlocks blocks={result.uiBlocks} analyzing={analyzing} />
 
           </div>
         )}

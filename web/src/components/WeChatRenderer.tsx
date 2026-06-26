@@ -8,13 +8,14 @@ import { fetchAllTemplates, BUILTIN_TEMPLATES, TemplateItem } from '../utils/tem
 import { ImageLibrary } from './ImageLibrary'
 import './WeChatRenderer.css'
 
+type PlatformMode = 'wechat' | 'toutiao'
+
 interface WeChatRendererProps {
   content: string
   title?: string
   articleId?: string
+  platformMode?: PlatformMode
 }
-
-type PlatformMode = 'wechat' | 'toutiao'
 
 // ── Markdown ──────────────────────────────────────────────────────────────────
 
@@ -241,11 +242,8 @@ function hasWxCreds(): boolean {
   } catch { return false }
 }
 
-export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, articleId }) => {
+export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, articleId, platformMode = 'wechat' }) => {
   const navigate = useNavigate()
-
-  // 平台模式切换
-  const [platformMode, setPlatformMode] = useState<PlatformMode>('wechat')
 
   // 从服务端加载模板，初始用内置副本保证无白屏
   const [templates, setTemplates] = useState<TemplateItem[]>(BUILTIN_TEMPLATES)
@@ -653,29 +651,6 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
 
   return (
     <div className="wr-root">
-      {/* ── 平台切换 Tab ── */}
-      <div className="wr-platform-tabs">
-        <button
-          className={`wr-platform-tab ${platformMode === 'wechat' ? 'active' : ''}`}
-          onClick={() => setPlatformMode('wechat')}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M8.5 13.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm7 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/>
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15H9v-2h2v2zm4 0h-2v-2h2v2zm1.07-7.75-.9.92C14.45 10.9 14 11.5 14 13h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H9c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/>
-          </svg>
-          微信公众号
-        </button>
-        <button
-          className={`wr-platform-tab wr-platform-tab--toutiao ${platformMode === 'toutiao' ? 'active' : ''}`}
-          onClick={() => setPlatformMode('toutiao')}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-          </svg>
-          今日头条
-        </button>
-      </div>
-
       {/* ── 公众号模式 ── */}
       {platformMode === 'wechat' && (
         <>

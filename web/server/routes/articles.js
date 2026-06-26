@@ -474,20 +474,33 @@ ${materials}
   }
 })
 
-// ── POST /api/articles/:articleId/analyze  (AI 内容分析) ─────────────────────
+// ── POST /api/articles/:articleId/analyze  (AI 内容分析，SSE 流式) ───────────
 
 router.post('/:articleId/analyze', async (req, res) => {
+  // SSE 响应头
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
+  res.flushHeaders()
+
+  const send = (event, data) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+  }
+
   try {
     const { articleId } = req.params
     const { article, task, aiConfig } = req.body
 
     if (!article || article.trim().length < 100) {
-      return res.status(400).json({ error: '文章内容太短，无法分析' })
+      send('error', { message: '文章内容太短，无法分析' })
+      return res.end()
     }
 
     const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
 
-    // ── 1. RAG 检索最相似往期文章（用于风格对比）────────────────────────────
+    // ── 1. RAG 检索（进度提示）──────────────────────────────────────────────
+    send('progress', { step: 'rag', message: '正在检索往期相似文章...' })
     let similarArticles = []
     try {
       similarArticles = await retrieveRelevant(article.slice(0, 500), {
@@ -506,11 +519,8 @@ router.post('/:articleId/analyze', async (req, res) => {
 
     // ── 2. 读取写作规范 + 数据库提示词 ──────────────────────────────────────
     const agentsContent = getAgentsContent()
-
-    // 从数据库读取文章分析提示词（支持用户自定义覆盖）
     const analyzePromptData = getEffectivePrompt('prompt-article-analyze')
     const analyzeInstruction = analyzePromptData?.content || ''
-
     const taskContext = task ? `\n\n# 本次写作任务\n${task}` : ''
 
     const prompt = `${analyzeInstruction ? analyzeInstruction + '\n\n' : '你是一个专业的文章审核助手，擅长分析微信公众号文章的质量。请对以下文章进行深度分析，返回 JSON 格式结果。\n\n'}# 写作规范（判断依据）
@@ -523,136 +533,189 @@ ${article}
 
 ---
 
-请严格按照以下 JSON 结构返回分析结果，不要有任何额外文字：
+请严格按照以下 JSON 结构返回分析结果，不要有任何额外文字。
+
+uiBlocks 字段说明（必须根据实际问题选择，不要强行凑数）：
+- 发现 AI 套话问题时，加入 type="cliche-diff" 块，items 列出每处套话的原句和改写建议
+- 发现缺乏数据支撑时，加入 type="data-suggestion" 块，items 列出空泛表述和补充建议
+- 发现结构/逻辑问题时，加入 type="structure-map" 块，sections 列出每个段落的诊断
+- 发现开头有套话或不够直接时，加入 type="lead-rewrite" 块，给出原文和改写版本
+- 文章整体质量好（overall>=75）时，加入 type="highlight-quote" 块，摘录 1-3 句金句
+
+返回格式（严格合法 JSON，所有字段都必须有值）：
 
 {
   "scores": {
-    "overall": <0-100整数，综合评分>,
-    "style": <0-100，风格真实度，避免 AI 腔>,
-    "structure": <0-100，结构合理性>,
-    "actionability": <0-100，实用性和可操作性>,
-    "originality": <0-100，观点独特性>
+    "overall": 75,
+    "style": 70,
+    "structure": 80,
+    "actionability": 75,
+    "originality": 65
   },
-  "wordCount": <实际字数整数>,
-  "readingMinutes": <阅读分钟数整数>,
-  "strengths": [<字符串，3-5条优点，每条20字以内>],
+  "wordCount": 1800,
+  "readingMinutes": 9,
+  "strengths": ["优点1", "优点2", "优点3"],
   "issues": [
     {
-      "level": <"error"|"warn"|"info">,
-      "type": <问题类型，如"AI套话"|"空话"|"结构问题"|"逻辑断层"等>,
-      "quote": <原文中的问题片段，不超过40字>,
-      "suggestion": <具体改进建议，不超过60字>
+      "level": "warn",
+      "type": "AI套话",
+      "quote": "原文问题片段",
+      "suggestion": "具体改进建议"
     }
   ],
   "styleMatch": {
-    "score": <0-100，与往期风格一致性，无往期数据时返回-1>,
-    "note": <一句话说明，如「开头较官方，与往期直接切入的习惯有差异」>
+    "score": 70,
+    "note": "风格说明"
   },
-  "topSuggestion": <最重要的一条改进建议，不超过80字>,
+  "topSuggestion": "最重要的改进建议",
   "uiBlocks": [
-    根据文章的实际问题，从以下类型中选择 1-4 个最有价值的 UI 块，按优先级排序。
-
-    如果发现 AI 套话（issues 中有 type 包含"套话"或"AI腔"的 error/warn 级别问题），必须包含：
     {
       "type": "cliche-diff",
       "title": "套话对比修改",
-      "items": [
-        {
-          "original": <原文中的套话句子，完整句子>,
-          "suggestion": <具体的改写建议，给出替换后的句子>
-        }
-      ]
-    }
-
-    如果发现缺乏数据支撑（issues 中有关于"数据""案例""具体"的问题），必须包含：
+      "items": [{ "original": "原文套话句子", "suggestion": "改写后的句子" }]
+    },
     {
       "type": "data-suggestion",
       "title": "数据补充建议",
-      "items": [
-        {
-          "claim": <文章中的空泛表述，原文引用>,
-          "dataHint": <建议补充什么类型的数据或案例，具体说明>
-        }
-      ]
-    }
-
-    如果发现结构问题（issues 中有关于"结构""逻辑""段落"的问题），必须包含：
+      "items": [{ "claim": "文章中的空泛表述", "dataHint": "建议补充什么数据或案例" }]
+    },
     {
       "type": "structure-map",
       "title": "结构诊断",
-      "sections": [
-        {
-          "heading": <段落标题或「开头」「结尾」>,
-          "status": <"good"|"warn"|"error">,
-          "note": <一句话评价，不超过30字>
-        }
-      ]
-    }
-
-    如果文章开头有套话或不够直接，必须包含：
+      "sections": [{ "heading": "开头", "status": "warn", "note": "一句话评价" }]
+    },
     {
       "type": "lead-rewrite",
       "title": "开头改写建议",
-      "original": <原文开头段落，完整引用>,
-      "rewritten": <改写后的开头，直接切入主题，保持原意>
-    }
-
-    如果文章整体质量不错（overall >= 75），可以包含：
+      "original": "原文开头段落",
+      "rewritten": "改写后的开头"
+    },
     {
       "type": "highlight-quote",
       "title": "文章金句",
-      "quotes": [<文章中最有力的 1-3 句话，原文引用>]
+      "quotes": ["金句1", "金句2"]
     }
-
-    注意：uiBlocks 数组只包含真正适用的块，不要强行凑数。如果文章质量很好，可以只返回 highlight-quote。
   ]
-}`
+}
 
-    // ── 3. 调用 LLM（带重试）──────────────────────────────────────────────────
+注意：上面是完整格式示例，实际返回时 uiBlocks 只包含真正适用的块（1-4个），scores 和 issues 等字段填入真实分析值。`
+
+    // ── 3. 调用 LLM（流式）──────────────────────────────────────────────────
     const { url, model, headers } = buildLLMRequest(cfg)
+    send('progress', { step: 'llm', message: 'AI 正在深度分析...' })
 
-    const llmRes = await callLLMWithRetry(url, {
+    const upstreamRes = await axios.post(url, {
       model,
       messages: [
         { role: 'system', content: '你是专业的文章分析助手，只输出合法 JSON，不加任何解释或 Markdown 代码块。' },
         { role: 'user',   content: prompt },
       ],
       temperature: 0.3,
-      max_tokens: 3500,
-    }, headers)
+      max_tokens: 2000,
+      stream: true,
+    }, { headers, responseType: 'stream', timeout: 120000 })
 
-    const raw = llmRes.data.choices[0].message.content.trim()
-    // 去掉可能的 ```json 包裹
-    const cleaned = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
+    // ── 4. 逐 chunk 转发 + 增量解析 partial-result ───────────────────────────
+    let fullText = ''
+    let inputTokens = 0, outputTokens = 0
+    let lastPartialSent = 0  // 上次发送 partial-result 时的文本长度
+
+    // 尝试从不完整 JSON 中提取已完成的字段
+    function tryParsePartial(text) {
+      const cleaned = text.trim().replace(/^```(?:json)?\n?/, '')
+      // 尝试直接解析
+      try { return JSON.parse(cleaned) } catch {}
+      // 尝试补全末尾
+      const attempts = [
+        cleaned + '"}]}',
+        cleaned + '"]}',
+        cleaned + ']}',
+        cleaned + '}',
+        cleaned.replace(/,?\s*"uiBlocks"\s*:[\s\S]*$/, '}'),
+        cleaned.replace(/,?\s*"[^"]*"\s*:[\s\S]*$/, '}'),
+      ]
+      for (const attempt of attempts) {
+        try { return JSON.parse(attempt) } catch {}
+      }
+      return null
+    }
+
+    await new Promise((resolve, reject) => {
+      let lineBuf = ''
+      upstreamRes.data.on('data', (chunk) => {
+        lineBuf += chunk.toString()
+        const lines = lineBuf.split('\n')
+        lineBuf = lines.pop() ?? ''
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (!trimmed || trimmed === 'data: [DONE]') continue
+          if (!trimmed.startsWith('data:')) continue
+          try {
+            const parsed = JSON.parse(trimmed.slice(5).trim())
+            const delta = parsed.choices?.[0]?.delta?.content || ''
+            if (delta) {
+              fullText += delta
+              // 每积累 200 字符尝试一次增量解析，发送 partial-result
+              if (fullText.length - lastPartialSent > 200) {
+                const partial = tryParsePartial(fullText)
+                if (partial && (partial.scores || partial.uiBlocks)) {
+                  send('partial-result', { ...partial, ragCount: similarArticles.length })
+                  lastPartialSent = fullText.length
+                }
+              }
+            }
+            if (parsed.usage) {
+              inputTokens  = parsed.usage.prompt_tokens     || 0
+              outputTokens = parsed.usage.completion_tokens || 0
+            }
+          } catch { /* 忽略解析失败的行 */ }
+        }
+      })
+      upstreamRes.data.on('end', resolve)
+      upstreamRes.data.on('error', reject)
+    })
+
+    // ── 5. 解析完整 JSON ──────────────────────────────────────────────────────
+    const cleaned = fullText.trim()
+      .replace(/^```(?:json)?\n?/, '')
+      .replace(/\n?```$/, '')
+
     let result
     try {
       result = JSON.parse(cleaned)
     } catch {
-      // JSON 解析失败时尝试截断修复（uiBlocks 过长可能被截断）
+      // 截断修复：uiBlocks 可能被截断
       const truncated = cleaned.replace(/,?\s*"uiBlocks"\s*:[\s\S]*$/, '') + '}'
-      result = JSON.parse(truncated)
+      try {
+        result = JSON.parse(truncated)
+      } catch (e2) {
+        send('error', { message: 'AI 返回格式异常，请重试' })
+        return res.end()
+      }
     }
 
     const fullResult = { ...result, ragCount: similarArticles.length }
 
-    // 自动保存到 SQLite
-    try { saveAnalysis(articleId, fullResult) } catch (e) { console.warn('[Analyze] 保存分析结果失败:', e.message) }
+    // ── 6. 保存 + token 用量 ──────────────────────────────────────────────────
+    try { saveAnalysis(articleId, fullResult) } catch (e) { console.warn('[Analyze] 保存失败:', e.message) }
 
-    // 记录 token 使用
-    const usage = llmRes.data.usage
-    if (usage) {
+    if (inputTokens || outputTokens) {
       recordTokenUsage({
         articleId, userId: req.user.id, operation: 'analyze', model,
-        inputTokens: usage.prompt_tokens, outputTokens: usage.completion_tokens,
-        totalTokens: usage.total_tokens,
+        inputTokens, outputTokens, totalTokens: inputTokens + outputTokens,
       })
     }
 
-    res.json(fullResult)
+    // ── 7. 发送最终结果 ───────────────────────────────────────────────────────
+    send('result', fullResult)
+    res.end()
+
   } catch (error) {
+    const status = error.response?.status
     const msg = error.response?.data?.error?.message || error.message
-    console.error('[Analyze] 分析失败:', msg)
-    res.status(500).json({ error: msg })
+    console.error('[Analyze] 分析失败:', { status, msg })
+    send('error', { message: `分析失败 (${status || 'network'}): ${msg}` })
+    res.end()
   }
 })
 

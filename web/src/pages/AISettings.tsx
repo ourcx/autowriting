@@ -18,24 +18,24 @@ import './AISettings.css'
 type Section = 'article' | 'cover' | 'search' | 'wechat' | 'cdn' | 'memory'
 
 const NAV_ITEMS: { id: Section; icon: React.ReactNode; label: string; sub: string }[] = [
-  { id: 'article', icon: <Zap size={16} />,    label: '文章生成',    sub: '大语言模型 API' },
-  { id: 'cover',   icon: <Image size={16} />,  label: '封面生成',    sub: '图片生成 API'   },
-  { id: 'search',  icon: <Search size={16} />, label: '素材搜索',    sub: '搜索引擎 API'   },
-  { id: 'wechat',  icon: <Link2 size={16} />,  label: '公众号绑定',  sub: '发布 & 数据预览' },
-  { id: 'cdn',     icon: <Image size={16} />,  label: '图床配置',    sub: 'Imgur 图片 CDN' },
-  { id: 'memory',  icon: <Brain size={16} />,  label: '永久记忆',    sub: '每次生成都注入' },
+  { id: 'article', icon: <Zap size={16} />, label: '文章生成', sub: '大语言模型 API' },
+  { id: 'cover', icon: <Image size={16} />, label: '封面生成', sub: '图片生成 API' },
+  { id: 'search', icon: <Search size={16} />, label: '素材搜索', sub: '搜索引擎 API' },
+  { id: 'wechat', icon: <Link2 size={16} />, label: '公众号绑定', sub: '发布 & 数据预览' },
+  { id: 'cdn', icon: <Image size={16} />, label: '图床配置', sub: 'Imgur 图片 CDN' },
+  { id: 'memory', icon: <Brain size={16} />, label: '永久记忆', sub: '每次生成都注入' },
 ]
 
 // ── 微信账号信息类型 ──────────────────────────────────────────────────────────
 interface WechatAccount {
-  nickname:     string
-  headimgurl:   string | null
-  fans_count:   number | null   // null = 未认证账号无权限查询
+  nickname: string
+  headimgurl: string | null
+  fans_count: number | null   // null = 未认证账号无权限查询
   fans_limited: boolean         // true = 账号未认证，粉丝数无法获取
   account_type: 'service' | 'subscription'
-  verify_type:  number          // -1=未认证, 0=微信认证
-  principal:    string | null
-  limited:      boolean
+  verify_type: number          // -1=未认证, 0=微信认证
+  principal: string | null
+  limited: boolean
 }
 
 export default function AISettings() {
@@ -51,10 +51,10 @@ export default function AISettings() {
   const [activeSection, setActiveSection] = useState<Section>('article')
 
   // ── 永久记忆 ──────────────────────────────────────────────────────────────
-  const [globalMemory, setGlobalMemory]         = useState('')
-  const [memorySaving, setMemorySaving]         = useState(false)
-  const [memorySaved, setMemorySaved]           = useState(false)
-  const [memoryLoadError, setMemoryLoadError]   = useState('')
+  const [globalMemory, setGlobalMemory] = useState('')
+  const [memorySaving, setMemorySaving] = useState(false)
+  const [memorySaved, setMemorySaved] = useState(false)
+  const [memoryLoadError, setMemoryLoadError] = useState('')
 
   const loadGlobalMemory = useCallback(async () => {
     try {
@@ -108,22 +108,22 @@ export default function AISettings() {
     localStorage.removeItem(WX_STORAGE_KEY)
   }
 
-  const [wxBound, setWxBound]           = useState(() => !!loadWxCreds())
-  const [wxAppId, setWxAppId]           = useState('')
+  const [wxBound, setWxBound] = useState(() => !!loadWxCreds())
+  const [wxAppId, setWxAppId] = useState('')
   const [wxBoundAppId, setWxBoundAppId] = useState(() => loadWxCreds()?.appId || '')
-  const [wxAppSecret, setWxAppSecret]   = useState('')
-  const [wxBinding, setWxBinding]       = useState(false)
-  const [wxBindErr, setWxBindErr]       = useState<string | null>(null)
-  const [wxAccount, setWxAccount]       = useState<WechatAccount | null>(null)
-  const [wxLoading, setWxLoading]       = useState(false)
-  const [showSecret, setShowSecret]     = useState(false)
+  const [wxAppSecret, setWxAppSecret] = useState('')
+  const [wxBinding, setWxBinding] = useState(false)
+  const [wxBindErr, setWxBindErr] = useState<string | null>(null)
+  const [wxAccount, setWxAccount] = useState<WechatAccount | null>(null)
+  const [wxLoading, setWxLoading] = useState(false)
+  const [showSecret, setShowSecret] = useState(false)
 
   // 从 localStorage 读取凭据，生成 wechat API 请求 headers
   const getWxHeaders = (): Record<string, string> => {
     const creds = loadWxCreds()
     if (!creds) return {}
     return {
-      'X-Wx-AppId':     creds.appId,
+      'X-Wx-AppId': creds.appId,
       'X-Wx-AppSecret': creds.appSecret,
     }
   }
@@ -152,7 +152,7 @@ export default function AISettings() {
       // 用凭据请求 account 接口验证有效性
       const r = await fetch('/api/wechat/account', {
         headers: {
-          'X-Wx-AppId':     wxAppId.trim(),
+          'X-Wx-AppId': wxAppId.trim(),
           'X-Wx-AppSecret': wxAppSecret.trim(),
         },
       })
@@ -232,13 +232,13 @@ export default function AISettings() {
   const selectedArticlePreset = PROVIDER_PRESETS.find(p => p.id === config.articleProvider)
 
   // ── 配置状态（每个 key 的状态） ──────────────────────────────────────────
-  const localMaas        = config.articleProvider === 'maas' && !!config.maasApiKey
-  const localOpenai      = config.articleProvider !== 'maas' && !!config.articleApiKey
+  const localMaas = config.articleProvider === 'maas' && !!config.maasApiKey
+  const localOpenai = config.articleProvider !== 'maas' && !!config.articleApiKey
   const localSiliconflow = !!config.siliconflowApiKey
-  const localCoverKey    = !!config.coverApiKey
-  const localSearchKey   = config.searchProvider === 'searxng' || !!config.searchApiKey
+  const localCoverKey = !!config.coverApiKey
+  const localSearchKey = config.searchProvider === 'searxng' || !!config.searchApiKey
   const localCdn = (config.cdnProvider === 'imgur' && !!config.imgurClientId)
-               || (config.cdnProvider === 'github' && !!config.githubToken && !!config.githubRepo)
+    || (config.cdnProvider === 'github' && !!config.githubToken && !!config.githubRepo)
 
   const STATUS_CARDS = [
     {
@@ -334,7 +334,7 @@ export default function AISettings() {
             <div className="as-status-label">配置状态</div>
             <div className="as-status-grid">
               {STATUS_CARDS.map(card => {
-                const ok     = card.local || card.server
+                const ok = card.local || card.server
                 const source = card.local ? '本地' : card.server ? card.serverNote : null
                 return (
                   <button
@@ -346,7 +346,7 @@ export default function AISettings() {
                     <div className="as-status-card-top">
                       {ok
                         ? <CheckCircle2 size={13} className="as-sc-icon as-sc-icon--ok" />
-                        : <AlertCircle  size={13} className="as-sc-icon as-sc-icon--off" />
+                        : <AlertCircle size={13} className="as-sc-icon as-sc-icon--off" />
                       }
                       <span className="as-status-card-name">{card.label}</span>
                     </div>
@@ -650,8 +650,8 @@ export default function AISettings() {
                 <div className="as-provider-grid">
                   {[
                     { id: 'searxng', name: 'SearXNG（推荐）', desc: '开源聚合，231 个搜索引擎，无需 Key' },
-                    { id: 'serper',  name: 'Serper.dev',       desc: '支持 Google / 百度，2500 次/月免费' },
-                    { id: 'bing',    name: 'Bing Search',      desc: 'Microsoft，1000 次/月免费' },
+                    { id: 'serper', name: 'Serper.dev', desc: '支持 Google / 百度，2500 次/月免费' },
+                    { id: 'bing', name: 'Bing Search', desc: 'Microsoft，1000 次/月免费' },
                   ].map(p => (
                     <button
                       key={p.id}
@@ -700,8 +700,8 @@ export default function AISettings() {
                     <div className="as-provider-grid">
                       {[
                         { id: 'google', name: 'Google', desc: '全球最大' },
-                        { id: 'baidu',  name: '百度',    desc: '国内最大' },
-                        { id: 'bing',   name: 'Bing',    desc: '微软必应' },
+                        { id: 'baidu', name: '百度', desc: '国内最大' },
+                        { id: 'bing', name: 'Bing', desc: '微软必应' },
                       ].map(e => (
                         <button
                           key={e.id}
@@ -946,9 +946,9 @@ export default function AISettings() {
                 <div className="as-card-section-label">选择图床方案</div>
                 <div className="as-provider-grid">
                   {[
-                    { id: 'none',   name: '不使用',           desc: '图片保存在本机，仅本地可访问' },
+                    { id: 'none', name: '不使用', desc: '图片保存在本机，仅本地可访问' },
                     { id: 'github', name: 'GitHub + jsDelivr', desc: '国内访问快，免费无限制，推荐' },
-                    { id: 'imgur',  name: 'Imgur',             desc: '全球 CDN，国内需代理' },
+                    { id: 'imgur', name: 'Imgur', desc: '全球 CDN，国内需代理' },
                   ].map(p => (
                     <button
                       key={p.id}
