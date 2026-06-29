@@ -177,6 +177,23 @@ db.exec(`
     updated_at      TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS article_scores (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     TEXT NOT NULL,
+    article_id  TEXT NOT NULL,
+    title       TEXT NOT NULL DEFAULT '',
+    platform    TEXT NOT NULL DEFAULT 'wechat',  -- 'wechat' | 'toutiao'
+    views       INTEGER,        -- 浏览量（可选）
+    shares      INTEGER,        -- 转发量（可选）
+    likes       INTEGER,        -- 点赞量（可选）
+    comments    INTEGER,        -- 评论量（可选）
+    composite   REAL,           -- 综合评分（0-100，由系统计算或手动填写）
+    note        TEXT,           -- 备注
+    scored_at   TEXT NOT NULL,  -- 数据录入时间
+    created_at  TEXT NOT NULL,
+    UNIQUE(user_id, article_id, platform)
+  );
+
   CREATE TABLE IF NOT EXISTS cron_logs (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     job_id          TEXT NOT NULL,
@@ -214,6 +231,8 @@ function createIndexes() {
       CREATE INDEX IF NOT EXISTS idx_cron_jobs_user ON cron_jobs(user_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_cron_logs_job ON cron_logs(job_id, started_at DESC);
       CREATE INDEX IF NOT EXISTS idx_cron_logs_user ON cron_logs(user_id, started_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_article_scores_user ON article_scores(user_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_article_scores_article ON article_scores(user_id, article_id);
     `)
   } catch (e) {
     console.warn('[DB] 创建索引失败:', e.message)
@@ -255,6 +274,16 @@ function addMissingColumns() {
     if (!hasReplacesId) {
       db.exec("ALTER TABLE prompts ADD COLUMN replaces_id TEXT")
       console.log('[DB] 添加 prompts.replaces_id 列')
+    }
+
+    // 检查 article_scores 是否有 comments 列（旧版本可能没有）
+    const scoresInfo = db.prepare("PRAGMA table_info(article_scores)").all()
+    if (scoresInfo.length > 0) {
+      const hasComments = scoresInfo.some(col => col.name === 'comments')
+      if (!hasComments) {
+        db.exec("ALTER TABLE article_scores ADD COLUMN comments INTEGER")
+        console.log('[DB] 添加 article_scores.comments 列')
+      }
     }
   } catch (e) {
     console.warn('[DB] 添加缺失列失败:', e.message)
@@ -954,6 +983,137 @@ export function getEffectivePrompt(builtinId) {
     id: builtin.id,
     content: builtin.content,
     isReplacement: false,
+  }
+}
+
+// ── 文章评分 ──────────────────────────────────────────────────────────────────
+
+/**
+ * 保存或更新文章评分（同一用户+文章+平台只保留一条）
+ * @param {object} opts
+ * @param {string} opts.userId
+ * @param {string} opts.articleId
+ * @param {string} opts.title
+ * @param {string} [opts.platform]   - 'wechat' | 'toutiao'
+ * @param {number} [opts.views]
+ * @param {number} [opts.shares]
+ * @param {number} [opts.likes]
+ * @param {number} [opts.comments]
+ * @param {number} [opts.composite]  - 综合评分 0-100（留空则自动计算）
+ * @param {string} [opts.note]
+ */
+export function saveArticleScore({ userId, articleId, title, platform = 'wechat', views, shares, likes, comments, composite, note }) {
+  const now = new Date().toISOString()
+
+  // 自动计算综合评分（若未手动填写）
+  // 权重：浏览量 40% + 点赞 30% + 转发 20% + 评论 10%
+  // 归一化到 0-100，基准：浏览 10000 / 点赞 500 / 转发 200 / 评论 100
+  let calcComposite = composite
+  if (calcComposite == null) {
+    const v = Math.min((views || 0) / 10000, 1) * 40
+    const l = Math.min((likes || 0) / 500, 1) * 30
+    const s = Math.min((shares || 0) / 200, 1) * 20
+    const c = Math.min((comments || 0) / 100, 1) * 10
+    calcComposite = parseFloat((v + l + s + c).toFixed(1))
+  }
+
+  db.prepare(`
+    INSERT INTO article_scores (user_id, article_id, title, platform, views, shares, likes, comments, composite, note, scored_at, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id, article_id, platform) DO UPDATE SET
+      title      = excluded.title,
+      views      = excluded.views,
+      shares     = excluded.shares,
+      likes      = excluded.likes,
+      comments   = excluded.comments,
+      composite  = excluded.composite,
+      note       = excluded.note,
+      scored_at  = excluded.scored_at
+  `).run(
+    userId, articleId, title || '', platform,
+    views ?? null, shares ?? null, likes ?? null, comments ?? null,
+    calcComposite, note || null, now, now
+  )
+
+  return getArticleScore(userId, articleId, platform)
+}
+
+/**
+ * 获取单篇文章的评分（指定平台）
+ */
+export function getArticleScore(userId, articleId, platform = 'wechat') {
+  const row = db.prepare(
+    'SELECT * FROM article_scores WHERE user_id=? AND article_id=? AND platform=?'
+  ).get(userId, articleId, platform)
+  if (!row) return null
+  return _mapScoreRow(row)
+}
+
+/**
+ * 获取某篇文章所有平台的评分
+ */
+export function getArticleScores(userId, articleId) {
+  return db.prepare(
+    'SELECT * FROM article_scores WHERE user_id=? AND article_id=? ORDER BY platform'
+  ).all(userId, articleId).map(_mapScoreRow)
+}
+
+/**
+ * 列出用户所有有评分的文章（按综合评分降序）
+ */
+export function listArticleScores(userId) {
+  return db.prepare(
+    'SELECT * FROM article_scores WHERE user_id=? ORDER BY composite DESC, created_at DESC'
+  ).all(userId).map(_mapScoreRow)
+}
+
+/**
+ * 删除评分
+ */
+export function deleteArticleScore(userId, articleId, platform) {
+  db.prepare(
+    'DELETE FROM article_scores WHERE user_id=? AND article_id=? AND platform=?'
+  ).run(userId, articleId, platform)
+}
+
+/**
+ * 获取用于 RAG 注入的优秀/不优秀文章示例
+ * 返回 { good: [...], bad: [...] }
+ * - good: composite >= goodThreshold（默认 70）
+ * - bad:  composite <= badThreshold（默认 30）
+ * - 每类最多 maxEach 篇，按评分排序
+ */
+export function getExampleArticles(userId, { goodThreshold = 70, badThreshold = 30, maxEach = 3 } = {}) {
+  const good = db.prepare(`
+    SELECT * FROM article_scores
+    WHERE user_id=? AND composite >= ?
+    ORDER BY composite DESC LIMIT ?
+  `).all(userId, goodThreshold, maxEach).map(_mapScoreRow)
+
+  const bad = db.prepare(`
+    SELECT * FROM article_scores
+    WHERE user_id=? AND composite <= ?
+    ORDER BY composite ASC LIMIT ?
+  `).all(userId, badThreshold, maxEach).map(_mapScoreRow)
+
+  return { good, bad }
+}
+
+function _mapScoreRow(row) {
+  return {
+    id:        row.id,
+    userId:    row.user_id,
+    articleId: row.article_id,
+    title:     row.title,
+    platform:  row.platform,
+    views:     row.views,
+    shares:    row.shares,
+    likes:     row.likes,
+    comments:  row.comments,
+    composite: row.composite,
+    note:      row.note,
+    scoredAt:  row.scored_at,
+    createdAt: row.created_at,
   }
 }
 

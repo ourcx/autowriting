@@ -1,0 +1,937 @@
+/* ═══════════════════════════════════════════════════════════
+   ArticleScorePage — Clay design system
+   canvas #fffaf0 · surface-card #f5f0e0 · ink #0a0a0a
+   brand-pink #ff4d8b · brand-teal #1a3a3a · brand-peach #ffb084
+   brand-lavender #b8a4ed · brand-ochre #e8b94a
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Root ── */
+.asp-root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: #fffaf0;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #0a0a0a;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+.asp-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 40px;
+  background: #fffaf0;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+/* ── Header add button ───────────────────────────────────── */
+.asp-btn-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 18px;
+  background: #1a3a3a;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.asp-btn-add:hover {
+  background: #2a5050;
+}
+
+.asp-header-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #0a0a0a;
+  letter-spacing: -0.3px;
+}
+
+/* ── Body ────────────────────────────────────────────────── */
+.asp-body {
+  flex: 1;
+  padding: 48px 40px 96px;
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 48px;
+  box-sizing: border-box;
+}
+
+/* ── Hero band ───────────────────────────────────────────── */
+.asp-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+
+.asp-hero-text {
+  flex: 1;
+  min-width: 260px;
+}
+
+.asp-hero-h1 {
+  font-size: 32px;
+  font-weight: 500;
+  letter-spacing: -0.5px;
+  line-height: 1.15;
+  color: #0a0a0a;
+  margin: 0 0 12px;
+}
+
+.asp-hero-desc {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #3a3a3a;
+  margin: 0;
+}
+
+.asp-hero-desc strong {
+  font-weight: 600;
+  color: #0a0a0a;
+}
+
+/* ── Stats row ───────────────────────────────────────────── */
+.asp-stats-row {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.asp-stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 88px;
+  height: 88px;
+  border-radius: 20px;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.asp-stat-card--teal {
+  background: #1a3a3a;
+  color: #fff;
+}
+
+.asp-stat-card--green {
+  background: rgba(34, 197, 94, 0.12);
+  border: 1.5px solid rgba(34, 197, 94, 0.3);
+  color: #15803d;
+}
+
+.asp-stat-card--pink {
+  background: rgba(255, 77, 139, 0.1);
+  border: 1.5px solid rgba(255, 77, 139, 0.3);
+  color: #be185d;
+}
+
+.asp-stat-num {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+
+.asp-stat-label {
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.75;
+  text-align: center;
+  line-height: 1.3;
+}
+
+/* ── Notice bar ──────────────────────────────────────────── */
+.asp-notice {
+  padding: 13px 18px;
+  background: rgba(232, 185, 74, 0.13);
+  border: 1px solid rgba(232, 185, 74, 0.4);
+  border-radius: 12px;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: #7a5500;
+}
+
+.asp-notice strong {
+  font-weight: 600;
+}
+
+/* ── Section ─────────────────────────────────────────────── */
+.asp-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.asp-section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.asp-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: #9a9a9a;
+}
+
+.asp-section-tip {
+  font-size: 12px;
+  color: #b8a4ed;
+  font-weight: 500;
+}
+
+/* ── Custom badge ────────────────────────────────────────── */
+.asp-badge--custom {
+  background: rgba(184, 164, 237, 0.15);
+  color: #6b4fa0;
+  border: 1px solid rgba(184, 164, 237, 0.4);
+}
+
+/* ── Loading / Empty ─────────────────────────────────────── */
+.asp-loading,
+.asp-empty {
+  font-size: 14px;
+  color: #9a9a9a;
+  padding: 32px 0;
+  text-align: center;
+}
+
+/* ── Article list ────────────────────────────────────────── */
+.asp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── Article card ────────────────────────────────────────── */
+.asp-article-card {
+  background: #fff;
+  border: 1.5px solid #e5e5e5;
+  border-radius: 16px;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.asp-article-card--scored {
+  border-color: #d0c9b5;
+}
+
+.asp-article-card:hover {
+  border-color: #c8c0b0;
+}
+
+/* ── Article head ────────────────────────────────────────── */
+.asp-article-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.asp-article-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.asp-article-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0a0a0a;
+  letter-spacing: -0.2px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.asp-article-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+  flex-wrap: wrap;
+}
+
+.asp-article-id {
+  font-size: 11.5px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: #9a9a9a;
+}
+
+/* ── Badge ───────────────────────────────────────────────── */
+.asp-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 9999px;
+  letter-spacing: 0;
+}
+
+.asp-badge--muted {
+  background: #f5f0e0;
+  color: #9a9a9a;
+  border: 1px solid #e5e5e5;
+}
+
+/* ── Expand button ───────────────────────────────────────── */
+.asp-expand-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: #f5f0e0;
+  color: #6a6a6a;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
+}
+
+.asp-expand-btn:hover {
+  background: #ebe6d6;
+  color: #0a0a0a;
+}
+
+/* ── Article body (expanded) ─────────────────────────────── */
+.asp-article-body {
+  padding: 0 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border-top: 1px solid #f0ebe0;
+}
+
+/* ── Scores grid ─────────────────────────────────────────── */
+.asp-scores-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  padding-top: 16px;
+}
+
+/* ── Score card ──────────────────────────────────────────── */
+.asp-score-card {
+  border-radius: 16px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.asp-score-card--green {
+  background: rgba(34, 197, 94, 0.08);
+  border: 1.5px solid rgba(34, 197, 94, 0.25);
+}
+
+.asp-score-card--ochre {
+  background: rgba(232, 185, 74, 0.1);
+  border: 1.5px solid rgba(232, 185, 74, 0.35);
+}
+
+.asp-score-card--pink {
+  background: rgba(255, 77, 139, 0.07);
+  border: 1.5px solid rgba(255, 77, 139, 0.25);
+}
+
+.asp-score-card--muted {
+  background: #faf5e8;
+  border: 1.5px solid #e5e5e5;
+}
+
+.asp-score-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.asp-score-platform {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.asp-score-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  background: rgba(0,0,0,0.07);
+  color: #3a3a3a;
+}
+
+/* ── Icon buttons ────────────────────────────────────────── */
+.asp-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.12s;
+  flex-shrink: 0;
+}
+
+.asp-icon-btn--edit {
+  background: rgba(0,0,0,0.05);
+  color: #6a6a6a;
+}
+
+.asp-icon-btn--edit:hover {
+  background: rgba(0,0,0,0.1);
+  color: #0a0a0a;
+}
+
+.asp-icon-btn--del {
+  background: rgba(239, 68, 68, 0.07);
+  color: #dc2626;
+}
+
+.asp-icon-btn--del:hover {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+/* ── Score composite ─────────────────────────────────────── */
+.asp-score-composite {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.asp-score-num {
+  font-size: 36px;
+  font-weight: 600;
+  letter-spacing: -1px;
+  line-height: 1;
+}
+
+.asp-score-unit {
+  font-size: 13px;
+  color: #9a9a9a;
+  font-weight: 400;
+}
+
+/* ── Score metrics ───────────────────────────────────────── */
+.asp-score-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.asp-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.asp-metric-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: #9a9a9a;
+  text-transform: uppercase;
+}
+
+.asp-metric-val {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+/* ── Score note ──────────────────────────────────────────── */
+.asp-score-note {
+  font-size: 12px;
+  color: #6a6a6a;
+  line-height: 1.5;
+  padding: 6px 10px;
+  background: rgba(0,0,0,0.04);
+  border-radius: 8px;
+}
+
+/* ── Add row ─────────────────────────────────────────────── */
+.asp-add-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+
+.asp-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+  border: 1.5px solid;
+}
+
+.asp-add-btn--wechat {
+  background: rgba(26, 58, 58, 0.06);
+  border-color: rgba(26, 58, 58, 0.2);
+  color: #1a3a3a;
+}
+
+.asp-add-btn--wechat:hover {
+  background: rgba(26, 58, 58, 0.12);
+  border-color: rgba(26, 58, 58, 0.35);
+}
+
+.asp-add-btn--toutiao {
+  background: rgba(255, 176, 132, 0.15);
+  border-color: rgba(255, 176, 132, 0.45);
+  color: #7a3500;
+}
+
+.asp-add-btn--toutiao:hover {
+  background: rgba(255, 176, 132, 0.25);
+  border-color: rgba(255, 176, 132, 0.6);
+}
+
+.asp-all-scored {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  color: #9a9a9a;
+  padding: 8px 0;
+}
+
+/* ── Form card ───────────────────────────────────────────── */
+.asp-form-card {
+  background: #faf5e8;
+  border: 1.5px solid #e8e2d4;
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.asp-form-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.asp-form-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+/* ── Platform switch ─────────────────────────────────────── */
+.asp-platform-switch {
+  display: flex;
+  gap: 3px;
+  background: #ebe6d6;
+  border-radius: 10px;
+  padding: 3px;
+}
+
+.asp-platform-btn {
+  height: 32px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 500;
+  font-family: inherit;
+  color: #6a6a6a;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.asp-platform-btn:hover {
+  color: #0a0a0a;
+}
+
+.asp-platform-btn--active {
+  background: #fff;
+  color: #0a0a0a;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* ── Form grid ───────────────────────────────────────────── */
+.asp-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px 14px;
+}
+
+@media (max-width: 640px) {
+  .asp-form-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 400px) {
+  .asp-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.asp-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.asp-form-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1a1a1a;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.asp-form-hint {
+  font-size: 11px;
+  font-weight: 400;
+  color: #9a9a9a;
+}
+
+/* ── Input ───────────────────────────────────────────────── */
+.asp-input {
+  height: 44px;
+  padding: 0 14px;
+  border: 1.5px solid #e8e2d4;
+  border-radius: 12px;
+  background: #fffaf0;
+  font-size: 14px;
+  font-weight: 400;
+  color: #0a0a0a;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.asp-input:focus {
+  border-color: #0a0a0a;
+  background: #fff;
+}
+
+.asp-input::placeholder {
+  color: #c0b8a8;
+}
+
+/* ── Form footer ─────────────────────────────────────────── */
+.asp-form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 4px;
+  border-top: 1px solid #e8e2d4;
+}
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.asp-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 44px;
+  padding: 0 22px;
+  background: #0a0a0a;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  letter-spacing: -0.1px;
+  transition: background 0.12s;
+}
+
+.asp-btn-primary:hover:not(:disabled) {
+  background: #1f1f1f;
+}
+
+.asp-btn-primary:disabled {
+  background: #e8e2d4;
+  color: #9a9a9a;
+  cursor: not-allowed;
+}
+
+.asp-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 18px;
+  background: transparent;
+  color: #6a6a6a;
+  border: 1.5px solid #e5e5e5;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+}
+
+.asp-btn-ghost:hover {
+  border-color: #c8c0b0;
+  color: #0a0a0a;
+}
+
+/* ── Guide cards — Clay saturated feature cards ──────────── */
+.asp-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+@media (max-width: 640px) {
+  .asp-guide-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.asp-guide-card {
+  border-radius: 24px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* feature-card-teal: #1a3a3a bg, white text */
+.asp-guide-card--teal {
+  background: #1a3a3a;
+  color: #fff;
+}
+
+/* feature-card-peach: #ffb084 bg, dark text */
+.asp-guide-card--peach {
+  background: #ffb084;
+  color: #2a1200;
+}
+
+/* feature-card-lavender: #b8a4ed bg, dark text */
+.asp-guide-card--lavender {
+  background: #b8a4ed;
+  color: #1a1030;
+}
+
+.asp-guide-step {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  opacity: 0.5;
+}
+
+.asp-guide-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  line-height: 1.3;
+}
+
+.asp-guide-card p {
+  font-size: 13.5px;
+  line-height: 1.7;
+  margin: 0;
+  opacity: 0.82;
+}
+
+/* ── Modal overlay ───────────────────────────────────────── */
+.asp-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(10, 10, 10, 0.45);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+/* ── Modal box ───────────────────────────────────────────── */
+.asp-modal {
+  background: #fffaf0;
+  border-radius: 24px;
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.18);
+  overflow: hidden;
+}
+
+.asp-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 28px 18px;
+  border-bottom: 1px solid #e8e2d4;
+  flex-shrink: 0;
+}
+
+.asp-modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #0a0a0a;
+  letter-spacing: -0.3px;
+}
+
+.asp-modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: #f0ebe0;
+  color: #6a6a6a;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.asp-modal-close:hover {
+  background: #e5e0d0;
+  color: #0a0a0a;
+}
+
+.asp-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.asp-modal-divider {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #9a9a9a;
+  padding-top: 4px;
+  border-top: 1px solid #e8e2d4;
+}
+
+.asp-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 18px 28px;
+  border-top: 1px solid #e8e2d4;
+  flex-shrink: 0;
+}
+
+/* ── Textarea ────────────────────────────────────────────── */
+.asp-textarea {
+  padding: 12px 14px;
+  border: 1.5px solid #e8e2d4;
+  border-radius: 12px;
+  background: #fffaf0;
+  font-size: 13.5px;
+  font-weight: 400;
+  color: #0a0a0a;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  line-height: 1.6;
+  min-height: 120px;
+}
+
+.asp-textarea:focus {
+  border-color: #0a0a0a;
+  background: #fff;
+}
+
+.asp-textarea::placeholder {
+  color: #c0b8a8;
+}
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .asp-header {
+    padding: 0 20px;
+  }
+
+  .asp-body {
+    padding: 32px 20px 64px;
+    gap: 32px;
+  }
+
+  .asp-hero {
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .asp-hero-h1 {
+    font-size: 24px;
+  }
+
+  .asp-stats-row {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .asp-scores-grid {
+    grid-template-columns: 1fr;
+  }
+}

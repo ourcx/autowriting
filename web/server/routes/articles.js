@@ -14,7 +14,7 @@ import path from 'path'
 import axios from 'axios'
 import { DRAFTS_DIR, SERVER_AI_CONFIG, getAgentsContent } from '../config.js'
 import { ensureDir, buildLLMRequest, callLLMWithRetry } from '../utils.js'
-import { retrieveRelevant, formatRetrievedContext } from '../rag.js'
+import { retrieveRelevant, formatRetrievedContext, formatExampleContext } from '../rag.js'
 import { saveAnalysis, getLatestAnalysis, listAnalyses, recordTokenUsage, getEffectivePrompt, getSetting } from '../db.js'
 import { authMiddleware } from '../authMiddleware.js'
 import { triggerBuildIndex } from './rag.js'
@@ -361,6 +361,17 @@ router.post('/:articleId/generate/stream', async (req, res) => {
       send('status', { step: 'rag', message: `已注入 ${selectedRagContext.split('###').length - 1} 篇往期文章` })
     }
 
+    // ── 1b. 评分示例注入（有评分的文章才注入，控制 token 消耗） ──────────────
+    let exampleSection = ''
+    try {
+      exampleSection = await formatExampleContext(req.user.id)
+      if (exampleSection) {
+        send('status', { step: 'examples', message: '已注入历史文章表现参考' })
+      }
+    } catch (e) {
+      // 非致命，忽略
+    }
+
     // ── 2. 读取写作规范 + 数据库提示词 ──────────────────────────────────────
     const agentsContent = getAgentsContent()
 
@@ -388,7 +399,7 @@ router.post('/:articleId/generate/stream', async (req, res) => {
     // ── 公众号 prompt ──────────────────────────────────────────────────────────
     const wechatPrompt = `${streamGenerateInstruction ? streamGenerateInstruction + '\n\n' : ''}# 写作规范（必须严格遵守）
 ${agentsContent}
-${ragSection}${globalMemorySection}
+${ragSection}${exampleSection ? '\n\n' + exampleSection + '\n' : ''}${globalMemorySection}
 # 当前时间
 ${currentDateTime}
 
@@ -402,8 +413,8 @@ ${materials}
 
 现在请直接输出完整的文章内容（纯 Markdown，只有 1 个 H1，所有 H2 带 emoji）：`
 
-    // ── 今日头条 prompt（不注入 RAG，使用相同素材但不同提示词）──────────────
-    const toutiaoPrompt = `${toutiaoInstruction ? toutiaoInstruction + '\n\n' : ''}${globalMemorySection}
+    // ── 今日头条 prompt（注入评分示例，不注入 RAG）──────────────────────────
+    const toutiaoPrompt = `${toutiaoInstruction ? toutiaoInstruction + '\n\n' : ''}${exampleSection ? exampleSection + '\n\n' : ''}${globalMemorySection}
 # 当前时间
 ${currentDateTime}
 

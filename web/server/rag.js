@@ -32,7 +32,7 @@ const LOCAL_EMBED_MODEL = 'Xenova/multilingual-e5-small'
 // ── 检索默认参数 ───────────────────────────────────────────────────────────────
 // 可通过 retrieveRelevant 的 options 覆盖
 const DEFAULT_SCORE_THRESHOLD = 0.72  // 相似度阈值：越低越严格（距离值，< 阈值才保留）
-const DEFAULT_TOP_K           = 5     // 默认召回 chunk 数
+const DEFAULT_TOP_K           = 10     // 默认召回 chunk 数
 const KEYWORD_WEIGHT          = 0.3   // 关键词分数在混合排序中的权重（0～1）
 
 // ── 索引目录 ──────────────────────────────────────────────────────────────────
@@ -707,6 +707,91 @@ export function formatRetrievedContext(docs) {
     return `### 参考${i + 1}（${meta}）\n${d.content}`
   })
   return `# 往期相关内容参考（自动检索，仅供风格和结构参考）\n\n${parts.join('\n\n---\n\n')}`
+}
+
+// ── 评分示例注入：读取有评分的文章内容，格式化为 prompt 片段 ─────────────────
+//
+// 设计原则（控制 token 消耗）：
+//   1. 只取优秀（composite >= 70）和不优秀（composite <= 30）各最多 2 篇
+//   2. 每篇文章内容截取前 600 字（约 400 token），避免超长
+//   3. 只注入文章正文（article_raw.md），不注入 task/materials
+//   4. 若无任何有评分文章，返回空字符串，不注入
+//
+// 返回格式化好的 prompt 字符串，直接拼入 userPrompt
+
+export async function formatExampleContext(userId, draftsDir) {
+  try {
+    const { getExampleArticles } = await import('./db.js')
+    const { good, bad } = getExampleArticles(userId, { goodThreshold: 70, badThreshold: 30, maxEach: 2 })
+
+    if (!good.length && !bad.length) return ''
+
+    const parts = []
+
+    // 读取文章内容（截取前 600 字）
+    function readArticleSnippet(articleId, dir) {
+      const articleDir = dir || path.join(DATA_DIR, '..', '公众号写作', 'drafts', userId)
+      // 尝试用户草稿目录
+      const userDraftsDir = draftsDir || path.join(DATA_DIR, 'drafts', String(userId))
+      const candidates = [
+        path.join(userDraftsDir, articleId, 'raw', 'article_raw.md'),
+        path.join(userDraftsDir, articleId.substring(0, 8), 'raw', 'article_raw.md'),
+      ]
+      for (const p of candidates) {
+        if (fs.existsSync(p)) {
+          const raw = fs.readFileSync(p, 'utf-8')
+          const cleaned = cleanText(raw)
+          return cleaned.slice(0, 600)
+        }
+      }
+      return null
+    }
+
+    if (good.length) {
+      const goodParts = []
+      for (const s of good) {
+        const snippet = readArticleSnippet(s.articleId)
+        if (!snippet) continue
+        const meta = [
+          s.platform === 'wechat' ? '公众号' : '今日头条',
+          s.views != null ? `浏览 ${s.views}` : null,
+          s.likes != null ? `点赞 ${s.likes}` : null,
+          s.shares != null ? `转发 ${s.shares}` : null,
+          `综合评分 ${s.composite}`,
+        ].filter(Boolean).join(' · ')
+        goodParts.push(`#### 优秀示例：${s.title}（${meta}）\n${snippet}`)
+      }
+      if (goodParts.length) {
+        parts.push(`### 高表现文章（请参考其写作风格、结构和表达方式）\n\n${goodParts.join('\n\n')}`)
+      }
+    }
+
+    if (bad.length) {
+      const badParts = []
+      for (const s of bad) {
+        const snippet = readArticleSnippet(s.articleId)
+        if (!snippet) continue
+        const meta = [
+          s.platform === 'wechat' ? '公众号' : '今日头条',
+          s.views != null ? `浏览 ${s.views}` : null,
+          s.likes != null ? `点赞 ${s.likes}` : null,
+          s.shares != null ? `转发 ${s.shares}` : null,
+          `综合评分 ${s.composite}`,
+        ].filter(Boolean).join(' · ')
+        badParts.push(`#### 低表现示例：${s.title}（${meta}）\n${snippet}`)
+      }
+      if (badParts.length) {
+        parts.push(`### 低表现文章（请避免其写作风格和结构问题）\n\n${badParts.join('\n\n')}`)
+      }
+    }
+
+    if (!parts.length) return ''
+
+    return `# 历史文章表现参考（基于真实数据，请学习优秀示例、规避低表现模式）\n\n${parts.join('\n\n---\n\n')}`
+  } catch (e) {
+    console.warn('[RAG] formatExampleContext 失败:', e.message)
+    return ''
+  }
 }
 
 // ── 索引状态 ──────────────────────────────────────────────────────────────────

@@ -29,6 +29,7 @@ import monitoringRouter from './server/routes/monitoring.js'
 import promptsRouter    from './server/routes/prompts.js'
 import cronRouter        from './server/routes/cron.js'
 import toutiaoRouter    from './server/routes/toutiao.js'
+import scoresRouter      from './server/routes/scores.js'
 
 // Cron 调度器
 import { initCronScheduler } from './server/cronEngine.js'
@@ -96,6 +97,7 @@ app.use('/api/monitoring', monitoringRouter) // 日志和监控（仅管理员�
 app.use('/api/prompts',    promptsRouter)   // 提示词管理
 app.use('/api/cron',       cronRouter)      // 定时任务管理
 app.use('/api/toutiao',    toutiaoRouter)   // 今日头条自动推送
+app.use('/api/scores',     scoresRouter)    // 文章评分管理
 
 // ── 杂项接口 ──────────────────────────────────────────────────────────────────
 
