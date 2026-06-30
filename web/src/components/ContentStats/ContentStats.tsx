@@ -137,7 +137,7 @@ function runChecks(text: string, title?: string) {
   const hasWrongQuotes = WRONG_QUOTES.some(q => text.includes(q))
   const hasWrongDash   = text.includes(WRONG_DASH)
   const hasWrongEllip  = text.includes(WRONG_ELLIP)
-  const wordCount      = text.replace(/[#*`\[\]()]/g, '').trim().length
+  const wordCount      = text.replace(/[#*`[\]()]/g, '').trim().length
   const hasData        = /\d+[%万元个人次分钟年月]/.test(text)
   const hasFirstPerson = text.includes('我')
   const hasHeadings    = /^#{1,6}\s/m.test(text)
@@ -419,7 +419,7 @@ function DynamicUIBlocks({
 // ── 主组件 ────────────────────────────────────────────────────────────────────
 
 export default function ContentStats({ content, title, articleId, task, onArticleChange }: ContentStatsProps) {
-  const wordCount   = content.replace(/[#*`\[\]()]/g, '').trim().length
+  const wordCount   = content.replace(/[#*`[\]()]/g, '').trim().length
   const readingTime = Math.ceil(wordCount / 200)
   const headings    = content.split('\n').reduce<Array<{ level: number; title: string }>>((acc, line) => {
     const m = line.match(/^(#{1,6})\s+(.+?)$/)
@@ -552,8 +552,6 @@ export default function ContentStats({ content, title, articleId, task, onArticl
 
   // 流式分析进度文字
   const [analyzeProgress, setAnalyzeProgress] = useState<string>('')
-  // 流式 JSON 累积文本（用于实时预览）
-  const [streamText, setStreamText]           = useState<string>('')
 
   const handleAnalyze = async () => {
     if (!articleId || content.trim().length < 100) {
@@ -564,7 +562,6 @@ export default function ContentStats({ content, title, articleId, task, onArticl
     setError(null)
     setResult(null)
     setAnalyzeProgress('')
-    setStreamText('')
 
     try {
       const aiConfig = loadAIConfig()
@@ -608,7 +605,6 @@ export default function ContentStats({ content, title, articleId, task, onArticl
               setAnalyzeProgress(payload.message as string)
             } else if (evt === 'chunk') {
               accumulated += payload.text as string
-              setStreamText(accumulated)
             } else if (evt === 'partial-result') {
               // 增量更新：流式渲染已解析的部分
               setResult(prev => ({
@@ -620,7 +616,6 @@ export default function ContentStats({ content, title, articleId, task, onArticl
               }))
             } else if (evt === 'result') {
               setResult(payload as unknown as AnalysisResult)
-              setStreamText('')
               setAnalyzeProgress('')
               setSaved(true)
               setTimeout(() => setSaved(false), 3000)

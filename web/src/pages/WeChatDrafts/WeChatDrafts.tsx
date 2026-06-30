@@ -182,7 +182,7 @@ export default function WeChatDrafts() {
       const mdContent = d.content ? htmlToMarkdown(d.content) : ''
       const dateStr   = new Date().toISOString().slice(0, 10).replace(/-/g, '')
       const slug      = item.title.replace(/[^\w\u4e00-\u9fff]/g, '').substring(0, 20)
-      const articleId = `${dateStr}-${slug || Date.now()}`
+      const articleId = `${dateStr}-${slug || Date.now()}` // eslint-disable-line react-hooks/purity
       const token     = localStorage.getItem('auth_token')
       const saveR = await fetch(`/api/articles/${articleId}`, {
         method: 'POST',

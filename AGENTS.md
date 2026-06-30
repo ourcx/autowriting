@@ -25,6 +25,7 @@
 - Web 构建：`pnpm --dir web build`
 - Electron 打包：`pnpm --dir web electron:build`
 - 原生模块重编译：`pnpm --dir web rebuild:native`
+- 执行 lint 检查：`pnpm --dir web lint` `pnpm --dir web lint:fix`
 
 ## 测试命令
 

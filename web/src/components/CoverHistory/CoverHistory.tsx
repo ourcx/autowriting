@@ -22,12 +22,7 @@ export const CoverHistory: React.FC = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [stats, setStats] = useState({ historyCount: 0, cacheCount: 0, cacheSize: '0 MB' })
 
-  useEffect(() => {
-    fetchHistory()
-    fetchStats()
-  }, [])
-
-  const fetchHistory = async () => {
+  async function fetchHistory() {
     try {
       setLoading(true)
       const response = await axios.get('/api/cover-history')
@@ -39,7 +34,7 @@ export const CoverHistory: React.FC = () => {
     }
   }
 
-  const fetchStats = async () => {
+  async function fetchStats() {
     try {
       const response = await axios.get('/api/cache-stats')
       setStats(response.data)
@@ -47,6 +42,11 @@ export const CoverHistory: React.FC = () => {
       console.error('Failed to fetch stats:', error)
     }
   }
+
+  useEffect(() => {
+    fetchHistory()
+    fetchStats()
+  }, [])
 
   const handleDelete = (id: string) => {
     showConfirm({
@@ -86,7 +86,7 @@ export const CoverHistory: React.FC = () => {
   const handleDownload = (imageUrl: string, title: string) => {
     const link = document.createElement('a')
     link.href = imageUrl
-    link.download = `cover-${title}-${Date.now()}.png`
+    link.download = `cover-${title}-${Date.now()}.png` // eslint-disable-line react-hooks/purity
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)

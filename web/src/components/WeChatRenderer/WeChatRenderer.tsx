@@ -357,7 +357,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
   // 今日头条：轮询 Chromium 安装状态，直到 ready 或 failed
   useEffect(() => {
     if (platformMode !== 'toutiao') return
-    let timer: ReturnType<typeof setInterval>
+    let timer: ReturnType<typeof setInterval> | undefined // eslint-disable-line prefer-const
     const authHeader = { 'Authorization': `Bearer ${localStorage.getItem('auth_token') ?? ''}` }
 
     const poll = async () => {

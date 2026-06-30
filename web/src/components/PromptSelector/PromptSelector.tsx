@@ -31,11 +31,7 @@ export default function PromptSelector({ onSelect, onClose, category }: PromptSe
   const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null)
   const [showPreview, setShowPreview] = useState(false)
 
-  useEffect(() => {
-    fetchPrompts()
-  }, [])
-
-  const fetchPrompts = async () => {
+  async function fetchPrompts() {
     try {
       setLoading(true)
       const res = await fetch('/api/prompts/list')
@@ -49,6 +45,10 @@ export default function PromptSelector({ onSelect, onClose, category }: PromptSe
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    fetchPrompts()
+  }, [])
 
   const filteredPrompts = prompts.filter(p => {
     const matchCategory = selectedCategory === 'all' || p.category === selectedCategory

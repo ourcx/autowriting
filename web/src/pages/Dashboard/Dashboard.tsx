@@ -97,6 +97,17 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
   const [migrating, setMigrating] = useState(false)
   const titleRef = useRef<HTMLInputElement>(null)
 
+  async function loadArticles() {
+    try {
+      setLoading(true)
+      setArticles(await fetchArticleList())
+    } catch (e) {
+      console.error('加载文章失败', e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
     loadArticles()
     setLocalArticles(loadLocalArticles())
@@ -118,28 +129,11 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
     }
   }
 
-  const loadArticles = async () => {
-    try {
-      setLoading(true)
-      setArticles(await fetchArticleList())
-    } catch (e) {
-      console.error('加载文章失败', e)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handleCreate = () => {
     const dateStr = newDate.replace(/-/g, '')
     const title = titleRef.current?.value.trim() || ''
-    let articleId = dateStr
-
-    if (title) {
-      const slug = title.replace(/[^\w\u4e00-\u9fff]/g, '').substring(0, 20)
-      articleId = `${dateStr}-${slug}`
-    } else {
-      articleId = `${dateStr}-${Date.now()}`
-    }
+    const slug = title ? title.replace(/[^\w\u4e00-\u9fff]/g, '').substring(0, 20) : ''
+    const articleId = slug ? `${dateStr}-${slug}` : `${dateStr}-${Date.now()}`
 
     if (storageMode === 'local') {
       // 本地存储：articleId 加 local: 前缀

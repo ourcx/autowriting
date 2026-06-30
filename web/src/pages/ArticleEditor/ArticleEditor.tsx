@@ -85,6 +85,68 @@ export default function ArticleEditor() {
   // 首次挂载时拉一次服务端状态
   useEffect(() => { fetchServerStatus() }, [])
 
+  // ── 本地文章读写（local: 前缀） ───────────────────────────────────────────
+  const isLocalArticle = articleId.startsWith('local:')
+  const localStorageKey = `local_article_data_${articleId}`
+
+  function loadLocalData(): ArticleData {
+    try {
+      return JSON.parse(localStorage.getItem(localStorageKey) || 'null') || { task: '', materials: '', article: '', title: '', articleToutiao: '' }
+    } catch {
+      return { task: '', materials: '', article: '', title: '', articleToutiao: '' }
+    }
+  }
+
+  function saveLocalData(d: ArticleData) {
+    localStorage.setItem(localStorageKey, JSON.stringify(d))
+    // 同步更新本地文章列表中的标题
+    const title = d.title || d.article.split('\n')[0]?.replace(/^#+\s*/, '') || ''
+    if (title) {
+      const articles: Array<{ id: string; title: string }> = JSON.parse(localStorage.getItem('local_articles') || '[]')
+      const updated = articles.map(a => a.id === articleId ? { ...a, title, status: d.article ? 'generated' : 'draft' } : a)
+      localStorage.setItem('local_articles', JSON.stringify(updated))
+    }
+  }
+
+  async function fetchArticleData() {
+    try {
+      setLoading(true)
+      if (isLocalArticle) {
+        setData(loadLocalData())
+      } else {
+        const d = await fetchArticle(articleId)
+        setData(d)
+      }
+    } catch (err) {
+      console.error('加载文章失败', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleSave() {
+    try {
+      if (isLocalArticle) {
+        saveLocalData(data)
+        toast.success('已保存到本地')
+      } else {
+        await saveArticle(articleId, data)
+        toast.success('保存成功')
+      }
+    } catch {
+      toast.error('保存失败，请重试')
+    }
+  }
+
+  function handleGenerate() {
+    if (!apiKeyReady) {
+      setGenerateError('未配置 AI API Key，请先前往「AI 配置」页面填写后再生成。')
+      return
+    }
+    setGenerateError(null)
+    setShowGenerateModal(true)
+  }
+
   useEffect(() => {
     if (!articleId) return
     fetchArticleData()
@@ -111,45 +173,6 @@ export default function ArticleEditor() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [data.task, data.materials, data.article, articleId])
-
-  // ── 本地文章读写（local: 前缀） ───────────────────────────────────────────
-  const isLocalArticle = articleId.startsWith('local:')
-  const localStorageKey = `local_article_data_${articleId}`
-
-  function loadLocalData(): ArticleData {
-    try {
-      return JSON.parse(localStorage.getItem(localStorageKey) || 'null') || { task: '', materials: '', article: '', title: '', articleToutiao: '' }
-    } catch {
-      return { task: '', materials: '', article: '', title: '', articleToutiao: '' }
-    }
-  }
-
-  function saveLocalData(d: ArticleData) {
-    localStorage.setItem(localStorageKey, JSON.stringify(d))
-    // 同步更新本地文章列表中的标题
-    const title = d.title || d.article.split('\n')[0]?.replace(/^#+\s*/, '') || ''
-    if (title) {
-      const articles: Array<{ id: string; title: string }> = JSON.parse(localStorage.getItem('local_articles') || '[]')
-      const updated = articles.map(a => a.id === articleId ? { ...a, title, status: d.article ? 'generated' : 'draft' } : a)
-      localStorage.setItem('local_articles', JSON.stringify(updated))
-    }
-  }
-
-  const fetchArticleData = async () => {
-    try {
-      setLoading(true)
-      if (isLocalArticle) {
-        setData(loadLocalData())
-      } else {
-        const d = await fetchArticle(articleId)
-        setData(d)
-      }
-    } catch (err) {
-      console.error('加载文章失败', err)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   // ── AI：生成大纲 → 追加到 materials ─────────────────────────────────────
   const handleGenerateOutline = async () => {
@@ -207,29 +230,6 @@ export default function ArticleEditor() {
       toast.error(e instanceof Error ? e.message : '整理素材失败')
     }
     setRefiningMaterials(false)
-  }
-
-  const handleSave = async () => {
-    try {
-      if (isLocalArticle) {
-        saveLocalData(data)
-        toast.success('已保存到本地')
-      } else {
-        await saveArticle(articleId, data)
-        toast.success('保存成功')
-      }
-    } catch {
-      toast.error('保存失败，请重试')
-    }
-  }
-
-  const handleGenerate = () => {
-    if (!apiKeyReady) {
-      setGenerateError('未配置 AI API Key，请先前往「AI 配置」页面填写后再生成。')
-      return
-    }
-    setGenerateError(null)
-    setShowGenerateModal(true)
   }
 
   const handleGenerateComplete = (article: string, articleToutiao: string, platforms: 'both' | 'wechat' | 'toutiao') => {

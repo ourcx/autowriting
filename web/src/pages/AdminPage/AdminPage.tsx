@@ -49,8 +49,6 @@ export default function AdminPage() {
   const [resetLoading, setResetLoading] = useState(false)
   const [resetError, setResetError] = useState('')
 
-  useEffect(() => { fetchUsers() }, [])
-
   async function fetchUsers() {
     setLoading(true)
     setError('')
@@ -63,6 +61,8 @@ export default function AdminPage() {
       setLoading(false)
     }
   }
+
+  useEffect(() => { fetchUsers() }, [])
 
   async function toggleDisable(u: UserRow) {
     try {
