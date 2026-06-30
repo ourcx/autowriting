@@ -70,6 +70,19 @@ alwaysApply: true
 
 格式：`type: description`（`feat` / `fix` / `docs` / `refactor`）
 
+提交会被 [`.husky/commit-msg`](.husky/commit-msg) 校验，不符合 Conventional Commits 直接 reject。
+
+## 提交前自检（必跑）
+
+```bash
+pnpm --dir web verify     # lint + arch-check + typecheck:changed + build
+pnpm --dir web smoke      # 改 API 契约/鉴权/关键路由后追加
+```
+
+`pre-commit` 钩子会自动跑 [`web/scripts/lint-file.mjs`](web/scripts/lint-file.mjs)（暂存文件）+ [`web/scripts/arch-check.mjs`](web/scripts/arch-check.mjs)（结构规则）。
+ESLint 错误信息均含 `❌ 问题 | ✅ FIX | 📖 see docs` 三段式，按指引修。
+存量违规已记录在 [`web/scripts/arch-baseline.json`](web/scripts/arch-baseline.json)，新文件 0 容忍。
+
 ## 端口约定
 
 - 后端：3000

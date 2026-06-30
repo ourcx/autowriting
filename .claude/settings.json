@@ -1,0 +1,46 @@
+{
+  "_doc": "Claude Code 项目级配置。PostToolUse hook 让 Agent 每次写完文件后立刻拿到 lint/arch 反馈，反馈延迟从'提交后'缩短到'编辑后'。",
+  "_doc_design": "三层反馈：编辑时(本文件) → 提交时(.husky) → CI兜底(pnpm verify)",
+
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE_PATH=$(echo \"$CLAUDE_TOOL_INPUT\" | grep -oE '\"(file_path|path)\"\\s*:\\s*\"[^\"]+\"' | head -n1 | sed -E 's/.*:\\s*\"([^\"]+)\"/\\1/'); if echo \"$FILE_PATH\" | grep -qE '^(.*/)?(web/(src|server)|web/server\\.js).*\\.(ts|tsx|js|mjs|cjs)$'; then echo \"[harness] lint $FILE_PATH\"; (cd \"$CLAUDE_PROJECT_DIR/web\" && node scripts/lint-file.mjs \"$FILE_PATH\") || true; fi",
+            "timeout": 30000
+          },
+          {
+            "type": "command",
+            "command": "FILE_PATH=$(echo \"$CLAUDE_TOOL_INPUT\" | grep -oE '\"(file_path|path)\"\\s*:\\s*\"[^\"]+\"' | head -n1 | sed -E 's/.*:\\s*\"([^\"]+)\"/\\1/'); if echo \"$FILE_PATH\" | grep -qE '^(.*/)?(web/server/routes/|web/src/(components|pages|store)/)'; then (cd \"$CLAUDE_PROJECT_DIR/web\" && node scripts/arch-check.mjs) || true; fi",
+            "timeout": 15000
+          }
+        ]
+      }
+    ]
+  },
+
+  "permissions": {
+    "allow": [
+      "Bash(pnpm --dir web *)",
+      "Bash(cd web && node scripts/*)",
+      "Bash(cd web && npx eslint *)",
+      "Bash(cd web && npx tsc *)",
+      "Bash(git diff*)",
+      "Bash(git status*)",
+      "Bash(git log*)",
+      "Bash(git add *)",
+      "Bash(node web/scripts/*)"
+    ],
+    "deny": [
+      "Bash(rm -rf*)",
+      "Bash(*sudo*)",
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(web/.env)",
+      "Read(web/.env.*)"
+    ]
+  }
+}

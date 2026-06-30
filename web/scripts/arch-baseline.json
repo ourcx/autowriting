@@ -1,0 +1,63 @@
+{
+  "_doc": "Harness Engineering 存量豁免清单。格式：'<相对仓库根路径>::<rule>'。新增违规禁止加入，必须修复。",
+  "_rules": [
+    "route-auth-missing：路由未挂 authMiddleware（可能是逐路由 adminMiddleware，或确实缺鉴权）",
+    "route-direct-db：路由直连 sqlite",
+    "component-import-store：组件 import store",
+    "component-import-page：组件反向引 page",
+    "page-bare-fetch：页面/组件裸 fetch（应走 apiHelpers）",
+    "route-too-big：路由文件超 800 行"
+  ],
+  "_cleanup_priority": {
+    "P0_security": [
+      "web/server/routes/covers.js::route-auth-missing",
+      "web/server/routes/images.js::route-auth-missing",
+      "web/server/routes/settings.js::route-auth-missing",
+      "web/server/routes/style.js::route-auth-missing",
+      "web/server/routes/templates.js::route-auth-missing",
+      "web/server/routes/wechat.js::route-auth-missing"
+    ],
+    "P1_consistency": [
+      "web/server/routes/admin.js::route-auth-missing",
+      "web/server/routes/monitoring.js::route-auth-missing",
+      "web/server/routes/prompts.js::route-auth-missing",
+      "web/server/routes/publish.js::route-auth-missing",
+      "web/server/routes/toutiao.js::route-auth-missing"
+    ],
+    "P2_refactor": "page-bare-fetch 系列：逐步替换为 apiHelpers，先做 6 个高频组件"
+  },
+  "violations": [
+    "web/server/routes/articles.js::route-too-big",
+    "web/server/routes/toutiao.js::route-too-big",
+    "web/server/routes/wechat.js::route-too-big",
+    "web/server/routes/admin.js::route-auth-missing",
+    "web/server/routes/covers.js::route-auth-missing",
+    "web/server/routes/images.js::route-auth-missing",
+    "web/server/routes/monitoring.js::route-auth-missing",
+    "web/server/routes/prompts.js::route-auth-missing",
+    "web/server/routes/publish.js::route-auth-missing",
+    "web/server/routes/settings.js::route-auth-missing",
+    "web/server/routes/style.js::route-auth-missing",
+    "web/server/routes/templates.js::route-auth-missing",
+    "web/server/routes/toutiao.js::route-auth-missing",
+    "web/server/routes/wechat.js::route-auth-missing",
+    "web/src/components/ContentStats/ContentStats.tsx::page-bare-fetch",
+    "web/src/components/CoverGenerator/CoverGenerator.tsx::page-bare-fetch",
+    "web/src/components/GenerateModal/GenerateModal.tsx::page-bare-fetch",
+    "web/src/components/ImageLibrary/ImageLibrary.tsx::page-bare-fetch",
+    "web/src/components/MarkdownEditor/MarkdownEditor.tsx::page-bare-fetch",
+    "web/src/components/MaterialsCollector/MaterialsCollector.tsx::page-bare-fetch",
+    "web/src/components/PrivateRoute/PrivateRoute.tsx::component-import-store",
+    "web/src/components/PromptSelector/PromptSelector.tsx::page-bare-fetch",
+    "web/src/components/WeChatRenderer/WeChatRenderer.tsx::page-bare-fetch",
+    "web/src/pages/AISettings/AISettings.tsx::page-bare-fetch",
+    "web/src/pages/ArticleEditor/ArticleEditor.tsx::page-bare-fetch",
+    "web/src/pages/ArticleScorePage/ArticleScorePage.tsx::page-bare-fetch",
+    "web/src/pages/Dashboard/Dashboard.tsx::page-bare-fetch",
+    "web/src/pages/PromptsPage/PromptsPage.tsx::page-bare-fetch",
+    "web/src/pages/RagPage/RagPage.tsx::page-bare-fetch",
+    "web/src/pages/StyleEditor/StyleEditor.tsx::page-bare-fetch",
+    "web/src/pages/TokenUsagePage/TokenUsagePage.tsx::page-bare-fetch",
+    "web/src/pages/WeChatDrafts/WeChatDrafts.tsx::page-bare-fetch"
+  ]
+}

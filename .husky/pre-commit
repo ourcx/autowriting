@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# ───────────────────────────────────────────────────────────────────────
+# pre-commit hook —— Harness 提交时反馈
+#
+# 提交时拦截策略：
+#   1. 改动文件 lint（ESLint 单文件，快）
+#   2. arch-check（规则面向模式，极快）
+#   3. typecheck:changed（仅改动 .ts/.tsx，中等）
+#
+# 失败时 commit 被阻断，错误消息内嵌 FIX 指引。
+#
+# 启用方式（已用 `git config core.hooksPath .husky` 启用）：
+#   git config core.hooksPath .husky
+#
+# 紧急绕过：git commit --no-verify （仅在确实必要时使用，并在 PR 中说明）
+# ───────────────────────────────────────────────────────────────────────
+
+set -e
+
+# 颜色
+R='\033[0;31m'; G='\033[0;32m'; Y='\033[1;33m'; N='\033[0m'
+
+echo -e "${Y}[harness/pre-commit]${N} 收集改动文件 ..."
+CHANGED=$(git diff --cached --name-only --diff-filter=ACMRTUXB)
+
+if [ -z "$CHANGED" ]; then
+  echo "  没有暂存的改动，跳过"
+  exit 0
+fi
+
+# 1. lint 改动文件（只跑 web/ 范围内的）
+WEB_FILES=$(echo "$CHANGED" | grep -E '^web/.*\.(ts|tsx|js|mjs|cjs)$' || true)
+if [ -n "$WEB_FILES" ]; then
+  echo -e "${Y}[harness]${N} lint 改动文件 ..."
+  # 转成相对 web/ 路径
+  REL=$(echo "$WEB_FILES" | sed 's|^web/||' | tr '\n' ' ')
+  if ! (cd web && npx eslint --no-warn-ignored $REL); then
+    echo -e "${R}❌ ESLint 阻断 commit${N}"
+    echo "📖 修复方法：根据上面输出的 message 调整，详见 docs/agents/conventions.md"
+    exit 1
+  fi
+fi
+
+# 2. arch-check（无论改了什么，都跑一次，反正极快）
+echo -e "${Y}[harness]${N} arch-check ..."
+if ! (cd web && node scripts/arch-check.mjs); then
+  echo -e "${R}❌ arch-check 阻断 commit${N}"
+  exit 1
+fi
+
+# 3. typecheck 改动的 .ts/.tsx
+TS_FILES=$(echo "$CHANGED" | grep -E '^web/src/.*\.(ts|tsx)$' || true)
+if [ -n "$TS_FILES" ]; then
+  echo -e "${Y}[harness]${N} typecheck:changed ..."
+  if ! (cd web && node scripts/typecheck-changed.mjs); then
+    echo -e "${R}❌ typecheck:changed 阻断 commit${N}"
+    exit 1
+  fi
+fi
+
+echo -e "${G}✅ [harness] pre-commit 全部通过${N}"
