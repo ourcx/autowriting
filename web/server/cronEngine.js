@@ -16,7 +16,7 @@ import {
   updateCronJobRunStats,
   getSetting,
 } from './db.js'
-import { SERVER_AI_CONFIG, DRAFTS_DIR, getAgentsContent } from './config.js'
+import { SERVER_AI_CONFIG, DRAFTS_DIR, getWritingGuideContent } from './config.js'
 import { buildLLMRequest, callLLMWithRetry } from './utils.js'
 import { ensureDir } from './utils.js'
 
@@ -121,7 +121,9 @@ async function fetchTrending(job, aiConfig) {
 // ── 步骤 2：生成文章 ─────────────────────────────────────────────────────────
 
 async function generateArticle(topic, aiConfig) {
-  const agentsContent = getAgentsContent()
+  // 写作规范：可选注入，没配置就跳过整段
+  const writingGuide = getWritingGuideContent()
+  const writingGuideSection = writingGuide ? `# 写作规范（必须严格遵守）\n${writingGuide}\n\n` : ''
   const { url, model, headers } = buildLLMRequest(aiConfig)
   const today = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
 
@@ -134,10 +136,7 @@ async function generateArticle(topic, aiConfig) {
       },
       {
         role: 'user',
-        content: `# 写作规范（必须严格遵守）
-${agentsContent}
-
-# 今日选题
+        content: `${writingGuideSection}# 今日选题
 ${topic}
 
 # 写作要求

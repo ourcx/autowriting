@@ -18,7 +18,7 @@
 - 路由变更必须同步 [`web/src/App.tsx`](web/src/App.tsx)
 
 ## 后端
-
+ 
 - **禁 console.\***：catch 块统一 `logger.error('MODULE', '描述', { error: error.message })`；可预期非致命用 `logger.warn`；调试输出用 `logger.debug`
 - 唯一入口原则：文件路径 → `config.js`、SQLite → `db.js`、日志 → `logger.js`
 - API 响应格式：成功直接返对象/数组；成功无数据 `{ success: true }`；失败 `{ error: '可读消息' }` + 对应 HTTP 状态码

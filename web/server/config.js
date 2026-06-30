@@ -52,28 +52,31 @@ if (!IS_ELECTRON || ELECTRON_USER_DATA === '') {
 
 // ── 路径常量 ─────────────────────────────────────────────────────────────────
 
-let PROJECT_ROOT_DEFAULT, DATA_DIR_DEFAULT, DRAFTS_DIR_DEFAULT, AGENTS_FILE_DEFAULT
+let PROJECT_ROOT_DEFAULT, DATA_DIR_DEFAULT, DRAFTS_DIR_DEFAULT, AGENTS_FILE_DEFAULT, WRITING_GUIDE_FILE_DEFAULT
 
 if (IS_ELECTRON && ELECTRON_USER_DATA) {
   // Electron 模式：数据存放在系统 userData 目录
   // Mac: ~/Library/Application Support/autowriting
   // Win: %APPDATA%/autowriting
-  PROJECT_ROOT_DEFAULT = ELECTRON_USER_DATA
-  DATA_DIR_DEFAULT     = path.join(ELECTRON_USER_DATA, 'data')
-  DRAFTS_DIR_DEFAULT   = path.join(ELECTRON_DOCUMENTS, 'autowriting', 'drafts')
-  AGENTS_FILE_DEFAULT  = path.join(ELECTRON_USER_DATA, 'AGENTS.md')
+  PROJECT_ROOT_DEFAULT       = ELECTRON_USER_DATA
+  DATA_DIR_DEFAULT           = path.join(ELECTRON_USER_DATA, 'data')
+  DRAFTS_DIR_DEFAULT         = path.join(ELECTRON_DOCUMENTS, 'autowriting', 'drafts')
+  AGENTS_FILE_DEFAULT        = path.join(ELECTRON_USER_DATA, 'AGENTS.md')
+  WRITING_GUIDE_FILE_DEFAULT = path.join(ELECTRON_USER_DATA, '写作规范.md')
 } else {
   // 普通 Web 模式：路径相对于项目根目录
-  PROJECT_ROOT_DEFAULT = path.join(WEB_DIR, '..')
-  DATA_DIR_DEFAULT     = path.join(PROJECT_ROOT_DEFAULT, '.cache')
-  DRAFTS_DIR_DEFAULT   = path.join(PROJECT_ROOT_DEFAULT, '公众号写作', 'drafts')
-  AGENTS_FILE_DEFAULT  = path.join(PROJECT_ROOT_DEFAULT, 'AGENTS.md')
+  PROJECT_ROOT_DEFAULT       = path.join(WEB_DIR, '..')
+  DATA_DIR_DEFAULT           = path.join(PROJECT_ROOT_DEFAULT, '.cache')
+  DRAFTS_DIR_DEFAULT         = path.join(PROJECT_ROOT_DEFAULT, '公众号写作', 'drafts')
+  AGENTS_FILE_DEFAULT        = path.join(PROJECT_ROOT_DEFAULT, 'AGENTS.md')
+  WRITING_GUIDE_FILE_DEFAULT = path.join(PROJECT_ROOT_DEFAULT, '写作参考', '写作规范.md')
 }
 
-export const PROJECT_ROOT = process.env.PROJECT_ROOT || PROJECT_ROOT_DEFAULT
-export const DRAFTS_DIR   = process.env.DRAFTS_DIR   || DRAFTS_DIR_DEFAULT
-export const AGENTS_FILE  = process.env.AGENTS_FILE  || AGENTS_FILE_DEFAULT
-export const DATA_DIR     = process.env.DATA_DIR     || DATA_DIR_DEFAULT
+export const PROJECT_ROOT      = process.env.PROJECT_ROOT      || PROJECT_ROOT_DEFAULT
+export const DRAFTS_DIR        = process.env.DRAFTS_DIR        || DRAFTS_DIR_DEFAULT
+export const AGENTS_FILE       = process.env.AGENTS_FILE       || AGENTS_FILE_DEFAULT
+export const WRITING_GUIDE_FILE = process.env.WRITING_GUIDE_FILE || WRITING_GUIDE_FILE_DEFAULT
+export const DATA_DIR          = process.env.DATA_DIR          || DATA_DIR_DEFAULT
 export const CACHE_DIR    = path.join(DATA_DIR, 'covers')
 export const HISTORY_FILE = path.join(DATA_DIR, 'cover_history.json')
 
@@ -90,8 +93,13 @@ export const PORT = process.env.PORT || 3000
 let _agentsCache = null
 
 /**
- * 读取 AGENTS.md 写作规范，带内存缓存。
+ * 读取 AGENTS.md 内容（项目级 AI 编码助手索引），带内存缓存。
  * 文件发生变化时自动清除缓存，下次调用时重新读取。
+ *
+ * 注意：AGENTS.md 是给 AI 编码助手用的项目规范，不要在文章生成 / 分析 / 大纲
+ * 等 LLM 调用里注入，否则会浪费大量 token 并且可能干扰输出（ESLint 规则、
+ * commit 规范跟"写公众号文章"完全无关）。写作类提示词请使用
+ * getWritingGuideContent()。
  */
 export function getAgentsContent() {
   if (_agentsCache !== null) return _agentsCache
@@ -102,10 +110,35 @@ export function getAgentsContent() {
   _agentsCache = fs.readFileSync(AGENTS_FILE, 'utf-8')
   // 监听文件变动，自动失效缓存（只注册一次）
   fs.watchFile(AGENTS_FILE, { interval: 5000 }, () => {
-    console.log('[Config] AGENTS.md 已变化，清除写作规范缓存')
+    console.log('[Config] AGENTS.md 已变化，清除缓存')
     _agentsCache = null
   })
   return _agentsCache
+}
+
+// ── 写作规范文件缓存 ─────────────────────────────────────────────────────────
+
+let _writingGuideCache = null
+
+/**
+ * 读取专门的「公众号写作规范」文件，供文章生成 / 分析 / 大纲提示词使用。
+ * 文件不存在时返回空串，调用方应根据空串跳过整段「# 写作规范」拼接，
+ * 避免给 LLM 输入无意义的标题占位。
+ *
+ * 默认路径：`写作参考/写作规范.md`，可通过环境变量 WRITING_GUIDE_FILE 覆盖。
+ */
+export function getWritingGuideContent() {
+  if (_writingGuideCache !== null) return _writingGuideCache
+  if (!fs.existsSync(WRITING_GUIDE_FILE)) {
+    _writingGuideCache = ''
+    return ''
+  }
+  _writingGuideCache = fs.readFileSync(WRITING_GUIDE_FILE, 'utf-8')
+  fs.watchFile(WRITING_GUIDE_FILE, { interval: 5000 }, () => {
+    console.log('[Config] 写作规范.md 已变化，清除缓存')
+    _writingGuideCache = null
+  })
+  return _writingGuideCache
 }
 
 // ── 服务端 AI 配置 ───────────────────────────────────────────────────────────

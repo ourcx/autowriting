@@ -12,7 +12,7 @@ import { Router } from 'express'
 import fs from 'fs'
 import path from 'path'
 import axios from 'axios'
-import { DRAFTS_DIR, SERVER_AI_CONFIG, getAgentsContent } from '../config.js'
+import { DRAFTS_DIR, SERVER_AI_CONFIG, getWritingGuideContent } from '../config.js'
 import { ensureDir, buildLLMRequest, callLLMWithRetry } from '../utils.js'
 import { retrieveRelevant, formatRetrievedContext, formatExampleContext } from '../rag.js'
 import { saveAnalysis, getLatestAnalysis, listAnalyses, recordTokenUsage, getEffectivePrompt, getSetting } from '../db.js'
@@ -227,11 +227,13 @@ router.post('/:articleId/generate', async (req, res) => {
       return res.status(400).json({ error: '未配置 MaaS API Key，请前往「AI 配置」页面设置后重试' })
     }
 
-    const agentsContent = getAgentsContent()
+    // 写作规范：仅在用户配置了「写作规范.md」时注入，没配置就不发，节省 token
+    const writingGuide = getWritingGuideContent()
+    const writingGuideSection = writingGuide ? `\n# 写作规范（必须严格遵守）\n${writingGuide}\n` : ''
 
     // 从数据库读取文章生成提示词（支持用户自定义覆盖）
     const generatePromptData = getEffectivePrompt('prompt-article-generate')
-    const generateSystemInstruction = generatePromptData?.content || ''
+    const generateSystemInstruction = generatePromptData?.content || '你是一个专业的内容创作助手，擅长按照规范和要求生成高质量的文章内容。'
 
     // 当前时间（北京时间格式）
     const nowGen = new Date()
@@ -244,11 +246,9 @@ router.post('/:articleId/generate', async (req, res) => {
 
     // 全局永久记忆
     const globalMemoryGen = getSetting('global_memory')
-    const globalMemorySectionGen = globalMemoryGen ? `\n\n# 全局背景信息（永久记忆）\n${globalMemoryGen}\n` : ''
+    const globalMemorySectionGen = globalMemoryGen ? `\n# 全局背景信息（永久记忆）\n${globalMemoryGen}\n` : ''
 
-    const userPrompt = `${generateSystemInstruction ? generateSystemInstruction + '\n\n' : ''}# 写作规范（必须严格遵守）
-${agentsContent}
-${globalMemorySectionGen}
+    const userPrompt = `${writingGuideSection}${globalMemorySectionGen}
 # 当前时间
 ${currentDateTimeGen}
 
@@ -267,7 +267,7 @@ ${materials}
     const response = await callLLMWithRetry(url, {
       model,
       messages: [
-        { role: 'system', content: '你是一个专业的内容创作助手，擅长按照规范和要求生成高质量的文章内容。' },
+        { role: 'system', content: generateSystemInstruction },
         { role: 'user',   content: userPrompt },
       ],
       temperature: 0.9,
@@ -373,15 +373,17 @@ router.post('/:articleId/generate/stream', async (req, res) => {
     }
 
     // ── 2. 读取写作规范 + 数据库提示词 ──────────────────────────────────────
-    const agentsContent = getAgentsContent()
+    // 写作规范：仅在用户配置了「写作规范.md」时注入，否则跳过整段
+    const writingGuide = getWritingGuideContent()
+    const writingGuideSection = writingGuide ? `\n# 写作规范（必须严格遵守）\n${writingGuide}\n` : ''
 
-    // 从数据库读取文章生成提示词（支持用户自定义覆盖）
+    // 从数据库读取文章生成提示词（支持用户自定义覆盖），用作 system 消息
     const streamGeneratePromptData = getEffectivePrompt('prompt-article-generate')
-    const streamGenerateInstruction = streamGeneratePromptData?.content || ''
+    const streamGenerateInstruction = streamGeneratePromptData?.content || '你是一个专业的内容创作助手，擅长按照规范和要求生成高质量的文章内容。'
 
-    // 今日头条提示词
+    // 今日头条提示词，用作 system 消息
     const toutiaoPromptData = getEffectivePrompt('prompt-article-generate-toutiao')
-    const toutiaoInstruction = toutiaoPromptData?.content || ''
+    const toutiaoInstruction = toutiaoPromptData?.content || '你是一个专业的今日头条内容创作者，擅长写吸引人的热点文章。'
 
     // 当前时间（北京时间格式）
     const now = new Date()
@@ -394,12 +396,10 @@ router.post('/:articleId/generate/stream', async (req, res) => {
 
     // 全局永久记忆
     const globalMemory = getSetting('global_memory')
-    const globalMemorySection = globalMemory ? `\n\n# 全局背景信息（永久记忆）\n${globalMemory}\n` : ''
+    const globalMemorySection = globalMemory ? `\n# 全局背景信息（永久记忆）\n${globalMemory}\n` : ''
 
     // ── 公众号 prompt ──────────────────────────────────────────────────────────
-    const wechatPrompt = `${streamGenerateInstruction ? streamGenerateInstruction + '\n\n' : ''}# 写作规范（必须严格遵守）
-${agentsContent}
-${ragSection}${exampleSection ? '\n\n' + exampleSection + '\n' : ''}${globalMemorySection}
+    const wechatPrompt = `${writingGuideSection}${ragSection}${exampleSection ? '\n' + exampleSection + '\n' : ''}${globalMemorySection}
 # 当前时间
 ${currentDateTime}
 
@@ -413,8 +413,8 @@ ${materials}
 
 现在请直接输出完整的文章内容（纯 Markdown，只有 1 个 H1，所有 H2 带 emoji）：`
 
-    // ── 今日头条 prompt（注入评分示例，不注入 RAG）──────────────────────────
-    const toutiaoPrompt = `${toutiaoInstruction ? toutiaoInstruction + '\n\n' : ''}${exampleSection ? exampleSection + '\n\n' : ''}${globalMemorySection}
+    // ── 今日头条 prompt（注入评分示例，不注入 RAG / 写作规范，平台风格不同）─
+    const toutiaoPrompt = `${exampleSection ? exampleSection + '\n\n' : ''}${globalMemorySection}
 # 当前时间
 ${currentDateTime}
 
@@ -513,36 +513,17 @@ ${materials}
       })
     }
 
+    // system 消息直接用数据库提示词，避免再叠一层硬编码 system 造成重复
     if (platforms === 'wechat') {
       // 只生成公众号
-      await streamPlatform(
-        wechatPrompt,
-        '你是一个专业的内容创作助手，擅长按照规范和要求生成高质量的文章内容。',
-        'wechat',
-        true
-      )
+      await streamPlatform(wechatPrompt, streamGenerateInstruction, 'wechat', true)
     } else if (platforms === 'toutiao') {
       // 只生成今日头条
-      await streamPlatform(
-        toutiaoPrompt,
-        '你是一个专业的今日头条内容创作者，擅长写热点、情感、故事类文章，标题吸引人，内容接地气。',
-        'toutiao',
-        true
-      )
+      await streamPlatform(toutiaoPrompt, toutiaoInstruction, 'toutiao', true)
     } else {
       // 两者都生成：先公众号，再今日头条
-      await streamPlatform(
-        wechatPrompt,
-        '你是一个专业的内容创作助手，擅长按照规范和要求生成高质量的文章内容。',
-        'wechat',
-        false
-      )
-      await streamPlatform(
-        toutiaoPrompt,
-        '你是一个专业的今日头条内容创作者，擅长写热点、情感、故事类文章，标题吸引人，内容接地气。',
-        'toutiao',
-        true
-      )
+      await streamPlatform(wechatPrompt, streamGenerateInstruction, 'wechat', false)
+      await streamPlatform(toutiaoPrompt, toutiaoInstruction, 'toutiao', true)
     }
 
   } catch (error) {
@@ -598,15 +579,14 @@ router.post('/:articleId/analyze', async (req, res) => {
       : ''
 
     // ── 2. 读取写作规范 + 数据库提示词 ──────────────────────────────────────
-    const agentsContent = getAgentsContent()
+    // 写作规范：可选注入，没配置就跳过整段
+    const writingGuide = getWritingGuideContent()
+    const writingGuideSection = writingGuide ? `\n# 写作规范（判断依据）\n${writingGuide}\n` : ''
     const analyzePromptData = getEffectivePrompt('prompt-article-analyze')
-    const analyzeInstruction = analyzePromptData?.content || ''
-    const taskContext = task ? `\n\n# 本次写作任务\n${task}` : ''
+    const analyzeInstruction = analyzePromptData?.content || '你是一个专业的文章审核助手，擅长分析微信公众号文章的质量。请对以下文章进行深度分析，返回 JSON 格式结果。'
+    const taskContext = task ? `\n# 本次写作任务\n${task}\n` : ''
 
-    const prompt = `${analyzeInstruction ? analyzeInstruction + '\n\n' : '你是一个专业的文章审核助手，擅长分析微信公众号文章的质量。请对以下文章进行深度分析，返回 JSON 格式结果。\n\n'}# 写作规范（判断依据）
-${agentsContent}
-${taskContext}
-${similarContext}
+    const prompt = `${writingGuideSection}${taskContext}${similarContext}
 
 # 待分析文章
 ${article}
@@ -687,7 +667,7 @@ uiBlocks 字段说明（必须根据实际问题选择，不要强行凑数）�
     const upstreamRes = await axios.post(url, {
       model,
       messages: [
-        { role: 'system', content: '你是专业的文章分析助手，只输出合法 JSON，不加任何解释或 Markdown 代码块。' },
+        { role: 'system', content: analyzeInstruction + '\n\n只输出合法 JSON，不加任何解释或 Markdown 代码块。' },
         { role: 'user',   content: prompt },
       ],
       temperature: 0.3,
@@ -909,15 +889,15 @@ router.post('/:articleId/outline', async (req, res) => {
     const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
     const { url, model, headers } = buildLLMRequest(cfg)
 
-    const agentsContent = getAgentsContent()
+    // 写作规范：可选注入，没配置就跳过
+    const writingGuide = getWritingGuideContent()
+    const writingGuideSection = writingGuide ? `\n# 写作规范参考\n${writingGuide}\n` : ''
 
-    // 从数据库读取大纲生成提示词（支持用户自定义覆盖）
+    // 从数据库读取大纲生成提示词（支持用户自定义覆盖），用作 system 消息
     const outlinePromptData = getEffectivePrompt('prompt-outline-generate')
-    const outlineInstruction = outlinePromptData?.content || ''
+    const outlineInstruction = outlinePromptData?.content || '你是一个专业的内容策划助手。根据以下写作任务要求，生成一份清晰的文章写作大纲。'
 
-    const prompt = `${outlineInstruction ? outlineInstruction + '\n\n' : '你是一个专业的内容策划助手。根据以下写作任务要求，生成一份清晰的文章写作大纲。\n\n'}# 写作规范参考
-${agentsContent}
-
+    const prompt = `${writingGuideSection}
 # 写作任务要求
 ${task}
 
@@ -932,7 +912,7 @@ ${task}
     const llmRes = await callLLMWithRetry(url, {
       model,
       messages: [
-        { role: 'system', content: '你是专业的内容策划助手，只输出大纲内容，Markdown 格式。' },
+        { role: 'system', content: outlineInstruction + '\n\n只输出大纲内容，Markdown 格式。' },
         { role: 'user',   content: prompt },
       ],
       temperature: 0.8,
