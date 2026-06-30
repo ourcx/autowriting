@@ -86,7 +86,7 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
 class RawEmbeddings extends Embeddings {
   constructor({ apiKey, baseURL, model, dimensions, instruction, extraHeaders = {},
-                batchSize = 1, batchDelayMs = 3000 }) {
+                batchSize = 4, batchDelayMs = 1000 }) {
     super({})
     this.apiKey        = apiKey
     this.baseURL       = baseURL.replace(/\/$/, '')
@@ -94,8 +94,8 @@ class RawEmbeddings extends Embeddings {
     this.dimensions    = dimensions
     this.instruction   = instruction
     this.extraHeaders  = extraHeaders
-    this.batchSize     = batchSize     // 每批并发数，默认 16（保守，避免触发限流）
-    this.batchDelayMs  = batchDelayMs  // 批次间延迟 ms
+    this.batchSize     = batchSize     // 每批并发数，默认 4（保守，避免触发上游 RPM 限流）
+    this.batchDelayMs  = batchDelayMs  // 批次间延迟 ms，默认 1000
   }
 
   async embedQuery(text) { return this._embedWithRetry(text) }
@@ -273,9 +273,10 @@ function getRemoteEmbeddings(cfg) {
   const model        = cfg.embeddingModel        || 'text-embedding-3-small'
   const dimensions   = cfg.embeddingDimensions   || undefined
   const instruction  = cfg.embeddingInstruction  || undefined
-  // 批量参数：可通过 cfg 覆盖，默认保守值（16并发 + 200ms间隔）
-  const batchSize    = cfg.embeddingBatchSize    || 16
-  const batchDelayMs = cfg.embeddingBatchDelayMs || 200
+  // 批量参数：可通过 cfg 覆盖，默认保守值（4 并发 + 1000ms 间隔，避免触发上游 RPM 限流）
+  // 历史上这里曾是 16 并发 + 200ms，会在「连续保存触发全量重建」时瞬间打几十次 embed 请求把上游打爆
+  const batchSize    = cfg.embeddingBatchSize    || 4
+  const batchDelayMs = cfg.embeddingBatchDelayMs || 1000
 
   let extraHeaders = {}
   if (cfg.embeddingExtraHeaders) {

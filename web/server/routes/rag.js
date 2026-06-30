@@ -16,21 +16,65 @@ import { authMiddleware } from '../authMiddleware.js'
 const router = Router()
 
 // 记录每个用户的异步构建状态
-// Map<userId, { running: boolean, progress: string, error: string|null, startedAt: Date|null }>
+// Map<userId, { running, progress, error, startedAt, result, finishedAt, pending }>
+//   running:    是否正在构建
+//   finishedAt: 上次成功完成时间（用于冷却判断）
+//   pending:    冷却期内被拒的请求标记，冷却结束后自动补跑一次（合并多次保存）
 const buildState = new Map()
+
+// 冷却窗口：上次构建完成后 N 毫秒内，新请求会被合并/跳过
+// 避免「编辑器连续点保存」短时间触发多次全量重建把 embedding 接口打爆
+const BUILD_COOLDOWN_MS = 60 * 1000
 
 function getState(userId) {
   if (!buildState.has(userId)) {
-    buildState.set(userId, { running: false, progress: '', error: null, startedAt: null, result: null })
+    buildState.set(userId, {
+      running: false, progress: '', error: null, startedAt: null,
+      result: null, finishedAt: null, pending: false,
+    })
   }
   return buildState.get(userId)
 }
 
-// 异步触发索引构建（可复用：文章保存后的增量更新也调用这个）
-export async function triggerBuildIndex(aiConfig, userId) {
+/**
+ * 异步触发索引构建。三个并发控制：
+ *   1. running 中：跳过（避免叠加），但标记 pending 以便跑完后补跑
+ *   2. 冷却期内（距上次完成 < BUILD_COOLDOWN_MS）：标记 pending，冷却到点后由定时器补跑一次
+ *   3. 否则：立即开跑
+ * 这样可以保证「连续 N 次保存」最多只触发 1 次重建 + 冷却后 1 次补跑，共 2 次。
+ *
+ * @param {object} options.force 用户在 RAG 页面点「重建索引」时传 true，绕过冷却
+ */
+export async function triggerBuildIndex(aiConfig, userId, { force = false } = {}) {
   const state = getState(userId)
-  if (state.running) return  // 已在构建中，跳过
+
+  // 1. 正在跑：跳过（buildIndex 完成后会检查 pending 自动补跑，无需在此标记）
+  if (state.running) {
+    state.pending = true
+    return
+  }
+
+  // 2. 在冷却期内：force=true 时跳过冷却（用户主动点重建按钮）
+  const now = Date.now()
+  if (!force && state.finishedAt && now - state.finishedAt < BUILD_COOLDOWN_MS) {
+    if (!state.pending) {
+      state.pending = true
+      const wait = BUILD_COOLDOWN_MS - (now - state.finishedAt)
+      setTimeout(() => {
+        const s = getState(userId)
+        if (s.pending && !s.running) {
+          s.pending = false
+          // 递归调用：此时已过冷却期，会进入正常分支
+          triggerBuildIndex(aiConfig, userId).catch(() => {})
+        }
+      }, wait + 50)
+    }
+    return
+  }
+
+  // 3. 正常启动
   state.running = true
+  state.pending = false
   state.progress = '准备中...'
   state.error = null
   state.startedAt = new Date()
@@ -48,6 +92,17 @@ export async function triggerBuildIndex(aiConfig, userId) {
       state.progress = '构建失败'
     } finally {
       state.running = false
+      state.finishedAt = Date.now()
+      // 跑完后若期间又被请求过，安排冷却到点后补跑一次
+      if (state.pending) {
+        setTimeout(() => {
+          const s = getState(userId)
+          if (s.pending && !s.running) {
+            s.pending = false
+            triggerBuildIndex(aiConfig, userId).catch(() => {})
+          }
+        }, BUILD_COOLDOWN_MS + 50)
+      }
     }
   })
 }
@@ -56,6 +111,7 @@ export async function triggerBuildIndex(aiConfig, userId) {
 router.use(authMiddleware)
 
 // POST /api/rag/index — 异步触发，立即返回
+// 用户主动点「重建索引」，绕过冷却（force: true）
 router.post('/index', (req, res) => {
   const { aiConfig: clientAiConfig } = req.body
   const aiConfig = { ...SERVER_AI_CONFIG, ...(clientAiConfig || {}) }
@@ -66,7 +122,7 @@ router.post('/index', (req, res) => {
     return res.json({ queued: false, running: true, progress: state.progress })
   }
 
-  triggerBuildIndex(aiConfig, userId)
+  triggerBuildIndex(aiConfig, userId, { force: true })
   res.json({ queued: true, running: true, progress: '准备中...' })
 })
 

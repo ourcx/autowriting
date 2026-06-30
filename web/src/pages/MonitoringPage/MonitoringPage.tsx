@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { AlertCircle, Activity, Zap, TrendingUp, RefreshCw } from 'lucide-react'
-import axios from 'axios'
+import axios, { AxiosError } from 'axios'
 import './MonitoringPage.css'
 
 interface LogEntry {
@@ -26,17 +26,25 @@ export default function MonitoringPage() {
   const [health, setHealth] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [logFilter, setLogFilter] = useState<'ALL' | 'ERROR' | 'WARN' | 'INFO'>('ALL')
+  // 401 后停掉自动刷新，避免每 10s 一次的噪声请求
+  const [authFailed, setAuthFailed] = useState(false)
 
-  // 获取日志
+  // 401 检测：未登录或 token 失效时不再继续轮询
+  const handleError = (error: unknown, label: string) => {
+    if (error instanceof AxiosError && error.response?.status === 401) {
+      setAuthFailed(true)
+    }
+    console.error(`${label}失败:`, error)
+  }
+
+  // 获取日志（依赖全局 axios 拦截器自动注入 Authorization）
   const fetchLogs = async () => {
     setLoading(true)
     try {
-      const response = await axios.get('/api/monitoring/logs?lines=100', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-      })
+      const response = await axios.get('/api/monitoring/logs?lines=100')
       setLogs(response.data.data.logs)
     } catch (error) {
-      console.error('获取日志失败:', error)
+      handleError(error, '获取日志')
     }
     setLoading(false)
   }
@@ -45,12 +53,10 @@ export default function MonitoringPage() {
   const fetchMetrics = async () => {
     setLoading(true)
     try {
-      const response = await axios.get('/api/monitoring/metrics', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-      })
+      const response = await axios.get('/api/monitoring/metrics')
       setMetrics(response.data.data)
     } catch (error) {
-      console.error('获取性能指标失败:', error)
+      handleError(error, '获取性能指标')
     }
     setLoading(false)
   }
@@ -59,12 +65,10 @@ export default function MonitoringPage() {
   const fetchAlerts = async () => {
     setLoading(true)
     try {
-      const response = await axios.get('/api/monitoring/alerts', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-      })
+      const response = await axios.get('/api/monitoring/alerts')
       setAlerts(response.data.data.alerts)
     } catch (error) {
-      console.error('获取告警失败:', error)
+      handleError(error, '获取告警')
     }
     setLoading(false)
   }
@@ -73,12 +77,10 @@ export default function MonitoringPage() {
   const fetchHealth = async () => {
     setLoading(true)
     try {
-      const response = await axios.get('/api/monitoring/health', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-      })
+      const response = await axios.get('/api/monitoring/health')
       setHealth(response.data.data)
     } catch (error) {
-      console.error('获取健康状态失败:', error)
+      handleError(error, '获取健康状态')
     }
     setLoading(false)
   }
@@ -87,32 +89,28 @@ export default function MonitoringPage() {
   const resetMetrics = async () => {
     if (!window.confirm('确定要重置性能指标吗？')) return
     try {
-      await axios.post('/api/monitoring/metrics/reset', {}, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-      })
+      await axios.post('/api/monitoring/metrics/reset', {})
       fetchMetrics()
     } catch (error) {
-      console.error('重置指标失败:', error)
+      handleError(error, '重置指标')
     }
   }
 
-  // 初始加载和定时刷新
+  // 初始加载和定时刷新（401 后不再轮询）
   useEffect(() => {
-    if (activeTab === 'logs') fetchLogs()
-    else if (activeTab === 'metrics') fetchMetrics()
-    else if (activeTab === 'alerts') fetchAlerts()
-    else if (activeTab === 'health') fetchHealth()
+    if (authFailed) return
 
-    // 每 10 秒自动刷新一次
-    const interval = setInterval(() => {
+    const tick = () => {
       if (activeTab === 'logs') fetchLogs()
       else if (activeTab === 'metrics') fetchMetrics()
       else if (activeTab === 'alerts') fetchAlerts()
       else if (activeTab === 'health') fetchHealth()
-    }, 10000)
+    }
 
+    tick()
+    const interval = setInterval(tick, 10000)
     return () => clearInterval(interval)
-  }, [activeTab])
+  }, [activeTab, authFailed])
 
   const filteredLogs = logs.filter(log => {
     if (logFilter === 'ALL') return true
@@ -126,6 +124,19 @@ export default function MonitoringPage() {
         <div className="monitoring-header">
           <h1 className="monitoring-title">系统监控</h1>
           <p className="monitoring-subtitle">实时查看系统性能、日志和告警信息</p>
+          {authFailed && (
+            <div style={{
+              marginTop: 12,
+              padding: '10px 14px',
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              borderRadius: 10,
+              color: '#b91c1c',
+              fontSize: 13,
+            }}>
+              未登录或登录已失效，已停止自动刷新。请重新登录后再访问监控面板。
+            </div>
+          )}
         </div>
 
         {/* 标签页导航 */}

@@ -51,8 +51,8 @@ function simColor(sim: number) {
 export default function GenerateModal({ articleId, task, materials, aiConfig, onComplete, onClose }: Props) {
   const [phase,        setPhase]       = useState<Phase>('pick')
   const [statusMsg,    setStatusMsg]   = useState('')
-  // 平台选择：both / wechat / toutiao
-  const [platforms,    setPlatforms]   = useState<'both' | 'wechat' | 'toutiao'>('both')
+  // 平台选择：默认仅公众号（双平台会触发 2 次完整 LLM 调用，让用户显式勾选）
+  const [platforms,    setPlatforms]   = useState<'both' | 'wechat' | 'toutiao'>('wechat')
   // 公众号流式文本
   const [streamTextWechat,   setStreamTextWechat]  = useState('')
   // 今日头条流式文本
@@ -479,14 +479,6 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
                 <span className="gm-platform-selector-label">生成平台</span>
                 <div className="gm-platform-selector-btns">
                   <button
-                    className={`gm-platform-selector-btn ${platforms === 'both' ? 'gm-platform-selector-btn--active' : ''}`}
-                    onClick={() => setPlatforms('both')}
-                  >
-                    <span className="gm-platform-badge gm-platform-badge--wechat">公众号</span>
-                    <span>+</span>
-                    <span className="gm-platform-badge gm-platform-badge--toutiao">今日头条</span>
-                  </button>
-                  <button
                     className={`gm-platform-selector-btn ${platforms === 'wechat' ? 'gm-platform-selector-btn--active' : ''}`}
                     onClick={() => setPlatforms('wechat')}
                   >
@@ -498,7 +490,39 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
                   >
                     <span className="gm-platform-badge gm-platform-badge--toutiao">仅今日头条</span>
                   </button>
+                  <button
+                    className={`gm-platform-selector-btn ${platforms === 'both' ? 'gm-platform-selector-btn--active' : ''}`}
+                    onClick={() => setPlatforms('both')}
+                    title="将串行调用 2 次大模型，Token 消耗约为单平台的 2 倍"
+                  >
+                    <span className="gm-platform-badge gm-platform-badge--wechat">公众号</span>
+                    <span>+</span>
+                    <span className="gm-platform-badge gm-platform-badge--toutiao">今日头条</span>
+                    <span style={{
+                      marginLeft: 4,
+                      padding: '2px 6px',
+                      background: '#fee2e2',
+                      color: '#b91c1c',
+                      borderRadius: 6,
+                      fontSize: 11,
+                      fontWeight: 600,
+                    }}>2× Token</span>
+                  </button>
                 </div>
+                {platforms === 'both' && (
+                  <div style={{
+                    marginTop: 8,
+                    padding: '8px 12px',
+                    background: '#fffbeb',
+                    border: '1px solid #fde68a',
+                    borderRadius: 8,
+                    color: '#92400e',
+                    fontSize: 12,
+                    lineHeight: 1.5,
+                  }}>
+                    已选「双平台」：将串行调用 2 次大模型，Token 消耗约为单平台的 2 倍，生成耗时也会翻倍。
+                  </div>
+                )}
               </div>
 
               {selected.size === 0 ? (

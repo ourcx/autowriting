@@ -9,6 +9,7 @@
  * DELETE /api/articles/:articleId
  */
 import { Router } from 'express'
+import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import axios from 'axios'
@@ -20,6 +21,17 @@ import { authMiddleware } from '../authMiddleware.js'
 import { triggerBuildIndex } from './rag.js'
 
 const router = Router()
+
+// 内容指纹缓存：key=`${userId}:${articleId}`，value=最近一次保存时 article+materials 的 md5
+// 用于「内容真正变化时才触发 RAG 重建」，避免编辑器原样回写导致的无意义索引重建
+// 进程内存即可，进程重启后第一次保存会触发一次重建（可接受）
+const _articleContentHash = new Map()
+function getArticleContentKey(userId, articleId) {
+  return `${userId}:${articleId}`
+}
+function hashContent(article = '', materials = '') {
+  return crypto.createHash('md5').update(`${article}\u0000${materials}`).digest('hex')
+}
 
 // 所有文章路由都需要登录
 router.use(authMiddleware)
@@ -196,8 +208,16 @@ router.post('/:articleId', (req, res) => {
     if (articleToutiao && toutiaoPath) fs.writeFileSync(toutiaoPath, articleToutiao, 'utf-8')
 
     // 文章内容有更新时，异步触发增量 RAG 索引（不阻塞响应）
-    if (article || materials) {
-      triggerBuildIndex(SERVER_AI_CONFIG, req.user.id).catch(() => {})
+    // 但要先做「内容指纹判重」：仅当 article/materials 真的变了才触发，
+    // 否则编辑器原样回写也会无意义地重建索引、把 embedding 接口打爆
+    if (article !== undefined || materials !== undefined) {
+      const key = getArticleContentKey(req.user.id, articleId)
+      const newHash = hashContent(article || '', materials || '')
+      const oldHash = _articleContentHash.get(key)
+      if (newHash !== oldHash) {
+        _articleContentHash.set(key, newHash)
+        triggerBuildIndex(SERVER_AI_CONFIG, req.user.id).catch(() => {})
+      }
     }
 
     res.json({ success: true })
