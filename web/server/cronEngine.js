@@ -17,8 +17,13 @@ import {
   getSetting,
 } from './db.js'
 import { SERVER_AI_CONFIG, DRAFTS_DIR, getWritingGuideContent } from './config.js'
-import { buildLLMRequest, callLLMWithRetry } from './utils.js'
-import { ensureDir } from './utils.js'
+import { 
+  buildLLMRequest, 
+  callLLMWithRetry,
+  collectMaterials,
+  formatMaterialsAsMarkdown,
+} from './utils/index.js'
+import { ensureDir } from './utils/index.js'
 
 // 调度实例 Map<jobId, ScheduledTask>
 const _scheduledTasks = new Map()
@@ -63,6 +68,34 @@ async function getWxToken(appId, appSecret) {
   const token = resp.data.access_token
   _tokenCache.set(appId, { token, exp: now + (resp.data.expires_in || 7200) })
   return token
+}
+
+// ── 步骤 0：智能素材收集（可选）─────────────────────────────────────────────
+
+async function collectMaterialsIfEnabled(job, topic, aiConfig) {
+  // 检查是否启用了智能素材收集
+  if (!job.enableMaterialsCollection) {
+    return null
+  }
+
+  // 检查必需的 API Key
+  if (!job.bingApiKey) {
+    throw new Error('未配置 Bing API Key，无法进行网络搜索。请在任务配置中填写 Bing API Key')
+  }
+
+  const searchConfig = {
+    bingApiKey: job.bingApiKey,
+    jinaApiKey: job.jinaApiKey || '', // Jina 是可选的
+  }
+
+  try {
+    const dataset = await collectMaterials(topic, aiConfig, searchConfig)
+    return dataset
+  } catch (err) {
+    // 素材收集失败不阻断整体流程，只记录警告
+    console.warn(`[Cron:${job.name}] 素材收集失败: ${err.message}`)
+    return null
+  }
 }
 
 // ── 步骤 1：热点抓取 ─────────────────────────────────────────────────────────
@@ -120,10 +153,18 @@ async function fetchTrending(job, aiConfig) {
 
 // ── 步骤 2：生成文章 ─────────────────────────────────────────────────────────
 
-async function generateArticle(topic, aiConfig) {
+async function generateArticle(topic, aiConfig, materialsDataset = null) {
   // 写作规范：可选注入，没配置就跳过整段
   const writingGuide = getWritingGuideContent()
   const writingGuideSection = writingGuide ? `# 写作规范（必须严格遵守）\n${writingGuide}\n\n` : ''
+  
+  // 素材数据集：如果有，注入到提示词中
+  let materialsSection = ''
+  if (materialsDataset) {
+    const materialsMarkdown = formatMaterialsAsMarkdown(materialsDataset)
+    materialsSection = `# 参考素材（从网络搜索和爬取获得）\n\n${materialsMarkdown}\n\n**重要提示**：\n- 以上素材仅供参考，请提取关键信息和数据\n- 必须用自己的语言重新组织，不要直接复制粘贴\n- 引用数据时要标注来源（如"根据某网站报道"）\n- 保持客观和真实，不要编造不存在的信息\n\n`
+  }
+  
   const { url, model, headers } = buildLLMRequest(aiConfig)
   const today = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
 
@@ -132,11 +173,11 @@ async function generateArticle(topic, aiConfig) {
     messages: [
       {
         role: 'system',
-        content: '你是一个专业的微信公众号内容创作者，擅长写真诚、实用、有干货的文章。',
+        content: '你是一个专业的微信公众号内容创作者，擅长写真诚、实用、有干货的文章。你善于从网络素材中提取关键信息，结合实际案例，创作出有深度、有价值的内容。',
       },
       {
         role: 'user',
-        content: `${writingGuideSection}# 今日选题
+        content: `${writingGuideSection}${materialsSection}# 今日选题
 ${topic}
 
 # 写作要求
@@ -145,6 +186,7 @@ ${topic}
 - 字数 800-1500 字
 - 有具体案例和数据支撑
 - 结尾有明确的行动建议
+${materialsDataset ? '- 充分利用上面提供的参考素材，但要用自己的语言重新表达' : ''}
 
 ---
 
@@ -320,11 +362,31 @@ export async function runCronJob(jobId) {
       throw new Error(`热点抓取失败: ${e.message}`)
     }
 
+    // ── Step 1.5: 智能素材收集（可选）──────────────────────────────────────
+    let materialsDataset = null
+    if (job.enableMaterialsCollection) {
+      addStep('materials', 'running', '正在收集网络素材...')
+      try {
+        materialsDataset = await collectMaterialsIfEnabled(job, topic, aiConfig)
+        if (materialsDataset) {
+          addStep('materials', 'success', 
+            `素材已收集：${materialsDataset.summary.totalItems} 条（搜索 ${materialsDataset.summary.searchQueries} 词，爬取 ${materialsDataset.summary.crawledUrls} URL）`,
+            { summary: materialsDataset.summary }
+          )
+        } else {
+          addStep('materials', 'skip', '素材收集已跳过或失败')
+        }
+      } catch (e) {
+        addStep('materials', 'warn', `素材收集失败，继续生成文章: ${e.message}`)
+        // 不阻断流程，继续生成文章
+      }
+    }
+
     // ── Step 2: 生成文章 ───────────────────────────────────────────────────
     addStep('generate', 'running', '正在生成文章...')
     let articleMd
     try {
-      articleMd = await generateArticle(topic, aiConfig)
+      articleMd = await generateArticle(topic, aiConfig, materialsDataset)
       const firstLine = articleMd.split('\n')[0].replace(/^#+\s*/, '').trim()
       addStep('generate', 'success', `文章已生成（${articleMd.length} 字）`, { title: firstLine })
     } catch (e) {
@@ -341,9 +403,25 @@ export async function runCronJob(jobId) {
     const articleId = `${dateStr}-cron-${jobId.slice(-6)}`
     const articleDir = path.join(DRAFTS_DIR, job.userId, articleId)
     const rawDir = path.join(articleDir, 'raw')
+    const promptDir = path.join(articleDir, 'prompt')
     ensureDir(rawDir)
+    ensureDir(promptDir)
     fs.writeFileSync(path.join(rawDir, 'article_raw.md'), articleMd, 'utf-8')
     fs.writeFileSync(path.join(articleDir, 'title.txt'), articleTitle, 'utf-8')
+    
+    // 保存素材数据集（如果有）
+    if (materialsDataset) {
+      const materialsMarkdown = formatMaterialsAsMarkdown(materialsDataset)
+      fs.writeFileSync(path.join(promptDir, 'materials.md'), materialsMarkdown, 'utf-8')
+      
+      // 同时保存 JSON 格式方便程序读取
+      fs.writeFileSync(
+        path.join(promptDir, 'materials.json'),
+        JSON.stringify(materialsDataset, null, 2),
+        'utf-8'
+      )
+    }
+    
     updateCronLog(logId, { articleTitle, articleId })
 
     // ── Step 3: 生成样式 ───────────────────────────────────────────────────

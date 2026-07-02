@@ -6,13 +6,13 @@ import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
 import axios from 'axios'
-import { SERVER_AI_CONFIG } from './config.js'
+import { SERVER_AI_CONFIG } from '../config.js'
 import {
   getCoverCache, setCoverCache,
   addCoverHistory, listCoverHistory,
   addImageToLibrary as dbAddImage,
   addPublishHistory,
-} from './db.js'
+} from '../db.js'
 
 // ── LLM 请求构建（统一入口）────────────────────────────────────────────────────
 
