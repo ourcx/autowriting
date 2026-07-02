@@ -4,7 +4,7 @@
  */
 import { Router } from 'express'
 import { SERVER_AI_CONFIG } from '../config.js'
-import { buildLLMRequest, callLLMWithRetry } from '../utils.js'
+import { buildLLMRequest, callLLMWithRetry } from '../utils/index.js'
 import { recordTokenUsage, getEffectivePrompt } from '../db.js'
 
 const router = Router()

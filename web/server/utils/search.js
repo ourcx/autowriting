@@ -10,6 +10,7 @@
  */
 
 import { buildLLMRequest, callLLMWithRetry } from './public.js'
+import { nowDay } from './date.js'
 import { logger } from '../logger.js'
 
 // ── 1. LLM 生成搜索计划 ────────────────────────────────────────────────────────
@@ -22,11 +23,7 @@ import { logger } from '../logger.js'
  */
 export async function generateSearchPlan(topic, aiConfig) {
   const { url, model, headers } = buildLLMRequest(aiConfig)
-  const today = new Date().toLocaleDateString('zh-CN', { 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
-  })
+  const today = nowDay()
 
   const systemPrompt = `你是一个专业的信息检索专家，擅长设计高效的搜索策略。
 你的任务是根据文章主题，生成一个详细的搜索和采集计划。
@@ -464,7 +461,7 @@ export function formatMaterialsAsMarkdown(dataset) {
 
   // 搜索结果
   if (dataset.searchResults.length > 0) {
-    lines.push('## 📰 搜索结果')
+    lines.push('## 搜索结果')
     lines.push('')
     
     for (const item of dataset.searchResults) {
@@ -491,7 +488,7 @@ export function formatMaterialsAsMarkdown(dataset) {
 
   // 爬取内容
   if (dataset.crawledContents.length > 0) {
-    lines.push('## 🔍 深度内容')
+    lines.push('## 深度内容')
     lines.push('')
     
     for (const item of dataset.crawledContents) {

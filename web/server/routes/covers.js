@@ -16,7 +16,7 @@ import {
   addImageToLibrary,
   generatePrompt, generatePlaceholderCover, generateWithDallE, generateWithSiliconFlow, generateWithQwenEdit,
   maskApiKey,
-} from '../utils.js'
+} from '../utils/index.js'
 import { deleteCoverHistory, clearCoverHistory, getCoverCacheCount } from '../db.js'
 
 const router = Router()

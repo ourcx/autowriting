@@ -20,11 +20,11 @@ import { SERVER_AI_CONFIG, DRAFTS_DIR, getWritingGuideContent } from './config.j
 import { 
   buildLLMRequest, 
   callLLMWithRetry,
+  ensureDir,
   collectMaterials,
   formatMaterialsAsMarkdown,
 } from './utils/index.js'
-import { ensureDir } from './utils/index.js'
-
+import { nowDay } from './utils/date.js'
 // 调度实例 Map<jobId, ScheduledTask>
 const _scheduledTasks = new Map()
 
@@ -115,7 +115,7 @@ async function fetchTrending(job, aiConfig) {
   }
 
   const { url, model, headers } = buildLLMRequest(aiConfig)
-  const today = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
+  const today = nnowDay()
 
   let resp
   try {
@@ -166,7 +166,7 @@ async function generateArticle(topic, aiConfig, materialsDataset = null) {
   }
   
   const { url, model, headers } = buildLLMRequest(aiConfig)
-  const today = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
+  const today = nowDay()
 
   const resp = await callLLMWithRetry(url, {
     model,
