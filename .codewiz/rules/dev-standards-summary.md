@@ -2,7 +2,7 @@
 alwaysApply: true
 ---
 
-# 开发规范速查（autowriting 项目）
+# 开发规范速查（dashy 项目）
 
 > 规则列表 + 背景注释。AI Agent 和开发者均适用。
 > 完整规范见 `.codewiz-spec/knowledge/code-standards.md` 和 `api-design.md`。

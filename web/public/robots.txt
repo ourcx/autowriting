@@ -1,0 +1,30 @@
+# robots.txt for Dashy - AI 公众号写作助手
+
+# 允许所有搜索引擎抓取
+User-agent: *
+Allow: /
+
+# 禁止抓取的目录（后台管理、API、用户数据）
+Disallow: /api/
+Disallow: /admin/
+Disallow: /user/
+Disallow: /drafts/
+
+# 站点地图
+Sitemap: https://0oq8he.site/sitemap.xml
+
+# 爬取延迟（避免服务器压力）
+Crawl-delay: 1
+
+# 针对特定搜索引擎的优化
+User-agent: Googlebot
+Allow: /
+Crawl-delay: 0
+
+User-agent: Baiduspider
+Allow: /
+Crawl-delay: 1
+
+User-agent: Bingbot
+Allow: /
+Crawl-delay: 1

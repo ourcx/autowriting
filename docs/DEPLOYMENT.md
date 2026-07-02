@@ -477,7 +477,3 @@ ls web/logs/
 # Nginx 日志
 sudo tail -f /var/log/nginx/autowriting_access.log
 sudo tail -f /var/log/nginx/autowriting_error.log
-
-# 系统日志
-journalctl -u nginx -f
-```

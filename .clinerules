@@ -1,0 +1,202 @@
+# Cline Agent 规则 - dashy 项目
+
+## 项目概述
+
+这是一个基于 React + Express + Electron 的全栈 AI 写作应用：
+- **前端**: React 18 + TypeScript + Zustand + Vite
+- **后端**: Express + SQLite + SSE 流式 API
+- **桌面**: Electron 跨平台打包
+- **包管理**: 只用 pnpm（monorepo 结构）
+- **主要功能**: AI 写作助手、公众号内容生成、RAG 检索、定时任务
+
+## 📖 完整文档索引
+
+在开始任何工作前，先查阅相关文档：
+
+| 需求 | 文档路径 |
+|------|---------|
+| 了解项目分层、目录边界 | `AGENTS.md` → `docs/agents/structure.md` |
+| 编码规范（前端/后端/SSE） | `docs/agents/conventions.md` |
+| 工作流程、验收命令 | `docs/agents/workflows.md` |
+| Code Review 检查清单 | `docs/agents/review.md` |
+| Harness 反馈回路 | `docs/agents/harness.md` |
+
+## 🚫 强约束（违反 = 阻断，不允许绕过）
+
+### 后端约束
+
+1. **禁止 console.\***  
+   必须用 `web/server/logger.js` 的 `debug/info/warn/error`
+   
+2. **禁止裸 fs 操作**  
+   路径必须走 `web/server/config.js` 统一管理
+   
+3. **禁止直接 new Database()**  
+   必须走 `web/server/db.js` 暴露的函数
+   
+4. **路由必须挂鉴权**  
+   顶部必须 `router.use(authMiddleware)`，管理员路由必须 `requireAdmin`
+
+### 前端约束
+
+5. **禁止裸 fetch()**  
+   必须走 `web/src/utils/apiHelpers.ts` 的封装函数
+   
+6. **组件不引 store**  
+   `src/components/**` 禁止 import `src/store/**`，状态由 props 传入
+   
+7. **禁直读 localStorage 配置**  
+   AI 配置必须走 `web/src/utils/aiConfig.ts` 的 `loadAIConfig`
+
+### 类型约束
+
+8. **禁止 any / @ts-ignore / @ts-expect-error**  
+   如需逃生必须注释原因，且只能在测试代码中
+
+## 📁 禁止修改区域
+
+以下目录/文件不允许手动编辑（产物/数据/敏感信息）：
+
+- `web/dist/`、`web/dist-electron/`、`.cache/`
+- `公众号写作/drafts/`、`logs/`
+- `node_modules/`、`.git/`
+- 任何密钥/Token/Cookie 不准写进代码、文档、截图、测试数据
+
+## 💻 编码规范
+
+### 通用
+
+- 缩进 2 空格，LF 换行
+- 前端 TS: **双引号**；后端 JS: **单引号、无分号**
+- 只用 `pnpm`，锁文件只认 `web/pnpm-lock.yaml`
+
+### 前端（React + TypeScript）
+
+- 组件 props 必须定义 `XxxProps` interface
+- 组件文件 `PascalCase.tsx` + 同名 `.css`
+- 页面路由变更必须同步 `web/src/App.tsx`
+
+### 后端（Express + ESM）
+
+- API 响应格式：
+  - 成功: 直接返对象/数组
+  - 成功无数据: `{ success: true }`
+  - 失败: `{ error: '可读消息' }` + HTTP 状态码
+- 错误捕获:
+  ```js
+  logger.error('MODULE', '描述', { error: error.message })
+  ```
+
+### SSE 流式接口（强模板）
+
+必须按此顺序，不可省略任何步骤：
+
+```js
+// 1. 设置 4 个响应头
+res.setHeader('Content-Type', 'text/event-stream')
+res.setHeader('Cache-Control', 'no-cache')
+res.setHeader('Connection', 'keep-alive')
+res.setHeader('X-Accel-Buffering', 'no')
+
+// 2. flush
+res.flushHeaders()
+
+// 3. 解析上游 → write
+
+// 4. on('end') 时
+recordTokenUsage({ userId: req.user.id, operation: 'generate', ... })
+res.write(`event: done\ndata: {}\n\n`)
+res.end()
+```
+
+`operation` 枚举: `generate` / `analyze` / `edit` / `deai` / `outline` / `refine`
+
+## ✅ 验收流程（必须在提交前通过）
+
+### 默认验收命令
+
+```bash
+pnpm --dir web verify
+```
+
+包含：ESLint（前端 + 后端）→ arch-check → typecheck:changed → build
+
+### 额外验收场景
+
+- 改了 API 契约/鉴权/路径/Electron → 额外跑:
+  ```bash
+  pnpm --dir web smoke
+  ```
+
+### 自检清单
+
+- [ ] `pnpm --dir web verify` 通过
+- [ ] 改了 API 契约 → `pnpm --dir web smoke` 通过
+- [ ] 新增长期功能 → 在 `web/docs/` 留下文档
+- [ ] 符合所有强约束（上文 8 条）
+- [ ] 无 console.log、无裸 fetch、无 any
+
+## 🔧 常用命令
+
+```bash
+# 开发环境
+pnpm --dir web dev          # 启动前端 + 后端开发服务器
+
+# 验收
+pnpm --dir web verify       # 完整验收（lint + typecheck + build）
+pnpm --dir web smoke        # 冒烟测试（API 契约 + 鉴权 + Electron）
+
+# 构建
+pnpm --dir web build        # 构建前端
+pnpm --dir web build:electron  # 打包 Electron 应用
+
+# 测试
+pnpm --dir web lint         # ESLint
+pnpm --dir web typecheck    # TypeScript 类型检查
+pnpm --dir web arch-check   # 架构约束检查
+```
+
+## 📝 Git 提交规范
+
+格式：`type: description`
+
+类型枚举：`feat` / `fix` / `docs` / `refactor` / `chore` / `test` / `perf` / `style`
+
+示例：
+- `feat: 添加文章导出功能`
+- `fix: 修复 SSE 流式响应断连问题`
+- `docs: 更新部署文档`
+
+由 `.husky/commit-msg` 自动校验。
+
+## 🎯 工作流程建议
+
+1. **开始任务前**：查阅 `AGENTS.md` 定位相关文档
+2. **写代码时**：严格遵守强约束（8 条）
+3. **提交前**：运行 `pnpm --dir web verify`
+4. **改 API 时**：额外运行 `pnpm --dir web smoke`
+5. **完成后**：检查是否需要更新 `web/docs/` 文档
+
+## 🚀 最佳实践
+
+- **优先读文档**：遇到不确定的规则，先查 `docs/agents/` 对应文档
+- **小步提交**：每完成一个功能点就提交，便于回滚
+- **保持类型安全**：宁可多写几行类型定义，也不要用 any
+- **日志分级**：debug（调试）/ info（关键流程）/ warn（非致命）/ error（错误）
+- **SSE 必须走模板**：不要自创流式接口写法
+- **工具函数抽离**：路由文件中超 30 行的函数抽到 `utils.js`
+
+## 🔍 架构强制检查
+
+项目使用 `web/scripts/arch-check.mjs` 自动检查架构约束：
+- 组件不引 store
+- 前端不裸 fetch
+- 后端不 console
+- 路由不直读 fs/sqlite
+
+违反会在 `pnpm --dir web verify` 时阻断。
+
+---
+
+**重要提醒**：  
+本项目的所有规则都经过工具化强制（ESLint + TypeScript + arch-check），**不是建议，而是硬约束**。如遇特殊情况需要豁免，必须查阅 `docs/agents/harness.md` 了解豁免策略。
