@@ -2,6 +2,7 @@
 # ============================================================
 # sync-to-guard.sh — 从源工程同步到 autowriting-guard
 # 用法：bash /Users/zhuxinhao/autowriting/sync-to-guard.sh
+# 小红书内部发布到cowork的生成zip文件的脚本
 # ============================================================
 set -e
 
