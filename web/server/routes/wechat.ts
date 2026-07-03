@@ -318,7 +318,7 @@ router.post('/draft', async (req, res) => {
   const creds = getCredentials(req)
   if (!creds) return res.status(401).json({ error: '未提供公众号凭据' })
 
-  const { title, content, digest, thumb_media_id } = req.body
+  const { title, content, digest, thumb_media_id,need_open_comment=1,only_fans_can_comment=1 } = req.body
   if (!title || !content) {
     return res.status(400).json({ error: '标题和内容不能为空' })
   }
@@ -336,8 +336,8 @@ router.post('/draft', async (req, res) => {
     const article = {
       title:                 title.slice(0, 64),
       content,
-      need_open_comment:     0,
-      only_fans_can_comment: 0,
+      need_open_comment,
+      only_fans_can_comment,
     }
     if (digest)        article.digest         = digest.slice(0, 120)
     if (finalThumbId)  article.thumb_media_id = finalThumbId
