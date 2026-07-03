@@ -128,9 +128,9 @@ export default tseslint.config(
     },
   },
 
-  // ─────────── 后端 ESM JavaScript（server.js + server/**/*.js） ───────────
+  // ─────────── 后端 TypeScript（server.ts + server/**/*.ts） ───────────
   {
-    files: ['server.js', 'server/**/*.js'],
+    files: ['server.ts', 'server/**/*.ts'],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: 'module',
@@ -201,7 +201,7 @@ export default tseslint.config(
 
   // ─────────── 路由层额外约束（必须排在存量豁免之前，让豁免可降级它）───────────
   {
-    files: ['server/routes/**/*.js'],
+    files: ['server/routes/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -226,31 +226,31 @@ export default tseslint.config(
   //   3. 文件全清干净后从清单移除，下次提交即受严格规则保护
   {
     files: [
-      'server/logger.js',
-      'server/db.js',
-      'server/config.js',
-      'server/cronEngine.js',
-      'server/seedPrompts.js',
-      'server/utils.js',
-      'server/rag.js',
-      'server/performanceMonitor.js',
-      'server/routes/admin.js',
-      'server/routes/articles.js',
-      'server/routes/covers.js',
-      'server/routes/cron.js',
-      'server/routes/images.js',
-      'server/routes/materials.js',
-      'server/routes/monitoring.js',
-      'server/routes/prompts.js',
-      'server/routes/publish.js',
-      'server/routes/rag.js',
-      'server/routes/scores.js',
-      'server/routes/settings.js',
-      'server/routes/style.js',
-      'server/routes/templates.js',
-      'server/routes/toutiao.js',
-      'server/routes/wechat.js',
-      'server.js',
+      'server/logger.ts',
+      'server/db.ts',
+      'server/config.ts',
+      'server/cronEngine.ts',
+      'server/seedPrompts.ts',
+      'server/utils.ts',
+      'server/rag.ts',
+      'server/performanceMonitor.ts',
+      'server/routes/admin.ts',
+      'server/routes/articles.ts',
+      'server/routes/covers.ts',
+      'server/routes/cron.ts',
+      'server/routes/images.ts',
+      'server/routes/materials.ts',
+      'server/routes/monitoring.ts',
+      'server/routes/prompts.ts',
+      'server/routes/publish.ts',
+      'server/routes/rag.ts',
+      'server/routes/scores.ts',
+      'server/routes/settings.ts',
+      'server/routes/style.ts',
+      'server/routes/templates.ts',
+      'server/routes/toutiao.ts',
+      'server/routes/wechat.ts',
+      'server.ts',
     ],
     rules: {
       'no-console': 'warn',

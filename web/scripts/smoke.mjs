@@ -42,7 +42,7 @@ async function waitHealthy(timeoutMs = 30_000) {
 
 function startServer() {
   console.log(`[smoke] 启动后端 (port ${PORT}) ...`)
-  serverProc = spawn('node', ['server.js'], {
+  serverProc = spawn('npx', ['tsx', 'server.ts'], {
     cwd: WEB_ROOT,
     env: { ...process.env, PORT, LOG_LEVEL: 'WARN' },
     stdio: ['ignore', 'pipe', 'pipe'],

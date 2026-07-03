@@ -1,8 +1,11 @@
 module.exports = {
   apps: [{
     name: 'autowriting',
-    script: './server.js',
-    
+    script: './server.ts',
+
+    // 使用 tsx 运行 TypeScript（项目后端为 .ts，未编译为 .js）
+    interpreter: './node_modules/.bin/tsx',
+
     // 多实例配置（根据 CPU 核心数）
     instances: 2,  // 单核服务器用 1，多核可用 'max' 或具体数字
     exec_mode: 'fork',  // cluster 模式适合无状态应用

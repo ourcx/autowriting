@@ -19,5 +19,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["server", "server.js"]
+  "include": ["server", "server.ts"]
 }

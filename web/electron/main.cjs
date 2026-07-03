@@ -1,7 +1,7 @@
 /**
  * Electron 主进程（CommonJS 格式）
  *
- * 开发模式：Express 由外部 `node server.js` 单独运行，Electron 不重复启动
+ * 开发模式：Express 由外部 `npx tsx server.ts` 单独运行，Electron 不重复启动
  * 生产模式：Electron 主进程内嵌用系统 Node 以子进程方式启动 Express
  *
  * 为什么用系统 Node 而非 Electron 内置 Node？
@@ -71,22 +71,23 @@ let serverProcess = null
 function startServerProcess() {
   return new Promise((resolve, reject) => {
     if (isDev) {
-      // 开发模式由外部 `node server.js` 负责，Electron 不再启动
+      // 开发模式由外部 `npx tsx server.ts` 负责，Electron 不再启动
       console.log('[Electron] 开发模式：使用外部 Express（http://localhost:' + SERVER_PORT + '）')
       resolve()
       return
     }
 
-    // 生产模式：server.js 打包在 app.asar 内，用系统 node 运行
+    // 生产模式：server.ts 打包在 app.asar 内，用系统 node + tsx 运行
     // process.resourcesPath = .../AutoWriting.app/Contents/Resources
-    const serverScript = path.join(process.resourcesPath, 'app.asar', 'server.js')
+    const serverScript = path.join(process.resourcesPath, 'app.asar', 'server.ts')
+    const tsxBin = path.join(process.resourcesPath, 'app.asar', 'node_modules', '.bin', 'tsx')
 
     // 找系统 node 路径（打包应用里没有 PATH，需要手动指定常见位置）
     const nodeBin = findNodeBin()
 
     serverProcess = spawn(
       nodeBin,
-      [serverScript],
+      [tsxBin, serverScript],
       {
         env: {
           ...process.env,

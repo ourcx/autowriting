@@ -35,20 +35,20 @@ rsync -av \
   --exclude="health.sh" \
   --exclude=".npmrc" \
   --exclude="public/" \
-  --exclude="server.js" \
+  --exclude="server.ts" \
   --exclude="sync-to-guard.sh" \
   "$SRC/" "$GUARD/"
 info "rsync 完成"
 
-# ── Step 2: server.js patch ───────────────────────────────────────────────────
-# 源工程 server.js 不含 dist/ 静态托管 + 0.0.0.0 + fileURLToPath
+# ── Step 2: server.ts patch ───────────────────────────────────────────────────
+# 源工程 server.ts 不含 dist/ 静态托管 + 0.0.0.0 + fileURLToPath
 # 每次同步后基于源工程自动生成完整 guard 版本
-info "Step 2: 生成 guard 版 server.js..."
+info "Step 2: 生成 guard 版 server.ts..."
 python3 - << 'PYEOF'
 import re
 
-src_path   = "/Users/zhuxinhao/autowriting/web/server.js"
-guard_path = "/Users/zhuxinhao/autowriting-guard/web/server.js"
+src_path   = "/Users/zhuxinhao/autowriting/web/server.ts"
+guard_path = "/Users/zhuxinhao/autowriting-guard/web/server.ts"
 
 with open(src_path) as f:
     code = f.read()
@@ -106,7 +106,7 @@ code = code.replace(
 with open(guard_path, "w") as f:
     f.write(code)
 
-print("[sync] server.js: guard 版本生成完成")
+print("[sync] server.ts: guard 版本生成完成")
 PYEOF
 
 # ── Step 3: App.tsx patch（BrowserRouter → HashRouter）────────────────────────
@@ -122,15 +122,15 @@ else
   info "App.tsx: 已是 HashRouter，跳过"
 fi
 
-# ── Step 4: server/config.js patch（PORT → APP_PORT）─────────────────────────
-info "Step 4: server/config.js patch..."
-if grep -q "process\.env\.PORT[^_]" "$GUARD/server/config.js" 2>/dev/null; then
+# ── Step 4: server/config.ts patch（PORT → APP_PORT）─────────────────────────
+info "Step 4: server/config.ts patch..."
+if grep -q "process\.env\.PORT[^_]" "$GUARD/server/config.ts" 2>/dev/null; then
   perl -i -0pe \
     's/export const PORT = process\.env\.PORT/\/* 用 APP_PORT 避免与 Pod\/PM2 注入的全局 PORT 冲突 *\/\nexport const PORT = process.env.APP_PORT/g' \
-    "$GUARD/server/config.js"
-  info "server/config.js: PORT → APP_PORT"
+    "$GUARD/server/config.ts"
+  info "server/config.ts: PORT → APP_PORT"
 else
-  info "server/config.js: 已是 APP_PORT，跳过"
+  info "server/config.ts: 已是 APP_PORT，跳过"
 fi
 
 # ── Step 5: package.json patch ────────────────────────────────────────────────
@@ -149,12 +149,13 @@ pkg["engines"] = {"node": ">=18"}
 
 # Guard 专属：scripts（只保留 web server 相关，去掉 Electron / postinstall）
 # Playwright Chromium 由服务启动时的 ensureChromiumInstalled() 按需安装
+# 后端为 TypeScript，用 tsx 运行 server.ts（tsx 已在 runtime deps 中）
 guard_scripts = {
     "dev":     pkg["scripts"].get("dev",     "vite"),
     "build":   pkg["scripts"].get("build",   "vite build"),
     "preview": pkg["scripts"].get("preview", "vite preview"),
-    "server":  "node server.js",
-    "start":   "node server.js",
+    "server":  "npx tsx server.ts",
+    "start":   "npx tsx server.ts",
 }
 pkg["scripts"] = guard_scripts
 
@@ -167,6 +168,7 @@ runtime_deps = {
     "dotenv":   "^16.3.1",
     "express":  "^4.18.2",
     "react-is": "^18.2.0",
+    "tsx":      "^4.22.5",
 }
 dev  = pkg.get("devDependencies", {})
 deps = pkg.get("dependencies", {})
@@ -210,18 +212,18 @@ npm install --legacy-peer-deps 2>&1 | tail -3
 info "Step 7: npm run build..."
 npm run build 2>&1 | grep -E "(✓|✗|dist/|error|warning)" | tail -10
 
-# ── Step 7: 烟测 ──────────────────────────────────────────────────────────────
+# ── Step 8: 烟测 ──────────────────────────────────────────────────────────────
 info "Step 8: 烟测..."
-pkill -f "APP_PORT=3099 node server.js" 2>/dev/null || true
+pkill -f "APP_PORT=3099 npx tsx server.ts" 2>/dev/null || true
 sleep 1
-APP_PORT=3099 node server.js > /tmp/guard-smoke.log 2>&1 &
+APP_PORT=3099 npx tsx server.ts > /tmp/guard-smoke.log 2>&1 &
 SMOKE_PID=$!
 sleep 4
 
 HEALTH=$(curl -sf http://127.0.0.1:3099/health 2>/dev/null || echo "FAIL")
 TITLE=$(curl -s http://127.0.0.1:3099/ 2>/dev/null | grep -o '<title>[^<]*</title>' || echo "FAIL")
 kill $SMOKE_PID 2>/dev/null || true
-pkill -f "APP_PORT=3099 node server.js" 2>/dev/null || true
+pkill -f "APP_PORT=3099 npx tsx server.ts" 2>/dev/null || true
 
 if echo "$HEALTH" | grep -q '"status":"ok"'; then
   info "烟测 /health → $HEALTH"
@@ -234,7 +236,7 @@ else
   error "烟测失败！/health 返回: $HEALTH\n详情: cat /tmp/guard-smoke.log"
 fi
 
-# ── Step 8: 打 zip ────────────────────────────────────────────────────────────
+# ── Step 9: 打 zip ────────────────────────────────────────────────────────────
 info "Step 9: 打 zip..."
 python3 - << PYEOF
 import zipfile, os, shutil
