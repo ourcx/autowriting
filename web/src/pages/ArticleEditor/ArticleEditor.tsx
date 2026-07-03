@@ -3,7 +3,7 @@ import { toast } from '../../components/Toast/Toast'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Zap, Save, Edit3, Palette, Settings, AlertTriangle, Plus, Trash2, Pencil, Sparkles, LayoutList, CheckCircle, ChevronRight, GripVertical } from 'lucide-react'
 import { useAIReadiness, fetchServerStatus } from '../../store/useConfigStore'
-import { fetchArticle, saveArticle } from '../../utils'
+import { fetchArticle, saveArticle } from '../../utils/apiHelpers'
 import CoverGenerator from '../../components/CoverGenerator/CoverGenerator'
 import ImageLibrary from '../../components/ImageLibrary/ImageLibrary'
 import MarkdownEditor from '../../components/MarkdownEditor/MarkdownEditor'
@@ -15,7 +15,7 @@ import {
   TaskTemplate,
   loadAllTaskTemplates,
   deleteCustomTaskTemplate,
-} from '../../utils'
+} from '../../utils/taskTemplateStore'
 import './ArticleEditor.css'
 
 interface ArticleData {

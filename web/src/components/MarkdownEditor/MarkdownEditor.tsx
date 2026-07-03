@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { toast } from '../Toast/Toast'
 import { Edit2, Copy, Download, Sparkles, Check, X, RotateCcw, ImagePlus, Loader2, Zap } from 'lucide-react'
-import { loadAIConfig } from '../../utils'
+import { loadAIConfig } from '../../utils/aiConfig'
 import PromptSelector from '../PromptSelector/PromptSelector'
 import './MarkdownEditor.css'
 

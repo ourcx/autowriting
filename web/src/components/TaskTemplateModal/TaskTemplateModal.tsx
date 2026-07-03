@@ -4,7 +4,7 @@ import {
   TaskTemplate,
   createNewTaskTemplate,
   saveCustomTaskTemplate,
-} from '../../utils'
+} from '../../utils/taskTemplateStore'
 import './TaskTemplateModal.css'
 
 interface Props {

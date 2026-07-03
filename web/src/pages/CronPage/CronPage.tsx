@@ -7,7 +7,7 @@ import {
   Eye, EyeOff, Zap, TrendingUp, FileText, Paintbrush, Send, Activity,
 } from 'lucide-react'
 import { useAIReadiness, fetchServerStatus } from '../../store/useConfigStore'
-import { loadAIConfig } from '../../utils'
+import { loadAIConfig } from '../../utils/aiConfig'
 import './CronPage.css'
 
 // ── 类型 ──────────────────────────────────────────────────────────────────────

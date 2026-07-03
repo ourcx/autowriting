@@ -10,9 +10,9 @@ import {
   PROVIDER_PRESETS,
   COVER_PROVIDER_PRESETS,
   CONFIG_PRESETS,
-} from '../../utils'
+} from '../../utils/aiConfig'
 import { useConfigStore, setLocalConfig, fetchServerStatus } from '../../store/useConfigStore'
-import { testAIConnection } from '../../utils'
+import { testAIConnection } from '../../utils/apiHelpers'
 import './AISettings.css'
 
 type Section = 'article' | 'cover' | 'search' | 'wechat' | 'cdn' | 'memory'
