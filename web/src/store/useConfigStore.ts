@@ -4,7 +4,7 @@
  * ============================================================ */
 
 import { useSyncExternalStore } from 'react'
-import { loadAIConfig, saveAIConfig, AIConfig } from '../utils'
+import { loadAIConfig, saveAIConfig, AIConfig } from '../utils/aiConfig'
 
 // ── 服务端配置状态（从 /api/config/status 拉取）──
 export interface ServerConfigStatus {
