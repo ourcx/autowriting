@@ -10,7 +10,7 @@
 import { Router } from 'express'
 import fs from 'fs'
 import path from 'path'
-import { buildIndex, retrieveRelevant, getIndexStatus } from '../rag.js'
+import { buildIndex, retrieveRelevant, getIndexStatus, extractSearchQuery } from '../rag.js'
 import { SERVER_AI_CONFIG, DRAFTS_DIR } from '../config.js'
 import { authMiddleware } from '../authMiddleware.js'
 
@@ -153,7 +153,9 @@ router.post('/search', async (req, res) => {
     const { query, topK = 5, scoreThreshold, aiConfig: clientAiConfig } = req.body
     if (!query) return res.status(400).json({ error: '缺少 query' })
     const aiConfig = { ...SERVER_AI_CONFIG, ...(clientAiConfig || {}) }
-    const results = await retrieveRelevant(query, {
+    // 使用查询预处理提升检索质量
+    const searchQuery = extractSearchQuery(query) || query
+    const results = await retrieveRelevant(searchQuery, {
       topK,
       scoreThreshold,
       aiConfig,
@@ -165,6 +167,8 @@ router.post('/search', async (req, res) => {
         topK,
         scoreThreshold: scoreThreshold ?? null,
         count: results.length,
+        originalQuery: query,
+        processedQuery: searchQuery,
       },
     })
   } catch (err) {
@@ -225,7 +229,7 @@ function readDirTitle(baseDir, fallback) {
 
 // POST /api/rag/candidates — 按文章目录维度聚合的候选列表（供用户手动选择上下文）
 // body: { query, topK?, aiConfig? }
-// 返回: { candidates: [{ dir, title, snippet, score, types }] }
+// 返回: { candidates: [{ dir, title, snippet, score, sim, types }] }
 router.post('/candidates', async (req, res) => {
   try {
     const { query, topK = 8, aiConfig: clientAiConfig } = req.body
@@ -234,18 +238,25 @@ router.post('/candidates', async (req, res) => {
     const aiConfig = { ...SERVER_AI_CONFIG, ...(clientAiConfig || {}) }
     const userId = req.user.id
 
-    // 检索更多 chunk，以便按文章目录聚合
-    const chunks = await retrieveRelevant(query, { topK: topK * 3, aiConfig, userId })
+    // 使用查询预处理提取核心主题，避免指令性文本干扰检索
+    const searchQuery = extractSearchQuery(query) || query
 
-    // 按 dir 聚合：同一目录取最高相似度，合并内容片段
+    // 检索更多 chunk，以便按文章目录聚合
+    const chunks = await retrieveRelevant(searchQuery, { topK: topK * 3, aiConfig, userId })
+
+    // 按 dir 聚合：同一目录取最高相似度（最大的 sim 值），合并内容片段
     const dirMap = new Map()
     for (const chunk of chunks) {
-      const { dir, content, type, score } = chunk
+      const { dir, content, type, score, sim } = chunk
       if (!dirMap.has(dir)) {
-        dirMap.set(dir, { dir, score, types: new Set([type]), snippets: [content] })
+        dirMap.set(dir, { dir, score, sim, types: new Set([type]), snippets: [content] })
       } else {
         const entry = dirMap.get(dir)
-        if (score < entry.score) entry.score = score   // score 越小越相似
+        // sim 是余弦相似度百分比，越大越相似
+        if (sim > entry.sim) {
+          entry.sim = sim
+          entry.score = score
+        }
         entry.types.add(type)
         if (entry.snippets.length < 3) entry.snippets.push(content)
       }
@@ -262,14 +273,14 @@ router.post('/candidates', async (req, res) => {
         dir:     entry.dir,
         title,
         score:   parseFloat(entry.score.toFixed(4)),
-        sim:     Math.round((1 - entry.score) * 100),
+        sim:     Math.round(entry.sim),  // sim 已是百分比
         types:   [...entry.types],
         snippet: entry.snippets.join(' … ').slice(0, 200),
       })
     }
 
-    // 按相似度排序，只返回前 topK 个文章
-    candidates.sort((a, b) => a.score - b.score)
+    // 按相似度排序（sim 越大越相似），只返回前 topK 个文章
+    candidates.sort((a, b) => b.sim - a.sim)
     res.json({ candidates: candidates.slice(0, topK) })
   } catch (err) {
     console.error('[RAG candidates]', err.message)

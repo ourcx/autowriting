@@ -16,7 +16,7 @@ import path from 'path'
 import axios from 'axios'
 import { DRAFTS_DIR, SERVER_AI_CONFIG, getWritingGuideContent } from '../config.js'
 import { ensureDir, buildLLMRequest, callLLMWithRetry } from '../utils'
-import { retrieveRelevant, formatRetrievedContext, formatExampleContext } from '../rag.js'
+import { retrieveRelevant, formatRetrievedContext, formatExampleContext, extractSearchQuery } from '../rag.js'
 import { saveAnalysis, getLatestAnalysis, listAnalyses, recordTokenUsage, getEffectivePrompt, getSetting } from '../db.js'
 import { authMiddleware } from '../authMiddleware.js'
 import { triggerBuildIndex } from './rag.js'
@@ -376,10 +376,32 @@ router.post('/:articleId/generate/stream', async (req, res) => {
       return res.end()
     }
 
-    // ── 1. RAG 上下文（仅使用前端手动选择的，不再自动检索） ──────────────────
-    const ragSection = selectedRagContext ? `\n\n${selectedRagContext}\n` : ''
+    // ── 1. RAG 上下文 ──────────────────────────────────────────────────────
+    // 优先使用前端手动选择的参考文章；若未选择，自动检索并注入相关内容
+    let ragSection = ''
+    let autoRagCount = 0
     if (selectedRagContext) {
+      ragSection = `\n\n${selectedRagContext}\n`
       send('status', { step: 'rag', message: `已注入 ${selectedRagContext.split('###').length - 1} 篇往期文章` })
+    } else {
+      // 自动 RAG 检索：从任务描述中提取核心主题进行检索
+      try {
+        send('status', { step: 'rag', message: '正在自动检索往期相关文章...' })
+        const searchQuery = extractSearchQuery(task) || task.slice(0, 300)
+        const autoDocs = await retrieveRelevant(searchQuery, {
+          topK: 3,
+          aiConfig: cfg,
+          userId: req.user.id,
+        })
+        if (autoDocs.length > 0) {
+          ragSection = '\n\n' + formatRetrievedContext(autoDocs) + '\n'
+          autoRagCount = autoDocs.length
+          send('status', { step: 'rag', message: `自动检索到 ${autoDocs.length} 篇相关文章` })
+        }
+      } catch (e) {
+        // RAG 检索失败不阻断生成流程
+        console.warn('[Stream] 自动 RAG 检索失败:', e.message)
+      }
     }
 
     // ── 1b. 评分示例注入（有评分的文章才注入，控制 token 消耗） ──────────────
@@ -518,7 +540,8 @@ ${materials}
             articleId, userId: req.user.id, operation: 'generate', model,
             outputTokens: Math.ceil(fullContent.length / 1.5),
           })
-          send('done', { article: fullContent, platform: platformKey, ragCount: platformKey === 'wechat' && selectedRagContext ? 1 : 0 })
+          const ragCount = platformKey === 'wechat' ? (selectedRagContext ? selectedRagContext.split('###').length - 1 : autoRagCount) : 0
+          send('done', { article: fullContent, platform: platformKey, ragCount })
           if (isLast) res.end()
           resolve()
         })

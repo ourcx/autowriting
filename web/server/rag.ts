@@ -1,5 +1,10 @@
 /**
  * RAG 模块：向量索引 + 混合检索（向量 + 关键词）
+ *
+ * HNSWLib 默认使用 L2（欧几里得距离）空间。
+ * 对于归一化向量，L2 距离与余弦相似度的关系：
+ *   L2² = 2 - 2 × cos_sim  →  cos_sim = 1 - L2² / 2
+ * 距离范围 [0, 2]，距离越小越相似。
  */
 import fs from "fs"
 import path from "path"
@@ -14,9 +19,12 @@ import type { AIConfig, SearchResult, ArticleScore } from "./types.ts"
 const LOCAL_EMBED_MODEL = "Xenova/multilingual-e5-small"
 
 // ── 检索默认参数 ───────────────────────────────────────────────────────────────
-const DEFAULT_SCORE_THRESHOLD = 0.72
+// HNSWLib 使用 L2 距离，归一化向量范围 [0, 2]
+// 0.85 对应 cosine_similarity ≈ 1 - 0.85²/2 ≈ 0.64，即 64% 余弦相似度
+// 本地小模型（e5-small）的语义距离通常较大，0.85 能覆盖大部分相关结果
+const DEFAULT_SCORE_THRESHOLD = 0.85
 const DEFAULT_TOP_K = 10
-const KEYWORD_WEIGHT = 0.3
+const KEYWORD_WEIGHT = 0.25
 
 // ── 索引目录 ──────────────────────────────────────────────────────────────────
 
@@ -70,6 +78,16 @@ function getEmbeddingKey(cfg: AIConfig): string {
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
+// ── L2 距离 → 余弦相似度转换 ──────────────────────────────────────────────────
+
+/**
+ * 将 HNSWLib 返回的 L2 距离转换为余弦相似度（0~1）。
+ * 公式：cos_sim = 1 - L2² / 2（仅对归一化向量成立）
+ */
+function l2ToCosine(l2Distance: number): number {
+  return Math.max(0, 1 - (l2Distance * l2Distance) / 2)
+}
 
 // ── 远端 Embedding ─────────────────────────────────────────────────────────────
 
@@ -444,6 +462,107 @@ export async function buildIndex(aiConfig: AIConfig = {}, userId?: string) {
   return { indexed: rawDocs.length, chunks: langchainDocs.length, dimensions: dims, model, embedMode: mode }
 }
 
+// ── 查询预处理：提取检索关键词 ───────────────────────────────────────────────
+
+/**
+ * 中文停用词表：过滤掉指令性、功能性词汇，避免关键词搜索引入噪音。
+ * 任务描述通常包含"请写一篇关于..."等指令语句，直接全文匹配会命中大量不相关文章。
+ */
+const STOP_WORDS = new Set([
+  "的", "了", "在", "是", "我", "有", "和", "就", "不", "人", "都", "一", "上", "也", "很",
+  "到", "说", "要", "去", "你", "会", "着", "没", "看", "好", "这", "那", "他", "她", "它",
+  "请", "写", "一篇", "文章", "关于", "主题", "内容", "要求", "素材", "参考", "需要",
+  "应该", "必须", "可以", "或者", "以及", "但是", "因为", "所以", "如果", "虽然",
+  "什么", "怎么", "为什么", "哪些", "这个", "那个", "这些", "那些", "一个", "一些",
+  "不要", "不能", "没有", "已经", "还是", "而且", "然后", "不过", "只有", "只要",
+])
+
+/**
+ * 从查询文本中提取有意义的检索关键词。
+ * 1. 按标点/空白分段，提取 2-10 字的词组（过滤停用词）
+ * 2. 对长段落提取 2-gram（过滤含停用词的 gram）
+ * 3. 提取引号/书名号内的内容（通常是核心主题）
+ * 4. 提取数字+单位组合（如 "2024年", "GPT-4"）
+ */
+function extractKeywords(text: string): string[] {
+  if (!text || text.trim().length === 0) return []
+
+  const keywords = new Set<string>()
+
+  // 1. 按标点/空白分词
+  const segments = text.split(/[\s,，。！？；：、""''（）()【】《》\-—…·\n\r]+/)
+  for (const seg of segments) {
+    const trimmed = seg.trim()
+    if (trimmed.length < 2) continue
+    if (STOP_WORDS.has(trimmed)) continue
+    // 提取长度 2-10 的词组
+    if (trimmed.length >= 2 && trimmed.length <= 10) {
+      keywords.add(trimmed)
+    }
+    // 对长段提取 2-gram
+    if (trimmed.length > 4) {
+      for (let i = 0; i < trimmed.length - 1; i++) {
+        const bigram = trimmed.slice(i, i + 2)
+        if (!STOP_WORDS.has(bigram[0]) && !STOP_WORDS.has(bigram[1])) {
+          keywords.add(bigram)
+        }
+      }
+    }
+  }
+
+  // 2. 提取引号/书名号内的内容
+  const quoteMatches = text.match(/[""''《]([^""''》]+)[""''》]/g)
+  if (quoteMatches) {
+    for (const qm of quoteMatches) {
+      const inner = qm.replace(/^[""''《]|[""''》]$/g, "").trim()
+      if (inner.length >= 2) keywords.add(inner)
+    }
+  }
+
+  // 3. 提取数字+单位/字母+数字组合
+  const numMatches = text.match(/\d+[\w年月日时分秒亿万亿%]+/g)
+  if (numMatches) {
+    for (const nm of numMatches) keywords.add(nm)
+  }
+
+  return Array.from(keywords).slice(0, 30)
+}
+
+/**
+ * 从任务描述中提取更适合向量检索的查询文本。
+ * 任务描述通常是指令性文本（"请写一篇关于XX的文章，要求..."），
+ * 直接用全文做向量检索会受指令噪音干扰。
+ * 此函数提取核心主题部分，提升检索质量。
+ */
+export function extractSearchQuery(task: string): string {
+  if (!task || task.trim().length === 0) return ""
+
+  // 尝试提取"主题：XXX"或"文章主题：XXX"格式
+  const topicMatch = task.match(/文章?主题[：:]\s*(.+?)(\n|$)/i)
+  if (topicMatch && topicMatch[1].trim().length > 2) {
+    return topicMatch[1].trim()
+  }
+
+  // 尝试提取引号内的内容
+  const quotedMatch = task.match(/[""''《]([^""''》]{3,})[""''》]/)
+  if (quotedMatch) {
+    return quotedMatch[1].trim()
+  }
+
+  // 尝试提取"关于XXX"后的内容
+  const aboutMatch = task.match(/关于(.+?)(?:的|，|。|;|；|\n|$)/)
+  if (aboutMatch && aboutMatch[1].trim().length > 2) {
+    return aboutMatch[1].trim()
+  }
+
+  // fallback：取前 300 字（去掉指令性前缀）
+  const lines = task.split("\n").filter((l) => l.trim().length > 0)
+  // 跳过以"请"、"写"、"生成"开头的指令行
+  const contentLines = lines.filter((l) => !/^\s*(请|写|生成|要求|注意|格式|输出)\s*[写生要注格输]/.test(l))
+  const source = contentLines.length > 0 ? contentLines.join(" ") : task
+  return source.slice(0, 300).trim()
+}
+
 // ── 关键词全文检索 ─────────────────────────────────────────────────────────────
 
 const CHUNK_STORE_FILE = "chunk_store.json"
@@ -470,23 +589,32 @@ function loadChunkStore(indexDir: string): ChunkStoreItem[] {
 function keywordSearch(query: string, chunks: ChunkStoreItem[], topK: number): SearchResult[] {
   if (!chunks.length) return []
 
-  const tokens = new Set([
-    ...query.split(/\s+/).filter((t) => t.length > 1),
-    ...Array.from({ length: query.length - 1 }, (_, i) => query.slice(i, i + 2)),
-  ])
+  const keywords = extractKeywords(query)
+  if (keywords.length === 0) return []
+
+  const kwLower = keywords.map((k) => k.toLowerCase())
 
   const scored = chunks.map((chunk) => {
     const content = chunk.content.toLowerCase()
     let hits = 0
-    for (const token of tokens) {
-      if (content.includes(token.toLowerCase())) hits++
+    let totalOccurrences = 0
+    for (const kw of kwLower) {
+      if (content.includes(kw)) {
+        hits++
+        // 计算出现次数，多次出现加权
+        const occurrences = content.split(kw).length - 1
+        totalOccurrences += occurrences
+      }
     }
-    const score = hits / tokens.size
+    // 命中率（主权重）+ 出现频次加权（辅助权重）
+    const hitRate = hits / kwLower.length
+    const freqBonus = Math.min(totalOccurrences / 10, 0.3)
+    const score = hitRate * 0.7 + freqBonus
     return { chunk, score }
   })
 
   return scored
-    .filter(({ score }) => score > 0)
+    .filter(({ score }) => score > 0.05)
     .sort((a, b) => b.score - a.score)
     .slice(0, topK * 2)
     .map(({ chunk, score }) => ({
@@ -494,7 +622,6 @@ function keywordSearch(query: string, chunks: ChunkStoreItem[], topK: number): S
       source: chunk.metadata.source,
       type: chunk.metadata.type,
       dir: chunk.metadata.dir,
-      // 初始 score 为 1，后续被关键词覆盖
       score: 0,
       kwScore: parseFloat(score.toFixed(4)),
     }))
@@ -507,7 +634,7 @@ interface VectorResult {
   source: string
   type: string
   dir: string
-  score: number
+  score: number  // L2 距离（越小越相似）
 }
 
 interface MergedResult {
@@ -515,10 +642,11 @@ interface MergedResult {
   source: string
   type: string
   dir: string
-  score: number
-  sim: number
-  kwScore: number
-  finalScore: number
+  score: number      // L2 距离
+  sim: number        // 余弦相似度 [0, 1]
+  kwScore: number    // 关键词得分 [0, 1]
+  finalScore: number // 综合得分 [0, 1]
+  hasVector: boolean // 是否有向量检索结果
 }
 
 function mergeResults(vectorResults: VectorResult[], kwResults: SearchResult[], threshold: number): MergedResult[] {
@@ -526,12 +654,14 @@ function mergeResults(vectorResults: VectorResult[], kwResults: SearchResult[], 
 
   for (const r of vectorResults) {
     const key = r.content.slice(0, 100)
-    const sim = 1 - r.score
+    // 使用正确的 L2 → 余弦相似度转换公式
+    const sim = l2ToCosine(r.score)
     merged.set(key, {
       ...r,
       sim,
       kwScore: 0,
       finalScore: (1 - KEYWORD_WEIGHT) * sim,
+      hasVector: true,
     })
   }
 
@@ -544,18 +674,23 @@ function mergeResults(vectorResults: VectorResult[], kwResults: SearchResult[], 
     } else {
       merged.set(key, {
         ...r,
-        score: 1,
+        score: 1,  // 无向量距离，设为较大值
         sim: 0,
         kwScore: r.kwScore ?? 0,
         finalScore: KEYWORD_WEIGHT * (r.kwScore ?? 0),
+        hasVector: false,
       })
     }
   }
 
   return Array.from(merged.values())
     .filter((r) => {
-      if (r.sim > 0) return r.score < threshold
-      return (r.kwScore ?? 0) > 0.2
+      if (r.hasVector) {
+        // 有向量结果：用 L2 距离阈值过滤
+        return r.score < threshold
+      }
+      // 纯关键词结果：要求关键词得分足够高
+      return (r.kwScore ?? 0) > 0.15
     })
     .sort((a, b) => b.finalScore - a.finalScore)
 }
@@ -623,8 +758,13 @@ export async function retrieveRelevant(query: string, { topK = DEFAULT_TOP_K, ai
     const merged = mergeResults(vectorResults, kwResults, threshold)
     const results = merged.slice(0, topK)
 
+    // 日志：输出 top-3 的详细信息，方便调试
+    const topDetails = results.slice(0, 3).map((r) =>
+      `  → dir=${r.dir} L2=${r.score.toFixed(3)} cos=${(r.sim * 100).toFixed(0)}% kw=${r.kwScore.toFixed(2)} final=${(r.finalScore * 100).toFixed(0)}%`
+    ).join("\n")
+
     console.log(
-      `[RAG] 检索完成 | query="${query.slice(0, 30)}" | 向量候选:${vectorResults.length} 关键词候选:${kwResults.length} 混合后:${merged.length} 返回:${results.length}`
+      `[RAG] 检索完成 | query="${query.slice(0, 40)}" | 向量候选:${vectorResults.length} 关键词候选:${kwResults.length} 混合后:${merged.length} 返回:${results.length}\n${topDetails}`
     )
 
     return results.map((r) => ({
@@ -633,7 +773,8 @@ export async function retrieveRelevant(query: string, { topK = DEFAULT_TOP_K, ai
       type: r.type,
       dir: r.dir,
       score: r.score,
-      sim: parseFloat(((r.sim || 0) * 100).toFixed(1)),
+      // sim 转为百分比展示（余弦相似度）
+      sim: parseFloat((r.sim * 100).toFixed(1)),
       kwScore: r.kwScore || 0,
       finalScore: parseFloat((r.finalScore * 100).toFixed(1)),
     }))
