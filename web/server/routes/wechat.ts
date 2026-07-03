@@ -16,9 +16,10 @@ import { Router } from 'express'
 import axios from 'axios'
 import FormData from 'form-data'
 import zlib from 'zlib'
+import { logger } from '../logger.js'
 
 const router = Router()
-
+const WECHAT = 'WECHAT'
 // ── Token 缓存（按 appId 隔离，进程重启后重新获取）──────────────────────────
 // Map<appId, { token: string, exp: number }>
 const _tokenCache = new Map()
@@ -28,9 +29,12 @@ const _tokenCache = new Map()
  * 返回 { appId, appSecret } 或 null
  */
 function getCredentials(req) {
-  const appId     = (req.headers['x-wx-appid'] || '').trim()
+  const appId = (req.headers['x-wx-appid'] || '').trim()
   const appSecret = (req.headers['x-wx-appsecret'] || '').trim()
-  if (!appId || !appSecret) return null
+  if (!appId || !appSecret) {
+    logger.warn(WECHAT, '缺少公众号凭据', { hasAppId: !!appId, hasAppSecret: !!appSecret })
+    return null
+  }
   return { appId, appSecret }
 }
 
@@ -44,15 +48,17 @@ async function fetchFreshToken(appId, appSecret) {
   })
 
   if (resp.data.errcode) {
+    logger.error(WECHAT, '微信 Token 获取失败', { errcode: resp.data.errcode, errmsg: resp.data.errmsg })
     throw new Error(`微信 Token 获取失败: [${resp.data.errcode}] ${resp.data.errmsg}`)
   }
 
-  const now       = Math.floor(Date.now() / 1000)
-  const token     = resp.data.access_token
+  const now = Math.floor(Date.now() / 1000)
+  const token = resp.data.access_token
   const expiresIn = resp.data.expires_in || 7200
-  const exp       = now + expiresIn
+  const exp = now + expiresIn
 
   _tokenCache.set(appId, { token, exp })
+  logger.info(WECHAT, '获取新 access_token 成功', { appId, expiresIn })
   return token
 }
 
@@ -83,8 +89,10 @@ function invalidateToken(appId) {
 // 检查 Header 中的凭据是否已提供（不主动向微信验证，避免消耗调用次数）
 router.get('/status', (req, res) => {
   const creds = getCredentials(req)
+  const bound = !!creds
+  logger.info(WECHAT, '状态查询', { bound, appId: creds?.appId || null })
   res.json({
-    bound: !!creds,
+    bound,
     appId: creds?.appId || null,
   })
 })
@@ -95,58 +103,64 @@ router.get('/account', async (req, res) => {
   if (!creds) return res.status(401).json({ error: '未提供公众号凭据（X-Wx-AppId / X-Wx-AppSecret）' })
 
   try {
+    logger.info(WECHAT, '获取账户信息', { appId: creds.appId })
     const token = await getAccessToken(creds.appId, creds.appSecret)
 
     let basicInfo = null
-    let limited   = false
+    let limited = false
 
     const basicResp = await axios.get('https://api.weixin.qq.com/cgi-bin/account/getaccountbasicinfo', {
-      params:  { access_token: token },
+      params: { access_token: token },
       timeout: 8000,
     })
 
     if (basicResp.data.errcode && basicResp.data.errcode !== 0) {
       if (basicResp.data.errcode === 48001) {
         limited = true
+        logger.warn(WECHAT, '账户接口权限不足 (48001)，标记为 limited', { appId: creds.appId })
       } else {
+        logger.error(WECHAT, '账户基础信息获取失败', { errcode: basicResp.data.errcode, errmsg: basicResp.data.errmsg })
         throw new Error(`[${basicResp.data.errcode}] ${basicResp.data.errmsg}`)
       }
     } else {
       basicInfo = basicResp.data
     }
 
-    let fansCount   = null
+    let fansCount = null
     let fansLimited = false
     try {
       const uResp = await axios.get('https://api.weixin.qq.com/cgi-bin/user/get', {
-        params:  { access_token: token, next_openid: '' },
+        params: { access_token: token, next_openid: '' },
         timeout: 8000,
       })
       if (uResp.data.errcode === 48001) {
         fansLimited = true
+        logger.warn(WECHAT, '粉丝接口权限不足 (48001)', { appId: creds.appId })
       } else if (!uResp.data.errcode || uResp.data.errcode === 0) {
         fansCount = uResp.data.total ?? uResp.data.count ?? 0
       }
-    } catch {
-      // 拿不到粉丝数也没关系
+    } catch (error) {
+      logger.warn(WECHAT, '获取粉丝数失败（不影响主流程）', { error: error.message })
     }
 
-    const headImg      = basicInfo?.head_img || basicInfo?.headimgurl || null
+    const headImg = basicInfo?.head_img || basicInfo?.headimgurl || null
     const cleanHeadImg = headImg && headImg.trim() !== '' ? headImg : null
 
+    logger.info(WECHAT, '账户信息获取成功', { appId: creds.appId, fansCount, limited })
+
     res.json({
-      nickname:     basicInfo?.nick_name  || basicInfo?.nickname || creds.appId,
-      headimgurl:   cleanHeadImg,
-      fans_count:   fansCount,
+      nickname: basicInfo?.nick_name || basicInfo?.nickname || creds.appId,
+      headimgurl: cleanHeadImg,
+      fans_count: fansCount,
       fans_limited: fansLimited,
       account_type: basicInfo?.service_type_info?.id === 2 ? 'service' : 'subscription',
-      verify_type:  basicInfo?.verify_type_info?.id ?? -1,
-      qrcode_url:   basicInfo?.qrcode_url || null,
-      principal:    basicInfo?.principal_name || null,
+      verify_type: basicInfo?.verify_type_info?.id ?? -1,
+      qrcode_url: basicInfo?.qrcode_url || null,
+      principal: basicInfo?.principal_name || null,
       limited,
     })
   } catch (err) {
-    console.error('[Wechat/account]', err.message)
+    logger.error(WECHAT, '获取账户信息失败', { error: err.message })
     res.status(500).json({ error: err.message })
   }
 })
@@ -157,9 +171,11 @@ router.get('/drafts', async (req, res) => {
   if (!creds) return res.status(401).json({ error: '未提供公众号凭据' })
 
   try {
-    const token  = await getAccessToken(creds.appId, creds.appSecret)
+    const token = await getAccessToken(creds.appId, creds.appSecret)
     const offset = parseInt(req.query.offset ?? '0', 10)
-    const count  = Math.min(parseInt(req.query.count ?? '10', 10), 20)
+    const count = Math.min(parseInt(req.query.count ?? '10', 10), 20)
+
+    logger.info(WECHAT, '获取草稿列表', { appId: creds.appId, offset, count })
 
     const resp = await axios.post(
       'https://api.weixin.qq.com/cgi-bin/draft/batchget',
@@ -168,6 +184,7 @@ router.get('/drafts', async (req, res) => {
     )
 
     if (resp.data.errcode && resp.data.errcode !== 0) {
+      logger.warn(WECHAT, '微信草稿列表接口返回错误', { errcode: resp.data.errcode, errmsg: resp.data.errmsg })
       return res.status(400).json({
         error: `[${resp.data.errcode}] ${resp.data.errmsg}`,
         errcode: resp.data.errcode,
@@ -177,23 +194,24 @@ router.get('/drafts', async (req, res) => {
     const items = (resp.data.item ?? []).map(item => {
       const first = item.content?.news_item?.[0] ?? {}
       return {
-        media_id:    item.media_id,
+        media_id: item.media_id,
         update_time: item.update_time,
-        title:       first.title   ?? '（无标题）',
-        digest:      first.digest  ?? '',
-        thumb_url:   first.thumb_url ?? null,
-        url:         first.url     ?? null,
-        count:       item.content?.news_item?.length ?? 1,
+        title: first.title ?? '（无标题）',
+        digest: first.digest ?? '',
+        thumb_url: first.thumb_url ?? null,
+        url: first.url ?? null,
+        count: item.content?.news_item?.length ?? 1,
       }
     })
 
+    logger.info(WECHAT, '草稿列表获取成功', { total: resp.data.total_count ?? 0, returned: items.length })
     res.json({
       total_count: resp.data.total_count ?? 0,
-      item_count:  resp.data.item_count  ?? items.length,
+      item_count: resp.data.item_count ?? items.length,
       items,
     })
   } catch (err) {
-    console.error('[Wechat/drafts]', err.message)
+    logger.error(WECHAT, '获取草稿列表失败', { error: err.message })
     res.status(500).json({ error: err.message })
   }
 })
@@ -215,20 +233,20 @@ function createWhitePng(width = 900, height = 383) {
     return (c ^ 0xFFFFFFFF) >>> 0
   }
   const chunk = (type, data) => {
-    const tBuf  = Buffer.from(type, 'ascii')
+    const tBuf = Buffer.from(type, 'ascii')
     const tData = Buffer.concat([tBuf, data])
-    const len   = Buffer.alloc(4); len.writeUInt32BE(data.length)
-    const crc   = Buffer.alloc(4); crc.writeUInt32BE(crc32(tData))
+    const len = Buffer.alloc(4); len.writeUInt32BE(data.length)
+    const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(tData))
     return Buffer.concat([len, tData, crc])
   }
   const ihdr = Buffer.alloc(13)
-  ihdr.writeUInt32BE(width,  0)
+  ihdr.writeUInt32BE(width, 0)
   ihdr.writeUInt32BE(height, 4)
   ihdr[8] = 8; ihdr[9] = 2
-  const row     = Buffer.alloc(1 + width * 3, 0xFF)
-  row[0]        = 0x00
+  const row = Buffer.alloc(1 + width * 3, 0xFF)
+  row[0] = 0x00
   const rawData = Buffer.concat(Array.from({ length: height }, () => row))
-  const idat    = zlib.deflateSync(rawData)
+  const idat = zlib.deflateSync(rawData)
   return Buffer.concat([
     Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
     chunk('IHDR', ihdr),
@@ -248,15 +266,17 @@ async function uploadBufferToWechat(token, buf, filename, contentType) {
     'https://api.weixin.qq.com/cgi-bin/material/add_material',
     form,
     {
-      params:  { access_token: token, type: 'image' },
+      params: { access_token: token, type: 'image' },
       headers: form.getHeaders(),
       timeout: 15000,
     },
   )
 
   if (upResp.data.errcode && upResp.data.errcode !== 0) {
+    logger.error(WECHAT, '上传永久素材失败', { errcode: upResp.data.errcode, errmsg: upResp.data.errmsg })
     throw new Error(`[${upResp.data.errcode}] ${upResp.data.errmsg}`)
   }
+  logger.debug(WECHAT, '永久素材上传成功', { filename, mediaId: upResp.data.media_id })
   return upResp.data.media_id
 }
 
@@ -269,10 +289,11 @@ async function getDefaultThumbMediaId(appId, token) {
   const cached = _defaultThumbCache.get(appId)
   if (cached) return cached
 
-  const buf     = createWhitePng()
+  logger.info(WECHAT, '上传默认封面素材', { appId })
+  const buf = createWhitePng()
   const mediaId = await uploadBufferToWechat(token, buf, 'blank_thumb.png', 'image/png')
   _defaultThumbCache.set(appId, mediaId)
-  console.log('[Wechat] 默认封面素材已上传，appId:', appId, 'media_id:', mediaId)
+  logger.info(WECHAT, '默认封面素材已上传', { appId, mediaId })
   return mediaId
 }
 
@@ -285,6 +306,7 @@ router.post('/upload-thumb', async (req, res) => {
   if (!url) return res.status(400).json({ error: '缺少 url 参数' })
 
   try {
+    logger.info(WECHAT, '上传封面图', { appId: creds.appId, url: url.slice(0, 80) })
     const token = await getAccessToken(creds.appId, creds.appSecret)
 
     const imgResp = await axios.get(url, {
@@ -294,10 +316,10 @@ router.post('/upload-thumb', async (req, res) => {
     })
 
     const contentType = imgResp.headers['content-type'] || 'image/jpeg'
-    const ext = contentType.includes('png')  ? 'png'
-              : contentType.includes('gif')  ? 'gif'
-              : contentType.includes('webp') ? 'webp'
-              : 'jpg'
+    const ext = contentType.includes('png') ? 'png'
+      : contentType.includes('gif') ? 'gif'
+        : contentType.includes('webp') ? 'webp'
+          : 'jpg'
 
     const mediaId = await uploadBufferToWechat(
       token,
@@ -306,9 +328,10 @@ router.post('/upload-thumb', async (req, res) => {
       contentType,
     )
 
+    logger.info(WECHAT, '封面图上传成功', { mediaId, contentType })
     res.json({ media_id: mediaId })
   } catch (err) {
-    console.error('[Wechat/upload-thumb]', err.message)
+    logger.error(WECHAT, '封面图上传失败', { error: err.message })
     res.status(500).json({ error: `封面图片上传失败: ${err.message}` })
   }
 })
@@ -318,8 +341,9 @@ router.post('/draft', async (req, res) => {
   const creds = getCredentials(req)
   if (!creds) return res.status(401).json({ error: '未提供公众号凭据' })
 
-  const { title, content, digest, thumb_media_id,need_open_comment=1,only_fans_can_comment=1 } = req.body
+  const { title, content, digest, thumb_media_id, need_open_comment = 1, only_fans_can_comment = 1 } = req.body
   if (!title || !content) {
+    logger.warn(WECHAT, '新增草稿参数缺失', { hasTitle: !!title, hasContent: !!content })
     return res.status(400).json({ error: '标题和内容不能为空' })
   }
 
@@ -329,18 +353,18 @@ router.post('/draft', async (req, res) => {
       try {
         finalThumbId = await getDefaultThumbMediaId(creds.appId, token)
       } catch (thumbErr) {
-        console.warn('[Wechat/draft] 默认封面上传失败，尝试无封面推送:', thumbErr.message)
+        logger.warn(WECHAT, '默认封面上传失败，尝试无封面推送', { error: thumbErr.message })
       }
     }
 
     const article = {
-      title:                 title.slice(0, 64),
+      title: title.slice(0, 64),
       content,
       need_open_comment,
       only_fans_can_comment,
     }
-    if (digest)        article.digest         = digest.slice(0, 120)
-    if (finalThumbId)  article.thumb_media_id = finalThumbId
+    if (digest) article.digest = digest.slice(0, 120)
+    if (finalThumbId) article.thumb_media_id = finalThumbId
 
     return axios.post(
       'https://api.weixin.qq.com/cgi-bin/draft/add',
@@ -350,26 +374,29 @@ router.post('/draft', async (req, res) => {
   }
 
   try {
+    logger.info(WECHAT, '新增草稿', { appId: creds.appId, title: title.slice(0, 20), hasThumb: !!thumb_media_id })
     let token = await getAccessToken(creds.appId, creds.appSecret)
-    let resp  = await submitDraft(token)
+    let resp = await submitDraft(token)
 
     if (resp.data.errcode === 40001) {
-      console.warn('[Wechat/draft] 收到 40001，强制刷新 token 后重试...')
+      logger.warn(WECHAT, '收到 40001，强制刷新 token 后重试', { appId: creds.appId })
       invalidateToken(creds.appId)
       token = await getAccessToken(creds.appId, creds.appSecret, { forceRefresh: true })
-      resp  = await submitDraft(token)
+      resp = await submitDraft(token)
     }
 
     if (resp.data.errcode && resp.data.errcode !== 0) {
+      logger.error(WECHAT, '推送草稿失败', { errcode: resp.data.errcode, errmsg: resp.data.errmsg })
       return res.status(400).json({
-        error:   `推送失败: [${resp.data.errcode}] ${resp.data.errmsg}`,
+        error: `推送失败: [${resp.data.errcode}] ${resp.data.errmsg}`,
         errcode: resp.data.errcode,
       })
     }
 
+    logger.info(WECHAT, '草稿新增成功', { mediaId: resp.data.media_id })
     res.json({ success: true, media_id: resp.data.media_id })
   } catch (err) {
-    console.error('[Wechat/draft]', err.message)
+    logger.error(WECHAT, '新增草稿失败', { error: err.message })
     res.status(500).json({ error: err.message })
   }
 })
@@ -383,10 +410,12 @@ router.get('/proxy-img', async (req, res) => {
   try { parsed = new URL(url) } catch { return res.status(400).json({ error: 'Invalid url' }) }
   const allowed = ['mmbiz.qpic.cn', 'mmbiz.qlogo.cn', 'wx.qlogo.cn']
   if (!allowed.some(h => parsed.hostname === h || parsed.hostname.endsWith('.' + h))) {
+    logger.warn(WECHAT, '图片代理域名被拒', { hostname: parsed.hostname })
     return res.status(403).json({ error: 'Domain not allowed' })
   }
 
   try {
+    logger.debug(WECHAT, '代理图片请求', { url: String(url).slice(0, 80) })
     const resp = await axios.get(url, {
       responseType: 'arraybuffer',
       timeout: 8000,
@@ -400,7 +429,7 @@ router.get('/proxy-img', async (req, res) => {
     res.setHeader('Cache-Control', 'public, max-age=86400')
     res.send(resp.data)
   } catch (err) {
-    console.error('[Wechat/proxy-img]', err.message)
+    logger.error(WECHAT, '图片代理失败', { url: String(url).slice(0, 80), error: err.message })
     res.status(502).json({ error: '图片代理失败' })
   }
 })
@@ -412,10 +441,12 @@ router.get('/token', async (req, res) => {
 
   try {
     const token = await getAccessToken(creds.appId, creds.appSecret)
-    const now   = Math.floor(Date.now() / 1000)
+    const now = Math.floor(Date.now() / 1000)
     const cached = _tokenCache.get(creds.appId)
+    logger.debug(WECHAT, '调试 token 查询', { appId: creds.appId, expiresIn: (cached?.exp ?? 0) - now })
     res.json({ token: token.slice(0, 16) + '...', expires_in: (cached?.exp ?? 0) - now })
   } catch (err) {
+    logger.error(WECHAT, '调试 token 查询失败', { error: err.message })
     res.status(500).json({ error: err.message })
   }
 })
@@ -426,8 +457,10 @@ router.get('/draft/:mediaId', async (req, res) => {
   if (!creds) return res.status(401).json({ error: '未提供公众号凭据' })
 
   try {
-    const token   = await getAccessToken(creds.appId, creds.appSecret)
+    const token = await getAccessToken(creds.appId, creds.appSecret)
     const { mediaId } = req.params
+
+    logger.info(WECHAT, '获取草稿详情', { appId: creds.appId, mediaId })
 
     const resp = await axios.post(
       'https://api.weixin.qq.com/cgi-bin/draft/get',
@@ -436,6 +469,7 @@ router.get('/draft/:mediaId', async (req, res) => {
     )
 
     if (resp.data.errcode && resp.data.errcode !== 0) {
+      logger.warn(WECHAT, '获取草稿详情失败', { errcode: resp.data.errcode, errmsg: resp.data.errmsg })
       return res.status(400).json({
         error: `[${resp.data.errcode}] ${resp.data.errmsg}`,
         errcode: resp.data.errcode,
@@ -443,14 +477,15 @@ router.get('/draft/:mediaId', async (req, res) => {
     }
 
     const first = resp.data.news_item?.[0] ?? {}
+    logger.info(WECHAT, '草稿详情获取成功', { mediaId, title: first.title ?? '' })
     res.json({
-      title:     first.title   ?? '',
-      content:   first.content ?? '',
-      digest:    first.digest  ?? '',
+      title: first.title ?? '',
+      content: first.content ?? '',
+      digest: first.digest ?? '',
       thumb_url: first.thumb_url ?? null,
     })
   } catch (err) {
-    console.error('[Wechat/draft/get]', err.message)
+    logger.error(WECHAT, '获取草稿详情失败', { mediaId: req.params.mediaId, error: err.message })
     res.status(500).json({ error: err.message })
   }
 })
@@ -461,8 +496,10 @@ router.delete('/draft/:mediaId', async (req, res) => {
   if (!creds) return res.status(401).json({ error: '未提供公众号凭据' })
 
   try {
-    const token   = await getAccessToken(creds.appId, creds.appSecret)
+    const token = await getAccessToken(creds.appId, creds.appSecret)
     const { mediaId } = req.params
+
+    logger.info(WECHAT, '删除草稿', { appId: creds.appId, mediaId })
 
     const resp = await axios.post(
       'https://api.weixin.qq.com/cgi-bin/draft/delete',
@@ -471,15 +508,17 @@ router.delete('/draft/:mediaId', async (req, res) => {
     )
 
     if (resp.data.errcode && resp.data.errcode !== 0) {
+      logger.warn(WECHAT, '删除草稿失败', { errcode: resp.data.errcode, errmsg: resp.data.errmsg })
       return res.status(400).json({
         error: `[${resp.data.errcode}] ${resp.data.errmsg}`,
         errcode: resp.data.errcode,
       })
     }
 
+    logger.info(WECHAT, '草稿删除成功', { mediaId })
     res.json({ success: true })
   } catch (err) {
-    console.error('[Wechat/draft/delete]', err.message)
+    logger.error(WECHAT, '删除草稿失败', { mediaId: req.params.mediaId, error: err.message })
     res.status(500).json({ error: err.message })
   }
 })
@@ -490,8 +529,10 @@ router.post('/draft/:mediaId/publish', async (req, res) => {
   if (!creds) return res.status(401).json({ error: '未提供公众号凭据' })
 
   try {
-    const token   = await getAccessToken(creds.appId, creds.appSecret)
+    const token = await getAccessToken(creds.appId, creds.appSecret)
     const { mediaId } = req.params
+
+    logger.info(WECHAT, '发布草稿', { appId: creds.appId, mediaId })
 
     const resp = await axios.post(
       'https://api.weixin.qq.com/cgi-bin/freepublish/submit',
@@ -500,15 +541,17 @@ router.post('/draft/:mediaId/publish', async (req, res) => {
     )
 
     if (resp.data.errcode && resp.data.errcode !== 0) {
+      logger.error(WECHAT, '发布草稿失败', { errcode: resp.data.errcode, errmsg: resp.data.errmsg })
       return res.status(400).json({
         error: `[${resp.data.errcode}] ${resp.data.errmsg}`,
         errcode: resp.data.errcode,
       })
     }
 
+    logger.info(WECHAT, '草稿发布成功', { mediaId, publishId: resp.data.publish_id })
     res.json({ success: true, publish_id: resp.data.publish_id })
   } catch (err) {
-    console.error('[Wechat/draft/publish]', err.message)
+    logger.error(WECHAT, '发布草稿失败', { mediaId: req.params.mediaId, error: err.message })
     res.status(500).json({ error: err.message })
   }
 })
@@ -519,9 +562,11 @@ router.get('/published', async (req, res) => {
   if (!creds) return res.status(401).json({ error: '未提供公众号凭据' })
 
   try {
-    const token  = await getAccessToken(creds.appId, creds.appSecret)
+    const token = await getAccessToken(creds.appId, creds.appSecret)
     const offset = parseInt(req.query.offset ?? '0', 10)
-    const count  = Math.min(parseInt(req.query.count ?? '10', 10), 20)
+    const count = Math.min(parseInt(req.query.count ?? '10', 10), 20)
+
+    logger.info(WECHAT, '获取已发布列表', { appId: creds.appId, offset, count })
 
     const resp = await axios.post(
       'https://api.weixin.qq.com/cgi-bin/freepublish/batchget',
@@ -530,6 +575,7 @@ router.get('/published', async (req, res) => {
     )
 
     if (resp.data.errcode && resp.data.errcode !== 0) {
+      logger.warn(WECHAT, '获取已发布列表失败', { errcode: resp.data.errcode, errmsg: resp.data.errmsg })
       return res.status(400).json({
         error: `[${resp.data.errcode}] ${resp.data.errmsg}`,
         errcode: resp.data.errcode,
@@ -539,23 +585,24 @@ router.get('/published', async (req, res) => {
     const items = (resp.data.item ?? []).map(item => {
       const first = item.content?.news_item?.[0] ?? {}
       return {
-        article_id:  item.article_id,
+        article_id: item.article_id,
         update_time: item.update_time,
-        title:       first.title   ?? '（无标题）',
-        digest:      first.digest  ?? '',
-        thumb_url:   first.thumb_url ?? null,
-        url:         first.url     ?? null,
-        count:       item.content?.news_item?.length ?? 1,
+        title: first.title ?? '（无标题）',
+        digest: first.digest ?? '',
+        thumb_url: first.thumb_url ?? null,
+        url: first.url ?? null,
+        count: item.content?.news_item?.length ?? 1,
       }
     })
 
+    logger.info(WECHAT, '已发布列表获取成功', { total: resp.data.total_count ?? 0, returned: items.length })
     res.json({
       total_count: resp.data.total_count ?? 0,
-      item_count:  resp.data.item_count  ?? items.length,
+      item_count: resp.data.item_count ?? items.length,
       items,
     })
   } catch (err) {
-    console.error('[Wechat/published]', err.message)
+    logger.error(WECHAT, '获取已发布列表失败', { error: err.message })
     res.status(500).json({ error: err.message })
   }
 })
@@ -566,10 +613,12 @@ router.get('/materials', async (req, res) => {
   if (!creds) return res.status(401).json({ error: '未提供公众号凭据' })
 
   try {
-    const token  = await getAccessToken(creds.appId, creds.appSecret)
-    const type   = req.query.type ?? 'image'
+    const token = await getAccessToken(creds.appId, creds.appSecret)
+    const type = req.query.type ?? 'image'
     const offset = parseInt(req.query.offset ?? '0', 10)
-    const count  = Math.min(parseInt(req.query.count ?? '20', 10), 20)
+    const count = Math.min(parseInt(req.query.count ?? '20', 10), 20)
+
+    logger.info(WECHAT, '获取素材列表', { appId: creds.appId, type, offset, count })
 
     const resp = await axios.post(
       'https://api.weixin.qq.com/cgi-bin/material/batchget_material',
@@ -578,19 +627,21 @@ router.get('/materials', async (req, res) => {
     )
 
     if (resp.data.errcode && resp.data.errcode !== 0) {
+      logger.warn(WECHAT, '获取素材列表失败', { errcode: resp.data.errcode, errmsg: resp.data.errmsg })
       return res.status(400).json({
         error: `[${resp.data.errcode}] ${resp.data.errmsg}`,
         errcode: resp.data.errcode,
       })
     }
 
+    logger.info(WECHAT, '素材列表获取成功', { type, total: resp.data.total_count ?? 0, returned: resp.data.item_count ?? 0 })
     res.json({
       total_count: resp.data.total_count ?? 0,
-      item_count:  resp.data.item_count  ?? 0,
-      items:       resp.data.item ?? [],
+      item_count: resp.data.item_count ?? 0,
+      items: resp.data.item ?? [],
     })
   } catch (err) {
-    console.error('[Wechat/materials]', err.message)
+    logger.error(WECHAT, '获取素材列表失败', { error: err.message })
     res.status(500).json({ error: err.message })
   }
 })
@@ -601,8 +652,10 @@ router.delete('/material/:mediaId', async (req, res) => {
   if (!creds) return res.status(401).json({ error: '未提供公众号凭据' })
 
   try {
-    const token   = await getAccessToken(creds.appId, creds.appSecret)
+    const token = await getAccessToken(creds.appId, creds.appSecret)
     const { mediaId } = req.params
+
+    logger.info(WECHAT, '删除素材', { appId: creds.appId, mediaId })
 
     const resp = await axios.post(
       'https://api.weixin.qq.com/cgi-bin/material/del_material',
@@ -611,15 +664,17 @@ router.delete('/material/:mediaId', async (req, res) => {
     )
 
     if (resp.data.errcode && resp.data.errcode !== 0) {
+      logger.warn(WECHAT, '删除素材失败', { errcode: resp.data.errcode, errmsg: resp.data.errmsg })
       return res.status(400).json({
         error: `[${resp.data.errcode}] ${resp.data.errmsg}`,
         errcode: resp.data.errcode,
       })
     }
 
+    logger.info(WECHAT, '素材删除成功', { mediaId })
     res.json({ success: true })
   } catch (err) {
-    console.error('[Wechat/material/delete]', err.message)
+    logger.error(WECHAT, '删除素材失败', { mediaId: req.params.mediaId, error: err.message })
     res.status(500).json({ error: err.message })
   }
 })
@@ -632,11 +687,13 @@ router.get('/article-stats', async (req, res) => {
   try {
     const token = await getAccessToken(creds.appId, creds.appSecret)
 
-    const now    = new Date()
-    const endD   = req.query.end_date   ?? now.toISOString().slice(0, 10)
+    const now = new Date()
+    const endD = req.query.end_date ?? now.toISOString().slice(0, 10)
     const startD = req.query.begin_date ?? (() => {
       const d = new Date(now); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10)
     })()
+
+    logger.info(WECHAT, '获取文章阅读统计', { appId: creds.appId, beginDate: startD, endDate: endD })
 
     const resp = await axios.post(
       'https://api.weixin.qq.com/datacube/getarticleread',
@@ -645,6 +702,7 @@ router.get('/article-stats', async (req, res) => {
     )
 
     if (resp.data.errcode && resp.data.errcode !== 0) {
+      logger.warn(WECHAT, '获取文章统计失败', { errcode: resp.data.errcode, errmsg: resp.data.errmsg })
       return res.status(400).json({
         error: `[${resp.data.errcode}] ${resp.data.errmsg}`,
         errcode: resp.data.errcode,
@@ -656,25 +714,28 @@ router.get('/article-stats', async (req, res) => {
       const key = row.msgid ?? row.title
       if (!byArticle[key]) {
         byArticle[key] = {
-          title:     row.title    ?? '',
-          url:       row.ori_url  ?? null,
-          read_num:  0,
+          title: row.title ?? '',
+          url: row.ori_url ?? null,
+          read_num: 0,
           share_num: 0,
-          date:      row.ref_date ?? '',
+          date: row.ref_date ?? '',
         }
       }
-      byArticle[key].read_num  += row.int_page_read_count  ?? 0
-      byArticle[key].share_num += row.share_count          ?? 0
+      byArticle[key].read_num += row.int_page_read_count ?? 0
+      byArticle[key].share_num += row.share_count ?? 0
     }
+
+    const articles = Object.values(byArticle).sort((a, b) => b.read_num - a.read_num)
+    logger.info(WECHAT, '文章统计获取成功', { articlesCount: articles.length, beginDate: startD, endDate: endD })
 
     res.json({
       begin_date: startD,
-      end_date:   endD,
-      list:       resp.data.list ?? [],
-      articles:   Object.values(byArticle).sort((a, b) => b.read_num - a.read_num),
+      end_date: endD,
+      list: resp.data.list ?? [],
+      articles,
     })
   } catch (err) {
-    console.error('[Wechat/article-stats]', err.message)
+    logger.error(WECHAT, '获取文章统计失败', { error: err.message })
     res.status(500).json({ error: err.message })
   }
 })

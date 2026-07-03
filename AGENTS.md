@@ -5,15 +5,16 @@
 
 ## 我要做什么 → 去哪里看
 
-| 目标 | 文档 |
-|---|---|
-| 了解项目分层、目录边界、命名约定 | [`docs/agents/structure.md`](docs/agents/structure.md) |
-| 写代码前查规范（前端 / 后端 / SSE / 提交） | [`docs/agents/conventions.md`](docs/agents/conventions.md) |
-| 知道用哪个命令验收、跑测试 | [`docs/agents/workflows.md`](docs/agents/workflows.md) |
-| 提 MR / review 时按什么顺序看 | [`docs/agents/review.md`](docs/agents/review.md) |
-| 理解 Harness 反馈回路 & 豁免策略 | [`docs/agents/harness.md`](docs/agents/harness.md) |
-| 新增功能时的高频陷阱清单 | [`.codewiz/rules/new-feature-checklist.md`](.codewiz/rules/new-feature-checklist.md) |
-| 视觉设计规范 | [`.codewiz/rules/DESIGN.md`](.codewiz/rules/DESIGN.md) |
+| 目标                                       | 文档                                                                                 |
+| ------------------------------------------ | ------------------------------------------------------------------------------------ |
+| 了解项目分层、目录边界、命名约定           | [`docs/agents/structure.md`](docs/agents/structure.md)                               |
+| 写代码前查规范（前端 / 后端 / SSE / 提交） | [`docs/agents/conventions.md`](docs/agents/conventions.md)                           |
+| 知道用哪个命令验收、跑测试                 | [`docs/agents/workflows.md`](docs/agents/workflows.md)                               |
+| 提 MR / review 时按什么顺序看              | [`docs/agents/review.md`](docs/agents/review.md)                                     |
+| 添加日志的方法                             | [`docs\添加日志的方法.md`](docs\添加日志的方法.md)                                   |
+| 理解 Harness 反馈回路 & 豁免策略           | [`docs/agents/harness.md`](docs/agents/harness.md)                                   |
+| 新增功能时的高频陷阱清单                   | [`.codewiz/rules/new-feature-checklist.md`](.codewiz/rules/new-feature-checklist.md) |
+| 视觉设计规范                               | [`.codewiz/rules/DESIGN.md`](.codewiz/rules/DESIGN.md)                               |
 
 ## 默认验收命令
 
