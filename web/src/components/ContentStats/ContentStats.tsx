@@ -63,7 +63,15 @@ interface UIBlockHighlightQuote {
   quotes: string[]
 }
 
-type UIBlock = UIBlockClicheDiff | UIBlockDataSuggestion | UIBlockStructureMap | UIBlockLeadRewrite | UIBlockHighlightQuote
+
+// 直接渲染 html，default 块
+interface UIBlockDefault {
+  type: 'html'
+  title?: string
+  html: string
+}
+
+type UIBlock = UIBlockClicheDiff | UIBlockDataSuggestion | UIBlockStructureMap | UIBlockLeadRewrite | UIBlockHighlightQuote | UIBlockDefault
 
 interface AnalysisResult {
   scores: ScoreMap
@@ -208,6 +216,7 @@ const BLOCK_THEMES = {
   'lead-rewrite':    { bg: '#ffb084', text: '#0a0a0a', accent: 'rgba(10,10,10,0.12)',   label: '开头改写' },
   'structure-map':   { bg: '#1a3a3a', text: '#fff',    accent: 'rgba(255,255,255,0.2)', label: '结构诊断' },
   'highlight-quote': { bg: '#e8b94a', text: '#0a0a0a', accent: 'rgba(10,10,10,0.12)',   label: '文章金句' },
+  'html':            { bg: '#2d3748', text: '#fff',    accent: 'rgba(255,255,255,0.15)', label: '自定义面板' },
 } as const
 
 // Skeleton 占位块（流式加载中）
@@ -404,6 +413,23 @@ function DynamicUIBlocks({
             case 'structure-map':   return <UIBlockStructureMapRenderer   key={i} block={block} />
             case 'lead-rewrite':    return <UIBlockLeadRewriteRenderer    key={i} block={block} />
             case 'highlight-quote': return <UIBlockHighlightQuoteRenderer key={i} block={block} />
+            case 'html': {
+              const theme = BLOCK_THEMES['html']
+              return (
+                <div className="clay-card clay-card--html" style={{ background: theme.bg }} key={i}>
+                  <div className="clay-card-header">
+                    <span className="clay-card-label" style={{ color: theme.text }}>{theme.label}</span>
+                  </div>
+                  {block.title && (
+                    <div className="clay-card-title" style={{ color: theme.text }}>{block.title}</div>
+                  )}
+                  <div
+                    className="clay-html-content"
+                    dangerouslySetInnerHTML={{ __html: block.html }}
+                  />
+                </div>
+              )
+            }
             default:                return null
           }
         })}
@@ -943,7 +969,7 @@ export default function ContentStats({ content, title, articleId, task, onArticl
 
         {!result && !analyzing && (
           <div className="analysis-empty">
-            <p>AI 会读取 AGENTS.md 规范和往期文章，评分并列出具体问题。</p>
+            <p>AI 会读取规范和往期文章，评分并列出具体问题。</p>
             {content.trim().length < 100 && (
               <p className="analysis-tip">文章内容不足 100 字，先把文章写长一点再分析。</p>
             )}

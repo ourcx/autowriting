@@ -1012,6 +1012,91 @@
   font-style: italic;
 }
 
+/* ── HTML 自定义块内部元素样式（深色卡片背景适配） ── */
+.clay-html-content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #fff;
+}
+
+.clay-html-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+}
+
+.clay-html-content th,
+.clay-html-content td {
+  padding: 8px 12px;
+  border: 1px solid rgba(255,255,255,0.2);
+  text-align: left;
+}
+
+.clay-html-content th {
+  background: rgba(255,255,255,0.1);
+  font-weight: 600;
+}
+
+.clay-html-content tr:nth-child(even) td {
+  background: rgba(255,255,255,0.05);
+}
+
+.clay-html-content h1,
+.clay-html-content h2,
+.clay-html-content h3,
+.clay-html-content h4 {
+  margin: 12px 0 6px;
+  font-weight: 600;
+}
+
+.clay-html-content h1 { font-size: 18px; }
+.clay-html-content h2 { font-size: 16px; }
+.clay-html-content h3 { font-size: 15px; }
+
+.clay-html-content p {
+  margin: 6px 0;
+}
+
+.clay-html-content ul,
+.clay-html-content ol {
+  margin: 6px 0;
+  padding-left: 20px;
+}
+
+.clay-html-content li {
+  margin: 4px 0;
+}
+
+.clay-html-content strong {
+  font-weight: 600;
+}
+
+.clay-html-content code {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.12);
+  font-size: 13px;
+}
+
+.clay-html-content blockquote {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-left: 3px solid rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.08);
+  border-radius: 0 8px 8px 0;
+}
+
+.clay-html-content a {
+  color: #63b3ed;
+  text-decoration: underline;
+}
+
+.clay-html-content hr {
+  border: none;
+  border-top: 1px solid rgba(255,255,255,0.2);
+  margin: 12px 0;
+}
+
 /* ── Skeleton 加载动画 ── */
 .clay-card--skeleton {
   opacity: 0.7;

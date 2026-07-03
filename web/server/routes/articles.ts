@@ -645,6 +645,8 @@ uiBlocks 字段说明（必须根据实际问题选择，不要强行凑数）�
 - 发现结构/逻辑问题时，加入 type="structure-map" 块，sections 列出每个段落的诊断
 - 发现开头有套话或不够直接时，加入 type="lead-rewrite" 块，给出原文和改写版本
 - 文章整体质量好（overall>=75）时，加入 type="highlight-quote" 块，摘录 1-3 句金句
+- 上述类型无法表达时，加入 type="html" 块，用自定义 HTML 渲染（前端会通过 dangerouslySetInnerHTML 直接插入）。html 字段必须是合法 HTML 字符串，可以使用内联 style 属性。适用场景：多维对比表格、进度条、标签云、时间线等结构化可视化内容，并且这个卡片的背景是比较黑的，你尽量使用亮色，内联样式必须美观，但是不能有太多ai感
+
 
 返回格式（严格合法 JSON，所有字段都必须有值）：
 
@@ -698,11 +700,16 @@ uiBlocks 字段说明（必须根据实际问题选择，不要强行凑数）�
       "type": "highlight-quote",
       "title": "文章金句",
       "quotes": ["金句1", "金句2"]
+    },
+    {
+      "type": "html",
+      "title": "标题关键词频次",
+      "html": "<table style='width:100%;border-collapse:collapse;font-size:14px'><tr style='background:#f0f0f0'><th style='padding:8px;border:1px solid #ddd'>关键词</th><th style='padding:8px;border:1px solid #ddd'>出现次数</th><th style='padding:8px;border:1px solid #ddd'>建议</th></tr><tr><td style='padding:8px;border:1px solid #ddd'>AI</td><td style='padding:8px;border:1px solid #ddd;text-align:center'>12</td><td style='padding:8px;border:1px solid #ddd;color:#e53e3e'>过多</td></tr></table>"
     }
   ]
 }
 
-注意：上面是完整格式示例，实际返回时 uiBlocks 只包含真正适用的块（1-4个），scores 和 issues 等字段填入真实分析值。`
+注意：上面是完整格式示例，实际返回时 uiBlocks 只包含真正适用的块（1-5个），scores 和 issues 等字段填入真实分析值。`
 
     // ── 3. 调用 LLM（流式）──────────────────────────────────────────────────
     const { url, model, headers } = buildLLMRequest(cfg)
