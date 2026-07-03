@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Plus, Calendar, FileText, Trash2, ArrowRight, RefreshCw, Zap, Server, HardDrive, AlertTriangle, Upload } from 'lucide-react'
-import { fetchArticleList, deleteArticle } from '../../utils/apiHelpers'
+import { fetchArticleList, deleteArticle } from '../../utils'
 import { showConfirm, toast } from '../../components/Toast/Toast'
 import './Dashboard.css'
 

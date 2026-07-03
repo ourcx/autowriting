@@ -25,7 +25,7 @@ import {
   collectMaterials,
   formatMaterialsAsMarkdown,
 } from './utils/index.ts'
-import { nowDay } from './utils/date.ts'
+import { nowDay } from './utils'
 // 调度实例 Map<jobId, ScheduledTask>
 const _scheduledTasks = new Map()
 

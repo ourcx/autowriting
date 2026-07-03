@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { loadAIConfig } from '../../utils/aiConfig'
+
 import { toast } from '../Toast/Toast'
 import './CoverGenerator.css'
+import { loadAIConfig } from '../../utils/aiConfig'
 
 interface CoverGeneratorProps {
   title: string

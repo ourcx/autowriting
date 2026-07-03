@@ -4,7 +4,7 @@ import {
   Sparkles, AlertCircle, CheckCircle2,
   ChevronDown, ChevronRight, Circle, Wand2, X,
 } from 'lucide-react'
-import { loadAIConfig } from '../../utils/aiConfig'
+import { loadAIConfig } from '../../utils'
 import './ContentStats.css'
 
 interface ContentStatsProps {

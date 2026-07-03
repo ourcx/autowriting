@@ -3,7 +3,7 @@ import type { MouseEvent as ReactMouseEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Plus, Trash2, Save, Copy, Check, Wand2, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { toast, showConfirm } from '../../components/Toast/Toast'
-import { loadAIConfig } from '../../utils/aiConfig'
+import { loadAIConfig } from '../../utils'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import {
