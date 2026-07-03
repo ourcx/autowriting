@@ -54,14 +54,15 @@ npm install -g pm2
 
 ### 2. 创建 PM2 配置文件
 
-在 `web/` 目录下创建 `ecosystem.config.cjs`：
+在 `web/` 目录下创建 `ecosystem.config.cjs`（后端为 TypeScript，使用 tsx 运行）：
 
 ```bash
 cat > ecosystem.config.cjs << 'EOF'
 module.exports = {
   apps: [{
     name: 'autowriting',
-    script: './server.js',
+    script: './server.ts',
+    interpreter: './node_modules/.bin/tsx',
     instances: 1,
     exec_mode: 'fork',
     autorestart: true,
@@ -79,6 +80,8 @@ module.exports = {
 }
 EOF
 ```
+
+> **注意**：项目后端使用 TypeScript（`server.ts`），不编译为 JS。PM2 通过 `tsx` interpreter 直接运行 `.ts` 文件，`tsx` 已在 `dependencies` 中，`pnpm install` 会自动安装。
 
 ### 3. 启动服务
 
@@ -148,8 +151,8 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
-# 启动服务
-CMD ["node", "server.js"]
+# 启动服务（后端为 TypeScript，使用 tsx 运行）
+CMD ["npx", "tsx", "server.ts"]
 ```
 
 ### 2. 创建 docker-compose.yml
@@ -448,7 +451,7 @@ docker-compose up -d --build
 ## 安全建议
 
 1. **不要在代码中硬编码 API Keys**，使用环境变量
-2. **限制服务器访问**：只开放必要端口（80/443）
+2. **限制服务器访问**：只开放必要端口（80/442）
 3. **定期更新依赖**：`pnpm update`
 4. **使用 HTTPS**：Let's Encrypt 免费证书
 5. **设置防火墙**：`ufw` 或云服务商安全组
