@@ -66,7 +66,8 @@
     "recharts": "^3.8.1",
     "remark-gfm": "^4.0.0",
     "tsx": "^4.22.5",
-    "uuid": "^14.0.0"
+    "uuid": "^14.0.0",
+    "sharp": "^0.32.6"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.4",
@@ -101,7 +102,8 @@
     "onlyBuiltDependencies": [
       "better-sqlite3",
       "hnswlib-node",
-      "esbuild"
+      "esbuild",
+      "sharp"
     ]
   }
 }

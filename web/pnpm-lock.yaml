@@ -95,6 +95,9 @@ importers:
       remark-gfm:
         specifier: ^4.0.0
         version: 4.0.1
+      sharp:
+        specifier: ^0.32.6
+        version: 0.32.6
       tsx:
         specifier: ^4.22.5
         version: 4.22.5
@@ -6331,7 +6334,7 @@ snapshots:
       es6-error: 4.1.1
       matcher: 3.0.0
       roarr: 2.15.4
-      semver: 7.7.4
+      semver: 7.8.1
       serialize-error: 7.0.1
     optional: true
 
