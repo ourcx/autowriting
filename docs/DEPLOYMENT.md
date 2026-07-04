@@ -459,6 +459,50 @@ docker-compose up -d --build
 
 ---
 
+## 常见问题
+
+### PM2 报 `ERR_MODULE_NOT_FOUND: server.js`
+
+**原因**：PM2 缓存了旧进程配置，仍尝试加载不存在的 `server.js`（项目后端入口是 `server.ts`）。
+
+**解决**：
+```bash
+# 删除旧进程（清除缓存），重新启动
+pm2 delete autowriting
+pm2 start ecosystem.config.cjs
+pm2 save
+```
+
+### 本地向量模型报 `sharp 模块加载失败` / `Cannot find module '../build/Release/sharp-linux-x64.node'`
+
+**原因**：`@xenova/transformers` 依赖 `sharp`，Linux 服务器上缺少预编译二进制。
+
+**解决**：
+```bash
+# 方法 1：重建 sharp 原生模块
+cd web
+pnpm rebuild sharp
+# 或
+npm install --platform=linux --arch=x64 sharp
+
+# 方法 2：重新执行 postinstall 脚本（自动检测并重建）
+pnpm rebuild:native
+
+# 方法 3（推荐）：切换到远端 Embedding API
+# 在设置页面配置 Embedding API Key，无需本地 sharp
+```
+
+### Embedding API 报 `429 Too Many Requests` / `余额不足`
+
+**原因**：Embedding API 配额耗尽或余额不足。
+
+**解决**：
+1. 等待配额恢复或充值
+2. 切换到本地向量模型（需先解决 sharp 依赖问题，见上条）
+3. 更换 Embedding API 提供商（在设置页面修改 `Embedding Base URL` 和 `API Key`）
+
+---
+
 ## 监控和日志
 
 ### PM2 监控

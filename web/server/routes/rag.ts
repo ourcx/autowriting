@@ -13,6 +13,7 @@ import path from 'path'
 import { buildIndex, retrieveRelevant, getIndexStatus, extractSearchQuery } from '../rag.js'
 import { SERVER_AI_CONFIG, DRAFTS_DIR } from '../config.js'
 import { authMiddleware } from '../authMiddleware.js'
+import { logger } from '../logger.js'
 
 const router = Router()
 
@@ -88,7 +89,7 @@ export async function triggerBuildIndex(aiConfig, userId, { force = false } = {}
       state.result = result
       state.progress = `完成（${result.indexed} 篇 / ${result.chunks} 段）`
     } catch (err) {
-      console.error('[RAG] 异步索引失败:', err.message)
+      logger.error('RAG', '异步索引失败', { error: err.message })
       state.error = err.message
       state.progress = '构建失败'
     } finally {
@@ -283,7 +284,7 @@ router.post('/candidates', async (req, res) => {
     candidates.sort((a, b) => b.sim - a.sim)
     res.json({ candidates: candidates.slice(0, topK) })
   } catch (err) {
-    console.error('[RAG candidates]', err.message)
+    logger.error('RAG', 'candidates 查询失败', { error: err.message })
     res.status(500).json({ error: err.message })
   }
 })
@@ -343,7 +344,7 @@ router.post('/context', async (req, res) => {
 
     res.json({ context, articles })
   } catch (err) {
-    console.error('[RAG context]', err.message)
+    logger.error('RAG', 'context 读取失败', { error: err.message })
     res.status(500).json({ error: err.message })
   }
 })

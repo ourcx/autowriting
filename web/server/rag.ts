@@ -14,6 +14,7 @@ import { Document } from "@langchain/core/documents"
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters"
 import { DATA_DIR, DRAFTS_DIR, SERVER_AI_CONFIG } from "./config.ts"
 import type { AIConfig, SearchResult, ArticleScore } from "./types.ts"
+import { logger } from "./logger.ts"
 
 // ── 本地向量模型默认配置 ───────────────────────────────────────────────────────
 const LOCAL_EMBED_MODEL = "Xenova/multilingual-e5-small"
@@ -149,16 +150,26 @@ class RawEmbeddings extends Embeddings {
         const err = e as Error
         const is429 = err.message?.startsWith("429")
         const is503 = err.message?.startsWith("503")
+
+        // 余额不足 / 配额耗尽是永久性错误，不重试（避免浪费 10 秒）
+        const isBalanceExhausted = is429 && /余额不足|无可用资源包|insufficient|quota/i.test(err.message)
+
+        if (isBalanceExhausted) {
+          throw new Error(
+            `Embedding API 配额已用完（429 Too Many Requests）。\n请等待配额恢复后重试，或切换到「本地向量模型」。\n原始错误：${err.message}`
+          )
+        }
+
         if ((!is429 && !is503) || attempt === maxRetries) {
           if (is429) {
             throw new Error(
-              `Embedding API 配额已用完（429 Too Many Requests）。\n请等待配额恢复后重试，或切换到「本地向量模型」。\n原始错误：${err.message}`
+              `Embedding API 被限流（429 Too Many Requests），已重试 ${maxRetries} 次仍失败。\n请稍后重试，或切换到「本地向量模型」。\n原始错误：${err.message}`
             )
           }
           throw e
         }
         const delay = RETRY_DELAYS[attempt]
-        console.warn(`[RAG] Embedding 请求被限流（${err.message.slice(0, 80)}），${delay}ms 后重试（${attempt + 1}/${maxRetries}）...`)
+        logger.warn("RAG", `Embedding 请求被限流（${err.message.slice(0, 80)}），${delay}ms 后重试（${attempt + 1}/${maxRetries}）...`)
         await sleep(delay)
       }
     }
@@ -210,17 +221,31 @@ class LocalEmbeddings extends Embeddings {
       try {
         const mod = await import("@xenova/transformers") as { pipeline: typeof pipeline }
         pipeline = mod.pipeline
-      } catch {
-        throw new Error("本地向量模型依赖未安装。请在 web/ 目录执行：pnpm add @xenova/transformers")
+      } catch (importErr: unknown) {
+        const err = importErr as Error & { code?: string }
+        // 区分"依赖未安装"和"原生模块加载失败"（如 sharp 在 Linux 上缺预编译二进制）
+        if (err.message?.includes("Cannot find module") || err.code === "ERR_MODULE_NOT_FOUND") {
+          throw new Error(
+            "本地向量模型依赖未安装。请在 web/ 目录执行：pnpm add @xenova/transformers"
+          )
+        }
+        // sharp / onnxruntime-node 等原生模块加载失败
+        throw new Error(
+          `本地向量模型原生依赖加载失败：${err.message}\n` +
+          `常见原因：sharp 或 onnxruntime-node 的预编译二进制缺失。\n` +
+          `解决方法：\n` +
+          `  1. Linux 服务器：pnpm rebuild sharp 或 npm install --platform=linux --arch=x64 sharp\n` +
+          `  2. 或切换到远端 Embedding API（在设置页面配置 Embedding API Key）`
+        )
       }
-      console.log(`[RAG] 加载本地向量模型：${this.modelName}（首次运行需下载模型文件，请稍候…）`)
+      logger.info("RAG", `加载本地向量模型：${this.modelName}（首次运行需下载模型文件，请稍候…）`)
       try {
         this._pipeline = await pipeline("feature-extraction", this.modelName, { quantized: true })
       } catch (loadErr: unknown) {
         const err = loadErr as Error
         throw new Error(`本地向量模型加载失败：${err.message}`)
       }
-      console.log(`[RAG] 本地向量模型加载完成：${this.modelName}`)
+      logger.info("RAG", `本地向量模型加载完成：${this.modelName}`)
     }
     return this._pipeline
   }
@@ -304,7 +329,7 @@ async function resolveEmbeddings(aiConfig: AIConfig = {}): Promise<{ embeddings:
 
   if (!remote) {
     const emb = getLocalEmbeddings(cfg)
-    console.log(`[RAG] 未配置 Embedding API Key，使用本地模型: ${emb.modelName}`)
+    logger.info("RAG", `未配置 Embedding API Key，使用本地模型: ${emb.modelName}`)
     return { embeddings: emb, mode: "local", model: emb.modelName }
   }
 
@@ -312,12 +337,12 @@ async function resolveEmbeddings(aiConfig: AIConfig = {}): Promise<{ embeddings:
     await remote.embedQuery("向量化探测")
     const model = (cfg.embeddingModel || "text-embedding-3-small") as string
     const dims = cfg.embeddingDimensions
-    console.log(`[RAG] 远端 Embedding 可用: ${model}${dims ? `（${dims}维）` : ""}`)
+    logger.info("RAG", `远端 Embedding 可用: ${model}${dims ? `（${dims}维）` : ""}`)
     return { embeddings: remote, mode: "remote", model }
   } catch (e: unknown) {
     const reason = (e as Error).message?.slice(0, 160) || String(e)
-    console.warn(`[RAG] 远端 Embedding 不可用（${reason}）`)
-    console.warn("[RAG] 自动切换到本地模型 fallback...")
+    logger.warn("RAG", `远端 Embedding 不可用（${reason}）`)
+    logger.warn("RAG", "自动切换到本地模型 fallback...")
     const emb = getLocalEmbeddings(cfg)
     return { embeddings: emb, mode: "local", model: emb.modelName }
   }
@@ -457,7 +482,7 @@ export async function buildIndex(aiConfig: AIConfig = {}, userId?: string) {
     docs: rawDocs.length,
   })
 
-  console.log(`[RAG] 索引构建完成：${rawDocs.length} 篇 / ${langchainDocs.length} chunks / 维度 ${dims} / 模型 ${model}`)
+  logger.info("RAG", `索引构建完成：${rawDocs.length} 篇 / ${langchainDocs.length} chunks / 维度 ${dims} / 模型 ${model}`)
 
   return { indexed: rawDocs.length, chunks: langchainDocs.length, dimensions: dims, model, embedMode: mode }
 }
@@ -724,8 +749,9 @@ export async function retrieveRelevant(query: string, { topK = DEFAULT_TOP_K, ai
   } else if (meta?.embedMode === "remote" && meta?.embedKey) {
     const currentKey = getEmbeddingKey(cfg)
     if (meta.embedKey !== currentKey) {
-      console.warn(
-        `[RAG] Embedding 配置已变更，索引需要重建。\n  旧: ${meta.embedKey}\n  新: ${currentKey}\n  请在知识库页面点击「重建索引」`
+      logger.warn(
+        "RAG",
+        `Embedding 配置已变更，索引需要重建。\n  旧: ${meta.embedKey}\n  新: ${currentKey}\n  请在知识库页面点击「重建索引」`
       )
       return []
     }
@@ -734,10 +760,10 @@ export async function retrieveRelevant(query: string, { topK = DEFAULT_TOP_K, ai
     const remote = getRemoteEmbeddings(cfg)
     if (remote) {
       embeddings = remote
-      console.log("[RAG] 旧索引无 embedMode 记录，使用当前远端配置检索")
+      logger.info("RAG", "旧索引无 embedMode 记录，使用当前远端配置检索")
     } else {
       embeddings = getLocalEmbeddings(cfg)
-      console.log("[RAG] 旧索引无 embedMode 记录，无 API Key，使用本地模型检索")
+      logger.info("RAG", "旧索引无 embedMode 记录，无 API Key，使用本地模型检索")
     }
   }
 
@@ -763,8 +789,9 @@ export async function retrieveRelevant(query: string, { topK = DEFAULT_TOP_K, ai
       `  → dir=${r.dir} L2=${r.score.toFixed(3)} cos=${(r.sim * 100).toFixed(0)}% kw=${r.kwScore.toFixed(2)} final=${(r.finalScore * 100).toFixed(0)}%`
     ).join("\n")
 
-    console.log(
-      `[RAG] 检索完成 | query="${query.slice(0, 40)}" | 向量候选:${vectorResults.length} 关键词候选:${kwResults.length} 混合后:${merged.length} 返回:${results.length}\n${topDetails}`
+    logger.debug(
+      "RAG",
+      `检索完成 | query="${query.slice(0, 40)}" | 向量候选:${vectorResults.length} 关键词候选:${kwResults.length} 混合后:${merged.length} 返回:${results.length}\n${topDetails}`
     )
 
     return results.map((r) => ({
@@ -779,7 +806,7 @@ export async function retrieveRelevant(query: string, { topK = DEFAULT_TOP_K, ai
       finalScore: parseFloat((r.finalScore * 100).toFixed(1)),
     }))
   } catch (e: unknown) {
-    console.error("[RAG] 检索失败:", (e as Error).message)
+    logger.error("RAG", "检索失败", { error: (e as Error).message })
     return []
   }
 }
@@ -872,7 +899,7 @@ export async function formatExampleContext(userId: string, draftsDir?: string): 
 
     return `# 历史文章表现参考（基于真实数据，请学习优秀示例、规避低表现模式）\n\n${parts.join("\n\n---\n\n")}`
   } catch (e: unknown) {
-    console.warn("[RAG] formatExampleContext 失败:", (e as Error).message)
+    logger.warn("RAG", "formatExampleContext 失败", { error: (e as Error).message })
     return ""
   }
 }

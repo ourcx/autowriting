@@ -1,6 +1,10 @@
 module.exports = {
   apps: [{
     name: 'autowriting',
+    // 后端入口为 server.ts（TypeScript），通过 tsx interpreter 运行
+    // 注意：不要改为 server.js，项目不编译 TS 为 JS
+    // 如果 PM2 报 ERR_MODULE_NOT_FOUND: server.js，说明缓存了旧进程配置
+    // 解决：pm2 delete autowriting && pm2 start ecosystem.config.cjs
     script: './server.ts',
 
     // 使用 tsx 运行 TypeScript（项目后端为 .ts，未编译为 .js）
