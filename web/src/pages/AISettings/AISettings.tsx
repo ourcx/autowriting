@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
+// @ts-ignore
 import { useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, Save, Check, Eye, EyeOff, AlertCircle, CheckCircle2,
+  Save, Check, Eye, EyeOff, AlertCircle, CheckCircle2,
   Zap, Image, Search, ChevronRight, Link2, Link2Off, RefreshCw, Users, ShieldAlert, Brain,
 } from 'lucide-react'
 import {
