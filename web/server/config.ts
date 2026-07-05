@@ -9,6 +9,7 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+// @ts-ignore 没有类型
 import dotenv from 'dotenv'
 
 const __filename = fileURLToPath(import.meta.url)

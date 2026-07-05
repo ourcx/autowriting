@@ -10,31 +10,72 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '20'
-      
+
       - name: Install pnpm
         run: npm install -g pnpm
-      
-      - name: Build frontend
+
+      - name: Build frontend (local)
         run: |
           cd web
           pnpm install
           pnpm build
-      
-      - name: Deploy to server
+
+      - name: Deploy to server (safe merge)
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            set -e  # 任何命令失败则退出
+
             cd /home/admin/autowriting
-            git pull origin main --force
+
+            # ----- 1. 备份当前状态（包括未提交修改和未跟踪文件） -----
+            TIMESTAMP=$(date +%Y%m%d%H%M%S)
+            BACKUP_BRANCH="backup/deploy-$TIMESTAMP"
+
+            # 如果工作区有未提交修改，先 stash（-u 包含未跟踪文件）
+            git stash push -u -m "auto-backup-before-deploy-$TIMESTAMP" || true
+
+            # 创建备份分支（基于当前 HEAD，保存当前提交历史）
+            git branch "$BACKUP_BRANCH" || true
+
+            echo "备份完成：分支 $BACKUP_BRANCH，stash 已保存"
+
+            # ----- 2. 拉取远程 main 并尝试合并 -----
+            git fetch origin main
+
+            # 尝试合并（不自动提交，不快进），方便检测冲突
+            if git merge origin/main --no-commit --no-ff; then
+              # 无冲突，检查是否有变更需要提交
+              if git diff --cached --quiet; then
+                echo "ℹ远程代码与本地完全一致，无需合并提交"
+              else
+                git commit -m "Merge origin/main (deploy $TIMESTAMP)"
+                echo "合并成功"
+              fi
+              # 删除备份的 stash（因为已经成功合并，本地修改已不再需要）
+              git stash drop || true
+            else
+              # 合并冲突！回滚并报错
+              echo "❌ 合并冲突检测到，正在回滚..."
+              git merge --abort
+              # 恢复 stash（保留现场供人工处理）
+              git stash pop || true
+              echo "🚫 部署中止，请手动解决冲突后重试"
+              exit 1
+            fi
+
+            # ----- 3. 构建与重启 -----
             cd web
             pnpm install
             pnpm build
             pm2 reload autowriting
+
+            echo "✅ 部署完成"
