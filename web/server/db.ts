@@ -21,6 +21,44 @@ import type {
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
 
+// ── 向后兼容：自动迁移旧 .cache/ 目录下的数据到 web/data/ ─────────────────
+
+/**
+ * 如果旧的 .cache/app.db 存在且新位置不存在 app.db，自动复制迁移。
+ * 同时迁移 uploads 目录和 covers 目录。
+ */
+function migrateFromLegacyCache(): void {
+  const legacyCacheDir = path.join(DATA_DIR, "..", "..", ".cache")
+  // 相对于 web/server/ 计算旧 .cache 路径（即 web/../.cache = 项目根/.cache）
+  // 但实际上 config.ts 改了 DATA_DIR 为 web/data/，所以要找到旧位置
+  const oldDbPath = path.join(legacyCacheDir, "app.db")
+  const newDbPath = path.join(DATA_DIR, "app.db")
+  const oldUploads = path.join(legacyCacheDir, "uploads")
+  const newUploads = path.join(DATA_DIR, "uploads")
+  const oldCovers = path.join(legacyCacheDir, "covers")
+  const newCovers = path.join(DATA_DIR, "covers")
+
+  // 迁移数据库文件
+  if (fs.existsSync(oldDbPath) && !fs.existsSync(newDbPath)) {
+    fs.copyFileSync(oldDbPath, newDbPath)
+    console.log(`[DB] 已从旧 .cache/ 迁移数据库到 data/：${oldDbPath} → ${newDbPath}`)
+  }
+
+  // 迁移 uploads 目录
+  if (fs.existsSync(oldUploads) && !fs.existsSync(newUploads)) {
+    fs.cpSync(oldUploads, newUploads, { recursive: true })
+    console.log(`[DB] 已从旧 .cache/ 迁移 uploads 目录：${oldUploads} → ${newUploads}`)
+  }
+
+  // 迁移 covers 缓存目录
+  if (fs.existsSync(oldCovers) && !fs.existsSync(newCovers)) {
+    fs.cpSync(oldCovers, newCovers, { recursive: true })
+    console.log(`[DB] 已从旧 .cache/ 迁移 covers 目录：${oldCovers} → ${newCovers}`)
+  }
+}
+
+migrateFromLegacyCache()
+
 const DB_PATH = path.join(DATA_DIR, "app.db")
 export const db = new Database(DB_PATH)
 
