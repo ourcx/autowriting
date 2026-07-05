@@ -50,10 +50,13 @@ export interface AIConfig {
   embeddingBatchDelayMs: string  // 可选，批次间延迟 ms，默认 "200"
 
   // 素材搜索
-  searchProvider: 'serper' | 'bing' | 'searxng'  // 搜索引擎服务商
-  searchApiKey:   string                          // 搜索 API Key
+  searchProvider: 'serper' | 'bing' | 'searxng' | 'zhipu'  // 搜索引擎服务商（zhipu 可复用 GLM_API_KEY）
+  searchApiKey:   string                          // 搜索 API Key（serper 需要单独的 Key；zhipu 复用 articleApiKey 时可不填）
   searchEngine:   string                          // serper engine：google / baidu / bing
   searxngUrl:     string                          // SearXNG 实例地址（可选，默认公共实例）
+  glmApiKey:      string                          // 智谱 API Key（搜索复用，与 articleApiKey 一致时可留空）
+
+  // 网页抓取（优先 Jina Reader，降级内置 WebFetcher）
   jinaApiKey:     string                          // Jina Reader API Key（可选，有 key 时优先使用）
 
   // 图床
@@ -95,6 +98,7 @@ export const DEFAULT_CONFIG: AIConfig = {
   searchApiKey:   '',
   searchEngine:   'google',
   searxngUrl:     '',
+  glmApiKey:       '',
   jinaApiKey:     '',
 
   cdnProvider:  'none',
@@ -235,6 +239,8 @@ export const PROVIDER_PRESETS: Array<{
   desc: string
   defaultBaseUrl: string
   models: string[]
+  tip: string
+  url: string
 }> = [
   {
     id: 'openai',
@@ -242,6 +248,8 @@ export const PROVIDER_PRESETS: Array<{
     desc: '官方 ChatGPT API',
     defaultBaseUrl: 'https://api.openai.com/v1',
     models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
+    tip: '默认模型：gpt-4o，支持更多模型请参考官方文档',
+    url: 'https://platform.openai.com/docs/models/gpt-4o'
   },
   {
     id: 'openai-compat',
@@ -249,6 +257,8 @@ export const PROVIDER_PRESETS: Array<{
     desc: 'Claude / DeepSeek / Gemini / 本地模型等',
     defaultBaseUrl: '',
     models: ['claude-opus-4-5', 'deepseek-chat', 'gemini-pro'],
+    tip: 'OPENAI 兼容模型，一般使用deepseek-v4',
+    url: 'https://deepseek.com'
   },
   {
     id: 'maas',
@@ -256,6 +266,8 @@ export const PROVIDER_PRESETS: Array<{
     desc: '小红书内部 MaaS 服务',
     defaultBaseUrl: 'https://maas.devops.xiaohongshu.com/v1',
     models: ['deepseek-v4-pro'],
+    tip: '小红书内部使用ALLINAI平台提供的api key，无需额外申请',
+    url: 'https://cowork.xiaohongshu.com/app'
   },
 ]
 

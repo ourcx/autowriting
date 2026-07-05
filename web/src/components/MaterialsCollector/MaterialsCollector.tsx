@@ -37,9 +37,10 @@ interface CollectedItem {
 interface Props {
   articleId:      string
   searchApiKey:   string
-  searchProvider: 'serper' | 'bing' | 'searxng'
+  searchProvider: 'serper' | 'bing' | 'searxng' | 'zhipu'
   searchEngine:   string
   searxngUrl?:    string
+  glmApiKey?:     string
   jinaApiKey?:    string
   onSaved?:       () => void
 }
@@ -64,6 +65,7 @@ export default function MaterialsCollector({
   searchProvider,
   searchEngine,
   searxngUrl,
+  glmApiKey,
   jinaApiKey,
   onSaved,
 }: Props) {
@@ -156,6 +158,9 @@ export default function MaterialsCollector({
       }
       if (searchProvider === 'searxng') {
         body.searxngUrl = searxngUrl || ''
+      } else if (searchProvider === 'zhipu') {
+        body.apiKey = searchApiKey
+        body.glmApiKey = glmApiKey || searchApiKey
       } else {
         body.apiKey = searchApiKey
       }

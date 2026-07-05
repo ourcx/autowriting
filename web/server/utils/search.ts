@@ -3,16 +3,70 @@
  *
  * 功能：
  * 1. LLM 生成搜索计划（关键词 + 爬取目标 + 清洗规则）
- * 2. 执行 Bing Search API 聚合搜索
+ * 2. 通过 SearchProvider 执行搜索（支持 Zhipu / Serper / SearXNG 三种引擎）
  * 3. 爬取指定 URL 获取详细内容
  * 4. 清洗和整理素材数据
  * 5. 生成结构化素材数据集
+ *
+ * 架构：
+ *   SearchProvider 接口（providers/types.ts）
+ *   ├── ZhipuProvider   — 智谱联网搜索，与 LLM 共用 GLM_API_KEY
+ *   ├── SerperProvider   — Serper.dev（Google 搜索聚合）
+ *   ├── SearXNGProvider  — 开源自建搜索引擎
+ *   └── SearchProviderFactory — 根据配置自动选择
+ *
+ *   抓取器：
+ *   ├── WebFetcher — HTTP 直接抓取 + HTML→Markdown（内置）
+ *   └── Jina Reader — 第三方 Reader API（可选，有 Key 时优先）
  */
 
 import { buildLLMRequest, callLLMWithRetry } from "./public.ts"
 import { nowDay } from "./date.ts"
 import { logger } from "../logger.ts"
+import { SERVER_AI_CONFIG } from "../config.ts"
+import { createSearchProvider } from "./search/providers/index.ts"
+import { webFetch } from "./search/webFetcher.ts"
 import type { AIConfig, SearchPlan, SearchItem, CrawlResult, MaterialsDataset } from "../types.ts"
+import type { SearchProvider } from "./search/providers/types.ts"
+import type { SearchResult as ProviderSearchResult } from "./search/types.ts"
+
+// ── 搜索 Provider 懒加载 ────────────────────────────────────────────────────────
+
+let _searchProvider: SearchProvider | null | undefined = undefined
+
+/**
+ * 获取/创建搜索 Provider（懒加载，线程安全）
+ * 优先级：
+ *   1. SERVER_AI_CONFIG.searchProvider 显式指定
+ *   2. 自动检测 GLM_API_KEY → zhipu
+ *   3. 自动检测 searchApiKey → serper
+ *   4. 自动检测 SEARXNG_URL → searxng
+ */
+function getSearchProvider(): SearchProvider | null {
+  if (_searchProvider !== undefined) return _searchProvider
+
+  _searchProvider = createSearchProvider({
+    searchProvider: SERVER_AI_CONFIG.searchProvider as string,
+    searchApiKey: SERVER_AI_CONFIG.searchApiKey as string,
+    glmApiKey: SERVER_AI_CONFIG.glmApiKey as string,
+    searxngUrl: SERVER_AI_CONFIG.searxngUrl as string,
+  })
+
+  if (_searchProvider) {
+    logger.info("SEARCH", `搜索 Provider 已初始化: ${_searchProvider.name()}`)
+  } else {
+    logger.warn("SEARCH", "未配置任何搜索 Provider，联网搜索不可用")
+  }
+
+  return _searchProvider
+}
+
+/**
+ * 重置 Provider（配置变更后调用）
+ */
+export function resetSearchProvider(): void {
+  _searchProvider = undefined
+}
 
 // ── 1. LLM 生成搜索计划 ────────────────────────────────────────────────────────
 
@@ -113,7 +167,7 @@ export async function generateSearchPlan(topic: string, aiConfig: AIConfig): Pro
   }
 }
 
-// ── 2. 执行搜索 ────────────────────────────────────────────────────────────────
+// ── 2. 执行搜索（统一入口） ────────────────────────────────────────────────────
 
 interface SearchOptions {
   count?: number
@@ -122,68 +176,27 @@ interface SearchOptions {
 }
 
 /**
- * 执行 Bing Search API 搜索（支持时效性过滤）
+ * 通过 Provider 执行单次搜索
+ * 返回统一的 SearchItem 数组
  */
-export async function searchBing(query: string, apiKey: string, options: SearchOptions = {}): Promise<SearchItem[]> {
-  const {
-    count = 10,
-    freshness = "Day",  // Day / Week / Month / Year
-    mkt = "zh-CN",
-  } = options
-
-  if (!apiKey) {
-    throw new Error("未配置 Bing API Key")
+export async function searchWithProvider(query: string, provider?: SearchProvider, topK = 10): Promise<SearchItem[]> {
+  const sp = provider || getSearchProvider()
+  if (!sp) {
+    throw new Error("未配置搜索服务，请在「AI 配置」页面配置搜索 Provider（智谱/Serper/SearXNG）")
   }
 
   try {
-    const params = new URLSearchParams({
-      q: query,
-      mkt,
-      count: String(count),
-      responseFilter: "WebPages",
-    })
-
-    // 添加时效性过滤（针对新闻和热点）
-    if (freshness) {
-      params.append("freshness", freshness)
-    }
-
-    const resp = await fetch(
-      `https://api.bing.microsoft.com/v7.0/search?${params}`,
-      {
-        headers: { "Ocp-Apim-Subscription-Key": apiKey },
-        signal: AbortSignal.timeout(15000),
-      }
-    )
-
-    if (!resp.ok) {
-      const errText = await resp.text()
-      throw new Error(`Bing API 错误 ${resp.status}: ${errText.slice(0, 200)}`)
-    }
-
-    const data = await resp.json() as {
-      webPages?: { value?: Array<{
-        name?: string
-        snippet?: string
-        url?: string
-        datePublished?: string
-      }> }
-    }
-    const webPages = data.webPages?.value || []
-
-    const results: SearchItem[] = webPages.map((item) => ({
-      title: item.name || "",
-      snippet: item.snippet || "",
-      url: item.url || "",
-      source: extractDomain(item.url || ""),
-      datePublished: item.datePublished || null,
+    const results = await sp.search(query, topK)
+    return results.map((r: ProviderSearchResult) => ({
+      title: r.title,
+      snippet: r.snippet,
+      url: r.url,
+      source: r.source,
+      datePublished: r.datePublished || null,
     }))
-
-    logger.debug("SEARCH", `Bing 搜索完成: ${query}`, { count: results.length })
-    return results
   } catch (err: unknown) {
     const e = err as Error
-    logger.error("SEARCH", "Bing 搜索失败", { query, error: e.message })
+    logger.error("SEARCH", "Provider 搜索失败", { query, error: e.message })
     throw err
   }
 }
@@ -191,16 +204,22 @@ export async function searchBing(query: string, apiKey: string, options: SearchO
 /**
  * 批量执行多个搜索查询
  */
-export async function executeSearchBatch(queries: string[], apiKey: string, options: SearchOptions = {}): Promise<SearchItem[]> {
+export async function executeSearchBatch(queries: string[], provider?: SearchProvider, topK = 10): Promise<SearchItem[]> {
+  const sp = provider || getSearchProvider()
+
+  if (!sp) {
+    throw new Error("未配置搜索服务，请在「AI 配置」页面配置搜索 Provider（智谱/Serper/SearXNG）")
+  }
+
   const allResults: SearchItem[] = []
 
   for (const query of queries) {
     try {
-      const results = await searchBing(query, apiKey, options)
+      const results = await searchWithProvider(query, sp, topK)
       allResults.push(...results)
 
-      // 限流：避免触发 Bing API 的 QPS 限制（3次/秒）
-      await new Promise((resolve) => setTimeout(resolve, 350))
+      // 限流：避免触发 Provider 的 QPS 限制
+      await new Promise((resolve) => setTimeout(resolve, 500))
     } catch (err: unknown) {
       const e = err as Error
       logger.warn("SEARCH", `搜索失败，跳过: ${query}`, { error: e.message })
@@ -230,26 +249,62 @@ export async function executeSearchBatch(queries: string[], apiKey: string, opti
 // ── 3. 爬取 URL ────────────────────────────────────────────────────────────────
 
 /**
+ * 获取 Jina API Key
+ */
+function getJinaApiKey(): string {
+  return (SERVER_AI_CONFIG.jinaApiKey as string) || ""
+}
+
+/**
+ * 通过 Jina Reader 抓取 URL
+ */
+async function fetchJinaText(url: string, apiKey = ""): Promise<string> {
+  const jinaUrl = `https://r.jina.ai/${url}`
+  const headers: Record<string, string> = {
+    "Accept": "text/plain",
+    "X-Return-Format": "markdown",
+    "X-Timeout": "8",
+  }
+  if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`
+
+  const resp = await fetch(jinaUrl, {
+    headers,
+    signal: AbortSignal.timeout(10000),
+  })
+
+  if (!resp.ok) throw new Error(`Jina ${resp.status}`)
+  const text = await resp.text()
+  if (text.length < 50) throw new Error("Jina 返回内容为空")
+  return text.slice(0, 8000)
+}
+
+/**
  * 爬取单个 URL 的详细内容
+ * 优先使用 Jina Reader，不可用时降级到内置 WebFetcher
  */
 export async function crawlUrl(url: string, jinaApiKey = ""): Promise<string> {
   try {
     // 优先使用 Jina Reader（更干净的提取）
-    if (jinaApiKey) {
+    const jinaKey = jinaApiKey || getJinaApiKey()
+    if (jinaKey) {
       try {
-        const content = await fetchJinaText(url, jinaApiKey)
+        const content = await fetchJinaText(url, jinaKey)
         logger.debug("SEARCH", `Jina 爬取成功: ${url}`)
         return content
       } catch (jinaErr: unknown) {
         const e = jinaErr as Error
-        logger.warn("SEARCH", `Jina 失败，降级直接爬取: ${e.message}`)
+        logger.warn("SEARCH", `Jina 失败，降级内置 WebFetcher: ${e.message}`)
       }
     }
 
-    // 降级：直接 fetch
-    const content = await fetchDirectText(url)
-    logger.debug("SEARCH", `直接爬取成功: ${url}`)
-    return content
+    // 降级：使用内置 WebFetcher（含安全策略 + HTML→Markdown）
+    const content = await webFetch(url, { maxChars: 8000 })
+    if (content && !content.startsWith("[") /* 不是错误消息前缀 */) {
+      logger.debug("SEARCH", `WebFetcher 爬取成功: ${url}`)
+      return content
+    }
+    logger.warn("SEARCH", `WebFetcher 未能提取正文: ${url}`)
+    return content // 返回错误/空内容，让上层处理
   } catch (err: unknown) {
     const e = err as Error
     logger.error("SEARCH", `爬取失败: ${url}`, { error: e.message })
@@ -277,7 +332,7 @@ export async function crawlUrlsBatch(
           reason: target.reason,
           extract_hint: target.extract_hint,
           content,
-          ok: content.length > 0,
+          ok: content.length > 0 && !content.startsWith("["),
         }
       })
     )
@@ -368,41 +423,32 @@ export function cleanMaterials(rawData: SearchItem[], scripts: string[] = []): S
 
 // ── 5. 主入口：智能素材收集 ────────────────────────────────────────────────────
 
-interface SearchConfig {
-  bingApiKey: string
-  jinaApiKey?: string
-}
-
 /**
  * 智能素材收集主流程
  */
-export async function collectMaterials(topic: string, aiConfig: AIConfig, searchConfig: SearchConfig = { bingApiKey: "" }): Promise<MaterialsDataset> {
-  const { bingApiKey, jinaApiKey = "" } = searchConfig
-
+export async function collectMaterials(
+  topic: string,
+  aiConfig: AIConfig,
+): Promise<MaterialsDataset> {
   try {
     // Step 1: LLM 生成搜索计划
     logger.info("SEARCH", "开始生成搜索计划", { topic })
     const plan = await generateSearchPlan(topic, aiConfig)
 
-    // Step 2: 执行搜索
+    // Step 2: 执行搜索（使用 Provider 架构）
     logger.info("SEARCH", "开始执行搜索", { queries: plan.search_queries })
-
-    const searchOptions = {
-      count: plan.max_results,
-      freshness: plan.priority === "timeliness" ? "Day" : "Week",
-    }
 
     const searchResults = await executeSearchBatch(
       plan.search_queries,
-      bingApiKey,
-      searchOptions
+      undefined, // 自动检测 Provider
+      plan.max_results
     )
 
     // Step 3: 爬取指定 URL
     let crawledContents: CrawlResult[] = []
     if (plan.crawl_targets.length > 0) {
       logger.info("SEARCH", "开始爬取指定 URL", { targets: plan.crawl_targets.length })
-      crawledContents = await crawlUrlsBatch(plan.crawl_targets, jinaApiKey)
+      crawledContents = await crawlUrlsBatch(plan.crawl_targets)
     }
 
     // Step 4: 清洗数据
@@ -515,7 +561,7 @@ export function formatMaterialsAsMarkdown(dataset: MaterialsDataset): string {
 
 // ── 辅助函数 ───────────────────────────────────────────────────────────────────
 
-function extractDomain(url: string): string {
+export function extractDomain(url: string): string {
   try {
     return new URL(url).hostname
   } catch {
@@ -579,43 +625,4 @@ function isAd(title = "", snippet = ""): boolean {
   ]
   const text = `${title} ${snippet}`.toLowerCase()
   return adKeywords.some((keyword) => text.includes(keyword))
-}
-
-// Jina Reader 封装
-async function fetchJinaText(url: string, apiKey = ""): Promise<string> {
-  const jinaUrl = `https://r.jina.ai/${url}`
-  const headers: Record<string, string> = {
-    "Accept": "text/plain",
-    "X-Return-Format": "markdown",
-    "X-Timeout": "8",
-  }
-  if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`
-
-  const resp = await fetch(jinaUrl, {
-    headers,
-    signal: AbortSignal.timeout(10000),
-  })
-
-  if (!resp.ok) throw new Error(`Jina ${resp.status}`)
-  const text = await resp.text()
-  if (text.length < 50) throw new Error("Jina 返回内容为空")
-  return text.slice(0, 8000)
-}
-
-// 直接 fetch 封装
-async function fetchDirectText(url: string): Promise<string> {
-  const resp = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; autowriting-bot/1.0)",
-      "Accept": "text/html,application/xhtml+xml,*/*",
-      "Accept-Language": "zh-CN,zh;q=0.9",
-    },
-    signal: AbortSignal.timeout(15000),
-  })
-
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-  const html = await resp.text()
-  const text = stripHtml(html)
-  if (text.length < 100) throw new Error("页面内容为空或无法提取正文")
-  return text.slice(0, 8000)
 }

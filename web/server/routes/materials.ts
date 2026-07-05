@@ -14,6 +14,7 @@ import path from 'path'
 import { DRAFTS_DIR } from '../config.js'
 import { logger } from '../logger.js'
 import { authMiddleware } from '../authMiddleware.js'
+import { webFetch } from '../utils/search/webFetcher.js'
 
 const router = Router()
 
@@ -55,36 +56,6 @@ router.get('/:articleId', (req, res) => {
   }
 })
 
-// ── 工具：HTML → 纯文本（简单提取，不依赖额外库）────────────────────────────
-function htmlToText(html) {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')      // 去 script
-    .replace(/<style[\s\S]*?<\/style>/gi, '')        // 去 style
-    .replace(/<[^>]+>/g, ' ')                         // 去所有标签
-    .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"')
-    .replace(/[ \t]+/g, ' ')                          // 合并空格
-    .replace(/\n{3,}/g, '\n\n')                       // 合并多余换行
-    .trim()
-    .slice(0, 8000)
-}
-
-// ── 工具：尝试直接 fetch 原 URL 并提取正文 ────────────────────────────────────
-async function fetchDirectText(url) {
-  const resp = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,*/*',
-      'Accept-Language': 'zh-CN,zh;q=0.9',
-    },
-    signal: AbortSignal.timeout(15000),
-  })
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-  const html = await resp.text()
-  const text = htmlToText(html)
-  if (text.length < 100) throw new Error('页面内容为空或无法提取正文')
-  return text
-}
-
 // ── 工具：尝试 Jina Reader（快速超时，失败时静默降级）────────────────────────
 async function fetchJinaText(url, apiKey = '') {
   const jinaUrl = `https://r.jina.ai/${url}`
@@ -96,7 +67,7 @@ async function fetchJinaText(url, apiKey = '') {
   if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
   const resp = await fetch(jinaUrl, {
     headers,
-    signal: AbortSignal.timeout(10000),  // 快速失败，让直接 fetch 兜底
+    signal: AbortSignal.timeout(10000),
   })
   if (!resp.ok) throw new Error(`Jina ${resp.status}`)
   const text = await resp.text()
@@ -105,7 +76,8 @@ async function fetchJinaText(url, apiKey = '') {
 }
 
 // ── POST /api/materials/fetch-url ─────────────────────────────────────────────
-// 读取 URL 正文：优先 Jina Reader（有梯子时更干净），不可用则直接 fetch 原页面
+// 读取 URL 正文：优先 Jina Reader，不可用则降级到内置 WebFetcher
+//   WebFetcher 三层防护：URL 安全检查 → 频率限制 → HTML 正文提取转 Markdown
 router.post('/fetch-url', async (req, res) => {
   const { url, jinaApiKey = '' } = req.body
   if (!url) return res.status(400).json({ error: '缺少 url 参数' })
@@ -118,16 +90,12 @@ router.post('/fetch-url', async (req, res) => {
     content = await fetchJinaText(url, jinaApiKey)
     method = 'jina'
   } catch (jinaErr) {
-    logger.warn('MATERIALS', `Jina Reader 不可用，降级直接 fetch：${jinaErr.message}`)
-    // 降级：直接 fetch 原页面
-    try {
-      content = await fetchDirectText(url)
-      method = 'direct'
-    } catch (directErr) {
-      const msg = directErr.name === 'TimeoutError'
-        ? 'URL 解析超时，请检查网络或换一个地址'
-        : `读取失败：${directErr.message}`
-      return res.status(500).json({ error: msg })
+    logger.warn('MATERIALS', `Jina Reader 不可用，降级 WebFetcher: ${jinaErr.message}`)
+    // 降级：使用内置 WebFetcher（安全策略 + HTML→Markdown）
+    content = await webFetch(url, { maxChars: 8000 })
+    method = 'webfetch'
+    if (!content || content.startsWith('[')) {
+      return res.status(500).json({ error: content || '抓取失败，可能是 JS 渲染页面或防爬墙' })
     }
   }
 
@@ -135,7 +103,7 @@ router.post('/fetch-url', async (req, res) => {
 })
 
 // ── POST /api/materials/fetch-url-batch ───────────────────────────────────────
-// 批量读取多个 URL 的全文：Jina 优先，不可用时直接 fetch（并发上限 3）
+// 批量读取多个 URL 的全文：Jina 优先，降级 WebFetcher（并发上限 3）
 router.post('/fetch-url-batch', async (req, res) => {
   const { urls, jinaApiKey = '' } = req.body
   if (!Array.isArray(urls) || urls.length === 0) {
@@ -145,19 +113,20 @@ router.post('/fetch-url-batch', async (req, res) => {
   const CONCURRENCY = 3
   const results = []
 
-  // 分批并发处理
   for (let i = 0; i < urls.length; i += CONCURRENCY) {
     const batch = urls.slice(i, i + CONCURRENCY)
     const batchResults = await Promise.allSettled(
       batch.map(async (url) => {
-        // 先试 Jina（传入 apiKey），失败就直接 fetch
         let content = ''
+        let ok = false
         try {
           content = await fetchJinaText(url, jinaApiKey)
+          ok = true
         } catch {
-          content = await fetchDirectText(url)
+          content = await webFetch(url, { maxChars: 8000 })
+          ok = content.length > 0 && !content.startsWith('[')
         }
-        return { url, content, ok: true }
+        return { url, content, ok }
       })
     )
 
@@ -175,9 +144,9 @@ router.post('/fetch-url-batch', async (req, res) => {
 })
 
 // ── POST /api/materials/search ────────────────────────────────────────────────
-// 支持 Serper（Google/Baidu）、Bing Search API、SearXNG（免费/自建）
+// 支持智谱（Zhipu）、Serper（Google/Baidu）、SearXNG（免费/自建）
 router.post('/search', async (req, res) => {
-  const { query, provider = 'serper', apiKey, engine = 'google', num = 10, searxngUrl } = req.body
+  const { query, provider, apiKey, engine = 'google', num = 10, searxngUrl, glmApiKey } = req.body
   if (!query) return res.status(400).json({ error: '缺少 query 参数' })
 
   try {
@@ -265,8 +234,40 @@ router.post('/search', async (req, res) => {
         source:  (() => { try { return new URL(item.url || 'https://unknown').hostname } catch { return 'unknown' } })(),
       }))
 
+    } else if (provider === 'zhipu') {
+      // 智谱搜索 — 与 LLM 共用 GLM_API_KEY，零额外配置
+      const zhipuKey = glmApiKey || apiKey
+      if (!zhipuKey) return res.status(400).json({ error: '未配置智谱 API Key（GLM_API_KEY），请在「AI 配置」页面填写' })
+      const resp = await fetch('https://open.bigmodel.cn/api/paas/v4/tools/web_search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${zhipuKey}`,
+        },
+        body: JSON.stringify({
+          search_engine: 'search_std',
+          search_query: query,
+          count: Math.min(num, 20),
+          content_size: 'medium',
+        }),
+        signal: AbortSignal.timeout(30000),
+      })
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => '')
+        return res.status(502).json({ error: `智谱搜索 API 返回 ${resp.status}: ${errText.slice(0, 200)}` })
+      }
+      const data = await resp.json()
+      const items = data.search_result || []
+      results = items.slice(0, num).map(item => ({
+        title:   item.title   || '',
+        snippet: item.content || '',
+        url:     item.link    || '',
+        source:  (() => { try { return new URL(item.link || 'https://unknown').hostname } catch { return 'unknown' } })(),
+      }))
+
     } else {
-      return res.status(400).json({ error: `不支持的搜索服务商: ${provider}` })
+      // 未指定 provider 时自动检测
+      return res.status(400).json({ error: `不支持的搜索服务商: ${provider || '未指定'}。支持：zhipu / serper / bing / searxng` })
     }
 
     res.json({ results, query })

@@ -397,7 +397,7 @@
 /* ── Provider grid ───────────────────────────────────────────────── */
 .as-provider-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 8px;
 }
 
@@ -405,6 +405,7 @@
   position: relative;
   display: flex;
   flex-direction: column;
+  width: 100%;
   gap: 3px;
   padding: 12px 14px;
   border: 1.5px solid var(--color-hairline, #e5e5e5);
@@ -439,28 +440,80 @@
   line-height: 1.4;
 }
 
-.as-pt-check {
-  position: absolute;
-  top: 10px;
-  right: 10px;
+.as-pt-hint {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--color-hairline, #e5e5e5);
+  font-size: 10px;
+  color: var(--color-muted-soft, #9a9a9a);
+  line-height: 1.4;
+}
+
+.as-pt-hint a {
+  color: var(--color-body, #3a3a3a);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.as-pt-hint a:hover {
   color: var(--color-ink, #0a0a0a);
 }
 
-/* ── Fields ──────────────────────────────────────────────────────── */
-.as-row-2 {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 12px;
+.as-pt-key-link {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-body, #3a3a3a);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+  transition: color 0.12s;
 }
 
-.as-field {
+.as-pt-key-link:hover {
+  color: var(--color-ink, #0a0a0a);
+}
+
+/* ── Provider wrap（按钮 + 下方提示链接） ─────────────── */
+.as-provider-wrap {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 4px;
 }
 
-.as-field--grow {
-  flex: 1;
+/* Grid 中包裹 provider tile 的容器（包含按钮 + 链接提示）不拉伸 */
+.as-provider-grid > .as-provider-wrap,
+.as-provider-grid > .as-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-self: start;
+}
+
+.as-provider-grid > .as-field {
+  padding: 0;         /* 清除 .as-field 默认的 gap */
+  margin: 0;
+}
+
+.as-provider-hint {
+  font-size: 11px;
+  color: var(--color-muted-soft, #9a9a9a);
+  margin: 0;
+  padding: 0 2px;
+  line-height: 1.4;
+}
+
+.as-provider-hint a {
+  color: var(--color-body, #3a3a3a);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 500;
+}
+
+.as-provider-hint a:hover {
+  color: var(--color-ink, #0a0a0a);
 }
 
 .as-label {

@@ -482,6 +482,7 @@ export default function ArticleEditor() {
                   searchProvider={aiConfig.searchProvider || 'serper'}
                   searchEngine={aiConfig.searchEngine || 'google'}
                   searxngUrl={aiConfig.searxngUrl || ''}
+                  glmApiKey={aiConfig.glmApiKey || aiConfig.articleApiKey || ''}
                   jinaApiKey={aiConfig.jinaApiKey || ''}
                   onSaved={fetchArticleData}
                 />

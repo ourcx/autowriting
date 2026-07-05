@@ -166,4 +166,12 @@ export const SERVER_AI_CONFIG = {
 
   // Imgur 图床
   imgurClientId: process.env.IMGUR_CLIENT_ID || '',
+
+  // 搜索
+  glmApiKey: process.env.GLM_API_KEY || process.env.OPENAI_API_KEY || '',
+  searchProvider: process.env.SEARCH_PROVIDER || '',
+  searchApiKey: process.env.SEARCH_API_KEY || process.env.SERPER_API_KEY || process.env.SERPAPI_KEY || '',
+  searchEngine: process.env.SEARCH_ENGINE || 'bing',
+  searxngUrl: process.env.SEARXNG_URL || '',
+  jinaApiKey: process.env.JINA_API_KEY || '',
 }

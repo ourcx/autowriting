@@ -435,7 +435,9 @@ export default function AISettings() {
                     >
                       <span className="as-pt-name">{p.name}</span>
                       <span className="as-pt-desc">{p.desc}</span>
-                      {config.articleProvider === p.id && <Check size={13} className="as-pt-check" />}
+                      <span className="as-pt-hint">
+                        <a href={p.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>获取 Key ↗</a> {p.tip}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -621,15 +623,16 @@ export default function AISettings() {
                 <p className="as-card-desc">封面生成器里可随时切换，这里设默认值</p>
                 <div className="as-provider-grid">
                   {COVER_PROVIDER_PRESETS.map(p => (
-                    <button
-                      key={p.id}
-                      className={`as-provider-tile${config.coverProvider === p.id ? ' as-provider-tile--active' : ''}`}
-                      onClick={() => set({ coverProvider: p.id })}
-                    >
-                      <span className="as-pt-name">{p.name}</span>
-                      <span className="as-pt-desc">{p.desc}</span>
-                      {config.coverProvider === p.id && <Check size={13} className="as-pt-check" />}
-                    </button>
+                    <>
+                      <button
+                        key={p.id}
+                        className={`as-provider-tile${config.coverProvider === p.id ? ' as-provider-tile--active' : ''}`}
+                        onClick={() => set({ coverProvider: p.id })}
+                      >
+                        <span className="as-pt-name">{p.name}</span>
+                        <span className="as-pt-desc">{p.desc}</span>
+                      </button>
+                    </>
                   ))}
                 </div>
               </div>
@@ -649,19 +652,23 @@ export default function AISettings() {
                 <p className="as-card-desc">SearXNG 无需 API Key 即可使用，适合入门；Serper / Bing 需注册获取 Key</p>
                 <div className="as-provider-grid">
                   {[
-                    { id: 'searxng', name: 'SearXNG（推荐）', desc: '开源聚合，231 个搜索引擎，无需 Key' },
-                    { id: 'serper', name: 'Serper.dev', desc: '支持 Google / 百度，2500 次/月免费' },
-                    { id: 'bing', name: 'Bing Search', desc: 'Microsoft，1000 次/月免费' },
+                    { id: 'zhipu', name: '智谱搜索（推荐）', desc: '与 LLM 共用 GLM_API_KEY，零额外配置', url: 'https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys', tip: '登录智谱开放平台获取 API Key' },
+                    { id: 'searxng', name: 'SearXNG', desc: '开源聚合，231 个搜索引擎，无需 Key', url: 'https://docs.searxng.org/admin/installation-docker.html', tip: 'Docker 一键部署，零成本' },
+                    { id: 'serper', name: 'Serper.dev', desc: '支持 Google / 百度，2500 次/月免费', url: 'https://serper.dev', tip: '免费注册，2500 次/月' },
+                    { id: 'bing', name: 'Bing Search', desc: 'Microsoft，1000 次/月免费', url: 'https://portal.azure.com', tip: 'Azure Portal 创建资源' },
                   ].map(p => (
-                    <button
-                      key={p.id}
-                      className={`as-provider-tile${config.searchProvider === p.id ? ' as-provider-tile--active' : ''}`}
-                      onClick={() => set({ searchProvider: p.id as AIConfig['searchProvider'] })}
-                    >
-                      <span className="as-pt-name">{p.name}</span>
-                      <span className="as-pt-desc">{p.desc}</span>
-                      {config.searchProvider === p.id && <Check size={13} className="as-pt-check" />}
-                    </button>
+                    <div key={p.id} className="as-provider-wrap">
+                      <button
+                        className={`as-provider-tile${config.searchProvider === p.id ? ' as-provider-tile--active' : ''}`}
+                        onClick={() => set({ searchProvider: p.id as AIConfig['searchProvider'] })}
+                      >
+                        <span className="as-pt-name">{p.name}</span>
+                        <span className="as-pt-desc">{p.desc}</span>
+                      </button>
+                      <p className="as-hint as-provider-hint">
+                        <a href={p.url} target="_blank" rel="noreferrer">获取 Key ↗</a> {p.tip}
+                      </p>
+                    </div>
                   ))}
                 </div>
 
@@ -710,7 +717,6 @@ export default function AISettings() {
                         >
                           <span className="as-pt-name">{e.name}</span>
                           <span className="as-pt-desc">{e.desc}</span>
-                          {config.searchEngine === e.id && <Check size={13} className="as-pt-check" />}
                         </button>
                       ))}
                     </div>
@@ -873,8 +879,8 @@ export default function AISettings() {
                 /* ── 未绑定：输入表单 ── */
                 <div className="as-card">
                   <div className="as-card-section-label">填写公众号凭据</div>
-                  <p className="as-card-desc">
-                    在微信公众平台 → 设置与开发 → 基本配置 中获取 AppID 和 AppSecret。
+                  <p className="as-card-desc as-hint">
+                    在<a href="https://developers.weixin.qq.com/console/product/mp" target="_blank" rel="noreferrer">微信公众平台 → 设置与开发 → 基本配置 </a>中获取 AppID 和 AppSecret。
                     服务端 IP 需加入安全中心的 IP 白名单（本机开发时填本机出口 IP）。
                   </p>
 
@@ -957,7 +963,6 @@ export default function AISettings() {
                     >
                       <span className="as-pt-name">{p.name}</span>
                       <span className="as-pt-desc">{p.desc}</span>
-                      {config.cdnProvider === p.id && <Check size={13} className="as-pt-check" />}
                     </button>
                   ))}
                 </div>

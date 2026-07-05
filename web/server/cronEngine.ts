@@ -79,18 +79,10 @@ async function collectMaterialsIfEnabled(job, topic, aiConfig) {
     return null
   }
 
-  // 检查必需的 API Key
-  if (!job.bingApiKey) {
-    throw new Error('未配置 Bing API Key，无法进行网络搜索。请在任务配置中填写 Bing API Key')
-  }
-
-  const searchConfig = {
-    bingApiKey: job.bingApiKey,
-    jinaApiKey: job.jinaApiKey || '', // Jina 是可选的
-  }
-
   try {
-    const dataset = await collectMaterials(topic, aiConfig, searchConfig)
+    // collectMaterials 通过 Provider 架构自动检测可用的搜索引擎
+    // 不再需要 bingApiKey/jinaApiKey 参数，配置从环境变量和 AI 配置中获取
+    const dataset = await collectMaterials(topic, aiConfig)
     return dataset
   } catch (err) {
     // 素材收集失败不阻断整体流程，只记录警告

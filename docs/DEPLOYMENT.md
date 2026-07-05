@@ -475,22 +475,25 @@ pm2 save
 
 ### 本地向量模型报 `sharp 模块加载失败` / `Cannot find module '../build/Release/sharp-linux-x64.node'`
 
-**原因**：`@xenova/transformers` 依赖 `sharp`，Linux 服务器上缺少预编译二进制。
+**原因**：`@xenova/transformers` 依赖 `sharp` 原生模块，Linux 服务器上缺少预编译二进制。`sharp` 已在 `package.json` 的 `dependencies` 中，`pnpm install` 会自动安装并触发 `postinstall` 脚本重建。
 
 **解决**：
 ```bash
-# 方法 1：重建 sharp 原生模块
+# 方法 1（推荐）：重新安装依赖（会自动触发 postinstall 重建 sharp）
 cd web
-pnpm rebuild sharp
-# 或
-npm install --platform=linux --arch=x64 sharp
+pnpm install
 
-# 方法 2：重新执行 postinstall 脚本（自动检测并重建）
+# 方法 2：手动重建 sharp 原生模块
+pnpm rebuild sharp
+
+# 方法 3：重新执行 postinstall 脚本
 pnpm rebuild:native
 
-# 方法 3（推荐）：切换到远端 Embedding API
+# 方法 4：如果以上都失败，切换到远端 Embedding API
 # 在设置页面配置 Embedding API Key，无需本地 sharp
 ```
+
+> **注意**：`sharp` 需要从 GitHub 下载 `libvips` 预编译包。如果服务器无法访问 GitHub（如内网环境），会超时失败。此时建议使用远端 Embedding API。
 
 ### Embedding API 报 `429 Too Many Requests` / `余额不足`
 
