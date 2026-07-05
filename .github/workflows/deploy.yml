@@ -36,8 +36,44 @@ jobs:
 
             cd /home/admin/autowriting
 
-            # ----- 1. 备份当前状态（包括未提交修改和未跟踪文件） -----
             TIMESTAMP=$(date +%Y%m%d%H%M%S)
+
+            # ----- 1. 备份数据库和文章草稿（部署前快照） -----
+            echo "===== 开始备份数据库和草稿 ====="
+            
+            BACKUP_DIR="/home/admin/autowriting/web/data/backups/deploy"
+            mkdir -p "$BACKUP_DIR"
+            
+            # 备份 SQLite 数据库（如果存在）
+            if [ -f /home/admin/autowriting/web/data/app.db ]; then
+              # 优先使用 sqlite3 CLI 做原子备份（更安全）
+              if command -v sqlite3 &> /dev/null; then
+                sqlite3 /home/admin/autowriting/web/data/app.db ".backup '$BACKUP_DIR/db_deploy_$TIMESTAMP.sqlite'"
+                echo "数据库已备份到: $BACKUP_DIR/db_deploy_$TIMESTAMP.sqlite"
+              else
+                cp /home/admin/autowriting/web/data/app.db "$BACKUP_DIR/db_deploy_$TIMESTAMP.sqlite"
+                echo "数据库已备份（cp方式）: $BACKUP_DIR/db_deploy_$TIMESTAMP.sqlite"
+              fi
+            else
+              echo "⚠ 未找到数据库文件 web/data/app.db，跳过数据库备份"
+            fi
+            
+            # 备份文章草稿目录
+            if [ -d /home/admin/autowriting/公众号写作/drafts ]; then
+              tar -czf "$BACKUP_DIR/drafts_deploy_$TIMESTAMP.tar.gz" \
+                -C /home/admin/autowriting/公众号写作 \
+                drafts 2>/dev/null || true
+              echo "草稿已备份到: $BACKUP_DIR/drafts_deploy_$TIMESTAMP.tar.gz"
+            else
+              echo "⚠ 未找到草稿目录，跳过草稿备份"
+            fi
+            
+            # 清理 90 天前的部署备份
+            find "$BACKUP_DIR" -type f -mtime +90 -delete 2>/dev/null || true
+            
+            echo "===== 数据备份完成 ====="
+
+            # ----- 2. 备份当前 git 状态（包括未提交修改和未跟踪文件） -----
             BACKUP_BRANCH="backup/deploy-$TIMESTAMP"
 
             # 如果工作区有未提交修改，先 stash（-u 包含未跟踪文件）
@@ -46,9 +82,11 @@ jobs:
             # 创建备份分支（基于当前 HEAD，保存当前提交历史）
             git branch "$BACKUP_BRANCH" || true
 
-            echo "备份完成：分支 $BACKUP_BRANCH，stash 已保存"
+            echo "Git 备份完成：分支 $BACKUP_BRANCH"
 
-            # ----- 2. 拉取远程 main 并尝试合并 -----
+            git push origin "$BACKUP_BRANCH" || true
+
+            # ----- 3. 拉取远程 main 并尝试合并 -----
             git fetch origin main
 
             # 尝试合并（不自动提交，不快进），方便检测冲突

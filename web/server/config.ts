@@ -67,7 +67,8 @@ if (IS_ELECTRON && ELECTRON_USER_DATA) {
 } else {
   // 普通 Web 模式：路径相对于项目根目录
   PROJECT_ROOT_DEFAULT = path.join(WEB_DIR, '..')
-  DATA_DIR_DEFAULT = path.join(PROJECT_ROOT_DEFAULT, '.cache')
+  // 数据目录放在 web/data/ 下（非 .cache），防止被当作可丢弃缓存误删
+  DATA_DIR_DEFAULT = path.join(WEB_DIR, 'data')
   DRAFTS_DIR_DEFAULT = path.join(PROJECT_ROOT_DEFAULT, '公众号写作', 'drafts')
   AGENTS_FILE_DEFAULT = path.join(PROJECT_ROOT_DEFAULT, 'AGENTS.md')
   WRITING_GUIDE_FILE_DEFAULT = path.join(PROJECT_ROOT_DEFAULT, '写作参考', '写作规范.md')

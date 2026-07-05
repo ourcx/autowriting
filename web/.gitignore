@@ -10,6 +10,10 @@ node_modules
 /dist
 /build
 
+# Runtime data directory (SQLite DB, uploads, covers, publish history)
+# 运行时数据目录，含用户数据、配置、上传文件等 — 不可 git 跟踪，防止数据泄漏和覆盖
+/data/
+
 # Misc
 .DS_Store
 .env
@@ -31,3 +35,5 @@ yarn-error.log*
 
 # OS
 Thumbs.db
+
+/公众号写作/*
