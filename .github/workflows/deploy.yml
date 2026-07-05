@@ -33,7 +33,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /home/admin/autowriting
-            git pull origin main
+            git pull origin main --force
             cd web
             pnpm install
             pnpm build
