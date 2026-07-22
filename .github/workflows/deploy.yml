@@ -31,9 +31,16 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 30m
           script: |
+            set -e
             cd /home/admin/autowriting
-            git pull origin main
+            if ! git diff --quiet || ! git diff --cached --quiet; then
+              echo "Server has local tracked changes. Abort deploy to avoid overwriting data."
+              git status --short
+              exit 1
+            fi
+            git pull --no-rebase origin main
             cd web
             pnpm install
             pnpm build
