@@ -27,7 +27,7 @@
     "verify": "pnpm lint && pnpm arch && pnpm typecheck:changed && pnpm build",
     "server": "npx tsx server.ts",
     "start": "concurrently \"npm run server\" \"npm run dev\"",
-    "sync": "bash sync-to-guard.sh",
+    "sync": "bash ./sync-to-guard.sh",
     "postinstall": "node scripts/postinstall.cjs",
     "rebuild:native": "node scripts/postinstall.cjs",
     "electron:dev": "concurrently --kill-others -n server,vite,electron \"npx tsx server.ts\" \"vite\" \"wait-on http://localhost:5173 http://localhost:3000/health && NODE_ENV=development electron .\"",

@@ -85,6 +85,45 @@ function invalidateToken(appId) {
   _tokenCache.delete(appId)
 }
 
+function truncateWechatText(value, maxChars) {
+  if (typeof value !== 'string') return ''
+  return Array.from(value.trim()).slice(0, maxChars).join('')
+}
+
+function normalizeWechatFlag(value, defaultValue) {
+  if (value === undefined || value === null || value === '') return defaultValue
+  if (value === true || value === 'true') return 1
+  if (value === false || value === 'false') return 0
+  const num = Number(value)
+  return num === 1 ? 1 : 0
+}
+
+function normalizeWechatArticleType(value) {
+  return value === 'newspic' ? 'newspic' : 'news'
+}
+
+function pickWechatAuthorName(basicInfo, fallback) {
+  const candidate = basicInfo?.nick_name || basicInfo?.nickname || basicInfo?.user_name || fallback || ''
+  return truncateWechatText(candidate, 16)
+}
+
+async function fetchWechatAccountBasicInfo(token) {
+  const basicResp = await axios.get('https://api.weixin.qq.com/cgi-bin/account/getaccountbasicinfo', {
+    params: { access_token: token },
+    timeout: 8000,
+  })
+
+  if (basicResp.data.errcode && basicResp.data.errcode !== 0) {
+    if (basicResp.data.errcode === 48001) {
+      return { basicInfo: null, limited: true }
+    }
+    logger.error(WECHAT, '账户基础信息获取失败', { errcode: basicResp.data.errcode, errmsg: basicResp.data.errmsg })
+    throw new Error(`[${basicResp.data.errcode}] ${basicResp.data.errmsg}`)
+  }
+
+  return { basicInfo: basicResp.data, limited: false }
+}
+
 // ── GET /api/wechat/status ───────────────────────────────────────────────────
 // 检查 Header 中的凭据是否已提供（不主动向微信验证，避免消耗调用次数）
 router.get('/status', (req, res) => {
@@ -105,26 +144,8 @@ router.get('/account', async (req, res) => {
   try {
     logger.info(WECHAT, '获取账户信息', { appId: creds.appId })
     const token = await getAccessToken(creds.appId, creds.appSecret)
-
-    let basicInfo = null
-    let limited = false
-
-    const basicResp = await axios.get('https://api.weixin.qq.com/cgi-bin/account/getaccountbasicinfo', {
-      params: { access_token: token },
-      timeout: 8000,
-    })
-
-    if (basicResp.data.errcode && basicResp.data.errcode !== 0) {
-      if (basicResp.data.errcode === 48001) {
-        limited = true
-        logger.warn(WECHAT, '账户接口权限不足 (48001)，标记为 limited', { appId: creds.appId })
-      } else {
-        logger.error(WECHAT, '账户基础信息获取失败', { errcode: basicResp.data.errcode, errmsg: basicResp.data.errmsg })
-        throw new Error(`[${basicResp.data.errcode}] ${basicResp.data.errmsg}`)
-      }
-    } else {
-      basicInfo = basicResp.data
-    }
+    const { basicInfo, limited } = await fetchWechatAccountBasicInfo(token)
+    if (limited) logger.warn(WECHAT, '账户接口权限不足 (48001)，标记为 limited', { appId: creds.appId })
 
     let fansCount = null
     let fansLimited = false
@@ -341,15 +362,44 @@ router.post('/draft', async (req, res) => {
   const creds = getCredentials(req)
   if (!creds) return res.status(401).json({ error: '未提供公众号凭据' })
 
-  const { title, content, digest, thumb_media_id, need_open_comment = 1, only_fans_can_comment = 1 } = req.body
-  if (!title || !content) {
-    logger.warn(WECHAT, '新增草稿参数缺失', { hasTitle: !!title, hasContent: !!content })
+  const {
+    article_type,
+    title,
+    author,
+    digest,
+    content,
+    content_source_url,
+    thumb_media_id,
+    need_open_comment = 1,
+    only_fans_can_comment = 0,
+    pic_crop_235_1,
+    pic_crop_1_1,
+    image_info,
+    cover_info,
+    product_info,
+  } = req.body ?? {}
+
+  const normalizedArticleType = normalizeWechatArticleType(article_type)
+  const normalizedTitle = truncateWechatText(title, 32)
+  const rawContent = typeof content === 'string' ? content : ''
+  const normalizedContent = rawContent.trim()
+  const normalizedDigest = truncateWechatText(digest || normalizedTitle, 120)
+  const normalizedSourceUrl = truncateWechatText(content_source_url, 1024)
+  const normalizedNeedOpenComment = normalizeWechatFlag(need_open_comment, 1)
+  const normalizedOnlyFansCanComment = normalizedNeedOpenComment
+    ? normalizeWechatFlag(only_fans_can_comment, 0)
+    : 0
+  const normalizedCrop235 = truncateWechatText(pic_crop_235_1, 64)
+  const normalizedCrop11 = truncateWechatText(pic_crop_1_1, 64)
+
+  if (!normalizedTitle || !normalizedContent) {
+    logger.warn(WECHAT, '新增草稿参数缺失', { hasTitle: !!normalizedTitle, hasContent: !!normalizedContent })
     return res.status(400).json({ error: '标题和内容不能为空' })
   }
 
   const submitDraft = async (token) => {
     let finalThumbId = thumb_media_id
-    if (!finalThumbId) {
+    if (normalizedArticleType === 'news' && !finalThumbId) {
       try {
         finalThumbId = await getDefaultThumbMediaId(creds.appId, token)
       } catch (thumbErr) {
@@ -357,14 +407,42 @@ router.post('/draft', async (req, res) => {
       }
     }
 
-    const article = {
-      title: title.slice(0, 64),
-      content,
-      need_open_comment,
-      only_fans_can_comment,
+    let currentAccountName = truncateWechatText(author, 16)
+    if (!currentAccountName) {
+      try {
+        const { basicInfo, limited } = await fetchWechatAccountBasicInfo(token)
+        currentAccountName = pickWechatAuthorName(basicInfo, creds.appId)
+        if (limited) {
+          logger.warn(WECHAT, '草稿默认作者回退为 appId，账户信息接口权限不足', { appId: creds.appId })
+        }
+      } catch (accountErr) {
+        currentAccountName = pickWechatAuthorName(null, creds.appId)
+        logger.warn(WECHAT, '获取公众号昵称失败，草稿作者回退为 appId', { appId: creds.appId, error: accountErr.message })
+      }
     }
-    if (digest) article.digest = digest.slice(0, 120)
-    if (finalThumbId) article.thumb_media_id = finalThumbId
+
+    const article = {
+      article_type: normalizedArticleType,
+      title: normalizedTitle,
+      author: currentAccountName,
+      content: rawContent,
+      need_open_comment: normalizedNeedOpenComment,
+      only_fans_can_comment: normalizedOnlyFansCanComment,
+    }
+
+    if (normalizedArticleType === 'news') {
+      article.digest = normalizedDigest
+      if (normalizedSourceUrl) article.content_source_url = normalizedSourceUrl
+      if (finalThumbId) article.thumb_media_id = finalThumbId
+      if (normalizedCrop235) article.pic_crop_235_1 = normalizedCrop235
+      if (normalizedCrop11) article.pic_crop_1_1 = normalizedCrop11
+    }
+
+    if (normalizedArticleType === 'newspic') {
+      article.image_info = image_info
+      if (cover_info) article.cover_info = cover_info
+      if (product_info) article.product_info = product_info
+    }
 
     return axios.post(
       'https://api.weixin.qq.com/cgi-bin/draft/add',
@@ -374,7 +452,14 @@ router.post('/draft', async (req, res) => {
   }
 
   try {
-    logger.info(WECHAT, '新增草稿', { appId: creds.appId, title: title.slice(0, 20), hasThumb: !!thumb_media_id })
+    logger.info(WECHAT, '新增草稿', {
+      appId: creds.appId,
+      articleType: normalizedArticleType,
+      title: normalizedTitle.slice(0, 20),
+      hasThumb: !!thumb_media_id,
+      openComment: !!normalizedNeedOpenComment,
+      fansOnlyComment: !!normalizedOnlyFansCanComment,
+    })
     let token = await getAccessToken(creds.appId, creds.appSecret)
     let resp = await submitDraft(token)
 

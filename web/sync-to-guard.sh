@@ -1,23 +1,50 @@
 #!/bin/bash
 # ============================================================
 # sync-to-guard.sh — 从源工程同步到 autowriting-guard
-# 用法：bash /Users/zhuxinhao/autowriting/sync-to-guard.sh
-# 小红书内部发布到cowork的生成zip文件的脚本
+# 用法：bash ./sync-to-guard.sh
+# 小红书内部发布到 cowork 的生成 zip 文件脚本
+# 支持通过环境变量覆盖目标路径：
+#   GUARD_ROOT=/custom/autowriting-guard ZIP_OUT=/custom/autowriting-guard.zip bash ./sync-to-guard.sh
 # ============================================================
-set -e
+set -euo pipefail
 
-SRC="/Users/zhuxinhao/autowriting/web"
-GUARD="/Users/zhuxinhao/autowriting-guard/web"
-ZIP_OUT="/Users/zhuxinhao/autowriting-guard.zip"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+BASE_DIR="$(cd "$REPO_ROOT/.." && pwd)"
+
+SRC="${SRC:-$SCRIPT_DIR}"
+GUARD_ROOT="${GUARD_ROOT:-$BASE_DIR/autowriting-guard}"
+GUARD="${GUARD:-$GUARD_ROOT/web}"
+ZIP_OUT="${ZIP_OUT:-$BASE_DIR/autowriting-guard.zip}"
+SMOKE_LOG="${SMOKE_LOG:-/tmp/guard-smoke.log}"
+TMP_ZIP="${TMP_ZIP:-/tmp/autowriting-guard-tmp.zip}"
+export SRC GUARD GUARD_ROOT ZIP_OUT SMOKE_LOG TMP_ZIP
 
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 info()  { echo -e "${GREEN}[sync]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[warn]${NC} $*"; }
 error() { echo -e "${RED}[error]${NC} $*"; exit 1; }
 
+ensure_dir() {
+  local dir="$1"
+  mkdir -p "$dir" || error "创建目录失败: $dir"
+  chmod 755 "$dir" 2>/dev/null || true
+  [[ -w "$dir" ]] || error "目录不可写: $dir"
+}
+
 info "=========================================="
 info "  autowriting → autowriting-guard 同步"
 info "=========================================="
+info "源目录: $SRC"
+info "目标目录: $GUARD"
+info "ZIP 输出: $ZIP_OUT"
+
+[[ -d "$SRC" ]] || error "源目录不存在: $SRC"
+ensure_dir "$GUARD_ROOT"
+ensure_dir "$GUARD"
+ensure_dir "$(dirname "$ZIP_OUT")"
+touch "$ZIP_OUT" 2>/dev/null || error "无法写入 ZIP 文件: $ZIP_OUT"
+rm -f "$ZIP_OUT"
 
 # ── Step 1: rsync（排除 guard 专属文件 + 需手动 patch 的文件）────────────────
 info "Step 1: rsync 同步..."
@@ -45,10 +72,11 @@ info "rsync 完成"
 # 每次同步后基于源工程自动生成完整 guard 版本
 info "Step 2: 生成 guard 版 server.ts..."
 python3 - << 'PYEOF'
+import os
 import re
 
-src_path   = "/Users/zhuxinhao/autowriting/web/server.ts"
-guard_path = "/Users/zhuxinhao/autowriting-guard/web/server.ts"
+src_path = os.path.join(os.environ["SRC"], "server.ts")
+guard_path = os.path.join(os.environ["GUARD"], "server.ts")
 
 with open(src_path) as f:
     code = f.read()
@@ -137,9 +165,10 @@ fi
 info "Step 5: package.json guard 专属改写..."
 python3 - << 'PYEOF'
 import json
+import os
 
-src_path   = "/Users/zhuxinhao/autowriting/web/package.json"
-guard_path = "/Users/zhuxinhao/autowriting-guard/web/package.json"
+src_path = os.path.join(os.environ["SRC"], "package.json")
+guard_path = os.path.join(os.environ["GUARD"], "package.json")
 
 with open(src_path) as f:
     pkg = json.load(f)
@@ -216,7 +245,7 @@ npm run build 2>&1 | grep -E "(✓|✗|dist/|error|warning)" | tail -10
 info "Step 8: 烟测..."
 pkill -f "APP_PORT=3099 npx tsx server.ts" 2>/dev/null || true
 sleep 1
-APP_PORT=3099 npx tsx server.ts > /tmp/guard-smoke.log 2>&1 &
+APP_PORT=3099 npx tsx server.ts > "$SMOKE_LOG" 2>&1 &
 SMOKE_PID=$!
 sleep 4
 
@@ -233,17 +262,19 @@ if echo "$HEALTH" | grep -q '"status":"ok"'; then
     info "烟测 /  → $TITLE"
   fi
 else
-  error "烟测失败！/health 返回: $HEALTH\n详情: cat /tmp/guard-smoke.log"
+  error "烟测失败！/health 返回: $HEALTH\n详情: cat $SMOKE_LOG"
 fi
 
 # ── Step 9: 打 zip ────────────────────────────────────────────────────────────
 info "Step 9: 打 zip..."
 python3 - << PYEOF
-import zipfile, os, shutil
+import os
+import shutil
+import zipfile
 
-src = '/Users/zhuxinhao/autowriting-guard/web'
-tmp = '/tmp/autowriting-guard-tmp.zip'
-dst = '/Users/zhuxinhao/autowriting-guard.zip'
+src = os.environ["GUARD"]
+tmp = os.environ["TMP_ZIP"]
+dst = os.environ["ZIP_OUT"]
 
 # 排除目录名（精确匹配）
 exclude_dirs  = {'node_modules', '.git', '__pycache__', 'dist-electron', 'electron', 'scripts'}
