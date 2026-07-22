@@ -35,9 +35,10 @@ jobs:
           script: |
             set -e
             cd /home/admin/autowriting
-            if ! git diff --quiet || ! git diff --cached --quiet; then
-              echo "Server has local tracked changes. Abort deploy to avoid overwriting data."
-              git status --short
+            DIRTY="$(git status --porcelain --untracked-files=no -- . ':(exclude)公众号写作/drafts' ':(exclude)logs')"
+            if [ -n "$DIRTY" ]; then
+              echo "Server has local tracked changes outside runtime data. Abort deploy to avoid overwriting data."
+              echo "$DIRTY"
               exit 1
             fi
             git pull --no-rebase origin main
