@@ -1,0 +1,552 @@
+.wm-page {
+  min-height: 100vh;
+  background: #fffaf0;
+  color: #0a0a0a;
+  padding: 24px;
+}
+
+.wm-header,
+.wm-hero,
+.wm-toolbar,
+.wm-upload-panel,
+.wm-content-grid {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.wm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.wm-header-left,
+.wm-header-actions,
+.wm-header-subtitle,
+.wm-type-tabs,
+.wm-card-actions,
+.wm-detail-actions,
+.wm-upload-footer,
+.wm-news-meta {
+  display: flex;
+}
+
+.wm-header-left,
+.wm-header-actions,
+.wm-card-actions,
+.wm-detail-actions,
+.wm-upload-footer,
+.wm-news-meta {
+  align-items: center;
+}
+
+.wm-header-left,
+.wm-type-tabs {
+  gap: 12px;
+}
+
+.wm-header-actions,
+.wm-card-actions,
+.wm-detail-actions {
+  gap: 10px;
+}
+
+.wm-header-title {
+  font-size: 28px;
+  line-height: 1.1;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.wm-header-subtitle {
+  margin-top: 6px;
+  color: #6a6a6a;
+  font-size: 14px;
+}
+
+.wm-back-btn,
+.wm-primary-btn,
+.wm-secondary-btn,
+.wm-type-tab,
+.wm-card-actions button,
+.wm-card-actions a,
+.wm-detail-actions button,
+.wm-detail-actions a,
+.wm-icon-btn {
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  background: #fffaf0;
+  color: #0a0a0a;
+  height: 42px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.wm-primary-btn {
+  background: #0a0a0a;
+  color: #fff;
+  border-color: #0a0a0a;
+}
+
+.wm-secondary-btn,
+.wm-type-tab,
+.wm-card-actions button,
+.wm-card-actions a,
+.wm-detail-actions button,
+.wm-detail-actions a,
+.wm-icon-btn,
+.wm-back-btn {
+  background: #fffaf0;
+}
+
+.wm-type-tab.is-active {
+  background: #1a3a3a;
+  border-color: #1a3a3a;
+  color: #fff;
+}
+
+.wm-hero {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.wm-hero-card {
+  border-radius: 24px;
+  padding: 28px;
+  min-height: 180px;
+}
+
+.wm-hero-card--teal {
+  background: #1a3a3a;
+  color: #fff;
+}
+
+.wm-hero-card--peach {
+  background: #ffb084;
+  color: #0a0a0a;
+}
+
+.wm-kicker {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  margin-bottom: 14px;
+}
+
+.wm-hero-card h2 {
+  margin: 0 0 10px;
+  font-size: 32px;
+  line-height: 1.1;
+  font-weight: 600;
+}
+
+.wm-hero-card p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.wm-toolbar,
+.wm-upload-panel,
+.wm-list-panel,
+.wm-detail-panel,
+.wm-empty-card,
+.wm-error-bar {
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 16px;
+}
+
+.wm-toolbar {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.wm-toolbar-meta {
+  color: #6a6a6a;
+  font-size: 14px;
+}
+
+.wm-upload-panel {
+  padding: 20px;
+  margin-bottom: 18px;
+}
+
+.wm-section-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.wm-upload-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.wm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #3a3a3a;
+}
+
+.wm-field input,
+.wm-field select {
+  height: 44px;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  background: #fffaf0;
+  padding: 0 14px;
+  font-size: 14px;
+  color: #0a0a0a;
+}
+
+.wm-field input[type="file"] {
+  padding: 10px 12px;
+}
+
+.wm-upload-footer {
+  justify-content: space-between;
+  margin-top: 16px;
+  gap: 12px;
+}
+
+.wm-upload-hint {
+  color: #6a6a6a;
+  font-size: 14px;
+}
+
+.wm-error-bar {
+  max-width: 1280px;
+  margin: 0 auto 18px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  color: #b42318;
+  background: #fff4f2;
+  border-color: #ffb4ab;
+}
+
+.wm-error-bar button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wm-content-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.9fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.wm-list-panel,
+.wm-detail-panel {
+  padding: 18px;
+}
+
+.wm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.wm-list-card,
+.wm-image-card,
+.wm-news-card {
+  border: 1px solid #f0f0f0;
+  border-radius: 16px;
+  background: #fffaf0;
+}
+
+.wm-list-card {
+  padding: 16px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.wm-list-main {
+  min-width: 0;
+}
+
+.wm-list-title,
+.wm-card-title,
+.wm-news-title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.wm-list-subtitle,
+.wm-card-meta,
+.wm-news-meta,
+.wm-news-link {
+  font-size: 13px;
+  color: #6a6a6a;
+}
+
+.wm-list-digest,
+.wm-news-digest {
+  margin-top: 8px;
+  color: #3a3a3a;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.wm-image-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.wm-image-card {
+  overflow: hidden;
+}
+
+.wm-image-frame {
+  aspect-ratio: 1.2 / 1;
+  background: #f5f0e0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.wm-image-frame img,
+.wm-detail-preview,
+.wm-news-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.wm-image-placeholder,
+.wm-empty-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wm-card-body {
+  padding: 14px;
+}
+
+.wm-card-meta {
+  margin-top: 6px;
+}
+
+.wm-card-actions {
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.wm-card-actions button,
+.wm-card-actions a,
+.wm-detail-actions button,
+.wm-detail-actions a {
+  height: 36px;
+  padding: 0 12px;
+  font-size: 13px;
+  border-radius: 10px;
+}
+
+.wm-card-actions .danger {
+  color: #b42318;
+}
+
+.wm-load-more {
+  margin-top: 16px;
+  display: flex;
+  justify-content: center;
+}
+
+.wm-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wm-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.wm-detail-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #6a6a6a;
+  font-size: 13px;
+}
+
+.wm-detail-row strong,
+.wm-detail-row code {
+  color: #0a0a0a;
+  font-size: 14px;
+  word-break: break-all;
+}
+
+.wm-detail-card {
+  border-radius: 14px;
+  border: 1px solid #f0f0f0;
+  background: #fffaf0;
+  padding: 14px;
+}
+
+.wm-detail-preview {
+  margin-top: 12px;
+  border-radius: 12px;
+  max-height: 260px;
+}
+
+.wm-audio-player {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.wm-news-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.wm-news-card {
+  padding: 14px;
+}
+
+.wm-news-meta {
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.wm-news-meta a,
+.wm-news-link {
+  color: #1a3a3a;
+  text-decoration: none;
+}
+
+.wm-news-thumb {
+  margin-top: 12px;
+  aspect-ratio: 2.35 / 1;
+  border-radius: 12px;
+}
+
+.wm-empty-state,
+.wm-empty-card,
+.wm-loading {
+  text-align: center;
+}
+
+.wm-empty-state {
+  max-width: 680px;
+  margin: 64px auto 0;
+  padding: 40px 24px;
+}
+
+.wm-empty-card,
+.wm-loading {
+  padding: 40px 20px;
+}
+
+.wm-empty-card h3,
+.wm-empty-state h2 {
+  margin: 12px 0 8px;
+  font-size: 20px;
+}
+
+.wm-empty-card p,
+.wm-empty-state p {
+  margin: 0;
+  color: #6a6a6a;
+  line-height: 1.6;
+}
+
+.wm-empty-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto;
+  border-radius: 18px;
+  background: #f5f0e0;
+  color: #1a3a3a;
+}
+
+.wm-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+}
+
+.wm-spin {
+  animation: wm-spin 0.8s linear infinite;
+}
+
+@keyframes wm-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 1100px) {
+  .wm-content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wm-upload-grid,
+  .wm-image-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 800px) {
+  .wm-page {
+    padding: 16px;
+  }
+
+  .wm-header,
+  .wm-toolbar,
+  .wm-upload-footer,
+  .wm-list-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .wm-hero,
+  .wm-upload-grid,
+  .wm-image-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wm-header-actions,
+  .wm-type-tabs {
+    flex-wrap: wrap;
+  }
+}

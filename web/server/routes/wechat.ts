@@ -15,11 +15,16 @@
 import { Router } from 'express'
 import axios from 'axios'
 import FormData from 'form-data'
+import multer from 'multer'
+import sharp from 'sharp'
 import zlib from 'zlib'
 import { logger } from '../logger.js'
 
 const router = Router()
 const WECHAT = 'WECHAT'
+const wechatUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } })
+const WECHAT_MATERIAL_TYPES = new Set(['image', 'voice', 'video', 'news'])
+const WECHAT_UPLOAD_MATERIAL_TYPES = new Set(['image', 'voice', 'video', 'thumb'])
 // ── Token 缓存（按 appId 隔离，进程重启后重新获取）──────────────────────────
 // Map<appId, { token: string, exp: number }>
 const _tokenCache = new Map()
@@ -102,6 +107,11 @@ function normalizeWechatArticleType(value) {
   return value === 'newspic' ? 'newspic' : 'news'
 }
 
+function normalizeWechatMaterialType(value, { allowThumb = false } = {}) {
+  const allowed = allowThumb ? WECHAT_UPLOAD_MATERIAL_TYPES : WECHAT_MATERIAL_TYPES
+  return allowed.has(value) ? value : 'image'
+}
+
 function pickWechatAuthorName(basicInfo, fallback) {
   const candidate = basicInfo?.nick_name || basicInfo?.nickname || basicInfo?.user_name || fallback || ''
   return truncateWechatText(candidate, 16)
@@ -122,6 +132,135 @@ async function fetchWechatAccountBasicInfo(token) {
   }
 
   return { basicInfo: basicResp.data, limited: false }
+}
+
+function isWechatHostedImage(url) {
+  try {
+    const hostname = new URL(url).hostname
+    return ['mmbiz.qpic.cn', 'mmbiz.qlogo.cn', 'wx.qlogo.cn'].some(h => hostname === h || hostname.endsWith(`.${h}`))
+  } catch {
+    return false
+  }
+}
+
+async function fetchRemoteBuffer(url, { maxBytes = 10 * 1024 * 1024 } = {}) {
+  const resp = await axios.get(url, {
+    responseType: 'arraybuffer',
+    timeout: 15000,
+    maxContentLength: maxBytes,
+  })
+  return {
+    buffer: Buffer.from(resp.data),
+    contentType: resp.headers['content-type'] || 'application/octet-stream',
+  }
+}
+
+function buildSafeWechatFilename(originalName, fallbackBase, ext = '') {
+  const safeBase = String(originalName || fallbackBase || 'wechat')
+    .replace(/[^\w.-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 40) || fallbackBase
+  return safeBase.includes('.') ? safeBase : `${safeBase}${ext}`
+}
+
+async function prepareWechatArticleImage(buf, contentType = 'image/jpeg') {
+  const normalizedType = String(contentType).toLowerCase()
+  const isPng = normalizedType.includes('png')
+  const fallbackName = isPng ? 'content.png' : 'content.jpg'
+
+  try {
+    let width = 1600
+    let quality = 82
+    let outBuf = Buffer.alloc(0)
+
+    for (let i = 0; i < 4; i++) {
+      let pipeline = sharp(buf, { animated: false }).rotate()
+      pipeline = pipeline.resize({ width, withoutEnlargement: true })
+      outBuf = isPng
+        ? await pipeline.png({ compressionLevel: 9, palette: true }).toBuffer()
+        : await pipeline.jpeg({ quality, mozjpeg: true }).toBuffer()
+      if (outBuf.length <= 1024 * 1024) {
+        return {
+          buffer: outBuf,
+          contentType: isPng ? 'image/png' : 'image/jpeg',
+          filename: fallbackName,
+        }
+      }
+      width = Math.max(960, width - 240)
+      quality = Math.max(56, quality - 10)
+    }
+
+    const jpegBuf = await sharp(buf, { animated: false })
+      .rotate()
+      .resize({ width: 960, withoutEnlargement: true })
+      .jpeg({ quality: 52, mozjpeg: true })
+      .toBuffer()
+
+    return {
+      buffer: jpegBuf,
+      contentType: 'image/jpeg',
+      filename: 'content.jpg',
+    }
+  } catch (err) {
+    if (buf.length <= 1024 * 1024 && /image\/(png|jpe?g)/i.test(contentType)) {
+      return {
+        buffer: buf,
+        contentType,
+        filename: fallbackName,
+      }
+    }
+    throw new Error(`正文图片处理失败: ${err.message}`)
+  }
+}
+
+async function uploadBufferToWechatContentImage(token, buf, filename, contentType) {
+  const form = new FormData()
+  form.append('media', buf, { filename, contentType })
+
+  const resp = await axios.post(
+    'https://api.weixin.qq.com/cgi-bin/media/uploadimg',
+    form,
+    {
+      params: { access_token: token },
+      headers: form.getHeaders(),
+      timeout: 15000,
+    },
+  )
+
+  if (resp.data.errcode && resp.data.errcode !== 0) {
+    logger.error(WECHAT, '上传正文图片失败', { errcode: resp.data.errcode, errmsg: resp.data.errmsg })
+    throw new Error(`[${resp.data.errcode}] ${resp.data.errmsg}`)
+  }
+  if (!resp.data.url) throw new Error('微信未返回正文图片 URL')
+  return resp.data.url
+}
+
+async function rewriteWechatContentImages(token, html) {
+  if (typeof html !== 'string' || !html.includes('<img')) return { html, rewritten: 0, failed: [] }
+
+  const matches = [...html.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)]
+  const uniqueUrls = [...new Set(matches.map(match => match[1]).filter(Boolean))]
+  if (uniqueUrls.length === 0) return { html, rewritten: 0, failed: [] }
+
+  let nextHtml = html
+  let rewritten = 0
+  const failed = []
+
+  for (const imageUrl of uniqueUrls) {
+    if (!/^https?:\/\//i.test(imageUrl) || isWechatHostedImage(imageUrl)) continue
+    try {
+      const remote = await fetchRemoteBuffer(imageUrl)
+      const prepared = await prepareWechatArticleImage(remote.buffer, remote.contentType)
+      const wechatUrl = await uploadBufferToWechatContentImage(token, prepared.buffer, prepared.filename, prepared.contentType)
+      nextHtml = nextHtml.split(imageUrl).join(wechatUrl)
+      rewritten += 1
+    } catch (err) {
+      failed.push({ url: imageUrl, error: err.message })
+      logger.warn(WECHAT, '正文图片上传失败，保留原始 URL', { url: imageUrl.slice(0, 120), error: err.message })
+    }
+  }
+
+  return { html: nextHtml, rewritten, failed }
 }
 
 // ── GET /api/wechat/status ───────────────────────────────────────────────────
@@ -421,11 +560,15 @@ router.post('/draft', async (req, res) => {
       }
     }
 
+    const rewrittenContent = normalizedArticleType === 'news'
+      ? await rewriteWechatContentImages(token, rawContent)
+      : { html: rawContent, rewritten: 0, failed: [] }
+
     const article = {
       article_type: normalizedArticleType,
       title: normalizedTitle,
       author: currentAccountName,
-      content: rawContent,
+      content: rewrittenContent.html,
       need_open_comment: normalizedNeedOpenComment,
       only_fans_can_comment: normalizedOnlyFansCanComment,
     }
@@ -699,7 +842,7 @@ router.get('/materials', async (req, res) => {
 
   try {
     const token = await getAccessToken(creds.appId, creds.appSecret)
-    const type = req.query.type ?? 'image'
+    const type = normalizeWechatMaterialType(req.query.type)
     const offset = parseInt(req.query.offset ?? '0', 10)
     const count = Math.min(parseInt(req.query.count ?? '20', 10), 20)
 
@@ -727,6 +870,164 @@ router.get('/materials', async (req, res) => {
     })
   } catch (err) {
     logger.error(WECHAT, '获取素材列表失败', { error: err.message })
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── GET /api/wechat/material/:mediaId ─────────────────────────────────────────
+router.get('/material/:mediaId', async (req, res) => {
+  const creds = getCredentials(req)
+  if (!creds) return res.status(401).json({ error: '未提供公众号凭据' })
+
+  try {
+    const token = await getAccessToken(creds.appId, creds.appSecret)
+    const type = normalizeWechatMaterialType(req.query.type)
+    const { mediaId } = req.params
+
+    logger.info(WECHAT, '获取素材详情', { appId: creds.appId, mediaId, type })
+
+    const responseType = type === 'image' || type === 'voice' ? 'arraybuffer' : 'json'
+    const resp = await axios.post(
+      'https://api.weixin.qq.com/cgi-bin/material/get_material',
+      { media_id: mediaId },
+      { params: { access_token: token }, timeout: 15000, responseType },
+    )
+
+    if (responseType === 'json') {
+      if (resp.data.errcode && resp.data.errcode !== 0) {
+        logger.warn(WECHAT, '获取素材详情失败', { errcode: resp.data.errcode, errmsg: resp.data.errmsg, mediaId, type })
+        return res.status(400).json({
+          error: `[${resp.data.errcode}] ${resp.data.errmsg}`,
+          errcode: resp.data.errcode,
+        })
+      }
+
+      return res.json({
+        media_id: mediaId,
+        type,
+        ...resp.data,
+      })
+    }
+
+    const contentType = resp.headers['content-type'] || (type === 'voice' ? 'audio/mpeg' : 'image/jpeg')
+    return res.json({
+      media_id: mediaId,
+      type,
+      content_type: contentType,
+      size: Buffer.byteLength(resp.data),
+      file_url: `/api/wechat/material/${mediaId}/file?type=${type}`,
+    })
+  } catch (err) {
+    logger.error(WECHAT, '获取素材详情失败', { mediaId: req.params.mediaId, error: err.message })
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── GET /api/wechat/material/:mediaId/file ────────────────────────────────────
+router.get('/material/:mediaId/file', async (req, res) => {
+  const creds = getCredentials(req)
+  if (!creds) return res.status(401).json({ error: '未提供公众号凭据' })
+
+  try {
+    const token = await getAccessToken(creds.appId, creds.appSecret)
+    const type = normalizeWechatMaterialType(req.query.type)
+    const { mediaId } = req.params
+
+    if (type !== 'image' && type !== 'voice') {
+      return res.status(400).json({ error: '仅图片和音频素材支持文件直出' })
+    }
+
+    const resp = await axios.post(
+      'https://api.weixin.qq.com/cgi-bin/material/get_material',
+      { media_id: mediaId },
+      { params: { access_token: token }, timeout: 15000, responseType: 'arraybuffer' },
+    )
+
+    res.setHeader('Content-Type', resp.headers['content-type'] || (type === 'voice' ? 'audio/mpeg' : 'image/jpeg'))
+    res.setHeader('Cache-Control', 'private, max-age=300')
+    res.send(resp.data)
+  } catch (err) {
+    logger.error(WECHAT, '素材文件直出失败', { mediaId: req.params.mediaId, error: err.message })
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── POST /api/wechat/material/upload ──────────────────────────────────────────
+router.post('/material/upload', wechatUpload.single('media'), async (req, res) => {
+  const creds = getCredentials(req)
+  if (!creds) return res.status(401).json({ error: '未提供公众号凭据' })
+  if (!req.file) return res.status(400).json({ error: '未收到素材文件' })
+
+  try {
+    const token = await getAccessToken(creds.appId, creds.appSecret)
+    const type = normalizeWechatMaterialType(req.body?.type, { allowThumb: true })
+    const title = truncateWechatText(req.body?.title, 64)
+    const introduction = truncateWechatText(req.body?.introduction, 120)
+
+    const form = new FormData()
+    form.append('media', req.file.buffer, {
+      filename: buildSafeWechatFilename(req.file.originalname, `wechat_${type}`),
+      contentType: req.file.mimetype || 'application/octet-stream',
+    })
+    if (type === 'video' && (title || introduction)) {
+      form.append('description', JSON.stringify({ title, introduction }))
+    }
+
+    logger.info(WECHAT, '上传永久素材', { appId: creds.appId, type, filename: req.file.originalname, size: req.file.size })
+
+    const resp = await axios.post(
+      'https://api.weixin.qq.com/cgi-bin/material/add_material',
+      form,
+      {
+        params: { access_token: token, type },
+        headers: form.getHeaders(),
+        timeout: 20000,
+      },
+    )
+
+    if (resp.data.errcode && resp.data.errcode !== 0) {
+      logger.warn(WECHAT, '上传永久素材失败', { errcode: resp.data.errcode, errmsg: resp.data.errmsg })
+      return res.status(400).json({
+        error: `[${resp.data.errcode}] ${resp.data.errmsg}`,
+        errcode: resp.data.errcode,
+      })
+    }
+
+    res.json({
+      success: true,
+      type,
+      media_id: resp.data.media_id,
+      url: resp.data.url || null,
+      name: req.file.originalname,
+    })
+  } catch (err) {
+    logger.error(WECHAT, '上传永久素材失败', { error: err.message })
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── POST /api/wechat/content-image/upload ─────────────────────────────────────
+router.post('/content-image/upload', wechatUpload.single('media'), async (req, res) => {
+  const creds = getCredentials(req)
+  if (!creds) return res.status(401).json({ error: '未提供公众号凭据' })
+  if (!req.file) return res.status(400).json({ error: '未收到图片文件' })
+
+  try {
+    const token = await getAccessToken(creds.appId, creds.appSecret)
+    const prepared = await prepareWechatArticleImage(req.file.buffer, req.file.mimetype)
+    const imageUrl = await uploadBufferToWechatContentImage(
+      token,
+      prepared.buffer,
+      buildSafeWechatFilename(req.file.originalname, 'content_image', prepared.filename.endsWith('.png') ? '.png' : '.jpg'),
+      prepared.contentType,
+    )
+
+    res.json({
+      success: true,
+      url: imageUrl,
+    })
+  } catch (err) {
+    logger.error(WECHAT, '上传正文图片失败', { error: err.message })
     res.status(500).json({ error: err.message })
   }
 })

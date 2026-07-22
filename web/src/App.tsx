@@ -4,6 +4,7 @@ import DashboardPage from './pages/DashboardPage/DashboardPage'
 import ArticleEditor from './pages/ArticleEditor/ArticleEditor'
 import WeChatPreview from './pages/WeChatPreview/WeChatPreview'
 import WeChatDrafts from './pages/WeChatDrafts/WeChatDrafts'
+import WeChatMaterials from './pages/WeChatMaterials/WeChatMaterials'
 import StyleEditor from './pages/StyleEditor/StyleEditor'
 import AISettings from './pages/AISettings/AISettings'
 import RagPage from './pages/RagPage/RagPage'
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="/editor/:articleId" element={<PrivateRoute><ArticleEditor /></PrivateRoute>} />
         <Route path="/preview/:articleId" element={<PrivateRoute><WeChatPreview /></PrivateRoute>} />
         <Route path="/drafts" element={<PrivateRoute><WeChatDrafts /></PrivateRoute>} />
+        <Route path="/wechat/materials" element={<PrivateRoute><WeChatMaterials /></PrivateRoute>} />
         <Route path="/styles" element={<PrivateRoute><StyleEditor /></PrivateRoute>} />
         <Route path="/settings" element={<PrivateRoute><AISettings /></PrivateRoute>} />
         <Route path="/rag" element={<PrivateRoute><RagPage /></PrivateRoute>} />

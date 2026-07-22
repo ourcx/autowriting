@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, RefreshCw, FileText, Clock, Layers,
+  RefreshCw, FileText, Clock, Layers,
   ExternalLink, Link2, Download, Loader2, Trash2,
   Send, Image, BookOpen, BarChart2, ChevronRight,
 } from 'lucide-react'
@@ -376,6 +376,9 @@ export default function WeChatDrafts() {
           }}
         >
           <RefreshCw size={14} className={(draftLoading || pubLoading || matLoading) ? 'wd-spin' : ''} />
+        </button>
+        <button className="wd-refresh-btn" title="素材管理" onClick={() => navigate('/wechat/materials')}>
+          <Image size={14} />
         </button>
       </header>
 

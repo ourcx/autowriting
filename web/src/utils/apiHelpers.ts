@@ -78,6 +78,33 @@ export async function deleteArticle(articleId: string): Promise<void> {
   await axios.delete(`/api/articles/${articleId}`)
 }
 
+// ── 通用 JSON 请求（给 fetch 场景收口错误处理） ──
+export async function fetchJson<T = any>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, init)
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    const message = (data as any)?.error || (data as any)?.message || `HTTP ${response.status}`
+    throw new Error(message)
+  }
+  return data as T
+}
+
+// ── 通用 Blob 请求（给文件预览 / 下载场景收口错误处理） ──
+export async function fetchBlob(url: string, init?: RequestInit): Promise<Blob> {
+  const response = await fetch(url, init)
+  if (!response.ok) {
+    let message = `HTTP ${response.status}`
+    try {
+      const data = await response.json()
+      message = data?.error || data?.message || message
+    } catch {
+      // ignore non-JSON error bodies
+    }
+    throw new Error(message)
+  }
+  return response.blob()
+}
+
 // ── 连通性测试（发 max_tokens=1 的最小请求） ──
 export async function testAIConnection(cfg: AIConfig): Promise<{ ok: boolean; msg: string }> {
   const isMaas = cfg.articleProvider === 'maas'

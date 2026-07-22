@@ -202,18 +202,20 @@ router.post('/:articleId', (req, res) => {
     ensureDir(path.dirname(materialsPath))
     ensureDir(path.dirname(articlePath))
 
-    if (task)           fs.writeFileSync(taskPath,      task,           'utf-8')
-    if (materials)      fs.writeFileSync(materialsPath, materials,      'utf-8')
-    if (article)        fs.writeFileSync(articlePath,   article,        'utf-8')
-    if (title)          fs.writeFileSync(titlePath,     title,          'utf-8')
-    if (articleToutiao && toutiaoPath) fs.writeFileSync(toutiaoPath, articleToutiao, 'utf-8')
+    if (task !== undefined)           fs.writeFileSync(taskPath,      task ?? '',           'utf-8')
+    if (materials !== undefined)      fs.writeFileSync(materialsPath, materials ?? '',      'utf-8')
+    if (article !== undefined)        fs.writeFileSync(articlePath,   article ?? '',        'utf-8')
+    if (title !== undefined)          fs.writeFileSync(titlePath,     title ?? '',          'utf-8')
+    if (articleToutiao !== undefined && toutiaoPath) fs.writeFileSync(toutiaoPath, articleToutiao ?? '', 'utf-8')
 
     // 文章内容有更新时，异步触发增量 RAG 索引（不阻塞响应）
     // 但要先做「内容指纹判重」：仅当 article/materials 真的变了才触发，
     // 否则编辑器原样回写也会无意义地重建索引、把 embedding 接口打爆
     if (article !== undefined || materials !== undefined) {
       const key = getArticleContentKey(req.user.id, articleId)
-      const newHash = hashContent(article || '', materials || '')
+      const persistedArticle = fs.existsSync(articlePath) ? fs.readFileSync(articlePath, 'utf-8') : ''
+      const persistedMaterials = fs.existsSync(materialsPath) ? fs.readFileSync(materialsPath, 'utf-8') : ''
+      const newHash = hashContent(persistedArticle, persistedMaterials)
       const oldHash = _articleContentHash.get(key)
       if (newHash !== oldHash) {
         _articleContentHash.set(key, newHash)

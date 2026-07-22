@@ -45,6 +45,7 @@ export default function ArticleEditor() {
 
   const [data, setData] = useState<ArticleData>({ task: '', materials: '', article: '', title: '', articleToutiao: '' })
   const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [generateError, setGenerateError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabId>('task')
   const [showGenerateModal, setShowGenerateModal] = useState(false)
@@ -125,8 +126,10 @@ export default function ArticleEditor() {
     }
   }
 
-  async function handleSave() {
+  const handleSave = useCallback(async () => {
+    if (saving) return
     try {
+      setSaving(true)
       if (isLocalArticle) {
         saveLocalData(data)
         toast.success('已保存到本地')
@@ -136,8 +139,10 @@ export default function ArticleEditor() {
       }
     } catch {
       toast.error('保存失败，请重试')
+    } finally {
+      setSaving(false)
     }
-  }
+  }, [articleId, data, isLocalArticle, saveLocalData, saving])
 
   function handleGenerate() {
     if (!apiKeyReady) {
@@ -173,7 +178,7 @@ export default function ArticleEditor() {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [data.task, data.materials, data.article, articleId])
+  }, [articleId, data, handleSave, navigate])
 
   // ── AI：生成大纲 → 追加到 materials ─────────────────────────────────────
   const handleGenerateOutline = async () => {
@@ -335,9 +340,9 @@ export default function ArticleEditor() {
             <Palette size={16} />
             管理样式
           </button>
-          <button className="btn btn-secondary" onClick={handleSave}>
+          <button className="btn btn-secondary" onClick={handleSave} disabled={saving}>
             <Save size={20} />
-            保存
+            {saving ? '保存中...' : '保存'}
           </button>
           <button
             className="btn btn-primary"

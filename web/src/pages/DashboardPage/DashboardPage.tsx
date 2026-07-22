@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings, Palette, AlertTriangle, Database, BookOpen, LogOut, Shield, Zap, Clock, Star } from 'lucide-react'
+import { Settings, Palette, AlertTriangle, Database, BookOpen, LogOut, Shield, Zap, Clock, Star, Image } from 'lucide-react'
 import Dashboard from '../Dashboard/Dashboard'
 import OnboardingGuide from '../../components/OnboardingGuide/OnboardingGuide'
 import { useAIReadiness, fetchServerStatus } from '../../store/useConfigStore'
@@ -60,6 +60,12 @@ export default function DashboardPage() {
             <button className="dp-nav-btn" onClick={() => navigate('/drafts')}>
               <BookOpen size={14} />
               草稿箱
+            </button>
+          )}
+          {wxBound && (
+            <button className="dp-nav-btn" onClick={() => navigate('/wechat/materials')}>
+              <Image size={14} />
+              素材库
             </button>
           )}
           <button className="dp-nav-btn" onClick={() => navigate('/rag')}>
