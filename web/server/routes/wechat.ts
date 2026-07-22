@@ -155,6 +155,55 @@ async function fetchRemoteBuffer(url, { maxBytes = 10 * 1024 * 1024 } = {}) {
   }
 }
 
+function getRequestOrigin(req) {
+  const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim()
+  const protocol = forwardedProto || req.protocol || 'http'
+  const host = req.get('host')
+  return host ? `${protocol}://${host}` : ''
+}
+
+function decodeDataUrl(dataUrl) {
+  const match = /^data:([^;,]+)?(?:;charset=[^;,]+)?(;base64)?,([\s\S]+)$/i.exec(String(dataUrl || ''))
+  if (!match) throw new Error('不支持的 data URL 格式')
+  const contentType = match[1] || 'application/octet-stream'
+  const isBase64 = !!match[2]
+  const payload = match[3] || ''
+  return {
+    buffer: Buffer.from(decodeURIComponent(payload), isBase64 ? 'base64' : 'utf8'),
+    contentType,
+  }
+}
+
+function normalizeImageSourceUrl(req, rawUrl) {
+  const url = String(rawUrl || '').trim()
+  if (!url) throw new Error('图片地址为空')
+  if (url.startsWith('data:')) return url
+  if (url.startsWith('//')) {
+    const protocol = String(req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0].trim() || 'https'
+    return `${protocol}:${url}`
+  }
+  if (/^https?:\/\//i.test(url)) return url
+  if (url.startsWith('/')) {
+    const origin = getRequestOrigin(req)
+    if (!origin) throw new Error('无法解析站内图片地址')
+    return new URL(url, origin).toString()
+  }
+  if (/^[\w.-]+\//.test(url)) {
+    const origin = getRequestOrigin(req)
+    if (!origin) throw new Error('无法解析相对图片地址')
+    return new URL(`/${url}`, origin).toString()
+  }
+  throw new Error(`暂不支持的图片地址: ${url.slice(0, 64)}`)
+}
+
+async function resolveImageSource(req, imageUrl, options = {}) {
+  const normalizedUrl = normalizeImageSourceUrl(req, imageUrl)
+  if (normalizedUrl.startsWith('data:')) {
+    return decodeDataUrl(normalizedUrl)
+  }
+  return fetchRemoteBuffer(normalizedUrl, options)
+}
+
 function buildSafeWechatFilename(originalName, fallbackBase, ext = '') {
   const safeBase = String(originalName || fallbackBase || 'wechat')
     .replace(/[^\w.-]+/g, '_')
@@ -235,7 +284,7 @@ async function uploadBufferToWechatContentImage(token, buf, filename, contentTyp
   return resp.data.url
 }
 
-async function rewriteWechatContentImages(token, html) {
+async function rewriteWechatContentImages(req, token, html) {
   if (typeof html !== 'string' || !html.includes('<img')) return { html, rewritten: 0, failed: [] }
 
   const matches = [...html.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)]
@@ -247,9 +296,10 @@ async function rewriteWechatContentImages(token, html) {
   const failed = []
 
   for (const imageUrl of uniqueUrls) {
-    if (!/^https?:\/\//i.test(imageUrl) || isWechatHostedImage(imageUrl)) continue
     try {
-      const remote = await fetchRemoteBuffer(imageUrl)
+      const normalizedUrl = normalizeImageSourceUrl(req, imageUrl)
+      if (!normalizedUrl.startsWith('data:') && isWechatHostedImage(normalizedUrl)) continue
+      const remote = await resolveImageSource(req, imageUrl)
       const prepared = await prepareWechatArticleImage(remote.buffer, remote.contentType)
       const wechatUrl = await uploadBufferToWechatContentImage(token, prepared.buffer, prepared.filename, prepared.contentType)
       nextHtml = nextHtml.split(imageUrl).join(wechatUrl)
@@ -469,13 +519,8 @@ router.post('/upload-thumb', async (req, res) => {
     logger.info(WECHAT, '上传封面图', { appId: creds.appId, url: url.slice(0, 80) })
     const token = await getAccessToken(creds.appId, creds.appSecret)
 
-    const imgResp = await axios.get(url, {
-      responseType: 'arraybuffer',
-      timeout: 10000,
-      maxContentLength: 2 * 1024 * 1024,
-    })
-
-    const contentType = imgResp.headers['content-type'] || 'image/jpeg'
+    const imgResp = await resolveImageSource(req, url, { maxBytes: 2 * 1024 * 1024 })
+    const contentType = imgResp.contentType || 'image/jpeg'
     const ext = contentType.includes('png') ? 'png'
       : contentType.includes('gif') ? 'gif'
         : contentType.includes('webp') ? 'webp'
@@ -483,7 +528,7 @@ router.post('/upload-thumb', async (req, res) => {
 
     const mediaId = await uploadBufferToWechat(
       token,
-      Buffer.from(imgResp.data),
+      imgResp.buffer,
       `thumb.${ext}`,
       contentType,
     )
@@ -561,7 +606,7 @@ router.post('/draft', async (req, res) => {
     }
 
     const rewrittenContent = normalizedArticleType === 'news'
-      ? await rewriteWechatContentImages(token, rawContent)
+      ? await rewriteWechatContentImages(req, token, rawContent)
       : { html: rawContent, rewritten: 0, failed: [] }
 
     const article = {
@@ -587,11 +632,12 @@ router.post('/draft', async (req, res) => {
       if (product_info) article.product_info = product_info
     }
 
-    return axios.post(
+    const resp = await axios.post(
       'https://api.weixin.qq.com/cgi-bin/draft/add',
       { articles: [article] },
       { params: { access_token: token }, timeout: 15000 },
     )
+    return { resp, rewrittenContent }
   }
 
   try {
@@ -604,13 +650,13 @@ router.post('/draft', async (req, res) => {
       fansOnlyComment: !!normalizedOnlyFansCanComment,
     })
     let token = await getAccessToken(creds.appId, creds.appSecret)
-    let resp = await submitDraft(token)
+    let { resp, rewrittenContent } = await submitDraft(token)
 
     if (resp.data.errcode === 40001) {
       logger.warn(WECHAT, '收到 40001，强制刷新 token 后重试', { appId: creds.appId })
       invalidateToken(creds.appId)
       token = await getAccessToken(creds.appId, creds.appSecret, { forceRefresh: true })
-      resp = await submitDraft(token)
+      ;({ resp, rewrittenContent } = await submitDraft(token))
     }
 
     if (resp.data.errcode && resp.data.errcode !== 0) {
@@ -622,7 +668,12 @@ router.post('/draft', async (req, res) => {
     }
 
     logger.info(WECHAT, '草稿新增成功', { mediaId: resp.data.media_id })
-    res.json({ success: true, media_id: resp.data.media_id })
+    res.json({
+      success: true,
+      media_id: resp.data.media_id,
+      rewritten_images: rewrittenContent.rewritten,
+      failed_images: rewrittenContent.failed,
+    })
   } catch (err) {
     logger.error(WECHAT, '新增草稿失败', { error: err.message })
     res.status(500).json({ error: err.message })

@@ -616,6 +616,11 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
         return
       }
       setPushDone(true)
+      if (Array.isArray(d.failed_images) && d.failed_images.length > 0) {
+        toast.warn(`有 ${d.failed_images.length} 张正文图片未能转存到微信，发布后可能仍不显示`, { duration: 5000 })
+      } else if ((d.rewritten_images ?? 0) > 0) {
+        toast.success(`正文图片已同步到微信，共处理 ${d.rewritten_images} 张`, { duration: 2500 })
+      }
       // 推送成功后显示带跳转链接的提示
       toast.success('草稿已推送到微信！点击前往公众平台发布', {
         duration: 0, // 不自动消失

@@ -6,9 +6,8 @@
 }
 
 .wm-header,
-.wm-hero,
+.wm-quick-grid,
 .wm-toolbar,
-.wm-upload-panel,
 .wm-content-grid {
   max-width: 1280px;
   margin: 0 auto;
@@ -114,52 +113,44 @@
   color: #fff;
 }
 
-.wm-hero {
+.wm-quick-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 18px;
   margin-bottom: 24px;
 }
 
-.wm-hero-card {
-  border-radius: 24px;
-  padding: 28px;
-  min-height: 180px;
+.wm-tool-card {
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 20px;
+  padding: 22px;
 }
 
-.wm-hero-card--teal {
-  background: #1a3a3a;
-  color: #fff;
-}
-
-.wm-hero-card--peach {
-  background: #ffb084;
-  color: #0a0a0a;
-}
-
-.wm-kicker {
+.wm-tool-kicker {
   font-size: 12px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  opacity: 0.75;
-  margin-bottom: 14px;
+  color: #1a3a3a;
+  margin-bottom: 12px;
+  font-weight: 700;
 }
 
-.wm-hero-card h2 {
+.wm-tool-card h2 {
   margin: 0 0 10px;
-  font-size: 32px;
-  line-height: 1.1;
+  font-size: 24px;
+  line-height: 1.2;
   font-weight: 600;
 }
 
-.wm-hero-card p {
+.wm-tool-card p {
   margin: 0;
   font-size: 15px;
   line-height: 1.6;
+  color: #4e4e4e;
 }
 
 .wm-toolbar,
-.wm-upload-panel,
 .wm-list-panel,
 .wm-detail-panel,
 .wm-empty-card,
@@ -170,12 +161,36 @@
 }
 
 .wm-toolbar {
-  padding: 14px 16px;
+  padding: 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.wm-search {
+  flex: 1;
+  min-width: 260px;
+  max-width: 420px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #e5e5e5;
+  background: #fffaf0;
+  border-radius: 12px;
+  height: 44px;
+  padding: 0 12px;
+}
+
+.wm-search input {
+  flex: 1;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-size: 14px;
+  color: #0a0a0a;
 }
 
 .wm-toolbar-meta {
@@ -183,21 +198,34 @@
   font-size: 14px;
 }
 
-.wm-upload-panel {
-  padding: 20px;
-  margin-bottom: 18px;
-}
-
 .wm-section-title {
   font-size: 18px;
   font-weight: 600;
-  margin-bottom: 16px;
+  margin-bottom: 4px;
+}
+
+.wm-section-head,
+.wm-tool-side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wm-section-desc {
+  color: #6a6a6a;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .wm-upload-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
+  margin-top: 16px;
+}
+
+.wm-upload-grid--two {
+  grid-template-columns: minmax(0, 1.2fr) minmax(240px, 0.8fr);
 }
 
 .wm-field {
@@ -228,6 +256,32 @@
   justify-content: space-between;
   margin-top: 16px;
   gap: 12px;
+}
+
+.wm-result-card {
+  margin-top: 16px;
+  border: 1px solid #f0eadf;
+  border-radius: 16px;
+  background: #fffaf0;
+  padding: 14px;
+}
+
+.wm-result-label {
+  font-size: 12px;
+  color: #6a6a6a;
+  margin-bottom: 8px;
+}
+
+.wm-result-card code,
+.wm-card-code {
+  display: block;
+  border-radius: 10px;
+  background: #f6f1e7;
+  padding: 9px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #1a3a3a;
+  word-break: break-all;
 }
 
 .wm-upload-hint {
@@ -316,6 +370,10 @@
   color: #3a3a3a;
   line-height: 1.6;
   font-size: 14px;
+}
+
+.wm-card-code {
+  margin-top: 10px;
 }
 
 .wm-image-grid {
@@ -524,6 +582,10 @@
   .wm-image-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .wm-upload-grid--two {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 800px) {
@@ -539,7 +601,7 @@
     align-items: stretch;
   }
 
-  .wm-hero,
+  .wm-quick-grid,
   .wm-upload-grid,
   .wm-image-grid {
     grid-template-columns: 1fr;
@@ -548,5 +610,10 @@
   .wm-header-actions,
   .wm-type-tabs {
     flex-wrap: wrap;
+  }
+
+  .wm-search {
+    max-width: none;
+    width: 100%;
   }
 }
