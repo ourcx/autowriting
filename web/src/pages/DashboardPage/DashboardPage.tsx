@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings, Palette, AlertTriangle, Database, BookOpen, LogOut, Shield, Zap, Clock, Star, Image } from 'lucide-react'
+import { Settings, Palette, AlertTriangle, Database, BookOpen, LogOut, Shield, Zap, Clock, Star, Image, User } from 'lucide-react'
 import Dashboard from '../Dashboard/Dashboard'
 import OnboardingGuide from '../../components/OnboardingGuide/OnboardingGuide'
 import { useAIReadiness, fetchServerStatus } from '../../store/useConfigStore'
@@ -83,6 +83,10 @@ export default function DashboardPage() {
           <button className="dp-nav-btn" onClick={() => navigate('/scores')}>
             <Star size={14} />
             文章评分
+          </button>
+          <button className="dp-nav-btn" onClick={() => navigate('/account')}>
+            <User size={14} />
+            用户页
           </button>
           <button className="dp-nav-btn" onClick={() => navigate('/settings')}>
             <Settings size={14} />

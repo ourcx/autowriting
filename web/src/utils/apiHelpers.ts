@@ -5,6 +5,29 @@
 import axios, { AxiosError } from 'axios'
 import { AIConfig } from './aiConfig'
 
+export interface WechatAccount {
+  nickname: string
+  headimgurl: string | null
+  fans_count: number | null
+  fans_limited: boolean
+  account_type: 'service' | 'subscription'
+  verify_type: number
+  principal: string | null
+  limited: boolean
+}
+
+export interface ToutiaoAccount {
+  nickname: string
+  avatar_url: string | null
+  description: string | null
+  followers_count: number | null
+  total_reads: number | null
+  total_income: number | null
+  data_note: string | null
+  cached: boolean
+  cached_at: string
+}
+
 // ── 从 axios/fetch 错误中提取可读的错误信息 ──
 export function extractErrorMessage(err: unknown, fallback = '请求失败，请稍后重试'): string {
   if (err instanceof AxiosError) {
@@ -76,6 +99,16 @@ export async function fetchArticleList() {
 // ── 删除文章 ──
 export async function deleteArticle(articleId: string): Promise<void> {
   await axios.delete(`/api/articles/${articleId}`)
+}
+
+export async function fetchWechatAccount(headers: Record<string, string>): Promise<WechatAccount> {
+  const response = await axios.get('/api/wechat/account', { headers })
+  return response.data as WechatAccount
+}
+
+export async function fetchToutiaoAccount(cookies: string, forceRefresh = false): Promise<ToutiaoAccount> {
+  const response = await axios.post('/api/toutiao/account', { cookies, force_refresh: forceRefresh })
+  return response.data as ToutiaoAccount
 }
 
 // ── 通用 JSON 请求（给 fetch 场景收口错误处理） ──

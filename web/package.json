@@ -26,7 +26,7 @@
     "smoke": "node scripts/smoke.mjs",
     "verify": "pnpm lint && pnpm arch && pnpm typecheck:changed && pnpm build",
     "server": "npx tsx server.ts",
-    "start": "concurrently \"npm run server\" \"npm run dev\"",
+    "start": "concurrently --kill-others-on-fail -n server,vite \"npm run server\" \"wait-on http://localhost:3000/health && npm run dev\"",
     "sync": "bash ./sync-to-guard.sh",
     "postinstall": "node scripts/postinstall.cjs",
     "rebuild:native": "node scripts/postinstall.cjs",
@@ -97,13 +97,5 @@
     "typescript-eslint": "^8.62.0",
     "vite": "^4.4.0",
     "wait-on": "^9.0.10"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "better-sqlite3",
-      "hnswlib-node",
-      "esbuild",
-      "sharp"
-    ]
   }
 }

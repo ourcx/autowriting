@@ -16,6 +16,7 @@ import MonitoringPage from './pages/MonitoringPage/MonitoringPage'
 import PromptsPage from './pages/PromptsPage/PromptsPage'
 import CronPage from './pages/CronPage/CronPage'
 import ArticleScorePage from './pages/ArticleScorePage/ArticleScorePage'
+import AccountPage from './pages/AccountPage/AccountPage'
 import PrivateRoute from './components/PrivateRoute/PrivateRoute'
 import ToastProvider from './components/Toast/Toast'
 import { syncAIConfigFromServer } from './utils/aiConfig'
@@ -50,6 +51,7 @@ export default function App() {
         <Route path="/prompts" element={<PrivateRoute><PromptsPage /></PrivateRoute>} />
         <Route path="/cron" element={<PrivateRoute><CronPage /></PrivateRoute>} />
         <Route path="/scores" element={<PrivateRoute><ArticleScorePage /></PrivateRoute>} />
+        <Route path="/account" element={<PrivateRoute><AccountPage /></PrivateRoute>} />
 
         {/* 管理员路由 */}
         <Route path="/admin" element={<PrivateRoute requireAdmin><AdminPage /></PrivateRoute>} />

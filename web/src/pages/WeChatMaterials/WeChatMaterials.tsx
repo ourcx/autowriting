@@ -356,8 +356,8 @@ export default function WeChatMaterials() {
         <div className="wm-empty">
           <div className="wm-empty-icon"><FileImage size={36} /></div>
           <p className="wm-empty-title">尚未绑定公众号</p>
-          <p className="wm-empty-desc">先去「AI 配置」里绑定公众号，再回来上传正文图片和管理永久素材。</p>
-          <button className="wm-primary-btn" onClick={() => navigate('/settings')}>前往绑定</button>
+          <p className="wm-empty-desc">先去「用户页」绑定公众号，再回来上传正文图片和管理永久素材。</p>
+          <button className="wm-primary-btn" onClick={() => navigate('/account')}>前往绑定</button>
         </div>
       </div>
     )

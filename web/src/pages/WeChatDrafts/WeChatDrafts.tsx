@@ -340,8 +340,8 @@ export default function WeChatDrafts() {
         <div className="wd-empty">
           <div className="wd-empty-icon"><Link2 size={36} /></div>
           <p className="wd-empty-title">尚未绑定公众号</p>
-          <p className="wd-empty-desc">前往「API 配置 → 公众号绑定」完成绑定后，即可查看草稿箱和已发布文章</p>
-          <button className="wd-goto-btn" onClick={() => navigate('/settings')}>前往配置</button>
+          <p className="wd-empty-desc">前往「用户页」绑定公众号后，即可查看草稿箱和已发布文章</p>
+          <button className="wd-goto-btn" onClick={() => navigate('/account')}>前往绑定</button>
         </div>
       </div>
     )

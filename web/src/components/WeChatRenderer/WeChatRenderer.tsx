@@ -551,7 +551,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
         duration: 2500,
         action: {
           label: '去绑定',
-          onClick: () => navigate('/settings'),
+          onClick: () => navigate('/account'),
         },
       })
     }

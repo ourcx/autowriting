@@ -21,8 +21,10 @@ import path from 'path'
 import os from 'os'
 import https from 'https'
 import http from 'http'
+import { createHash } from 'crypto'
 import { marked } from 'marked'
 import { logger } from '../logger.js'
+import { authMiddleware } from '../authMiddleware.js'
 
 function sleep(min, max) {
   const ms = max ? Math.floor(min + Math.random() * (max - min)) : min
@@ -104,7 +106,7 @@ async function ensureChromiumInstalled() {
 
 ensureChromiumInstalled()
 
-async function launchBrowserWithContext(extraContextOptions = {}) {
+async function launchBrowserWithContext(extraContextOptions = {}, { preferChromium = false } = {}) {
   const commonArgs = [
     '--no-sandbox',
     '--disable-setuid-sandbox',
@@ -113,7 +115,7 @@ async function launchBrowserWithContext(extraContextOptions = {}) {
     '--disable-blink-features=AutomationControlled',
   ]
 
-  if (fs.existsSync(EDGE_PATH)) {
+  if (!preferChromium && fs.existsSync(EDGE_PATH)) {
     const tmpProfileDir = path.join(os.tmpdir(), `edge_profile_${Date.now()}`)
     const realDefaultProfile = path.join(EDGE_USER_DATA, 'Default')
     try {
@@ -130,7 +132,13 @@ async function launchBrowserWithContext(extraContextOptions = {}) {
         ...extraContextOptions,
       })
       logger.info('TOUTIAO', '使用 Edge + 临时 profile 启动成功')
-      context.once('close', () => fs.rmSync(tmpProfileDir, { recursive: true, force: true }))
+      context.once('close', () => {
+        try {
+          fs.rmSync(tmpProfileDir, { recursive: true, force: true })
+        } catch (error) {
+          logger.warn('TOUTIAO', '清理 Edge 临时 profile 失败', { error: error.message })
+        }
+      })
       return { browser: null, context }
     } catch (e) {
       logger.warn('TOUTIAO', `Edge 启动失败，回退到 Chromium: ${e.message}`)
@@ -154,11 +162,16 @@ async function launchBrowserWithContext(extraContextOptions = {}) {
 }
 
 const router = Router()
+router.use(authMiddleware)
 
 const TT_HOME_URL = 'https://mp.toutiao.com'
 const TT_PUBLISH_URL = 'https://mp.toutiao.com/profile_v4/graphic/publish'
+const TT_INCOME_OVERVIEW_URL = 'https://mp.toutiao.com/profile_v4/analysis/income-overview'
 const TITLE_MAX_LEN = 30
 const TITLE_MIN_LEN = 2
+const ACCOUNT_CACHE_TTL_MS = 15 * 60 * 1000
+const accountCache = new Map()
+const accountRequests = new Map()
 
 function parseCookies(req) {
   const raw = req.body?.cookies
@@ -170,9 +183,211 @@ function parseCookies(req) {
   } catch { return null }
 }
 
+function normalizeCookies(cookies) {
+  return cookies.map(c => ({
+    name: c.name,
+    value: c.value,
+    domain: c.domain || '.toutiao.com',
+    path: c.path || '/',
+    secure: c.secure ?? false,
+    httpOnly: c.httpOnly ?? false,
+    sameSite: ['Strict', 'Lax', 'None'].includes(c.sameSite) ? c.sameSite : 'Lax',
+  }))
+}
+
+function parseMetric(value, { integer = true } = {}) {
+  const text = String(value ?? '').replace(/[\s,，]/g, '')
+  const matched = text.match(/(\d+(?:\.\d+)?)\s*([万亿wW]?)/)
+  if (!matched) return null
+  const number = Number(matched[1])
+  if (!Number.isFinite(number)) return null
+  const unit = matched[2].toLowerCase()
+  const scaled = unit === '万' || unit === 'w'
+    ? number * 10000
+    : unit === '亿'
+      ? number * 100000000
+      : number
+  return integer ? Math.round(scaled) : scaled
+}
+
+function extractDashboardMetric(text, label, options = {}) {
+  const index = text.indexOf(label)
+  if (index === -1) return null
+
+  // 指标值在头条仪表盘中位于标签之后的独立节点；限制范围可避开下方作品列表的阅读量。
+  const metricText = text.slice(index + label.length, index + label.length + 80)
+  const value = /(?:^|\s)([\d.,，]+(?:\s*[万亿wW])?)(?:\s|$)/.exec(metricText)?.[1]
+  return parseMetric(value, options)
+}
+
+function extractIncomeOverviewMetric(text) {
+  const index = text.indexOf('累计收益')
+  if (index === -1) return null
+  const metricText = text.slice(index + '累计收益'.length, index + '累计收益'.length + 120)
+  const value = /(?:^|\s)([\d.,，]+(?:\s*[万亿wW])?)(?:元|\s|$)/.exec(metricText)?.[1]
+  return parseMetric(value, { integer: false })
+}
+
+function getAccountCacheKey(cookies) {
+  const fingerprint = cookies
+    .map(cookie => `${cookie.domain || ''}:${cookie.name || ''}:${cookie.value || ''}`)
+    .sort()
+    .join('|')
+  return createHash('sha256').update(fingerprint).digest('hex')
+}
+
+async function getToutiaoAccount(cookies) {
+  let browser = null
+  let context = null
+  try {
+    const launched = await launchBrowserWithContext({
+      viewport: { width: 1440, height: 900 },
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    }, { preferChromium: true })
+    browser = launched.browser
+    context = launched.context
+    await context.addCookies(normalizeCookies(cookies))
+
+    const page = await context.newPage()
+    await page.goto('https://mp.toutiao.com/profile_v4/index', { waitUntil: 'domcontentloaded', timeout: 30000 })
+    await page.waitForFunction(
+      () => {
+        const text = document.body.innerText || ''
+        return text.includes('粉丝数')
+          && text.includes('总阅读(播放)量')
+          && text.includes('累计收益')
+      },
+      { timeout: 10000 },
+    ).catch(() => {})
+    await sleep(600, 1000)
+
+    const currentUrl = page.url()
+    if (currentUrl.includes('login') || currentUrl.includes('passport') || currentUrl.includes('sso')) {
+      throw new Error('Cookie 已失效，请重新获取并绑定')
+    }
+
+    const data = await page.evaluate(() => {
+      const text = document.body.innerText || ''
+      const nicknameCandidates = [
+        '[class*="user"] [class*="name"]',
+        '[class*="profile"] [class*="name"]',
+        '[class*="author"] [class*="name"]',
+      ]
+      let nickname = ''
+      for (const selector of nicknameCandidates) {
+        const item = document.querySelector(selector)
+        const value = item?.textContent?.trim()
+        if (value && value.length < 50) {
+          nickname = value
+          break
+        }
+      }
+
+      const avatarCandidates = Array.from(document.images)
+        .map(image => {
+          const rect = image.getBoundingClientRect()
+          const width = rect.width || image.naturalWidth
+          const height = rect.height || image.naturalHeight
+          const isSquare = width > 0 && height > 0 && Math.abs(width - height) / Math.max(width, height) < 0.2
+          const inCreatorHeader = rect.top >= 0
+            && rect.top < 110
+            && rect.left > window.innerWidth * 0.65
+            && width >= 20
+            && width <= 96
+            && isSquare
+          return {
+            url: image.currentSrc || image.src,
+            score: inCreatorHeader ? rect.left - rect.top : -Infinity,
+          }
+        })
+        .filter(candidate => candidate.url && Number.isFinite(candidate.score))
+        .sort((left, right) => right.score - left.score)
+
+      return {
+        text,
+        nickname,
+        avatarUrl: avatarCandidates[0]?.url || null,
+      }
+    })
+
+    return {
+      nickname: data.nickname || '今日头条账号',
+      avatar_url: data.avatarUrl,
+      description: null,
+      followers_count: extractDashboardMetric(data.text, '粉丝数'),
+      total_reads: extractDashboardMetric(data.text, '总阅读(播放)量'),
+      total_income: await getToutiaoIncome(page),
+      data_note: '粉丝数、总阅读(播放)量来自创作中心首页；累计收益来自收益总览。',
+    }
+  } finally {
+    if (context) await context.close().catch(() => {})
+    if (browser) await browser.close().catch(() => {})
+  }
+}
+
+async function getToutiaoIncome(page) {
+  await page.goto(TT_INCOME_OVERVIEW_URL, { waitUntil: 'domcontentloaded', timeout: 30000 })
+  await page.waitForFunction(
+    () => (document.body.innerText || '').includes('累计收益'),
+    { timeout: 10000 },
+  ).catch(() => {})
+  await sleep(600, 1000)
+
+  const incomeText = await page.evaluate(() => document.body.innerText || '')
+  const totalIncome = extractIncomeOverviewMetric(incomeText)
+  if (totalIncome === null) {
+    logger.warn('TOUTIAO', '收益总览页未识别到累计收益', { sample: incomeText.slice(0, 240) })
+  }
+  return totalIncome
+}
+
+async function getCachedToutiaoAccount(cookies, forceRefresh) {
+  const cacheKey = getAccountCacheKey(cookies)
+  const cached = accountCache.get(cacheKey)
+  const now = Date.now()
+  if (!forceRefresh && cached && now - cached.fetchedAt < ACCOUNT_CACHE_TTL_MS) {
+    return { ...cached.account, cached: true, cached_at: new Date(cached.fetchedAt).toISOString() }
+  }
+
+  const pending = accountRequests.get(cacheKey)
+  if (pending) return pending
+
+  const request = getToutiaoAccount(cookies)
+    .then(account => {
+      const fetchedAt = Date.now()
+      accountCache.set(cacheKey, { account, fetchedAt })
+      return { ...account, cached: false, cached_at: new Date(fetchedAt).toISOString() }
+    })
+    .finally(() => accountRequests.delete(cacheKey))
+  accountRequests.set(cacheKey, request)
+  return request
+}
+
 // ── GET /api/toutiao/status ──────────────────────────────────────────────────
 router.get('/status', (req, res) => {
   res.json({ available: chromiumStatus === 'ready', status: chromiumStatus, message: chromiumStatusMsg })
+})
+
+// ── POST /api/toutiao/account ────────────────────────────────────────────────
+router.post('/account', async (req, res) => {
+  const cookies = parseCookies(req)
+  if (!cookies) return res.status(401).json({ error: '未提供今日头条 Cookie，请先绑定账号' })
+
+  try {
+    const forceRefresh = req.body?.force_refresh === true
+    logger.info('TOUTIAO', '开始读取头条账号数据', { cookieCount: cookies.length, forceRefresh })
+    const account = await getCachedToutiaoAccount(cookies, forceRefresh)
+    logger.info('TOUTIAO', '头条账号数据读取成功', {
+      followersCount: account.followers_count,
+      totalReads: account.total_reads,
+      totalIncome: account.total_income,
+      cached: account.cached,
+    })
+    res.json(account)
+  } catch (error) {
+    logger.error('TOUTIAO', '头条账号数据读取失败', { error: error.message })
+    res.status(500).json({ error: error.message || '读取今日头条账号数据失败' })
+  }
 })
 
 // ── GET /api/toutiao/install-logs ────────────────────────────────────────────
@@ -234,15 +449,7 @@ router.post('/publish', async (req, res) => {
     context = launched.context
 
     // ── 注入 Cookie ────────────────────────────────────────────────────────
-    const normalizedCookies = cookies.map(c => ({
-      name:     c.name,
-      value:    c.value,
-      domain:   c.domain   || '.toutiao.com',
-      path:     c.path     || '/',
-      secure:   c.secure   ?? false,
-      httpOnly: c.httpOnly ?? false,
-      sameSite: (['Strict', 'Lax', 'None'].includes(c.sameSite) ? c.sameSite : 'Lax'),
-    }))
+    const normalizedCookies = normalizeCookies(cookies)
     await context.addCookies(normalizedCookies)
     logger.info('TOUTIAO', `已注入 ${normalizedCookies.length} 个 Cookie`)
 
