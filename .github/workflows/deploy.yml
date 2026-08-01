@@ -37,6 +37,9 @@ jobs:
           source: web-dist.tar.gz
           target: /home/admin/autowriting
           overwrite: true
+          timeout: 30s
+          command_timeout: 2m
+          debug: true
       
       - name: Deploy to server
         uses: appleboy/ssh-action@master
