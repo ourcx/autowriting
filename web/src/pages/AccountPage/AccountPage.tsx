@@ -11,11 +11,12 @@ import {
 import {
   clearToutiaoCookies, clearWechatCredentials, getWechatHeaders,
   hasToutiaoCookies, loadToutiaoCookies, loadWechatCredentials,
-  saveToutiaoCookies, saveWechatCredentials,
+  clearXiaohongshuCookies, hasXiaohongshuCookies,
+  saveToutiaoCookies, saveWechatCredentials, saveXiaohongshuCookies,
 } from "../../utils/accountBindings"
 import "./AccountPage.css"
 
-type Platform = "wechat" | "toutiao"
+type Platform = "wechat" | "toutiao" | "xiaohongshu"
 
 function formatNumber(value: number | null): string {
   return value === null ? "—" : value.toLocaleString("zh-CN")
@@ -36,12 +37,15 @@ export default function AccountPage() {
   const [toutiaoError, setToutiaoError] = useState("")
   const [wechatBound, setWechatBound] = useState(() => !!loadWechatCredentials())
   const [toutiaoBound, setToutiaoBound] = useState(hasToutiaoCookies)
+  const [xiaohongshuBound, setXiaohongshuBound] = useState(hasXiaohongshuCookies)
   const [appId, setAppId] = useState("")
   const [appSecret, setAppSecret] = useState("")
   const [showSecret, setShowSecret] = useState(false)
   const [cookies, setCookies] = useState("")
   const [bindingWechat, setBindingWechat] = useState(false)
   const [bindingToutiao, setBindingToutiao] = useState(false)
+  const [xiaohongshuCookies, setXiaohongshuCookies] = useState("")
+  const [xiaohongshuError, setXiaohongshuError] = useState("")
 
   const refreshWechat = useCallback(async () => {
     if (!loadWechatCredentials()) return
@@ -142,6 +146,28 @@ export default function AccountPage() {
     setToutiaoBound(false)
   }
 
+  function bindXiaohongshu(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const value = xiaohongshuCookies.trim()
+    try {
+      const parsed: unknown = JSON.parse(value)
+      if (!Array.isArray(parsed) || parsed.length === 0) throw new Error("Cookie 必须是非空 JSON 数组")
+      saveXiaohongshuCookies(value)
+      setXiaohongshuBound(true)
+      setXiaohongshuCookies("")
+      setXiaohongshuError("")
+    } catch (error) {
+      setXiaohongshuError(error instanceof Error ? error.message : "Cookie 格式不正确")
+    }
+  }
+
+  function unbindXiaohongshu() {
+    if (!confirm("确认解绑小红书？")) return
+    clearXiaohongshuCookies()
+    setXiaohongshuBound(false)
+    setXiaohongshuError("")
+  }
+
   return (
     <main className="ap-root">
       <header className="ap-header">
@@ -161,7 +187,7 @@ export default function AccountPage() {
           </div>
           <div className="ap-summary">
             <span>已连接</span>
-            <strong>{Number(wechatBound) + Number(toutiaoBound)}<small>/2</small></strong>
+            <strong>{Number(wechatBound) + Number(toutiaoBound) + Number(xiaohongshuBound)}<small>/3</small></strong>
             <span>内容平台</span>
           </div>
         </div>
@@ -232,6 +258,38 @@ export default function AccountPage() {
                 {toutiaoError ? <p className="ap-error">{toutiaoError}</p> : null}
                 <button className="ap-btn ap-btn--dark" disabled={bindingToutiao}>{bindingToutiao ? "验证中…" : <><Link2 size={15} />绑定今日头条</>}</button>
                 <a href="https://mp.toutiao.com/profile_v4/index" target="_blank" rel="noreferrer">打开头条创作中心 <ExternalLink size={13} /></a>
+              </form>
+            )}
+          </article>
+
+          <article className="ap-card ap-card--xiaohongshu">
+            <div className="ap-card-top">
+              <div className="ap-platform"><span className="ap-platform-mark ap-platform-mark--xiaohongshu">红</span><span>小红书</span></div>
+              <span className={`ap-status ${xiaohongshuBound ? "ap-status--ok" : ""}`}>{xiaohongshuBound ? "已绑定" : "未绑定"}</span>
+            </div>
+            {xiaohongshuBound ? (
+              <>
+                <div className="ap-profile">
+                  <AccountAvatar name="小红书" imageUrl={null} platform="xiaohongshu" />
+                  <div><h2>小红书创作服务平台</h2><p>已保存当前浏览器的登录会话</p></div>
+                </div>
+                <div className="ap-metric">
+                  <ShieldCheck size={18} /><div><strong>会话已就绪</strong><span>仅用于图文笔记发布</span></div>
+                </div>
+                <p className="ap-limited">发布前会校验登录态；遇到验证码或会话失效时需人工重新登录并更新 Cookie。</p>
+                <div className="ap-actions">
+                  <button className="ap-btn ap-btn--dark" onClick={() => navigate("/")}>在文章预览发布</button>
+                  <a className="ap-icon-btn" href="https://creator.xiaohongshu.com" target="_blank" rel="noreferrer" title="打开小红书创作服务平台"><ExternalLink size={16} /></a>
+                  <button className="ap-icon-btn" onClick={unbindXiaohongshu} title="解绑小红书"><Link2Off size={16} /></button>
+                </div>
+              </>
+            ) : (
+              <form className="ap-bind-form" onSubmit={bindXiaohongshu}>
+                <p>粘贴已登录小红书创作服务平台浏览器导出的 Cookie JSON，用于图文笔记发布。</p>
+                <textarea value={xiaohongshuCookies} onChange={event => { setXiaohongshuCookies(event.target.value); setXiaohongshuError("") }} placeholder='[{"name":"web_session","value":"…","domain":".xiaohongshu.com"}]' rows={5} />
+                {xiaohongshuError ? <p className="ap-error">{xiaohongshuError}</p> : null}
+                <button className="ap-btn ap-btn--dark"><Link2 size={15} />绑定小红书</button>
+                <a href="https://creator.xiaohongshu.com" target="_blank" rel="noreferrer">打开小红书创作服务平台 <ExternalLink size={13} /></a>
               </form>
             )}
           </article>

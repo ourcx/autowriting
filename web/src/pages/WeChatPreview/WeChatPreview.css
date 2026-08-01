@@ -183,3 +183,35 @@
 .preview-empty-toutiao button:hover {
   background: #1f1f1f;
 }
+
+/* 小屏下保留完整平台切换，不压缩为难以点击的图标。 */
+@media (max-width: 980px) {
+  .preview-nav-inner {
+    max-width: none;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #c8bfb0 transparent;
+  }
+
+  .preview-nav-inner::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  .preview-nav-inner::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .preview-nav-inner::-webkit-scrollbar-thumb {
+    background: #c8bfb0;
+    border-radius: 999px;
+  }
+
+  .preview-nav-title {
+    min-width: 180px;
+  }
+
+  .preview-nav-styles-btn,
+  .wr-platform-tab {
+    flex-shrink: 0;
+  }
+}

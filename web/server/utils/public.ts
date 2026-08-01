@@ -3,9 +3,14 @@
  * 存储层已迁移至 SQLite（db.ts），本文件保留图片生成、工具函数
  */
 import fs from "fs"
+import path from "path"
 import crypto from "crypto"
 import axios from "axios"
-import { SERVER_AI_CONFIG } from "../config.ts"
+import {
+  SERVER_AI_CONFIG,
+  XIAOHONGSHU_DEBUG_DIR,
+  XIAOHONGSHU_PUBLISH_LOCK_FILE,
+} from "../config.ts"
 import {
   getCoverCache,
   setCoverCache,
@@ -105,6 +110,35 @@ export function maskApiKey(obj: Record<string, unknown>): Record<string, unknown
 
 export function ensureDir(dir: string): void {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+}
+
+export function saveXiaohongshuDebugArtifacts(input: {
+  step: string
+  screenshot: Buffer
+  html: string
+}): { screenshotPath: string; htmlPath: string } {
+  ensureDir(XIAOHONGSHU_DEBUG_DIR)
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
+  const safeStep = input.step.replace(/[^\w\u4e00-\u9fa5-]+/g, "-").slice(0, 40)
+  const screenshotPath = path.join(XIAOHONGSHU_DEBUG_DIR, `${timestamp}-${safeStep}.png`)
+  const htmlPath = path.join(XIAOHONGSHU_DEBUG_DIR, `${timestamp}-${safeStep}.html`)
+  fs.writeFileSync(screenshotPath, input.screenshot)
+  fs.writeFileSync(htmlPath, input.html, "utf8")
+  return { screenshotPath, htmlPath }
+}
+
+export function createXiaohongshuPublishLock(): void {
+  ensureDir(path.dirname(XIAOHONGSHU_PUBLISH_LOCK_FILE))
+  fs.writeFileSync(XIAOHONGSHU_PUBLISH_LOCK_FILE, new Date().toISOString(), "utf8")
+}
+
+export function removeXiaohongshuPublishLock(): void {
+  try {
+    fs.unlinkSync(XIAOHONGSHU_PUBLISH_LOCK_FILE)
+  } catch (error: unknown) {
+    const nodeError = error as NodeJS.ErrnoException
+    if (nodeError.code !== "ENOENT") throw error
+  }
 }
 
 // ── 封面缓存（SQLite） ────────────────────────────────────────────────────────

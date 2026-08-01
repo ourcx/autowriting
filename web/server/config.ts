@@ -84,6 +84,9 @@ export const HISTORY_FILE = path.join(DATA_DIR, 'cover_history.json')
 
 export const IMAGES_DIR = path.join(DATA_DIR, 'images')
 export const IMAGES_METADATA_FILE = path.join(DATA_DIR, 'images_metadata.json')
+export const UPLOAD_DIR = path.join(DATA_DIR, 'uploads')
+export const XIAOHONGSHU_DEBUG_DIR = path.join(DATA_DIR, 'xiaohongshu-debug')
+export const XIAOHONGSHU_PUBLISH_LOCK_FILE = path.join(DATA_DIR, 'xiaohongshu-publish.lock')
 
 export const PUBLISH_DIR = path.join(DATA_DIR, 'publish')
 export const PUBLISH_HISTORY_FILE = path.join(DATA_DIR, 'publish_history.json')

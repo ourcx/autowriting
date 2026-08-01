@@ -28,6 +28,19 @@ export interface ToutiaoAccount {
   cached_at: string
 }
 
+export interface XiaohongshuPublishRecord {
+  id: string
+  title: string
+  content: string
+  contentType: "image_note" | "article"
+  imageCount: number
+  status: "publishing" | "published" | "failed"
+  noteUrl: string | null
+  errorMessage: string | null
+  createdAt: string
+  publishedAt: string | null
+}
+
 // ── 从 axios/fetch 错误中提取可读的错误信息 ──
 export function extractErrorMessage(err: unknown, fallback = '请求失败，请稍后重试'): string {
   if (err instanceof AxiosError) {
@@ -109,6 +122,53 @@ export async function fetchWechatAccount(headers: Record<string, string>): Promi
 export async function fetchToutiaoAccount(cookies: string, forceRefresh = false): Promise<ToutiaoAccount> {
   const response = await axios.post('/api/toutiao/account', { cookies, force_refresh: forceRefresh })
   return response.data as ToutiaoAccount
+}
+
+export async function publishXiaohongshuNote(input: {
+  cookies: string
+  contentType: "image_note" | "article"
+  title: string
+  content: string
+  imageUrls: string[]
+  articleOptions?: {
+    summary: string
+    templateName: string
+    coverType: "with_image" | "without_image"
+    showAuthor: boolean
+    showReadingTime: boolean
+    showSummary: boolean
+    finalTitle: string
+    topics: string[]
+    original: boolean
+  }
+}): Promise<{ success: boolean; recordId: string; noteUrl: string | null }> {
+  const response = await axios.post("/api/xiaohongshu/publish", input)
+  return response.data as { success: boolean; recordId: string; noteUrl: string | null }
+}
+
+export async function generateXiaohongshuArticleMetadata(input: {
+  title: string
+  content: string
+  aiConfig: AIConfig
+}): Promise<{ title: string; summary: string; topics: string[] }> {
+  const response = await axios.post("/api/xiaohongshu/article-metadata", input)
+  return response.data as { title: string; summary: string; topics: string[] }
+}
+
+export async function fetchXiaohongshuPublishRecords(): Promise<XiaohongshuPublishRecord[]> {
+  const response = await axios.get("/api/xiaohongshu/records")
+  return (response.data as { records: XiaohongshuPublishRecord[] }).records
+}
+
+export async function uploadLocalImage(file: File): Promise<{
+  id: string
+  url: string
+  originalName: string
+}> {
+  const formData = new FormData()
+  formData.append("image", file)
+  const response = await axios.post("/api/images/upload", formData)
+  return response.data as { id: string; url: string; originalName: string }
 }
 
 // ── 通用 JSON 请求（给 fetch 场景收口错误处理） ──

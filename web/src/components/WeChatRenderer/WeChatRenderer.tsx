@@ -1,14 +1,17 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { toast } from '../Toast/Toast'
-import { Copy, Check, Minus, Plus, ExternalLink, Send, Loader2, Image as ImageIcon, Settings } from 'lucide-react'
+import { Copy, Check, Minus, Plus, ExternalLink, Send, Loader2, Image as ImageIcon, Settings, Palette, Sparkles, Wand2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import { fetchAllTemplates, BUILTIN_TEMPLATES, TemplateItem } from '../../utils/templateStore'
 import { ImageLibrary } from '../ImageLibrary/ImageLibrary'
+import { generateXiaohongshuArticleMetadata, publishXiaohongshuNote } from '../../utils/apiHelpers'
+import { hasXiaohongshuCookies, loadXiaohongshuCookies } from '../../utils/accountBindings'
+import { loadAIConfig } from '../../utils/aiConfig'
 import './WeChatRenderer.css'
 
-type PlatformMode = 'wechat' | 'toutiao'
+type PlatformMode = 'wechat' | 'toutiao' | 'xiaohongshu'
 
 interface WeChatRendererProps {
   content: string
@@ -209,6 +212,7 @@ function copyHtmlViaExecCommand(
 
 // ── 今日头条 Cookie 工具函数 ──────────────────────────────────────────────────
 const TT_COOKIE_KEY = 'toutiao_cookies'
+const XIAOHONGSHU_TEMPLATES = ['简约基础', '清晰明朗', '黑白极简', '优雅几何', '平实叙事', '逻辑结构', '理性现代', '线条复古', '拼接色块', '杂志先锋', '交叉拓扑', '灵感备忘', '手帐书写', '札记集尘', '素雅底纹', '文艺清新', '黄昏手稿', '涂鸦马克', '大图纯享', '轻感明快']
 
 function getTtCookies(): string {
   return localStorage.getItem(TT_COOKIE_KEY) ?? ''
@@ -265,6 +269,19 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
   const [ttCookieBound, setTtCookieBound] = useState(false)
   const [ttPushing, setTtPushing] = useState(false)
   const [ttPushDone, setTtPushDone] = useState(false)
+  // 小红书长文：会话与平台侧卡片配置
+  const [xhsBound, setXhsBound] = useState(false)
+  const [xhsPushing, setXhsPushing] = useState(false)
+  const [xhsGenerating, setXhsGenerating] = useState(false)
+  const [xhsPushDone, setXhsPushDone] = useState(false)
+  const [xhsSummary, setXhsSummary] = useState('')
+  const [xhsFinalTitle, setXhsFinalTitle] = useState(title ?? '')
+  const [xhsTopics, setXhsTopics] = useState<string[]>([])
+  const [xhsTemplateName, setXhsTemplateName] = useState(XIAOHONGSHU_TEMPLATES[0])
+  const [xhsCoverType, setXhsCoverType] = useState<'with_image' | 'without_image'>('with_image')
+  const [xhsShowAuthor, setXhsShowAuthor] = useState(true)
+  const [xhsShowReadingTime, setXhsShowReadingTime] = useState(false)
+  const [xhsShowSummary, setXhsShowSummary] = useState(true)
   // 今日头条：Chromium 安装状态 + 日志面板
   const [chromiumStatus, setChromiumStatus] = useState<'checking' | 'ready' | 'installing' | 'failed'>('checking')
   const [chromiumMsg, setChromiumMsg] = useState('正在检测浏览器环境...')
@@ -323,7 +340,12 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
   useEffect(() => {
     setWxBound(hasWxCreds())
     setTtCookieBound(hasTtCookies())
+    setXhsBound(hasXiaohongshuCookies())
   }, [])
+
+  useEffect(() => {
+    if (!xhsFinalTitle) setXhsFinalTitle(title ?? '')
+  }, [title, xhsFinalTitle])
 
   useEffect(() => {
     fetchAllTemplates().then(all => {
@@ -536,6 +558,89 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
       setTtPushing(false)
     }
   }, [ttCookieBound, title, content])
+
+  const handleXhsPublish = useCallback(async () => {
+    if (!xhsBound) {
+      toast.warn('请先在用户页绑定小红书账号', {
+        action: { label: '去绑定', onClick: () => navigate('/account') },
+      })
+      return
+    }
+    if (!title?.trim() || title.trim().length < 2) {
+      toast.warn('小红书长文标题至少需要 2 个字')
+      return
+    }
+    if (Array.from(title.trim()).length > 20) {
+      toast.warn('小红书标题最多 20 个字，请先在文章编辑器中修改标题')
+      return
+    }
+    if (Array.from(xhsFinalTitle.trim()).length > 20) {
+      toast.warn('最终发布标题最多 20 个字，请先修改')
+      return
+    }
+    if (!content?.trim()) {
+      toast.warn('文章内容为空，无法发布小红书长文')
+      return
+    }
+
+    setXhsPushing(true)
+    try {
+      const result = await publishXiaohongshuNote({
+        cookies: loadXiaohongshuCookies(),
+        contentType: 'article',
+        title: title.trim(),
+        content,
+        imageUrls: [],
+        articleOptions: {
+          summary: xhsSummary.trim(),
+          templateName: xhsTemplateName,
+          coverType: xhsCoverType,
+          showAuthor: xhsShowAuthor,
+          showReadingTime: xhsShowReadingTime,
+          showSummary: xhsShowSummary,
+          finalTitle: xhsFinalTitle.trim(),
+          topics: xhsTopics,
+          original: true,
+        },
+      })
+      setXhsPushDone(true)
+      const noteUrl = result.noteUrl
+      toast.success('文章已同步到小红书长文并完成发布', {
+        duration: 0,
+        action: noteUrl ? { label: '打开发布页', onClick: () => window.open(noteUrl, '_blank') } : undefined,
+      })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '小红书长文发布失败')
+    } finally {
+      setXhsPushing(false)
+    }
+  }, [
+    content, navigate, title, xhsBound, xhsCoverType, xhsFinalTitle, xhsShowAuthor,
+    xhsShowReadingTime, xhsShowSummary, xhsSummary, xhsTemplateName, xhsTopics,
+  ])
+
+  const handleXhsGenerateMetadata = useCallback(async () => {
+    if (!title?.trim() || !content?.trim()) {
+      toast.warn('标题或正文为空，无法生成小红书发布信息')
+      return
+    }
+    setXhsGenerating(true)
+    try {
+      const metadata = await generateXiaohongshuArticleMetadata({
+        title: title.trim(),
+        content,
+        aiConfig: loadAIConfig(),
+      })
+      setXhsFinalTitle(metadata.title)
+      setXhsSummary(metadata.summary)
+      setXhsTopics(metadata.topics)
+      toast.success('已生成发布标题、摘要和话题，可确认后发布')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'AI 生成发布信息失败')
+    } finally {
+      setXhsGenerating(false)
+    }
+  }, [content, title])
 
   // 从 HTML 字符串提取第一张图片的 src
   function extractFirstImageSrc(htmlStr: string): string | null {
@@ -1001,6 +1106,133 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                   <pre className="wr-tt-md-pre">{content}</pre>
                 </div>
               </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── 小红书长文模式 ── */}
+      {platformMode === 'xiaohongshu' && (
+        <>
+          <div className="wr-toolbar wr-xhs-toolbar">
+            <div className="wr-xhs-toolbar-context">
+              <div className="wr-xhs-toolbar-mark">小</div>
+              <div>
+                <span>小红书长文</span>
+                <small>当前文章已同步 · {charCount.toLocaleString()} 字</small>
+              </div>
+            </div>
+            <div className="wr-xhs-toolbar-actions">
+              <span className={`wr-xhs-status ${xhsBound ? 'is-bound' : ''}`}>{xhsBound ? '账号已绑定' : '未绑定账号'}</span>
+              <button
+                className="wr-xhs-action wr-xhs-action--ai"
+                onClick={handleXhsGenerateMetadata}
+                disabled={xhsGenerating || xhsPushing}
+              >
+                {xhsGenerating ? <Loader2 size={15} className="wr-spin" /> : <Wand2 size={15} />}
+                {xhsGenerating ? 'AI 生成中...' : 'AI 生成发布信息'}
+              </button>
+              <button
+                className={`wr-xhs-action wr-xhs-action--publish ${xhsPushDone ? 'success' : ''}`}
+                onClick={handleXhsPublish}
+                disabled={xhsPushing || xhsPushDone}
+              >
+                {xhsPushing ? <Loader2 size={15} className="wr-spin" /> : xhsPushDone ? <Check size={15} /> : <Send size={15} />}
+                {xhsPushing ? '同步发布中...' : xhsPushDone ? '已同步发布！' : '一键发布长文'}
+              </button>
+              <a
+                href="https://creator.xiaohongshu.com/publish/publish?from=menu&target=article"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="wr-xhs-action wr-xhs-action--open"
+              >
+                <ExternalLink size={14} />
+                平台预览
+              </a>
+            </div>
+          </div>
+
+          <div className="wr-xhs-main">
+            <aside className="wr-xhs-sidebar">
+              <div className="wr-xhs-sidebar-header">
+                <div>
+                  <p>长文发布设置</p>
+                  <span>同步当前文章，不修改原文</span>
+                </div>
+              </div>
+              <div className="wr-xhs-settings-card wr-xhs-settings-card--lavender">
+                <div className="wr-xhs-settings-title"><Wand2 size={15} /><span>发布信息</span></div>
+                <label className="wr-xhs-field">
+                  <span>最终发布标题 <em>{xhsFinalTitle.length}/20</em></span>
+                  <input
+                    value={xhsFinalTitle}
+                    maxLength={20}
+                    onChange={event => setXhsFinalTitle(event.target.value)}
+                    placeholder="AI 生成后可在此调整"
+                  />
+                </label>
+                <label className="wr-xhs-field">
+                  <span>封面摘要 <em>{xhsSummary.length}/60</em></span>
+                  <textarea
+                    value={xhsSummary}
+                    maxLength={60}
+                    onChange={event => setXhsSummary(event.target.value)}
+                    placeholder="为封面补充一句简短摘要"
+                    rows={3}
+                  />
+                </label>
+                <div className="wr-xhs-option-group">
+                  <p>发布话题</p>
+                  <div className="wr-xhs-topics">
+                    {xhsTopics.length ? xhsTopics.map((topic, index) => (
+                      <span key={`${topic}-${index}`}>#{topic}<button onClick={() => setXhsTopics(current => current.filter((_, itemIndex) => itemIndex !== index))}>×</button></span>
+                    )) : <small>用 AI 自动生成 3–5 个相关话题</small>}
+                  </div>
+                </div>
+              </div>
+              <div className="wr-xhs-settings-card">
+                <div className="wr-xhs-settings-title"><Palette size={15} /><span>卡片排版</span></div>
+                <section className="wr-xhs-option-group">
+                  <p>选择模板</p>
+                  <div className="wr-xhs-option-list">
+                    {XIAOHONGSHU_TEMPLATES.map(templateName => (
+                      <button
+                        key={templateName}
+                        className={xhsTemplateName === templateName ? 'active' : ''}
+                        onClick={() => setXhsTemplateName(templateName)}
+                      >
+                        {templateName}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+                <section className="wr-xhs-option-group">
+                  <p>封面类型</p>
+                  <div className="wr-xhs-option-list">
+                    <button className={xhsCoverType === 'with_image' ? 'active' : ''} onClick={() => setXhsCoverType('with_image')}>有图封面</button>
+                    <button className={xhsCoverType === 'without_image' ? 'active' : ''} onClick={() => setXhsCoverType('without_image')}>无图封面</button>
+                  </div>
+                </section>
+              </div>
+              <div className="wr-xhs-settings-card wr-xhs-settings-card--mint">
+                <div className="wr-xhs-settings-title"><Sparkles size={15} /><span>封面信息</span></div>
+                <label className="wr-xhs-toggle"><input type="checkbox" checked={xhsShowAuthor} onChange={event => setXhsShowAuthor(event.target.checked)} /> 显示作者</label>
+                <label className="wr-xhs-toggle"><input type="checkbox" checked={xhsShowReadingTime} disabled={charCount < 1500} onChange={event => setXhsShowReadingTime(event.target.checked)} /> 显示字数和时长 {charCount < 1500 ? '（满 1500 字可用）' : ''}</label>
+                <label className="wr-xhs-toggle"><input type="checkbox" checked={xhsShowSummary} onChange={event => setXhsShowSummary(event.target.checked)} /> 显示摘要</label>
+              </div>
+              <p className="wr-xhs-note">流程：同步排版到“写长文” → 选择模板与封面 → 等待自动保存 → 进入下一步 → 填入 AI 生成的标题、话题与原创声明 → 发布。地点、可见范围和定时不自动修改。</p>
+            </aside>
+
+            <div className="wr-xhs-preview">
+              <article className="wr-xhs-card">
+                <div className="wr-xhs-card-cover">
+                  <span>小红书长文预览</span>
+                  <h2>{xhsFinalTitle || title}</h2>
+                  {xhsShowSummary && xhsSummary && <p>{xhsSummary}</p>}
+                  <footer>{xhsShowAuthor ? '当前账号' : ''}{xhsShowAuthor && xhsShowReadingTime ? ' · ' : ''}{xhsShowReadingTime ? `${charCount.toLocaleString()} 字` : ''}</footer>
+                </div>
+                <div className="wr-xhs-card-content" dangerouslySetInnerHTML={{ __html: html }} />
+              </article>
             </div>
           </div>
         </>

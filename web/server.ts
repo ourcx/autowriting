@@ -23,6 +23,7 @@ import promptsRouter from "./server/routes/prompts.ts"
 import cronRouter from "./server/routes/cron.ts"
 import toutiaoRouter from "./server/routes/toutiao.ts"
 import scoresRouter from "./server/routes/scores.ts"
+import xiaohongshuRouter from "./server/routes/xiaohongshu.ts"
 import { initCronScheduler } from "./server/cronEngine.ts"
 import { upsertTemplate, db } from "./server/db.ts"
 import { BUILTIN_TEMPLATES_DATA } from "./server/builtinTemplates.ts"
@@ -73,6 +74,7 @@ app.use("/api/prompts", promptsRouter)
 app.use("/api/cron", cronRouter)
 app.use("/api/toutiao", toutiaoRouter)
 app.use("/api/scores", scoresRouter)
+app.use("/api/xiaohongshu", xiaohongshuRouter)
 
 app.get("/health", (_req, res) => { res.json({ status: "ok" }) })
 

@@ -5,6 +5,7 @@ export interface WechatCredentials {
 
 const WECHAT_CREDENTIALS_KEY = "wechat_credentials"
 const TOUTIAO_COOKIES_KEY = "toutiao_cookies"
+const XIAOHONGSHU_COOKIES_KEY = "xiaohongshu_cookies"
 
 export function loadWechatCredentials(): WechatCredentials | null {
   try {
@@ -50,6 +51,27 @@ export function clearToutiaoCookies(): void {
 export function hasToutiaoCookies(): boolean {
   try {
     const value: unknown = JSON.parse(loadToutiaoCookies())
+    return Array.isArray(value) && value.length > 0
+  } catch {
+    return false
+  }
+}
+
+export function loadXiaohongshuCookies(): string {
+  return localStorage.getItem(XIAOHONGSHU_COOKIES_KEY) ?? ""
+}
+
+export function saveXiaohongshuCookies(cookies: string): void {
+  localStorage.setItem(XIAOHONGSHU_COOKIES_KEY, cookies)
+}
+
+export function clearXiaohongshuCookies(): void {
+  localStorage.removeItem(XIAOHONGSHU_COOKIES_KEY)
+}
+
+export function hasXiaohongshuCookies(): boolean {
+  try {
+    const value: unknown = JSON.parse(loadXiaohongshuCookies())
     return Array.isArray(value) && value.length > 0
   } catch {
     return false

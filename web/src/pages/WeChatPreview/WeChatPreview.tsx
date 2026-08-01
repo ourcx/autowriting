@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Palette } from 'lucide-react'
+import { Palette } from 'lucide-react'
 import axios from 'axios'
 import WeChatRenderer from '../../components/WeChatRenderer/WeChatRenderer'
 import './WeChatPreview.css'
@@ -13,7 +13,7 @@ interface ArticleData {
   articleToutiao: string
 }
 
-type PlatformMode = 'wechat' | 'toutiao'
+type PlatformMode = 'wechat' | 'toutiao' | 'xiaohongshu'
 
 export default function WeChatPreview() {
   const { articleId } = useParams<{ articleId: string }>()
@@ -76,6 +76,16 @@ export default function WeChatPreview() {
               <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
             </svg>
             今日头条
+          </button>
+          <button
+            className={`wr-platform-tab wr-platform-tab--xiaohongshu ${platformMode === 'xiaohongshu' ? 'active' : ''}`}
+            onClick={() => setPlatformMode('xiaohongshu')}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="3" y="5" width="18" height="14" rx="4" />
+              <path d="M8 9h8v2H8zm0 4h5v2H8z" fill="#fffaf0" />
+            </svg>
+            小红书长文
           </button>
         </div>
       </header>

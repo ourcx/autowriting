@@ -128,6 +128,20 @@ db.exec(`
     created_at  TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS xiaohongshu_publish_records (
+    id              TEXT PRIMARY KEY,
+    user_id         TEXT NOT NULL,
+    title           TEXT NOT NULL,
+    content         TEXT NOT NULL,
+    content_type    TEXT NOT NULL DEFAULT 'image_note',
+    image_count     INTEGER NOT NULL DEFAULT 0,
+    status          TEXT NOT NULL,
+    note_url        TEXT,
+    error_message   TEXT,
+    created_at      TEXT NOT NULL,
+    published_at    TEXT
+  );
+
   CREATE TABLE IF NOT EXISTS analyses (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id         TEXT,
@@ -270,6 +284,7 @@ function createIndexes(): void {
       CREATE INDEX IF NOT EXISTS idx_cron_logs_user ON cron_logs(user_id, started_at DESC);
       CREATE INDEX IF NOT EXISTS idx_article_scores_user ON article_scores(user_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_article_scores_article ON article_scores(user_id, article_id);
+      CREATE INDEX IF NOT EXISTS idx_xiaohongshu_publish_records_user ON xiaohongshu_publish_records(user_id, created_at DESC);
     `)
   } catch (e: unknown) {
     console.warn("[DB] 创建索引失败:", (e as Error).message)
@@ -308,6 +323,12 @@ function addMissingColumns(): void {
     if (scoresInfo.length > 0 && !scoresInfo.some((col) => col.name === "comments")) {
       db.exec("ALTER TABLE article_scores ADD COLUMN comments INTEGER")
       console.log("[DB] 添加 article_scores.comments 列")
+    }
+
+    const xiaohongshuPublishInfo = db.prepare("PRAGMA table_info(xiaohongshu_publish_records)").all() as Array<{ name: string }>
+    if (xiaohongshuPublishInfo.length > 0 && !xiaohongshuPublishInfo.some((col) => col.name === "content_type")) {
+      db.exec("ALTER TABLE xiaohongshu_publish_records ADD COLUMN content_type TEXT NOT NULL DEFAULT 'image_note'")
+      console.log("[DB] 添加 xiaohongshu_publish_records.content_type 列")
     }
   } catch (e: unknown) {
     console.warn("[DB] 添加缺失列失败:", (e as Error).message)
@@ -702,6 +723,112 @@ export function getPublishById(id: string) {
   const row = stmts.getPublishById.get(id) as DbPublishRow | undefined
   if (!row) return null
   return { id: row.id, title: row.title, content: row.content, coverImage: row.cover_image, status: row.status, createdAt: row.created_at }
+}
+
+// ── 小红书发布记录 ────────────────────────────────────────────────────────────
+
+export type XiaohongshuPublishStatus = "publishing" | "published" | "failed"
+export type XiaohongshuContentType = "image_note" | "article"
+
+export interface XiaohongshuPublishRecord {
+  id: string
+  userId: string
+  title: string
+  content: string
+  contentType: XiaohongshuContentType
+  imageCount: number
+  status: XiaohongshuPublishStatus
+  noteUrl: string | null
+  errorMessage: string | null
+  createdAt: string
+  publishedAt: string | null
+}
+
+interface DbXiaohongshuPublishRecord {
+  id: string
+  user_id: string
+  title: string
+  content: string
+  content_type: XiaohongshuContentType
+  image_count: number
+  status: XiaohongshuPublishStatus
+  note_url: string | null
+  error_message: string | null
+  created_at: string
+  published_at: string | null
+}
+
+function mapXiaohongshuPublishRecord(row: DbXiaohongshuPublishRecord): XiaohongshuPublishRecord {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    title: row.title,
+    content: row.content,
+    contentType: row.content_type,
+    imageCount: row.image_count,
+    status: row.status,
+    noteUrl: row.note_url,
+    errorMessage: row.error_message,
+    createdAt: row.created_at,
+    publishedAt: row.published_at,
+  }
+}
+
+export function createXiaohongshuPublishRecord(input: {
+  id: string
+  userId: string
+  title: string
+  content: string
+  contentType: XiaohongshuContentType
+  imageCount: number
+}): XiaohongshuPublishRecord {
+  const createdAt = new Date().toISOString()
+  db.prepare(`
+    INSERT INTO xiaohongshu_publish_records
+      (id, user_id, title, content, content_type, image_count, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'publishing', ?)
+  `).run(input.id, input.userId, input.title, input.content, input.contentType, input.imageCount, createdAt)
+
+  return {
+    id: input.id,
+    userId: input.userId,
+    title: input.title,
+    content: input.content,
+    contentType: input.contentType,
+    imageCount: input.imageCount,
+    status: "publishing",
+    noteUrl: null,
+    errorMessage: null,
+    createdAt,
+    publishedAt: null,
+  }
+}
+
+export function completeXiaohongshuPublishRecord(id: string, noteUrl: string | null): void {
+  db.prepare(`
+    UPDATE xiaohongshu_publish_records
+    SET status = 'published', note_url = ?, error_message = NULL, published_at = ?
+    WHERE id = ?
+  `).run(noteUrl, new Date().toISOString(), id)
+}
+
+export function failXiaohongshuPublishRecord(id: string, errorMessage: string): void {
+  db.prepare(`
+    UPDATE xiaohongshu_publish_records
+    SET status = 'failed', error_message = ?
+    WHERE id = ?
+  `).run(errorMessage.slice(0, 1000), id)
+}
+
+export function listXiaohongshuPublishRecords(userId: string, limit = 30): XiaohongshuPublishRecord[] {
+  const rows = db.prepare(`
+    SELECT * FROM xiaohongshu_publish_records
+    WHERE user_id = ?
+    ORDER BY created_at DESC
+    LIMIT ?
+  `).all(userId, limit) as DbXiaohongshuPublishRecord[]
+
+  return rows.map(mapXiaohongshuPublishRecord)
 }
 
 // ── 分析结果 ──────────────────────────────────────────────────────────────────
