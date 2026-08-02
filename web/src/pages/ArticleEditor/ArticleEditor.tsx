@@ -25,9 +25,10 @@ interface ArticleData {
   article: string
   title: string
   articleToutiao: string
+  xiaohongshuTitle: string
 }
 
-type TabId = 'task' | 'materials' | 'article' | 'toutiao' | 'analysis' | 'cover' | 'library'
+type TabId = 'task' | 'materials' | 'article' | 'toutiao' | 'xiaohongshu' | 'analysis' | 'cover' | 'library'
 
 // 流程步骤定义（cover 的 check 在组件内动态注入）
 const BASE_FLOW_STEPS: { id: TabId; label: string; check: (d: ArticleData) => boolean }[] = [
@@ -35,6 +36,7 @@ const BASE_FLOW_STEPS: { id: TabId; label: string; check: (d: ArticleData) => bo
   { id: 'materials', label: '素材采集', check: d => d.materials.trim().length >= 30 },
   { id: 'article',   label: '公众号',   check: d => d.article.trim().length > 100 },
   { id: 'toutiao',   label: '今日头条', check: d => d.articleToutiao.trim().length > 100 },
+  { id: 'xiaohongshu', label: '小红书', check: d => d.article.trim().length > 100 && d.xiaohongshuTitle.trim().length >= 2 },
   { id: 'cover',     label: '生成封面', check: () => false }, // 由组件内 hasCover 覆盖
   { id: 'analysis',  label: '内容分析', check: () => false },
 ]
@@ -43,7 +45,7 @@ export default function ArticleEditor() {
   const { articleId = '' } = useParams<{ articleId: string }>()
   const navigate = useNavigate()
 
-  const [data, setData] = useState<ArticleData>({ task: '', materials: '', article: '', title: '', articleToutiao: '' })
+  const [data, setData] = useState<ArticleData>({ task: '', materials: '', article: '', title: '', articleToutiao: '', xiaohongshuTitle: '' })
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [generateError, setGenerateError] = useState<string | null>(null)
@@ -92,10 +94,12 @@ export default function ArticleEditor() {
   const localStorageKey = `local_article_data_${articleId}`
 
   function loadLocalData(): ArticleData {
+    const emptyData: ArticleData = { task: '', materials: '', article: '', title: '', articleToutiao: '', xiaohongshuTitle: '' }
     try {
-      return JSON.parse(localStorage.getItem(localStorageKey) || 'null') || { task: '', materials: '', article: '', title: '', articleToutiao: '' }
+      const saved = JSON.parse(localStorage.getItem(localStorageKey) || 'null')
+      return saved ? { ...emptyData, ...saved } : emptyData
     } catch {
-      return { task: '', materials: '', article: '', title: '', articleToutiao: '' }
+      return emptyData
     }
   }
 
@@ -576,6 +580,34 @@ export default function ArticleEditor() {
                 onChange={value => setData(prev => ({ ...prev, articleToutiao: value }))}
                 placeholder="今日头条文章将在这里显示..."
                 height="600px"
+                articleId={articleId}
+              />
+            </div>
+          )}
+
+          {activeTab === 'xiaohongshu' && (
+            <div className="editor-panel editor-panel--xiaohongshu">
+              <div className="editor-platform-label editor-platform-label--xiaohongshu">小红书长文</div>
+              <div className="xiaohongshu-title-card">
+                <div>
+                  <h3>复用公众号正文</h3>
+                  <p>小红书不会额外生成文章，发布时直接使用公众号正文；仅需设置独立标题。</p>
+                </div>
+                <label className="xiaohongshu-title-field">
+                  <span>小红书标题 <em>{Array.from(data.xiaohongshuTitle).length}/20</em></span>
+                  <input
+                    value={data.xiaohongshuTitle}
+                    maxLength={20}
+                    onChange={event => setData(prev => ({ ...prev, xiaohongshuTitle: event.target.value }))}
+                    placeholder={articleTitle || '输入小红书发布标题'}
+                  />
+                </label>
+              </div>
+              <MarkdownEditor
+                value={data.article}
+                onChange={value => setData(prev => ({ ...prev, article: value }))}
+                placeholder="请先在公众号页生成或编辑文章正文..."
+                height="500px"
                 articleId={articleId}
               />
             </div>

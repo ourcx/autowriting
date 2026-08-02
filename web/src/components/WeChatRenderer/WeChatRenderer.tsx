@@ -571,7 +571,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
       return
     }
     if (Array.from(title.trim()).length > 20) {
-      toast.warn('小红书标题最多 20 个字，请先在文章编辑器中修改标题')
+      toast.warn('小红书标题最多 20 个字，请先修改小红书标题')
       return
     }
     if (Array.from(xhsFinalTitle.trim()).length > 20) {

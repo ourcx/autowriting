@@ -11,6 +11,7 @@ interface ArticleData {
   article: string
   title: string
   articleToutiao: string
+  xiaohongshuTitle: string
 }
 
 type PlatformMode = 'wechat' | 'toutiao' | 'xiaohongshu'
@@ -18,7 +19,7 @@ type PlatformMode = 'wechat' | 'toutiao' | 'xiaohongshu'
 export default function WeChatPreview() {
   const { articleId } = useParams<{ articleId: string }>()
   const navigate = useNavigate()
-  const [data, setData] = useState<ArticleData>({ task: '', materials: '', article: '', title: '', articleToutiao: '' })
+  const [data, setData] = useState<ArticleData>({ task: '', materials: '', article: '', title: '', articleToutiao: '', xiaohongshuTitle: '' })
   const [loading, setLoading] = useState(true)
   const [platformMode, setPlatformMode] = useState<PlatformMode>('wechat')
 
@@ -36,7 +37,10 @@ export default function WeChatPreview() {
     ? data.articleToutiao
     : data.article
 
-  const title = data.title || activeContent.split('\n')[0]?.replace(/^#+\s*/, '') || '未命名文章'
+  const articleTitle = data.title || activeContent.split('\n')[0]?.replace(/^#+\s*/, '') || '未命名文章'
+  const title = platformMode === 'xiaohongshu'
+    ? data.xiaohongshuTitle || articleTitle
+    : articleTitle
 
   return (
     <div className="wechat-preview-page">

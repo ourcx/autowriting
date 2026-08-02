@@ -166,6 +166,7 @@ router.get('/:articleId', (req, res) => {
     const titlePath     = getArticlePath(articleId, 'title',     uid)
     // 今日头条文章路径（article_raw.md → article_toutiao.md）
     const toutiaoPath   = articlePath ? articlePath.replace('article_raw', 'article_toutiao') : null
+    const xiaohongshuTitlePath = articlePath ? articlePath.replace('article_raw.md', 'xiaohongshu_title.txt') : null
 
     ensureDir(path.dirname(taskPath))
     ensureDir(path.dirname(materialsPath))
@@ -177,6 +178,7 @@ router.get('/:articleId', (req, res) => {
       article:        fs.existsSync(articlePath)   ? fs.readFileSync(articlePath,   'utf-8') : '',
       title:          fs.existsSync(titlePath)     ? fs.readFileSync(titlePath,     'utf-8') : '',
       articleToutiao: toutiaoPath && fs.existsSync(toutiaoPath) ? fs.readFileSync(toutiaoPath, 'utf-8') : '',
+      xiaohongshuTitle: xiaohongshuTitlePath && fs.existsSync(xiaohongshuTitlePath) ? fs.readFileSync(xiaohongshuTitlePath, 'utf-8') : '',
     })
   } catch (error) {
     console.error('Error fetching article:', error)
@@ -189,7 +191,7 @@ router.get('/:articleId', (req, res) => {
 router.post('/:articleId', (req, res) => {
   try {
     const { articleId } = req.params
-    const { task, materials, article, title, articleToutiao } = req.body
+    const { task, materials, article, title, articleToutiao, xiaohongshuTitle } = req.body
     const uid = req.user.id
 
     const taskPath      = getArticlePath(articleId, 'task',      uid)
@@ -197,6 +199,7 @@ router.post('/:articleId', (req, res) => {
     const articlePath   = getArticlePath(articleId, 'article',   uid)
     const titlePath     = getArticlePath(articleId, 'title',     uid)
     const toutiaoPath   = articlePath ? articlePath.replace('article_raw', 'article_toutiao') : null
+    const xiaohongshuTitlePath = articlePath ? articlePath.replace('article_raw.md', 'xiaohongshu_title.txt') : null
 
     ensureDir(path.dirname(taskPath))
     ensureDir(path.dirname(materialsPath))
@@ -207,6 +210,7 @@ router.post('/:articleId', (req, res) => {
     if (article !== undefined)        fs.writeFileSync(articlePath,   article ?? '',        'utf-8')
     if (title !== undefined)          fs.writeFileSync(titlePath,     title ?? '',          'utf-8')
     if (articleToutiao !== undefined && toutiaoPath) fs.writeFileSync(toutiaoPath, articleToutiao ?? '', 'utf-8')
+    if (xiaohongshuTitle !== undefined && xiaohongshuTitlePath) fs.writeFileSync(xiaohongshuTitlePath, xiaohongshuTitle ?? '', 'utf-8')
 
     // 文章内容有更新时，异步触发增量 RAG 索引（不阻塞响应）
     // 但要先做「内容指纹判重」：仅当 article/materials 真的变了才触发，

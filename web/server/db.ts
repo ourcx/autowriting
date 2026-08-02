@@ -1192,7 +1192,7 @@ function _mapScoreRow(row: DbArticleScoreRow): ArticleScore {
     userId: row.user_id,
     articleId: row.article_id,
     title: row.title,
-    platform: row.platform as "wechat" | "toutiao",
+    platform: row.platform as "wechat" | "toutiao" | "xiaohongshu",
     views: row.views,
     shares: row.shares,
     likes: row.likes,

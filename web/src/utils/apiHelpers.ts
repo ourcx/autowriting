@@ -72,6 +72,7 @@ export async function saveArticle(articleId: string, data: {
   article?: string
   title?: string
   articleToutiao?: string
+  xiaohongshuTitle?: string
 }): Promise<void> {
   await axios.post(`/api/articles/${articleId}`, data)
 }
@@ -94,7 +95,14 @@ export async function generateArticle(
 // ── 获取单篇文章 ──
 export async function fetchArticle(articleId: string) {
   const res = await axios.get(`/api/articles/${articleId}`)
-  return res.data as { task: string; materials: string; article: string; title: string; articleToutiao: string }
+  return res.data as {
+    task: string
+    materials: string
+    article: string
+    title: string
+    articleToutiao: string
+    xiaohongshuTitle: string
+  }
 }
 
 // ── 获取文章列表 ──

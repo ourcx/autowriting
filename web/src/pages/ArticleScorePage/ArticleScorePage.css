@@ -529,6 +529,17 @@
   border-color: rgba(255, 176, 132, 0.6);
 }
 
+.asp-add-btn--xiaohongshu {
+  background: rgba(255, 36, 66, 0.08);
+  border-color: rgba(255, 36, 66, 0.28);
+  color: #b11b34;
+}
+
+.asp-add-btn--xiaohongshu:hover {
+  background: rgba(255, 36, 66, 0.14);
+  border-color: rgba(255, 36, 66, 0.45);
+}
+
 .asp-all-scored {
   display: inline-flex;
   align-items: center;

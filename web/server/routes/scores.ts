@@ -50,8 +50,8 @@ router.post('/:articleId', (req, res) => {
     const { articleId } = req.params
     const { title, platform, views, shares, likes, comments, composite, note } = req.body
 
-    if (!platform || !['wechat', 'toutiao'].includes(platform)) {
-      return res.status(400).json({ error: 'platform 必须是 wechat 或 toutiao' })
+    if (!platform || !['wechat', 'toutiao', 'xiaohongshu'].includes(platform)) {
+      return res.status(400).json({ error: 'platform 必须是 wechat、toutiao 或 xiaohongshu' })
     }
 
     // 至少要有一个数据字段

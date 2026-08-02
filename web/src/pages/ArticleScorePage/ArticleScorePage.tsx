@@ -22,7 +22,7 @@ interface ScoreData {
   id: number
   articleId: string
   title: string
-  platform: 'wechat' | 'toutiao'
+  platform: Platform
   views: number | null
   shares: number | null
   likes: number | null
@@ -45,7 +45,7 @@ interface ScoreForm {
 interface AddArticleForm {
   title: string
   content: string
-  platform: 'wechat' | 'toutiao'
+  platform: Platform
   views: string
   shares: string
   likes: string
@@ -54,10 +54,20 @@ interface AddArticleForm {
   note: string
 }
 
+type Platform = 'wechat' | 'toutiao' | 'xiaohongshu'
+
 const EMPTY_FORM: ScoreForm = { views: '', shares: '', likes: '', comments: '', composite: '', note: '' }
 const EMPTY_ADD_FORM: AddArticleForm = {
   title: '', content: '', platform: 'wechat',
   views: '', shares: '', likes: '', comments: '', composite: '', note: '',
+}
+
+function platformLabel(platform: Platform) {
+  return { wechat: '公众号', toutiao: '今日头条', xiaohongshu: '小红书' }[platform]
+}
+
+function platformIcon(platform: Platform) {
+  return { wechat: '📱', toutiao: '📰', xiaohongshu: '📕' }[platform]
 }
 
 function authHeaders(): Record<string, string> {
@@ -99,7 +109,7 @@ function ScoreCard({
   return (
     <div className={`asp-score-card asp-score-card--${lbl?.color || 'muted'}`}>
       <div className="asp-score-card-head">
-        <span className="asp-score-platform">{s.platform === 'wechat' ? '公众号' : '今日头条'}</span>
+        <span className="asp-score-platform">{platformLabel(s.platform)}</span>
         {lbl && <span className="asp-score-label">{lbl.text}</span>}
         <div style={{ flex: 1 }} />
         <button className="asp-icon-btn asp-icon-btn--edit" onClick={onEdit} title="编辑">
@@ -128,7 +138,6 @@ function ScoreCard({
 
 // ── 内联评分表单（复用） ──────────────────────────────────────────────────────
 function InlineScoreForm({
-  articleId,
   editState,
   isSaving,
   onPlatformChange,
@@ -136,10 +145,9 @@ function InlineScoreForm({
   onSave,
   onCancel,
 }: {
-  articleId: string
-  editState: { platform: 'wechat' | 'toutiao'; form: ScoreForm }
+  editState: { platform: Platform; form: ScoreForm }
   isSaving: boolean
-  onPlatformChange: (p: 'wechat' | 'toutiao') => void
+  onPlatformChange: (p: Platform) => void
   onFieldChange: (field: keyof ScoreForm, value: string) => void
   onSave: () => void
   onCancel: () => void
@@ -148,7 +156,7 @@ function InlineScoreForm({
     <div className="asp-form-card">
       <div className="asp-form-head">
         <span className="asp-form-title">
-          {editState.platform === 'wechat' ? '📱 公众号' : '📰 今日头条'} 数据录入
+          {platformIcon(editState.platform)} {platformLabel(editState.platform)} 数据录入
         </span>
         <div className="asp-platform-switch">
           <button
@@ -159,6 +167,10 @@ function InlineScoreForm({
             className={`asp-platform-btn${editState.platform === 'toutiao' ? ' asp-platform-btn--active' : ''}`}
             onClick={() => onPlatformChange('toutiao')}
           >今日头条</button>
+          <button
+            className={`asp-platform-btn${editState.platform === 'xiaohongshu' ? ' asp-platform-btn--active' : ''}`}
+            onClick={() => onPlatformChange('xiaohongshu')}
+          >小红书</button>
         </div>
       </div>
       <div className="asp-form-grid">
@@ -327,6 +339,10 @@ function AddArticleModal({
                 className={`asp-platform-btn${form.platform === 'toutiao' ? ' asp-platform-btn--active' : ''}`}
                 onClick={() => setField('platform', 'toutiao')}
               >今日头条</button>
+              <button
+                className={`asp-platform-btn${form.platform === 'xiaohongshu' ? ' asp-platform-btn--active' : ''}`}
+                onClick={() => setField('platform', 'xiaohongshu')}
+              >小红书</button>
             </div>
           </div>
 
@@ -388,7 +404,7 @@ function AddArticleModal({
 
 // ── 文章卡片（通用） ──────────────────────────────────────────────────────────
 function ArticleCard({
-  articleId,
+  articleId: _articleId,
   title,
   articleScores,
   isExpanded,
@@ -407,19 +423,20 @@ function ArticleCard({
   title: string
   articleScores: ScoreData[]
   isExpanded: boolean
-  editState: { platform: 'wechat' | 'toutiao'; form: ScoreForm } | null | undefined
+  editState: { platform: Platform; form: ScoreForm } | null | undefined
   isSaving: boolean
   onToggle: () => void
-  onStartEdit: (platform: 'wechat' | 'toutiao', existing?: ScoreData) => void
+  onStartEdit: (platform: Platform, existing?: ScoreData) => void
   onCancelEdit: () => void
-  onPlatformChange: (p: 'wechat' | 'toutiao') => void
+  onPlatformChange: (p: Platform) => void
   onFieldChange: (field: keyof ScoreForm, value: string) => void
   onSave: () => void
-  onDelete: (platform: string) => void
+  onDelete: (platform: Platform) => void
   badge?: React.ReactNode
 }) {
   const wechatScore  = articleScores.find(s => s.platform === 'wechat')
   const toutiaoScore = articleScores.find(s => s.platform === 'toutiao')
+  const xiaohongshuScore = articleScores.find(s => s.platform === 'xiaohongshu')
 
   return (
     <div className={`asp-article-card${articleScores.length ? ' asp-article-card--scored' : ''}`}>
@@ -439,6 +456,11 @@ function ArticleCard({
             {toutiaoScore && (
               <span className="asp-badge" style={{ background: `${compositeColor(toutiaoScore.composite)}18`, color: compositeColor(toutiaoScore.composite), border: `1px solid ${compositeColor(toutiaoScore.composite)}40` }}>
                 头条 {toutiaoScore.composite}分
+              </span>
+            )}
+            {xiaohongshuScore && (
+              <span className="asp-badge" style={{ background: `${compositeColor(xiaohongshuScore.composite)}18`, color: compositeColor(xiaohongshuScore.composite), border: `1px solid ${compositeColor(xiaohongshuScore.composite)}40` }}>
+                小红书 {xiaohongshuScore.composite}分
               </span>
             )}
           </div>
@@ -465,7 +487,6 @@ function ArticleCard({
 
           {editState ? (
             <InlineScoreForm
-              articleId={articleId}
               editState={editState}
               isSaving={isSaving}
               onPlatformChange={onPlatformChange}
@@ -487,10 +508,16 @@ function ArticleCard({
                   录入今日头条数据
                 </button>
               )}
-              {wechatScore && toutiaoScore && (
+              {!xiaohongshuScore && (
+                <button className="asp-add-btn asp-add-btn--xiaohongshu" onClick={() => onStartEdit('xiaohongshu')}>
+                  <Star size={13} />
+                  录入小红书数据
+                </button>
+              )}
+              {wechatScore && toutiaoScore && xiaohongshuScore && (
                 <span className="asp-all-scored">
                   <Minus size={12} />
-                  两个平台均已评分，点击评分卡片上的编辑按钮修改
+                  三个平台均已评分，点击评分卡片上的编辑按钮修改
                 </span>
               )}
             </div>
@@ -508,7 +535,7 @@ export default function ArticleScorePage() {
   const [scores, setScores]       = useState<Record<string, ScoreData[]>>({})
   const [loading, setLoading]     = useState(true)
   const [expanded, setExpanded]   = useState<Record<string, boolean>>({})
-  const [editing, setEditing]     = useState<Record<string, { platform: 'wechat' | 'toutiao'; form: ScoreForm } | null>>({})
+  const [editing, setEditing]     = useState<Record<string, { platform: Platform; form: ScoreForm } | null>>({})
   const [saving, setSaving]       = useState<Record<string, boolean>>({})
   const [showAddModal, setShowAddModal] = useState(false)
 
@@ -543,7 +570,7 @@ export default function ArticleScorePage() {
     setExpanded(prev => ({ ...prev, [id]: !prev[id] }))
   }
 
-  function startEdit(articleId: string, platform: 'wechat' | 'toutiao', existing?: ScoreData) {
+  function startEdit(articleId: string, platform: Platform, existing?: ScoreData) {
     setEditing(prev => ({
       ...prev,
       [articleId]: {
@@ -572,7 +599,7 @@ export default function ArticleScorePage() {
     })
   }
 
-  function changePlatform(articleId: string, platform: 'wechat' | 'toutiao') {
+  function changePlatform(articleId: string, platform: Platform) {
     setEditing(prev => {
       const cur = prev[articleId]
       if (!cur) return prev
@@ -611,8 +638,8 @@ export default function ArticleScorePage() {
     }
   }
 
-  async function deleteScore(articleId: string, platform: string) {
-    if (!confirm(`确认删除「${platform === 'wechat' ? '公众号' : '今日头条'}」的评分？`)) return
+  async function deleteScore(articleId: string, platform: Platform) {
+    if (!confirm(`确认删除「${platformLabel(platform)}」的评分？`)) return
     try {
       await fetch(`/api/scores/${articleId}/${platform}`, {
         method: 'DELETE',
@@ -665,7 +692,7 @@ export default function ArticleScorePage() {
           <div className="asp-hero-text">
             <h1 className="asp-hero-h1">文章表现评分</h1>
             <p className="asp-hero-desc">
-              输入公众号或今日头条的真实数据，系统自动计算综合评分。
+              输入公众号、今日头条或小红书的真实数据，系统自动计算综合评分。
               生成新文章时，<strong>优秀文章（≥70分）</strong>和<strong>低表现文章（≤30分）</strong>会作为示例注入 prompt，帮助 AI 学习成功模式、规避失败模式。
             </p>
           </div>

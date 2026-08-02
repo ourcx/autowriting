@@ -1026,7 +1026,7 @@
   }
 }
 
-/* ── 平台标签（公众号 / 今日头条） ── */
+/* ── 平台标签 ── */
 .editor-platform-label {
   display: inline-flex;
   align-items: center;
@@ -1048,4 +1048,91 @@
   background: #ff4d4d14;
   color: #cc2200;
   border: 1px solid #ff4d4d35;
+}
+
+.editor-platform-label--xiaohongshu {
+  background: #ff244214;
+  color: #c41530;
+  border: 1px solid #ff244235;
+}
+
+.editor-panel--xiaohongshu {
+  display: flex;
+  flex-direction: column;
+}
+
+.xiaohongshu-title-card {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 18px;
+  padding: 20px;
+  border: 1px solid #ff244229;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #fff4f5, #fffaf0);
+}
+
+.xiaohongshu-title-card h3 {
+  margin: 0 0 6px;
+  color: #3b1d24;
+  font-size: 16px;
+}
+
+.xiaohongshu-title-card p {
+  max-width: 520px;
+  margin: 0;
+  color: #7a5960;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.xiaohongshu-title-field {
+  flex: 0 0 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: #5d3b43;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.xiaohongshu-title-field span {
+  display: flex;
+  justify-content: space-between;
+}
+
+.xiaohongshu-title-field em {
+  color: #a87983;
+  font-style: normal;
+  font-weight: 500;
+}
+
+.xiaohongshu-title-field input {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #e8bdc5;
+  border-radius: 10px;
+  outline: none;
+  color: #3b1d24;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+}
+
+.xiaohongshu-title-field input:focus {
+  border-color: #ff2442;
+  box-shadow: 0 0 0 3px #ff24421a;
+}
+
+@media (max-width: 720px) {
+  .xiaohongshu-title-card {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .xiaohongshu-title-field {
+    flex-basis: auto;
+  }
 }

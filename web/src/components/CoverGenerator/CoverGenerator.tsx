@@ -541,7 +541,7 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
             <div className="cg-preview-empty">
               <div className="cg-empty-inner">
                 <p className="cg-empty-title">或配置左侧选项后点击「生成封面」</p>
-                <p className="cg-empty-hint">公众号推荐比例 2.35:1 · 1024×576px</p>
+                <p className="cg-empty-hint">公众号 / 今日头条推荐比例 2.35:1 · 小红书长文可复用此封面</p>
               </div>
             </div>
           </>
