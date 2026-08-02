@@ -5,10 +5,7 @@
 
 import fs from "fs"
 import path from "path"
-import { fileURLToPath } from "url"
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
+import { LOG_DIR } from "./config.ts"
 
 // 日志级别定义
 const LOG_LEVELS: Record<string, number> = {
@@ -22,7 +19,6 @@ const LOG_LEVELS: Record<string, number> = {
 const CURRENT_LEVEL = LOG_LEVELS[process.env.LOG_LEVEL || "INFO"] ?? LOG_LEVELS.INFO
 
 // 日志文件路径
-const LOG_DIR = path.join(__dirname, "..", "..", "logs")
 const LOG_FILE = path.join(LOG_DIR, `app-${new Date().toISOString().split("T")[0]}.log`)
 
 // 确保日志目录存在

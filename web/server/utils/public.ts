@@ -9,6 +9,8 @@ import axios from "axios"
 import {
   SERVER_AI_CONFIG,
   XIAOHONGSHU_DEBUG_DIR,
+  XIAOHONGSHU_DEBUG_MAX_BYTES,
+  XIAOHONGSHU_DEBUG_RETENTION_DAYS,
   XIAOHONGSHU_PUBLISH_LOCK_FILE,
 } from "../config.ts"
 import {
@@ -20,6 +22,7 @@ import {
   addPublishHistory,
 } from "../db.ts"
 import type { AIConfig } from "../types.ts"
+import { logger } from "../logger.ts"
 
 // ── LLM 请求构建（统一入口）────────────────────────────────────────────────────
 
@@ -124,7 +127,65 @@ export function saveXiaohongshuDebugArtifacts(input: {
   const htmlPath = path.join(XIAOHONGSHU_DEBUG_DIR, `${timestamp}-${safeStep}.html`)
   fs.writeFileSync(screenshotPath, input.screenshot)
   fs.writeFileSync(htmlPath, input.html, "utf8")
+  cleanupXiaohongshuDebugArtifacts()
   return { screenshotPath, htmlPath }
+}
+
+interface DebugArtifactFile {
+  path: string
+  mtimeMs: number
+  size: number
+}
+
+export function cleanupXiaohongshuDebugArtifacts(): { deleted: number; bytesFreed: number } {
+  if (!fs.existsSync(XIAOHONGSHU_DEBUG_DIR)) return { deleted: 0, bytesFreed: 0 }
+
+  const now = Date.now()
+  const cutoff = XIAOHONGSHU_DEBUG_RETENTION_DAYS > 0
+    ? now - XIAOHONGSHU_DEBUG_RETENTION_DAYS * 24 * 60 * 60 * 1000
+    : 0
+  const artifacts: DebugArtifactFile[] = []
+  for (const name of fs.readdirSync(XIAOHONGSHU_DEBUG_DIR)) {
+    const artifactPath = path.join(XIAOHONGSHU_DEBUG_DIR, name)
+    const stat = fs.statSync(artifactPath)
+    if (stat.isFile()) artifacts.push({ path: artifactPath, mtimeMs: stat.mtimeMs, size: stat.size })
+  }
+
+  const toDelete = new Set<string>()
+  if (cutoff) {
+    for (const artifact of artifacts) {
+      if (artifact.mtimeMs < cutoff) toDelete.add(artifact.path)
+    }
+  }
+
+  if (XIAOHONGSHU_DEBUG_MAX_BYTES > 0) {
+    let retainedBytes = artifacts
+      .filter((artifact) => !toDelete.has(artifact.path))
+      .reduce((total, artifact) => total + artifact.size, 0)
+    for (const artifact of artifacts
+      .filter((item) => !toDelete.has(item.path))
+      .sort((left, right) => left.mtimeMs - right.mtimeMs)) {
+      if (retainedBytes <= XIAOHONGSHU_DEBUG_MAX_BYTES) break
+      toDelete.add(artifact.path)
+      retainedBytes -= artifact.size
+    }
+  }
+
+  let bytesFreed = 0
+  for (const artifact of artifacts) {
+    if (!toDelete.has(artifact.path)) continue
+    try {
+      fs.unlinkSync(artifact.path)
+      bytesFreed += artifact.size
+    } catch (error: unknown) {
+      logger.warn("XIAOHONGSHU", "清理调试工件失败", {
+        path: artifact.path,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  return { deleted: toDelete.size, bytesFreed }
 }
 
 export function createXiaohongshuPublishLock(): void {

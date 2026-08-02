@@ -46,6 +46,10 @@ sudo yum install -y python3 git
 
 PM2 是 Node.js 进程管理工具，提供自动重启、日志管理、负载均衡等功能。
 
+> 当前线上使用此方案（PM2 后端 + Nginx 前端）。本方案不会使用 Docker 的 `/app/data`、`/app/.cache` 或 Docker 命名卷。
+>
+> 默认数据路径保持不变：SQLite/RAG/上传文件在 `web/data/`，文章草稿在 `公众号写作/drafts/`，日志在 `web/logs/`。不要在现有 PM2 环境设置 `DATA_DIR=/app/data` 或 `LEGACY_DATA_DIR`。
+
 ### 1. 安装 PM2
 
 ```bash
@@ -117,98 +121,98 @@ pm2 monit                 # 实时监控
 
 ## 方案三：Docker 部署
 
-容器化部署，环境隔离，易于迁移。
+项目根目录已经提供受版本控制的 `Dockerfile`、`docker-compose.yml` 和 `.dockerignore`，不需要手动复制 Docker 配置。镜像包含 Playwright Chromium，支持小红书自动发布流程。
 
-### 1. 创建 Dockerfile
-
-在项目根目录创建 `Dockerfile`：
-
-```dockerfile
-FROM node:20-alpine
-
-# 安装编译工具（原生模块需要）
-RUN apk add --no-cache python3 make g++ git
-
-# 设置工作目录
-WORKDIR /app
-
-# 复制 package 文件
-COPY web/package.json web/pnpm-lock.yaml ./
-
-# 安装 pnpm 和依赖
-RUN npm install -g pnpm && pnpm install --frozen-lockfile
-
-# 复制项目文件
-COPY web/ .
-
-# 构建前端
-RUN pnpm build
-
-# 暴露端口
-EXPOSE 3000
-
-# 健康检查
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
-
-# 启动服务（后端为 TypeScript，使用 tsx 运行）
-CMD ["npx", "tsx", "server.ts"]
-```
-
-### 2. 创建 docker-compose.yml
-
-```yaml
-version: "3.8"
-
-services:
-  autowriting:
-    build: .
-    container_name: autowriting
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    volumes:
-      # 持久化数据
-      - ./data:/app/.cache
-      - ./drafts:/app/../公众号写作/drafts
-    environment:
-      - NODE_ENV=production
-      - PORT=3000
-      - ARTICLE_PROVIDER=openai
-      - ARTICLE_API_KEY=${ARTICLE_API_KEY}
-      - ARTICLE_BASE_URL=https://api.openai.com/v1
-      - ARTICLE_MODEL=gpt-4o
-    env_file:
-      - web/.env
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-```
-
-### 3. 构建和启动
+### 1. 配置环境变量
 
 ```bash
-# 构建镜像
-docker-compose build
+cp web/.env.example web/.env
+# 编辑 web/.env，至少填写 ARTICLE_API_KEY 或 MAAS_API_KEY
+```
 
-# 启动容器
-docker-compose up -d
+不要把真实 API Key、Cookie 或备份文件提交到 Git。
+
+### 2. 一键构建和启动
+
+```bash
+# 构建镜像并后台启动
+docker compose up -d --build
 
 # 查看日志
-docker-compose logs -f
+docker compose logs -f autowriting
 
-# 停止服务
-docker-compose down
+# 查看健康状态
+docker compose ps
 ```
+
+默认访问地址：`http://localhost:3000`。如需改端口，在启动前设置 `AUTOWRITING_PORT`，例如 `AUTOWRITING_PORT=8080 docker compose up -d`。
+
+### 3. 持久化数据
+
+Compose 使用命名卷，容器重建不会丢失数据：
+
+| 卷 | 容器路径 | 内容 |
+| --- | --- | --- |
+| `autowriting_data` | `/app/data` | SQLite 数据库、WAL、RAG HNSW 索引、上传图片、小红书调试工件 |
+| `autowriting_drafts` | `/app/drafts` | 文章任务、素材、公众号正文、今日头条正文、小红书标题 |
+| `autowriting_logs` | `/app/logs` | 应用结构化日志 |
+
+当前版本仍使用 SQLite 与本地 HNSW 向量索引；卷名保持稳定，为后续切换 MySQL/Qdrant 留出迁移边界。
+
+#### 从旧 `/app/.cache` 升级
+
+> 此小节**只适用于 Docker 部署**。当前 PM2 + Nginx 线上环境不读取 `/app/data`，也不会触发该迁移逻辑。
+
+旧版 Docker 示例错误地将宿主机 `./data` 挂载到 `/app/.cache`。新版仍以只读方式挂载该旧目录，并在首次启动时执行一次迁移：
+
+- 仅当新卷 `/app/data` 中不存在 `app.db` 时复制旧目录；
+- 会迁移 SQLite 数据库与 WAL、RAG 索引、上传图片、封面缓存和小红书调试工件；
+- 新卷已有 `app.db` 时不做任何覆盖；
+- 草稿目录由独立的 `autowriting_drafts` 卷管理，不受本次数据路径修正影响。
+
+升级前先停止旧容器，避免复制运行中的 SQLite WAL 文件：
+
+```bash
+# 旧版本在运行时先停止，不要带 -v
+docker compose down
+
+# 确认旧数据仍在项目根目录的 data/
+test -f ./data/app.db
+
+# 启动新版；首次启动日志应出现“已从旧数据目录迁移”
+docker compose up -d --build
+docker compose logs --tail=100 autowriting
+```
+
+确认应用可正常访问后，`./data` 暂时保留作为只读迁移源；完成备份并稳定运行后才可人工归档。不要在未确认迁移成功前删除它。
+
+### 4. 小红书调试工件清理
+
+小红书发布失败时会保存页面 HTML 和截图。服务会在启动时和每天凌晨 2 点清理：
+
+- `XIAOHONGSHU_DEBUG_RETENTION_DAYS`：默认 `7`，超过天数的工件会删除；
+- `XIAOHONGSHU_DEBUG_MAX_BYTES`：默认 `104857600`（100MB），超出时按最旧文件优先删除；
+- 设为 `0` 可关闭对应限制。
+
+可在 `docker-compose.yml` 同目录创建 `.env` 覆盖 Compose 变量，例如：
+
+```env
+XIAOHONGSHU_DEBUG_RETENTION_DAYS=14
+XIAOHONGSHU_DEBUG_MAX_BYTES=209715200
+```
+
+### 5. 停止和更新
+
+```bash
+# 停止服务，保留所有命名卷
+docker compose down
+
+# 拉取最新代码后重建
+git pull --ff-only
+docker compose up -d --build
+```
+
+不要执行 `docker compose down -v`，它会删除命名卷中的运行时数据。
 
 ---
 
@@ -423,23 +427,52 @@ pm2 reload autowriting
 cd /opt/autowriting
 
 # 拉取最新代码
-git pull
+git pull --ff-only
 
 # 重新构建并启动
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 ## 性能优化建议
 
 1. **启用 Gzip 压缩**（Nginx 配置中已包含）
 2. **静态资源 CDN**（可选，适合高流量）
-3. **数据库定期备份**
+3. **定期备份**：当前 SQLite/HNSW 版本至少备份三个 Docker 卷；后续迁移 MySQL/Qdrant 后分别执行逻辑备份和快照。
    ```bash
-   # 添加 cron 任务
-   crontab -e
-   # 每天凌晨 3 点备份
-   0 3 * * * cd /opt/autowriting && tar -czf backup-$(date +\%Y\%m\%d).tar.gz web/.cache/app.db
+   # 当前版本：备份 SQLite、RAG、上传和小红书调试文件
+   mkdir -p backups
+   docker run --rm \
+     -v autowriting_autowriting_data:/source:ro \
+     -v "$PWD/backups:/backup" \
+     alpine tar -czf "/backup/autowriting-data-$(date +%Y%m%d-%H%M%S).tar.gz" -C /source .
+
+   # 当前版本：备份文章草稿和独立标题
+   docker run --rm \
+     -v autowriting_autowriting_drafts:/source:ro \
+     -v "$PWD/backups:/backup" \
+     alpine tar -czf "/backup/autowriting-drafts-$(date +%Y%m%d-%H%M%S).tar.gz" -C /source .
+
+   # 当前版本：备份日志（可选）
+   docker run --rm \
+     -v autowriting_autowriting_logs:/source:ro \
+     -v "$PWD/backups:/backup" \
+     alpine tar -czf "/backup/autowriting-logs-$(date +%Y%m%d-%H%M%S).tar.gz" -C /source .
    ```
+
+   未来接入 MySQL 和 Qdrant 后，使用以下方式备份（服务名、账户和 collection 名按最终 Compose 调整）：
+
+   ```bash
+   # MySQL：逻辑备份
+   docker compose exec -T mysql \
+     mysqldump -uautowriting -p"$MYSQL_PASSWORD" --single-transaction --routines --events autowriting \
+     > "backups/mysql-$(date +%Y%m%d-%H%M%S).sql"
+
+   # Qdrant：collection snapshot
+   curl -X POST "http://127.0.0.1:6333/collections/article_chunks/snapshots"
+   curl -O "http://127.0.0.1:6333/collections/article_chunks/snapshots/<snapshot-name>"
+   ```
+
+   命名卷实际前缀可能因 Compose project name 改变，可先运行 `docker volume ls` 确认。
 4. **日志轮转**
    ```bash
    # PM2 自动管理，或使用 logrotate

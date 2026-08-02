@@ -1,0 +1,45 @@
+services:
+  autowriting:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: autowriting
+    restart: unless-stopped
+    ports:
+      - "${AUTOWRITING_PORT:-3000}:3000"
+    env_file:
+      - ./web/.env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATA_DIR: /app/data
+      LEGACY_DATA_DIR: /app/.cache
+      DRAFTS_DIR: /app/drafts
+      LOG_DIR: /app/logs
+      AGENTS_FILE: /app/AGENTS.md
+      WRITING_GUIDE_FILE: /app/writing-guide/写作规范.md
+      XIAOHONGSHU_KEEP_BROWSER_OPEN: "false"
+      XIAOHONGSHU_DEBUG_RETENTION_DAYS: "${XIAOHONGSHU_DEBUG_RETENTION_DAYS:-7}"
+      XIAOHONGSHU_DEBUG_MAX_BYTES: "${XIAOHONGSHU_DEBUG_MAX_BYTES:-104857600}"
+    volumes:
+      - autowriting_data:/app/data
+      - autowriting_drafts:/app/drafts
+      - autowriting_logs:/app/logs
+      # 兼容旧版 Docker 示例（./data -> /app/.cache）：仅用于首次启动时迁移。
+      - ./data:/app/.cache:ro
+      - ./写作参考:/app/writing-guide:ro
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+
+volumes:
+  autowriting_data:
+  autowriting_drafts:
+  autowriting_logs:

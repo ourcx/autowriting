@@ -28,6 +28,7 @@ import { initCronScheduler } from "./server/cronEngine.ts"
 import { upsertTemplate, db } from "./server/db.ts"
 import { BUILTIN_TEMPLATES_DATA } from "./server/builtinTemplates.ts"
 import { seedBuiltinPrompts } from "./server/seedPrompts.ts"
+import { cleanupXiaohongshuDebugArtifacts } from "./server/utils/public.ts"
 
 const app = express()
 
@@ -44,11 +45,27 @@ function scheduleCleanup(): void {
     try {
       const cutoff = new Date(Date.now() - CACHE_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString()
       const deleted = (db.prepare("DELETE FROM cover_cache WHERE cached_at < ?").run(cutoff) as { changes: number }).changes
-      console.log(`[Cleanup] 删除过期缓存 ${deleted} 条`)
-    } catch (e: unknown) { console.error("[Cleanup] 失败:", (e as Error).message) }
+      const debugCleanup = cleanupXiaohongshuDebugArtifacts()
+      logger.info("CLEANUP", "清理任务完成", { coverCacheDeleted: deleted, ...debugCleanup })
+    } catch (error: unknown) {
+      logger.error("CLEANUP", "清理任务失败", {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
     scheduleCleanup()
   }, delay)
-  console.log(`[Cleanup] 下次执行：${nextCleanup.toLocaleString()}`)
+  logger.info("CLEANUP", "已安排下次清理", { nextCleanup: nextCleanup.toISOString() })
+}
+
+try {
+  const startupCleanup = cleanupXiaohongshuDebugArtifacts()
+  if (startupCleanup.deleted > 0) {
+    logger.info("CLEANUP", "启动时已清理小红书调试工件", startupCleanup)
+  }
+} catch (error: unknown) {
+  logger.warn("CLEANUP", "启动时清理小红书调试工件失败", {
+    error: error instanceof Error ? error.message : String(error),
+  })
 }
 scheduleCleanup()
 

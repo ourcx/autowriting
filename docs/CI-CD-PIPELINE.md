@@ -56,8 +56,8 @@
 
 1. **开发者推送代码** → Git 仓库
 2. **触发 CI/CD 流水线** → 自动构建和测试
-3. **通过 SSH 部署** → 上传代码到服务器
-4. **服务器自动化脚本** → 安装依赖、构建、重启
+3. **通过 SSH/SCP 部署** → Runner 打包当前提交和前端产物并上传到服务器
+4. **服务器自动化脚本** → 解压发布包、安装依赖、重启
 5. **PM2 零停机重启** → 用户无感知更新
 6. **健康检查** → 确认服务正常
 
@@ -65,72 +65,25 @@
 
 ## 方案一：GitHub Actions（推荐）
 
-### 1. 创建部署脚本
+### 1. 发布方式与 DNS 故障处理
 
-在服务器上创建 `/opt/autowriting/deploy.sh`：
+当前受版本控制的 `.github/workflows/deploy.yml` 不在服务器执行 `git pull`：
+
+1. GitHub Runner checkout 并构建当前提交；
+2. Runner 使用 `git archive` 打包后端代码，并放入已构建的 `web/dist`；
+3. Runner 通过 SCP 上传 `autowriting-release.tar.gz`；
+4. 服务器解压发布包、优先使用 pnpm 本地缓存安装依赖、重启 PM2。
+
+因此服务器无法解析 `github.com` 时，不会阻断代码发布。服务器仍需要能解析 npm registry，**仅当 `pnpm-lock.yaml` 变化且本地 pnpm 缓存没有对应依赖时**才需要下载新依赖。
+
+若部署日志出现 `Could not resolve hostname github.com`，先在服务器确认根因：
 
 ```bash
-#!/bin/bash
-set -e
-
-PROJECT_DIR="/opt/autowriting"
-WEB_DIR="$PROJECT_DIR/web"
-
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "🚀 开始部署 autowriting"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-# 1. 进入项目目录
-cd "$PROJECT_DIR"
-echo "📁 当前目录: $(pwd)"
-
-# 2. 拉取最新代码
-echo "📥 拉取最新代码..."
-git fetch origin
-git reset --hard origin/main
-echo "✅ 代码更新完成: $(git rev-parse --short HEAD)"
-
-# 3. 安装依赖
-cd "$WEB_DIR"
-echo "📦 安装依赖..."
-pnpm install --frozen-lockfile
-echo "✅ 依赖安装完成"
-
-# 4. 构建前端
-echo "🔨 构建前端..."
-pnpm build
-echo "✅ 前端构建完成"
-
-# 5. 运行验证（可选）
-echo "🧪 运行验证..."
-pnpm lint || echo "⚠️  Lint 警告（忽略）"
-echo "✅ 验证通过"
-
-# 6. 重启服务
-echo "🔄 重启 PM2 服务..."
-pm2 reload autowriting --update-env
-echo "✅ 服务重启完成"
-
-# 7. 健康检查
-echo "🏥 健康检查..."
-sleep 3
-HEALTH=$(curl -s http://localhost:3000/health)
-if echo "$HEALTH" | grep -q "ok"; then
-  echo "✅ 健康检查通过"
-else
-  echo "❌ 健康检查失败"
-  exit 1
-fi
-
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "🎉 部署成功！"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+getent hosts github.com || true
+cat /etc/resolv.conf
 ```
 
-赋予执行权限：
-```bash
-chmod +x /opt/autowriting/deploy.sh
-```
+应修复服务器或 VPC 的 DNS/出网配置，而不是在流水线里硬编码 GitHub IP；GitHub IP 会变化且不保证 HTTPS/SSH 可靠。
 
 ### 2. 配置 SSH 密钥（GitHub Actions 访问服务器）
 
@@ -155,42 +108,15 @@ cat ~/.ssh/deploy_key
 | `SERVER_USER` | `autowriting` | 服务器用户名 |
 | `SSH_PRIVATE_KEY` | 私钥内容 | 上面生成的 `deploy_key` |
 
-### 4. 创建 GitHub Actions 配置
+### 4. 服务器前置条件
 
-在项目根目录创建 `.github/workflows/deploy.yml`：
+服务器需要 Node.js、pnpm、PM2、`tar`、`mktemp`，并提前创建项目目录：
 
-```yaml
-name: Deploy to Production
-
-on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:  # 允许手动触发
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v3
-      
-      - name: 🔑 Setup SSH
-        uses: webfactory/ssh-agent@v0.8.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-      
-      - name: 🚀 Deploy to server
-        run: |
-          ssh -o StrictHostKeyChecking=no \
-            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
-            "bash /opt/autowriting/deploy.sh"
-      
-      - name: 📊 Deployment Summary
-        run: |
-          echo "✅ 部署成功！"
-          echo "🔗 访问地址: http://${{ secrets.SERVER_HOST }}"
+```bash
+mkdir -p /home/admin/autowriting
 ```
+
+首次部署或变更依赖后，需要保证服务器能访问 pnpm registry；仅更新业务代码时，前端由 Runner 构建，不会在服务器执行 Vite 构建。
 
 ### 5. 测试部署
 

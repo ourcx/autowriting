@@ -44,6 +44,18 @@ npm start
 
 前端跑在 http://localhost:5173，后端 API 在 http://localhost:3000。
 
+## Docker 一键部署
+
+项目根目录已提供 `Dockerfile` 和 `docker-compose.yml`，运行：
+
+```bash
+cp web/.env.example web/.env
+# 编辑 web/.env，填写文章生成所需的 API Key
+docker compose up -d --build
+```
+
+服务启动后访问 http://localhost:3000。SQLite、RAG 索引、上传图片、草稿和日志会分别保存在 Docker 命名卷中；详细持久化、备份和调试文件清理说明见 `docs/DEPLOYMENT.md`。
+
 ## 后续方向
 
 工作流式的提示词编排能力——把现在的单次生成升级成多步骤的任务链，支持更复杂的写作场景。

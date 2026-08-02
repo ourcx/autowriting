@@ -6,7 +6,7 @@ import Database from "better-sqlite3"
 import bcrypt from "bcryptjs"
 import fs from "fs"
 import path from "path"
-import { DATA_DIR } from "./config.ts"
+import { DATA_DIR, LEGACY_DATA_DIR } from "./config.ts"
 import type {
   DbUserRow, DbCoverCacheRow, DbCoverHistoryRow, DbImageRow,
   DbPublishRow, DbAnalysisRow, DbTemplateRow, DbPromptRow,
@@ -21,40 +21,31 @@ import type {
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
 
-// ── 向后兼容：自动迁移旧 .cache/ 目录下的数据到 web/data/ ─────────────────
+// ── 向后兼容：自动迁移旧 .cache/ 目录下的数据到 data/ ─────────────────────
 
 /**
- * 如果旧的 .cache/app.db 存在且新位置不存在 app.db，自动复制迁移。
- * 同时迁移 uploads 目录和 covers 目录。
+ * 旧 Docker 示例将宿主机 ./data 挂载到 /app/.cache。首次升级到 /app/data
+ * 时，仅在目标目录尚未初始化 app.db 的情况下复制整个旧数据目录，避免覆盖
+ * 已运行的新版本数据。复制内容包括 SQLite/WAL、RAG 索引、上传文件和调试工件。
  */
 function migrateFromLegacyCache(): void {
-  const legacyCacheDir = path.join(DATA_DIR, "..", "..", ".cache")
-  // 相对于 web/server/ 计算旧 .cache 路径（即 web/../.cache = 项目根/.cache）
-  // 但实际上 config.ts 改了 DATA_DIR 为 web/data/，所以要找到旧位置
-  const oldDbPath = path.join(legacyCacheDir, "app.db")
+  if (!LEGACY_DATA_DIR) return
+
+  const legacyCacheDir = path.resolve(LEGACY_DATA_DIR)
   const newDbPath = path.join(DATA_DIR, "app.db")
-  const oldUploads = path.join(legacyCacheDir, "uploads")
-  const newUploads = path.join(DATA_DIR, "uploads")
-  const oldCovers = path.join(legacyCacheDir, "covers")
-  const newCovers = path.join(DATA_DIR, "covers")
 
-  // 迁移数据库文件
-  if (fs.existsSync(oldDbPath) && !fs.existsSync(newDbPath)) {
-    fs.copyFileSync(oldDbPath, newDbPath)
-    console.log(`[DB] 已从旧 .cache/ 迁移数据库到 data/：${oldDbPath} → ${newDbPath}`)
-  }
+  if (
+    legacyCacheDir === path.resolve(DATA_DIR)
+    || !fs.existsSync(path.join(legacyCacheDir, "app.db"))
+    || fs.existsSync(newDbPath)
+  ) return
 
-  // 迁移 uploads 目录
-  if (fs.existsSync(oldUploads) && !fs.existsSync(newUploads)) {
-    fs.cpSync(oldUploads, newUploads, { recursive: true })
-    console.log(`[DB] 已从旧 .cache/ 迁移 uploads 目录：${oldUploads} → ${newUploads}`)
-  }
-
-  // 迁移 covers 缓存目录
-  if (fs.existsSync(oldCovers) && !fs.existsSync(newCovers)) {
-    fs.cpSync(oldCovers, newCovers, { recursive: true })
-    console.log(`[DB] 已从旧 .cache/ 迁移 covers 目录：${oldCovers} → ${newCovers}`)
-  }
+  fs.cpSync(legacyCacheDir, DATA_DIR, {
+    recursive: true,
+    force: false,
+    errorOnExist: false,
+  })
+  console.log(`[DB] 已从旧数据目录迁移：${legacyCacheDir} → ${DATA_DIR}`)
 }
 
 migrateFromLegacyCache()

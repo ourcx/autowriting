@@ -79,6 +79,8 @@ export const DRAFTS_DIR = process.env.DRAFTS_DIR || DRAFTS_DIR_DEFAULT
 export const AGENTS_FILE = process.env.AGENTS_FILE || AGENTS_FILE_DEFAULT
 export const WRITING_GUIDE_FILE = process.env.WRITING_GUIDE_FILE || WRITING_GUIDE_FILE_DEFAULT
 export const DATA_DIR = process.env.DATA_DIR || DATA_DIR_DEFAULT
+export const LEGACY_DATA_DIR = process.env.LEGACY_DATA_DIR || ''
+export const LOG_DIR = process.env.LOG_DIR || path.join(PROJECT_ROOT, 'logs')
 export const CACHE_DIR = path.join(DATA_DIR, 'covers')
 export const HISTORY_FILE = path.join(DATA_DIR, 'cover_history.json')
 
@@ -87,6 +89,14 @@ export const IMAGES_METADATA_FILE = path.join(DATA_DIR, 'images_metadata.json')
 export const UPLOAD_DIR = path.join(DATA_DIR, 'uploads')
 export const XIAOHONGSHU_DEBUG_DIR = path.join(DATA_DIR, 'xiaohongshu-debug')
 export const XIAOHONGSHU_PUBLISH_LOCK_FILE = path.join(DATA_DIR, 'xiaohongshu-publish.lock')
+export const XIAOHONGSHU_DEBUG_RETENTION_DAYS = Math.max(
+  0,
+  Number.parseInt(process.env.XIAOHONGSHU_DEBUG_RETENTION_DAYS || '7', 10) || 0,
+)
+export const XIAOHONGSHU_DEBUG_MAX_BYTES = Math.max(
+  0,
+  Number.parseInt(process.env.XIAOHONGSHU_DEBUG_MAX_BYTES || String(100 * 1024 * 1024), 10) || 0,
+)
 
 export const PUBLISH_DIR = path.join(DATA_DIR, 'publish')
 export const PUBLISH_HISTORY_FILE = path.join(DATA_DIR, 'publish_history.json')
