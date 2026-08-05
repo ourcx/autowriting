@@ -18,6 +18,7 @@ const WEB_ROOT = resolve(__dirname, '..')
 
 const PORT = process.env.SMOKE_PORT || '3000'
 const BASE = `http://127.0.0.1:${PORT}`
+const SMOKE_AGENT_API_KEY = 'smoke-agent-api-key'
 
 let serverProc = null
 let killed = false
@@ -44,7 +45,13 @@ function startServer() {
   console.log(`[smoke] 启动后端 (port ${PORT}) ...`)
   serverProc = spawn('npx', ['tsx', 'server.ts'], {
     cwd: WEB_ROOT,
-    env: { ...process.env, PORT, LOG_LEVEL: 'WARN' },
+    env: {
+      ...process.env,
+      PORT,
+      LOG_LEVEL: 'WARN',
+      AGENT_API_KEY: SMOKE_AGENT_API_KEY,
+      AGENT_USERNAME: 'admin',
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   serverProc.stdout.on('data', () => {})
@@ -92,6 +99,60 @@ cases.push({
     if (r.status !== 401 && r.status !== 403) {
       throw new Error(`期望 401/403，实际 ${r.status}`)
     }
+  },
+})
+cases.push({
+  name: '错误 Agent API Key 应被拒绝',
+  run: async () => {
+    const r = await fetch(`${BASE}/api/agent/status`, {
+      headers: { 'X-Agent-API-Key': 'wrong-key' },
+    })
+    if (r.status !== 401) throw new Error(`期望 401，实际 ${r.status}`)
+  },
+})
+cases.push({
+  name: 'Agent API Key 应可发现能力',
+  run: async () => {
+    const r = await fetch(`${BASE}/api/agent/status`, {
+      headers: { 'X-Agent-API-Key': SMOKE_AGENT_API_KEY },
+    })
+    if (!r.ok) throw new Error(`status=${r.status}`)
+    const data = await r.json()
+    if (data.user?.username !== 'admin') throw new Error('Agent 未绑定到 admin 用户')
+    if (!Array.isArray(data.capabilities?.articles)) throw new Error('响应中缺少文章能力')
+  },
+})
+cases.push({
+  name: 'Agent API Key 应可写入和读取文章',
+  run: async () => {
+    const articleId = `20260805-agent-smoke-${Date.now()}`
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-Agent-API-Key': SMOKE_AGENT_API_KEY,
+    }
+    const saveResponse = await fetch(`${BASE}/api/articles/${articleId}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        title: 'Agent Smoke',
+        task: 'Agent 写作任务',
+        materials: 'Agent 写作素材',
+      }),
+    })
+    if (!saveResponse.ok) throw new Error(`保存失败 status=${saveResponse.status}`)
+
+    const readResponse = await fetch(`${BASE}/api/articles/${articleId}`, {
+      headers: { 'X-Agent-API-Key': SMOKE_AGENT_API_KEY },
+    })
+    if (!readResponse.ok) throw new Error(`读取失败 status=${readResponse.status}`)
+    const article = await readResponse.json()
+    if (article.title !== 'Agent Smoke') throw new Error('Agent 读取内容与写入内容不一致')
+
+    const deleteResponse = await fetch(`${BASE}/api/articles/${articleId}`, {
+      method: 'DELETE',
+      headers: { 'X-Agent-API-Key': SMOKE_AGENT_API_KEY },
+    })
+    if (!deleteResponse.ok) throw new Error(`清理失败 status=${deleteResponse.status}`)
   },
 })
 

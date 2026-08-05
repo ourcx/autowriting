@@ -5,11 +5,47 @@
  * - requireAdmin：同 adminMiddleware，用于 CommonJS 模块
  */
 import jwt from "jsonwebtoken"
+import { timingSafeEqual } from "node:crypto"
 import type { Response, NextFunction } from "express"
+import { AGENT_API_KEY, AGENT_USERNAME } from "./config.ts"
+import { findUserByUsername } from "./db.ts"
+import { logger } from "./logger.ts"
 import { JWT_SECRET } from "./routes/auth.ts"
 import type { AuthedRequest } from "./types.ts"
 
+function hasValidAgentApiKey(candidate: string): boolean {
+  if (!AGENT_API_KEY || !candidate) return false
+  const expected = Buffer.from(AGENT_API_KEY)
+  const received = Buffer.from(candidate)
+  return expected.length === received.length && timingSafeEqual(expected, received)
+}
+
+function authenticateAgent(req: AuthedRequest, res: Response, next: NextFunction): boolean {
+  const candidate = req.header("x-agent-api-key") || ""
+  if (!candidate) return false
+  if (!AGENT_API_KEY) {
+    res.status(503).json({ error: "远程 Agent API 未启用" })
+    return true
+  }
+  if (!hasValidAgentApiKey(candidate)) {
+    res.status(401).json({ error: "Agent API Key 无效" })
+    return true
+  }
+
+  const user = findUserByUsername(AGENT_USERNAME)
+  if (!user || user.disabled) {
+    logger.warn("AUTH", "远程 Agent 绑定用户不可用", { username: AGENT_USERNAME })
+    res.status(503).json({ error: "远程 Agent 绑定用户不可用" })
+    return true
+  }
+  req.user = { id: user.id, username: user.username, role: user.role }
+  next()
+  return true
+}
+
 export function authMiddleware(req: AuthedRequest, res: Response, next: NextFunction): void {
+  if (authenticateAgent(req, res, next)) return
+
   const authHeader = req.headers.authorization
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     res.status(401).json({ error: "未登录，请先登录" })

@@ -9,7 +9,6 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-// @ts-ignore 没有类型
 import dotenv from 'dotenv'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -102,6 +101,8 @@ export const PUBLISH_DIR = path.join(DATA_DIR, 'publish')
 export const PUBLISH_HISTORY_FILE = path.join(DATA_DIR, 'publish_history.json')
 
 export const PORT = process.env.PORT || 3000
+export const AGENT_API_KEY = process.env.AGENT_API_KEY || ''
+export const AGENT_USERNAME = process.env.AGENT_USERNAME || 'admin'
 
 // ── AGENTS.md 内容缓存 ────────────────────────────────────────────────────────
 
