@@ -570,14 +570,6 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
       toast.warn('小红书长文标题至少需要 2 个字')
       return
     }
-    if (Array.from(title.trim()).length > 20) {
-      toast.warn('小红书标题最多 20 个字，请先修改小红书标题')
-      return
-    }
-    if (Array.from(xhsFinalTitle.trim()).length > 20) {
-      toast.warn('最终发布标题最多 20 个字，请先修改')
-      return
-    }
     if (!content?.trim()) {
       toast.warn('文章内容为空，无法发布小红书长文')
       return
@@ -1163,10 +1155,9 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
               <div className="wr-xhs-settings-card wr-xhs-settings-card--lavender">
                 <div className="wr-xhs-settings-title"><Wand2 size={15} /><span>发布信息</span></div>
                 <label className="wr-xhs-field">
-                  <span>最终发布标题 <em>{xhsFinalTitle.length}/20</em></span>
+                  <span>最终发布标题 <em>{Array.from(xhsFinalTitle).length} 字</em></span>
                   <input
                     value={xhsFinalTitle}
-                    maxLength={20}
                     onChange={event => setXhsFinalTitle(event.target.value)}
                     placeholder="AI 生成后可在此调整"
                   />

@@ -594,10 +594,9 @@ export default function ArticleEditor() {
                   <p>小红书不会额外生成文章，发布时直接使用公众号正文；仅需设置独立标题。</p>
                 </div>
                 <label className="xiaohongshu-title-field">
-                  <span>小红书标题 <em>{Array.from(data.xiaohongshuTitle).length}/20</em></span>
+                  <span>小红书标题 <em>{Array.from(data.xiaohongshuTitle).length} 字</em></span>
                   <input
                     value={data.xiaohongshuTitle}
-                    maxLength={20}
                     onChange={event => setData(prev => ({ ...prev, xiaohongshuTitle: event.target.value }))}
                     placeholder={articleTitle || '输入小红书发布标题'}
                   />

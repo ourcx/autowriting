@@ -24,9 +24,7 @@ const router = Router()
 router.use(authMiddleware)
 
 const XIAOHONGSHU_PUBLISH_URL = "https://creator.xiaohongshu.com/publish/publish?from=menu&target=article"
-const TITLE_MAX_LENGTH = 20
 const CONTENT_MAX_LENGTH = 1000
-const ARTICLE_TITLE_MAX_LENGTH = 20
 const ARTICLE_CONTENT_MAX_LENGTH = 10000
 const MAX_IMAGES = 9
 // 同一 tab 会同时渲染埋点覆盖层（button-hp-installed）和真实 Vue 节点。
@@ -84,7 +82,7 @@ function parseXiaohongshuMetadata(value: string): {
   if (!parsed || typeof parsed !== "object") throw new Error("AI 发布信息格式不正确")
   const data = parsed as Record<string, unknown>
   return {
-    title: normalizeText(data.title, ARTICLE_TITLE_MAX_LENGTH),
+    title: String(data.title || "").trim(),
     summary: normalizeText(data.summary, 60),
     topics: parseTopics(data.topics),
   }
@@ -855,7 +853,7 @@ router.get("/records", (req, res) => {
 })
 
 router.post("/article-metadata", async (req, res) => {
-  const title = normalizeText(req.body?.title, ARTICLE_TITLE_MAX_LENGTH)
+  const title = String(req.body?.title || "").trim()
   const content = normalizeText(req.body?.content, ARTICLE_CONTENT_MAX_LENGTH)
   const aiConfig = req.body?.aiConfig ?? {}
   if (!title || !content) return res.status(400).json({ error: "标题和正文不能为空" })
@@ -877,7 +875,7 @@ router.post("/article-metadata", async (req, res) => {
         },
         {
           role: "user",
-          content: `基于这篇长文，生成小红书最终发布信息。要求：标题不超过${ARTICLE_TITLE_MAX_LENGTH}个中文字符；摘要不超过60字；topics 生成3到5个高相关中文话题词，不带#，不要虚构事实。\n\n标题：${title}\n\n正文：${content}\n\n返回格式：{"title":"", "summary":"", "topics":[""]}`,
+          content: `基于这篇长文，生成小红书最终发布信息。要求：标题准确、有吸引力；摘要不超过60字；topics 生成3到5个高相关中文话题词，不带#，不要虚构事实。\n\n标题：${title}\n\n正文：${content}\n\n返回格式：{"title":"", "summary":"", "topics":[""]}`,
         },
       ],
       temperature: 0.5,
@@ -902,15 +900,8 @@ router.post("/publish", async (req, res) => {
   const contentType = parseContentType(req.body?.contentType)
   if (!contentType) return res.status(400).json({ error: "仅支持图文笔记或长文" })
 
-  const titleLimit = contentType === "image_note" ? TITLE_MAX_LENGTH : ARTICLE_TITLE_MAX_LENGTH
   const rawTitle = String(req.body?.title || "").trim()
   const rawFinalTitle = String(req.body?.articleOptions?.finalTitle || "").trim()
-  if (Array.from(rawTitle).length > titleLimit) {
-    return res.status(400).json({ error: `小红书标题最多 ${titleLimit} 个字，请先修改后再发布` })
-  }
-  if (rawFinalTitle && Array.from(rawFinalTitle).length > ARTICLE_TITLE_MAX_LENGTH) {
-    return res.status(400).json({ error: `最终发布标题最多 ${ARTICLE_TITLE_MAX_LENGTH} 个字，请先修改后再发布` })
-  }
 
   const title = rawTitle
   const content = normalizeText(req.body?.content, contentType === "image_note" ? CONTENT_MAX_LENGTH : ARTICLE_CONTENT_MAX_LENGTH)
