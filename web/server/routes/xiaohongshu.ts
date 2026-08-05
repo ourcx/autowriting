@@ -24,6 +24,7 @@ const router = Router()
 router.use(authMiddleware)
 
 const XIAOHONGSHU_PUBLISH_URL = "https://creator.xiaohongshu.com/publish/publish?from=menu&target=article"
+const TITLE_SAFETY_MAX_LENGTH = 500
 const CONTENT_MAX_LENGTH = 1000
 const ARTICLE_CONTENT_MAX_LENGTH = 10000
 const MAX_IMAGES = 9
@@ -82,10 +83,14 @@ function parseXiaohongshuMetadata(value: string): {
   if (!parsed || typeof parsed !== "object") throw new Error("AI 发布信息格式不正确")
   const data = parsed as Record<string, unknown>
   return {
-    title: String(data.title || "").trim(),
+    title: normalizeText(data.title, TITLE_SAFETY_MAX_LENGTH),
     summary: normalizeText(data.summary, 60),
     topics: parseTopics(data.topics),
   }
+}
+
+function isTitleOverSafetyLimit(value: string): boolean {
+  return Array.from(value).length > TITLE_SAFETY_MAX_LENGTH
 }
 
 function getLocalImagePaths(imageUrls: unknown): string[] {
@@ -857,6 +862,9 @@ router.post("/article-metadata", async (req, res) => {
   const content = normalizeText(req.body?.content, ARTICLE_CONTENT_MAX_LENGTH)
   const aiConfig = req.body?.aiConfig ?? {}
   if (!title || !content) return res.status(400).json({ error: "标题和正文不能为空" })
+  if (isTitleOverSafetyLimit(title)) {
+    return res.status(400).json({ error: `标题异常过长，最多 ${TITLE_SAFETY_MAX_LENGTH} 个字` })
+  }
   if (!aiConfig.articleApiKey && aiConfig.articleProvider !== "maas") {
     return res.status(400).json({ error: "请先在 AI 配置中填写文章模型的 API Key" })
   }
@@ -902,6 +910,9 @@ router.post("/publish", async (req, res) => {
 
   const rawTitle = String(req.body?.title || "").trim()
   const rawFinalTitle = String(req.body?.articleOptions?.finalTitle || "").trim()
+  if (isTitleOverSafetyLimit(rawTitle) || isTitleOverSafetyLimit(rawFinalTitle)) {
+    return res.status(400).json({ error: `标题异常过长，最多 ${TITLE_SAFETY_MAX_LENGTH} 个字` })
+  }
 
   const title = rawTitle
   const content = normalizeText(req.body?.content, contentType === "image_note" ? CONTENT_MAX_LENGTH : ARTICLE_CONTENT_MAX_LENGTH)

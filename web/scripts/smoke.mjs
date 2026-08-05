@@ -173,7 +173,6 @@ cases.push({
     if (!deleteResponse.ok) throw new Error(`清理失败 status=${deleteResponse.status}`)
   },
 })
-
 let token = null
 const smokeUser = {
   username: `smoke_${Date.now()}`,
@@ -214,6 +213,48 @@ cases.push({
       headers: { Authorization: `Bearer ${token}` },
     })
     if (!r.ok) throw new Error(`status=${r.status}`)
+  },
+})
+cases.push({
+  name: '小红书标题超过 20 字仍应通过长度校验',
+  run: async () => {
+    const r = await fetch(`${BASE}/api/xiaohongshu/article-metadata`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: '这是一个明确超过二十个汉字但仍应通过标题长度校验的小红书标题',
+        content: 'Smoke 正文',
+      }),
+    })
+    if (r.status !== 400) throw new Error(`期望缺少 API Key 的 400，实际 ${r.status}`)
+    const body = await r.json()
+    if (!String(body.error || '').includes('API Key')) {
+      throw new Error(`标题未越过长度校验：${JSON.stringify(body)}`)
+    }
+  },
+})
+cases.push({
+  name: '小红书异常超长标题应被拒绝',
+  run: async () => {
+    const r = await fetch(`${BASE}/api/xiaohongshu/article-metadata`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: '长'.repeat(501),
+        content: 'Smoke 正文',
+      }),
+    })
+    if (r.status !== 400) throw new Error(`期望 400，实际 ${r.status}`)
+    const body = await r.json()
+    if (!String(body.error || '').includes('最多 500 个字')) {
+      throw new Error(`错误信息不正确：${JSON.stringify(body)}`)
+    }
   },
 })
 cases.push({
