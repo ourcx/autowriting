@@ -13,7 +13,8 @@ import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import axios from 'axios'
-import { ARTICLE_BACKUP_DIR, DRAFTS_DIR, SERVER_AI_CONFIG, getWritingGuideContent } from '../config.js'
+import { DRAFTS_DIR, SERVER_AI_CONFIG, getWritingGuideContent } from '../config.js'
+import { ArticleContentConflictError, getArticleSidecarPath, writeArticleSafely } from '../articleStorage.js'
 import { ensureDir, buildLLMRequest, callLLMWithRetry } from '../utils'
 import { retrieveRelevant, formatRetrievedContext, formatExampleContext, extractSearchQuery } from '../rag.js'
 import { saveAnalysis, getLatestAnalysis, listAnalyses, recordTokenUsage, getEffectivePrompt, getSetting } from '../db.js'
@@ -32,32 +33,6 @@ function getArticleContentKey(userId, articleId) {
 }
 function hashContent(article = '', materials = '') {
   return crypto.createHash('md5').update(`${article}\u0000${materials}`).digest('hex')
-}
-
-function writeArticleSafely(articlePath, articleId, userId, content) {
-  const existing = fs.existsSync(articlePath) ? fs.readFileSync(articlePath, 'utf-8') : ''
-  if (existing.trim() && !content.trim()) {
-    const error = new Error('为保护原文，不能用空内容覆盖已有公众号正文')
-    error.statusCode = 409
-    throw error
-  }
-  if (existing === content) return
-
-  if (existing) {
-    const backupDir = path.join(ARTICLE_BACKUP_DIR, userId, articleId)
-    ensureDir(backupDir)
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-    fs.writeFileSync(path.join(backupDir, `${timestamp}.md`), existing, 'utf-8')
-  }
-
-  ensureDir(path.dirname(articlePath))
-  const tempPath = `${articlePath}.${process.pid}.${Date.now()}.tmp`
-  try {
-    fs.writeFileSync(tempPath, content, 'utf-8')
-    fs.renameSync(tempPath, articlePath)
-  } finally {
-    if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath)
-  }
 }
 
 // 所有文章路由都需要登录
@@ -94,15 +69,6 @@ function getArticlePath(articleId, type, userId) {
     article:   path.join(baseDir, dateDir, 'raw', `article_raw${suffix}.md`),
     title:     path.join(baseDir, dateDir, `title${suffix}.txt`),
   }[type]
-}
-
-function getArticleSidecarPath(articlePath, targetPrefix, extension = 'md') {
-  const filename = path.basename(articlePath)
-  if (!filename.startsWith('article_raw') || !filename.endsWith('.md')) {
-    throw new Error(`无法从正文路径生成 ${targetPrefix} 路径`)
-  }
-  const suffix = filename.slice('article_raw'.length, -'.md'.length)
-  return path.join(path.dirname(articlePath), `${targetPrefix}${suffix}.${extension}`)
 }
 
 // ── 工具：扫描某个 drafts 目录，返回文章列表 ─────────────────────────────────
@@ -242,7 +208,7 @@ router.post('/:articleId', (req, res) => {
 
     if (task !== undefined)           fs.writeFileSync(taskPath,      task ?? '',           'utf-8')
     if (materials !== undefined)      fs.writeFileSync(materialsPath, materials ?? '',      'utf-8')
-    if (article !== undefined)        writeArticleSafely(articlePath, articleId, uid, String(article ?? ''))
+    if (article !== undefined)        writeArticleSafely({ articlePath, articleId, userId: uid, content: String(article ?? '') })
     if (title !== undefined)          fs.writeFileSync(titlePath,     title ?? '',          'utf-8')
     if (articleToutiao !== undefined && toutiaoPath) fs.writeFileSync(toutiaoPath, articleToutiao ?? '', 'utf-8')
     if (xiaohongshuTitle !== undefined && xiaohongshuTitlePath) fs.writeFileSync(xiaohongshuTitlePath, xiaohongshuTitle ?? '', 'utf-8')
@@ -264,7 +230,7 @@ router.post('/:articleId', (req, res) => {
 
     res.json({ success: true })
   } catch (error) {
-    if (error.statusCode === 409) {
+    if (error instanceof ArticleContentConflictError) {
       logger.warn('ARTICLES', '已阻止空内容覆盖公众号正文', {
         articleId: req.params.articleId,
         userId: req.user.id,
@@ -272,7 +238,7 @@ router.post('/:articleId', (req, res) => {
     } else {
       console.error('Error saving article:', error)
     }
-    res.status(error.statusCode || 500).json({ error: error.message })
+    res.status(error instanceof ArticleContentConflictError ? 409 : 500).json({ error: error.message })
   }
 })
 
@@ -346,7 +312,7 @@ ${materials}
 
     const article = response.data.choices[0].message.content
     const articlePath = getArticlePath(articleId, 'article', req.user.id)
-    writeArticleSafely(articlePath, articleId, req.user.id, article)
+    writeArticleSafely({ articlePath, articleId, userId: req.user.id, content: article })
 
     // 记录 token 使用
     const usage = response.data.usage
@@ -399,7 +365,7 @@ router.post('/:articleId/generate/stream', async (req, res) => {
     if (fullText.length < 50) return
     try {
       const articlePath = getArticlePath(articleId, 'article', req.user.id)
-      writeArticleSafely(articlePath, articleId, req.user.id, fullText)
+      writeArticleSafely({ articlePath, articleId, userId: req.user.id, content: fullText })
     } catch (e) {
       console.warn('[Stream] 中断时保存部分内容失败:', e.message)
     }
@@ -572,7 +538,7 @@ ${materials}
           try {
             const articlePath = getArticlePath(articleId, 'article', req.user.id)
             if (platformKey === 'wechat') {
-              writeArticleSafely(articlePath, articleId, req.user.id, fullContent)
+              writeArticleSafely({ articlePath, articleId, userId: req.user.id, content: fullContent })
             } else {
               const toutiaoPath = getArticleSidecarPath(articlePath, 'article_toutiao')
               ensureDir(path.dirname(toutiaoPath))
