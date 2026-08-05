@@ -24,6 +24,7 @@ import cronRouter from "./server/routes/cron.ts"
 import toutiaoRouter from "./server/routes/toutiao.ts"
 import scoresRouter from "./server/routes/scores.ts"
 import xiaohongshuRouter from "./server/routes/xiaohongshu.ts"
+import { validateArticleId } from "./server/articleIdMiddleware.ts"
 import { initCronScheduler } from "./server/cronEngine.ts"
 import { upsertTemplate, db } from "./server/db.ts"
 import { BUILTIN_TEMPLATES_DATA } from "./server/builtinTemplates.ts"
@@ -76,6 +77,7 @@ app.use(performanceMonitorMiddleware)
 
 app.use("/api/auth", authRouter)
 app.use("/api/admin", adminRouter)
+app.use("/api/articles/:articleId", validateArticleId)
 app.use("/api/articles", articlesRouter)
 app.use("/api", coversRouter)
 app.use("/api/images", imagesRouter)

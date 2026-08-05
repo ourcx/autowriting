@@ -137,6 +137,44 @@ cases.push({
     if (!r.ok) throw new Error(`status=${r.status}`)
   },
 })
+cases.push({
+  name: '合法中文文章 ID 应可保存和读取',
+  run: async () => {
+    const articleId = `20260805-smoke-中文标题-${Date.now()}`
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    }
+    const saveResponse = await fetch(`${BASE}/api/articles/${encodeURIComponent(articleId)}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ title: 'Smoke 中文标题', task: 'Smoke 测试任务', materials: 'Smoke 测试素材' }),
+    })
+    if (!saveResponse.ok) throw new Error(`保存失败 status=${saveResponse.status}`)
+
+    const readResponse = await fetch(`${BASE}/api/articles/${encodeURIComponent(articleId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!readResponse.ok) throw new Error(`读取失败 status=${readResponse.status}`)
+    const article = await readResponse.json()
+    if (article.title !== 'Smoke 中文标题') throw new Error('读取内容与保存内容不一致')
+
+    const deleteResponse = await fetch(`${BASE}/api/articles/${encodeURIComponent(articleId)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!deleteResponse.ok) throw new Error(`清理失败 status=${deleteResponse.status}`)
+  },
+})
+cases.push({
+  name: '目录逃逸文章 ID 应被拒绝',
+  run: async () => {
+    const r = await fetch(`${BASE}/api/articles/%2e%2e%2foutside`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (r.status !== 400) throw new Error(`期望 400，实际 ${r.status}`)
+  },
+})
 
 ;(async () => {
   startServer()
