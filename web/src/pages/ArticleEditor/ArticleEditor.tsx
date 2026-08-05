@@ -1,10 +1,17 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { toast } from '../../components/Toast/Toast'
 // @ts-ignore
 import { useParams, useNavigate } from 'react-router-dom'
 import { Zap, Save, Edit3, Palette, Settings, AlertTriangle, Plus, Trash2, Pencil, Sparkles, LayoutList, CheckCircle, ChevronRight, GripVertical } from 'lucide-react'
 import { useAIReadiness, fetchServerStatus } from '../../store/useConfigStore'
 import { fetchArticle, saveArticle } from '../../utils/apiHelpers'
+import {
+  ArticleData,
+  createEmptyArticleData,
+  getLocalArticleStorageKey,
+  loadLocalArticleData,
+  normalizeArticleData,
+} from '../../utils/articleData'
 import CoverGenerator from '../../components/CoverGenerator/CoverGenerator'
 import ImageLibrary from '../../components/ImageLibrary/ImageLibrary'
 import MarkdownEditor from '../../components/MarkdownEditor/MarkdownEditor'
@@ -18,15 +25,6 @@ import {
   deleteCustomTaskTemplate,
 } from '../../utils/taskTemplateStore'
 import './ArticleEditor.css'
-
-interface ArticleData {
-  task: string
-  materials: string
-  article: string
-  title: string
-  articleToutiao: string
-  xiaohongshuTitle: string
-}
 
 type TabId = 'task' | 'materials' | 'article' | 'toutiao' | 'xiaohongshu' | 'analysis' | 'cover' | 'library'
 
@@ -45,9 +43,11 @@ export default function ArticleEditor() {
   const { articleId = '' } = useParams<{ articleId: string }>()
   const navigate = useNavigate()
 
-  const [data, setData] = useState<ArticleData>({ task: '', materials: '', article: '', title: '', articleToutiao: '', xiaohongshuTitle: '' })
-  const [loading, setLoading] = useState(false)
+  const [data, setData] = useState<ArticleData>(createEmptyArticleData)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
   const [generateError, setGenerateError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabId>('task')
   const [showGenerateModal, setShowGenerateModal] = useState(false)
@@ -91,20 +91,13 @@ export default function ArticleEditor() {
 
   // ── 本地文章读写（local: 前缀） ───────────────────────────────────────────
   const isLocalArticle = articleId.startsWith('local:')
-  const localStorageKey = `local_article_data_${articleId}`
 
   function loadLocalData(): ArticleData {
-    const emptyData: ArticleData = { task: '', materials: '', article: '', title: '', articleToutiao: '', xiaohongshuTitle: '' }
-    try {
-      const saved = JSON.parse(localStorage.getItem(localStorageKey) || 'null')
-      return saved ? { ...emptyData, ...saved } : emptyData
-    } catch {
-      return emptyData
-    }
+    return loadLocalArticleData(articleId)
   }
 
   function saveLocalData(d: ArticleData) {
-    localStorage.setItem(localStorageKey, JSON.stringify(d))
+    localStorage.setItem(getLocalArticleStorageKey(articleId), JSON.stringify(d))
     // 同步更新本地文章列表中的标题
     const title = d.title || d.article.split('\n')[0]?.replace(/^#+\s*/, '') || ''
     if (title) {
@@ -117,22 +110,25 @@ export default function ArticleEditor() {
   async function fetchArticleData() {
     try {
       setLoading(true)
+      setLoadError(null)
       if (isLocalArticle) {
         setData(loadLocalData())
       } else {
         const d = await fetchArticle(articleId)
-        setData(d)
+        setData(normalizeArticleData(d))
       }
     } catch (err) {
       console.error('加载文章失败', err)
+      setLoadError('文章加载失败。为保护原文，当前页面已禁止保存，请重试加载。')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleSave = useCallback(async () => {
-    if (saving) return
+  const handleSave = useCallback(async (): Promise<boolean> => {
+    if (savingRef.current || loading || loadError) return false
     try {
+      savingRef.current = true
       setSaving(true)
       if (isLocalArticle) {
         saveLocalData(data)
@@ -141,12 +137,25 @@ export default function ArticleEditor() {
         await saveArticle(articleId, data)
         toast.success('保存成功')
       }
+      return true
     } catch {
       toast.error('保存失败，请重试')
+      return false
     } finally {
+      savingRef.current = false
       setSaving(false)
     }
-  }, [articleId, data, isLocalArticle, saveLocalData, saving])
+  }, [articleId, data, isLocalArticle, loadError, loading, saveLocalData])
+
+  const handlePreview = useCallback(async () => {
+    if (!data.article.trim()) return
+    const saved = await handleSave()
+    if (!saved) {
+      toast.error('保存成功后才能进入预览，原文未被修改')
+      return
+    }
+    navigate(`/preview/${articleId}`)
+  }, [articleId, data.article, handleSave, navigate])
 
   function handleGenerate() {
     if (!apiKeyReady) {
@@ -166,7 +175,7 @@ export default function ArticleEditor() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault()
-        handleSave()
+        void handleSave()
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'g') {
         e.preventDefault()
@@ -174,7 +183,7 @@ export default function ArticleEditor() {
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
         e.preventDefault()
-        if (data.article) navigate(`/preview/${articleId}`)
+        void handlePreview()
       }
       if (e.key === 'Escape') {
         setShowGenerateModal(false)
@@ -182,7 +191,7 @@ export default function ArticleEditor() {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [articleId, data, handleSave, navigate])
+  }, [data, handlePreview, handleSave])
 
   // ── AI：生成大纲 → 追加到 materials ─────────────────────────────────────
   const handleGenerateOutline = async () => {
@@ -276,6 +285,18 @@ export default function ArticleEditor() {
     )
   }
 
+  if (loadError) {
+    return (
+      <div className="editor-loading">
+        <AlertTriangle size={24} />
+        <p>{loadError}</p>
+        <button className="btn btn-primary" onClick={() => void fetchArticleData()}>
+          重新加载
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="editor">
       {/* ── 未配置 Key 提示横幅 ── */}
@@ -344,7 +365,7 @@ export default function ArticleEditor() {
             <Palette size={16} />
             管理样式
           </button>
-          <button className="btn btn-secondary" onClick={handleSave} disabled={saving}>
+          <button className="btn btn-secondary" onClick={() => void handleSave()} disabled={saving || loading}>
             <Save size={20} />
             {saving ? '保存中...' : '保存'}
           </button>
@@ -359,7 +380,7 @@ export default function ArticleEditor() {
           {data.article && (
             <button
               className="btn btn-success"
-              onClick={() => navigate(`/preview/${articleId}`)}
+              onClick={() => void handlePreview()}
               title="发布预览 (Cmd+P)"
             >
               发布预览

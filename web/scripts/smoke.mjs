@@ -10,7 +10,9 @@
  */
 
 import { spawn } from 'node:child_process'
-import { resolve, dirname } from 'node:path'
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { resolve, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -19,6 +21,7 @@ const WEB_ROOT = resolve(__dirname, '..')
 const PORT = process.env.SMOKE_PORT || '3000'
 const BASE = `http://127.0.0.1:${PORT}`
 const SMOKE_AGENT_API_KEY = 'smoke-agent-api-key'
+const SMOKE_DATA_ROOT = mkdtempSync(join(tmpdir(), 'autowriting-smoke-'))
 
 let serverProc = null
 let killed = false
@@ -49,6 +52,9 @@ function startServer() {
       ...process.env,
       PORT,
       LOG_LEVEL: 'WARN',
+      DATA_DIR: join(SMOKE_DATA_ROOT, 'data'),
+      DRAFTS_DIR: join(SMOKE_DATA_ROOT, 'drafts'),
+      LOG_DIR: join(SMOKE_DATA_ROOT, 'logs'),
       AGENT_API_KEY: SMOKE_AGENT_API_KEY,
       AGENT_USERNAME: 'admin',
     },
@@ -66,6 +72,7 @@ function stopServer() {
     killed = true
     serverProc.kill('SIGTERM')
   }
+  rmSync(SMOKE_DATA_ROOT, { recursive: true, force: true })
 }
 
 process.on('SIGINT', stopServer)
@@ -174,6 +181,7 @@ cases.push({
   },
 })
 let token = null
+let smokeUserId = null
 const smokeUser = {
   username: `smoke_${Date.now()}`,
   password: 'smoke_pw_8888',
@@ -203,7 +211,9 @@ cases.push({
     if (!r.ok) throw new Error(`status=${r.status}`)
     const j = await r.json()
     token = j.token
+    smokeUserId = j.user?.id
     if (!token) throw new Error('响应中没有 token')
+    if (!smokeUserId) throw new Error('响应中没有用户 ID')
   },
 })
 cases.push({
@@ -278,6 +288,99 @@ cases.push({
     if (!readResponse.ok) throw new Error(`读取失败 status=${readResponse.status}`)
     const article = await readResponse.json()
     if (article.title !== 'Smoke 中文标题') throw new Error('读取内容与保存内容不一致')
+
+    const deleteResponse = await fetch(`${BASE}/api/articles/${encodeURIComponent(articleId)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!deleteResponse.ok) throw new Error(`清理失败 status=${deleteResponse.status}`)
+  },
+})
+cases.push({
+  name: '已有公众号正文不得被空内容覆盖',
+  run: async () => {
+    const articleId = `20260805-protect-content-${Date.now()}`
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    }
+    const original = '# 不能丢失的公众号正文\n\n这是一段必须被保护的内容。'
+    const createResponse = await fetch(`${BASE}/api/articles/${articleId}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ article: original, title: '正文保护测试' }),
+    })
+    if (!createResponse.ok) throw new Error(`创建失败 status=${createResponse.status}`)
+
+    const clearResponse = await fetch(`${BASE}/api/articles/${articleId}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ article: '' }),
+    })
+    if (clearResponse.status !== 409) {
+      throw new Error(`空覆盖应返回 409，实际 ${clearResponse.status}`)
+    }
+
+    const readResponse = await fetch(`${BASE}/api/articles/${articleId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const article = await readResponse.json()
+    if (article.article !== original) throw new Error('空覆盖后原正文未被保留')
+
+    const updated = `${original}\n\n新增内容。`
+    const updateResponse = await fetch(`${BASE}/api/articles/${articleId}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ article: updated }),
+    })
+    if (!updateResponse.ok) throw new Error(`正常更新失败 status=${updateResponse.status}`)
+
+    const updatedResponse = await fetch(`${BASE}/api/articles/${articleId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const updatedArticle = await updatedResponse.json()
+    if (updatedArticle.article !== updated) throw new Error('正常正文更新未保存')
+
+    const backupDir = join(SMOKE_DATA_ROOT, 'data', 'article-backups', smokeUserId, articleId)
+    const backupFiles = readdirSync(backupDir)
+    if (backupFiles.length === 0) throw new Error('正常更新前未保存正文备份')
+    const backupContents = backupFiles.map((filename) => readFileSync(join(backupDir, filename), 'utf8'))
+    if (!backupContents.includes(original)) throw new Error('正文备份内容不正确')
+
+    const deleteResponse = await fetch(`${BASE}/api/articles/${articleId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!deleteResponse.ok) throw new Error(`清理失败 status=${deleteResponse.status}`)
+  },
+})
+cases.push({
+  name: '带后缀文章的小红书标题不得覆盖公众号正文',
+  run: async () => {
+    const articleId = `20260805-带标题后缀-${Date.now()}`
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    }
+    const original = '# 带后缀文章正文\n\n保存空的小红书标题时，这段正文不能消失。'
+    const saveResponse = await fetch(`${BASE}/api/articles/${encodeURIComponent(articleId)}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        article: original,
+        xiaohongshuTitle: '',
+        title: '侧车路径保护测试',
+      }),
+    })
+    if (!saveResponse.ok) throw new Error(`保存失败 status=${saveResponse.status}`)
+
+    const readResponse = await fetch(`${BASE}/api/articles/${encodeURIComponent(articleId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!readResponse.ok) throw new Error(`读取失败 status=${readResponse.status}`)
+    const article = await readResponse.json()
+    if (article.article !== original) throw new Error('小红书标题覆盖了公众号正文')
+    if (article.xiaohongshuTitle !== '') throw new Error('小红书标题读取结果不正确')
 
     const deleteResponse = await fetch(`${BASE}/api/articles/${encodeURIComponent(articleId)}`, {
       method: 'DELETE',

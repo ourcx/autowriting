@@ -1,35 +1,48 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Palette } from 'lucide-react'
-import axios from 'axios'
+import { AlertTriangle, Palette } from 'lucide-react'
 import WeChatRenderer from '../../components/WeChatRenderer/WeChatRenderer'
+import { fetchArticle } from '../../utils/apiHelpers'
+import {
+  ArticleData,
+  createEmptyArticleData,
+  loadLocalArticleData,
+  normalizeArticleData,
+} from '../../utils/articleData'
 import './WeChatPreview.css'
-
-interface ArticleData {
-  task: string
-  materials: string
-  article: string
-  title: string
-  articleToutiao: string
-  xiaohongshuTitle: string
-}
 
 type PlatformMode = 'wechat' | 'toutiao' | 'xiaohongshu'
 
 export default function WeChatPreview() {
   const { articleId } = useParams<{ articleId: string }>()
   const navigate = useNavigate()
-  const [data, setData] = useState<ArticleData>({ task: '', materials: '', article: '', title: '', articleToutiao: '', xiaohongshuTitle: '' })
+  const [data, setData] = useState<ArticleData>(createEmptyArticleData)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [platformMode, setPlatformMode] = useState<PlatformMode>('wechat')
 
   useEffect(() => {
     if (!articleId) return
-    axios
-      .get(`/api/articles/${articleId}`)
-      .then(res => setData(res.data))
-      .catch(err => console.error('加载失败', err))
-      .finally(() => setLoading(false))
+    let cancelled = false
+    const load = async () => {
+      setLoading(true)
+      setLoadError(null)
+      try {
+        const article = articleId.startsWith('local:')
+          ? loadLocalArticleData(articleId)
+          : normalizeArticleData(await fetchArticle(articleId))
+        if (!cancelled) setData(article)
+      } catch (error) {
+        console.error('加载失败', error)
+        if (!cancelled) setLoadError('文章预览加载失败，原文没有被修改。请返回编辑器重试。')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
   }, [articleId])
 
   // 根据平台模式选择对应内容
@@ -100,6 +113,12 @@ export default function WeChatPreview() {
           <div className="preview-loading">
             <div className="preview-spinner" />
             <p>加载文章中...</p>
+          </div>
+        ) : loadError ? (
+          <div className="preview-empty-toutiao">
+            <AlertTriangle size={24} />
+            <p>{loadError}</p>
+            <button onClick={() => navigate(-1)}>返回编辑器</button>
           </div>
         ) : platformMode === 'toutiao' && !data.articleToutiao ? (
           <div className="preview-empty-toutiao">
