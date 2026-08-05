@@ -17,7 +17,7 @@
 
 ### 必需
 
-- **Node.js**: >= 16.x（推荐 18.x 或 20.x LTS）
+- **Node.js**: >= 20.x（GitHub Actions 构建环境使用 24.x）
 - **pnpm**: >= 8.x（或使用 npm）
 - **内存**: 至少 1GB RAM（推荐 2GB+）
 - **磁盘**: 至少 2GB 可用空间
@@ -48,7 +48,9 @@ PM2 是 Node.js 进程管理工具，提供自动重启、日志管理、负载�
 
 > 当前线上使用此方案（PM2 后端 + Nginx 前端）。本方案不会使用 Docker 的 `/app/data`、`/app/.cache` 或 Docker 命名卷。
 >
-> 默认数据路径保持不变：SQLite/RAG/上传文件在 `web/data/`，文章草稿在 `公众号写作/drafts/`，日志在 `web/logs/`。不要在现有 PM2 环境设置 `DATA_DIR=/app/data` 或 `LEGACY_DATA_DIR`。
+> 默认数据路径保持不变：SQLite/RAG/上传文件在 `web/data/`，文章草稿在 `公众号写作/drafts/`，应用结构化日志在 `logs/`，PM2 stdout/stderr 在 `web/logs/`。不要在现有 PM2 环境设置 `DATA_DIR=/app/data` 或 `LEGACY_DATA_DIR`。
+>
+> GitHub Actions 使用发布包覆盖应用代码，不要求服务器 Git 工作区干净，也不执行 `git pull`。部署前会备份 SQLite、草稿、`.env` 和服务器本地源码 patch；发布包不包含这些运行数据。
 
 ### 1. 安装 PM2
 

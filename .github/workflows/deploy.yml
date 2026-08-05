@@ -25,20 +25,42 @@ jobs:
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
 
-      - name: Build frontend artifact
+      - name: Build deployment release
         run: |
           set -euo pipefail
           pnpm --dir web install --frozen-lockfile
           pnpm --dir web build
-          tar -C web -czf web-dist.tar.gz dist
+          mkdir -p deploy-release
+          git archive --format=tar "$GITHUB_SHA" -- \
+            . \
+            ':(exclude)node_modules' \
+            ':(exclude)web/node_modules' \
+            ':(exclude)web/dist' \
+            ':(exclude)web/data' \
+            ':(exclude)公众号写作/drafts' \
+            ':(exclude)logs' \
+            ':(exclude)web/logs' \
+            | tar -x -C deploy-release
+          rm -f deploy-release/.env deploy-release/web/.env
+          cp -a web/dist deploy-release/web/dist
+          printf '%s\n' "$GITHUB_SHA" > deploy-release/.deploy-revision
+          (
+            cd deploy-release
+            find . -type f \
+              ! -path './.deploy-manifest' \
+              -print \
+              | sed 's#^\./##' \
+              | LC_ALL=C sort > .deploy-manifest
+          )
+          tar -C deploy-release -czf autowriting-release.tar.gz .
 
-      - name: Upload frontend artifact
+      - name: Upload deployment release
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: web-dist.tar.gz
+          source: autowriting-release.tar.gz
           target: /home/admin/autowriting
           overwrite: true
           timeout: 30s
@@ -55,13 +77,26 @@ jobs:
           script: |
             set -euo pipefail
             PROJECT_DIR=/home/admin/autowriting
-            ARTIFACT="$PROJECT_DIR/web-dist.tar.gz"
+            ARCHIVE="$PROJECT_DIR/autowriting-release.tar.gz"
             BACKUP_ROOT=/home/admin/autowriting-backups
             TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
             BACKUP_DIR="$BACKUP_ROOT/$TIMESTAMP"
+            STAGING_DIR="$(mktemp -d "$PROJECT_DIR/.deploy.XXXXXX")"
+            cleanup() {
+              rm -rf "$STAGING_DIR"
+            }
+            is_safe_managed_file() {
+              case "$1" in
+                ""|/*|../*|*/../*|*/..)
+                  return 1
+                  ;;
+              esac
+              return 0
+            }
+            trap cleanup EXIT
 
             cd "$PROJECT_DIR"
-            test -f "$ARTIFACT"
+            test -f "$ARCHIVE"
 
             echo "[deploy] snapshot runtime data"
             mkdir -p "$BACKUP_DIR"
@@ -77,33 +112,78 @@ jobs:
             if test -d "公众号写作/drafts"; then
               tar -C "公众号写作" -czf "$BACKUP_DIR/drafts.tar.gz" drafts
             fi
+            if test -d logs; then
+              tar -czf "$BACKUP_DIR/app-logs.tar.gz" logs
+            fi
+            if test -d web/logs; then
+              tar -C web -czf "$BACKUP_DIR/pm2-logs.tar.gz" logs
+            fi
+            test ! -f .env || cp -a .env "$BACKUP_DIR/root.env"
+            test ! -f web/.env || cp -a web/.env "$BACKUP_DIR/web.env"
+            if test -d .git; then
+              git rev-parse HEAD > "$BACKUP_DIR/server-head.txt" || true
+              git bundle create "$BACKUP_DIR/server-head.bundle" HEAD || true
+              git diff HEAD --binary > "$BACKUP_DIR/server-source.patch" || true
+              git status --short > "$BACKUP_DIR/server-source-status.txt" || true
+              UNTRACKED_LIST="$BACKUP_DIR/server-untracked-files.txt"
+              git ls-files -z --others --exclude-standard -- \
+                . \
+                ':(exclude)autowriting-release.tar.gz' \
+                ':(exclude).deploy-manifest' \
+                > "$UNTRACKED_LIST"
+              if test -s "$UNTRACKED_LIST"; then
+                tar --null -czf "$BACKUP_DIR/server-untracked.tar.gz" -T "$UNTRACKED_LIST"
+              else
+                rm -f "$UNTRACKED_LIST"
+              fi
+            fi
             find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d -mtime +30 -exec rm -rf {} +
 
-            echo "[deploy] verify source tree"
-            DIRTY="$(git status --porcelain --untracked-files=no -- . \
-              ':(exclude)web/data' \
-              ':(exclude)公众号写作/drafts' \
-              ':(exclude)logs')"
-            if test -n "$DIRTY"; then
-              echo "Tracked source changes found on the server; deployment stopped."
-              echo "$DIRTY"
-              exit 1
+            echo "[deploy] extract and verify release"
+            tar -xzf "$ARCHIVE" -C "$STAGING_DIR"
+            test -f "$STAGING_DIR/.deploy-revision"
+            test -f "$STAGING_DIR/.deploy-manifest"
+            test -f "$STAGING_DIR/web/package.json"
+            test -f "$STAGING_DIR/web/dist/index.html"
+            test ! -e "$STAGING_DIR/web/data"
+            test ! -e "$STAGING_DIR/公众号写作/drafts"
+            test ! -e "$STAGING_DIR/logs"
+            test ! -e "$STAGING_DIR/web/logs"
+            test ! -e "$STAGING_DIR/.env"
+            test ! -e "$STAGING_DIR/web/.env"
+
+            echo "[deploy] remove files deleted by the new release"
+            if test -f .deploy-manifest; then
+              while IFS= read -r managed_file; do
+                if ! is_safe_managed_file "$managed_file"; then
+                  echo "[deploy] unsafe path in existing manifest: $managed_file"
+                  exit 1
+                fi
+                if ! grep -Fxq -- "$managed_file" "$STAGING_DIR/.deploy-manifest"; then
+                  rm -f -- "$PROJECT_DIR/$managed_file"
+                fi
+              done < .deploy-manifest
+            elif test -d .git; then
+              git ls-files | while IFS= read -r managed_file; do
+                case "$managed_file" in
+                  web/data/*|公众号写作/drafts/*|logs/*|web/logs/*)
+                    continue
+                    ;;
+                esac
+                if ! is_safe_managed_file "$managed_file"; then
+                  echo "[deploy] unsafe path from git index: $managed_file"
+                  exit 1
+                fi
+                if ! grep -Fxq -- "$managed_file" "$STAGING_DIR/.deploy-manifest"; then
+                  rm -f -- "$PROJECT_DIR/$managed_file"
+                fi
+              done
             fi
 
-            echo "[deploy] pull main branch"
-            git checkout main
-            git pull --ff-only origin main
-
-            echo "[deploy] restore runtime drafts after source update"
-            if test -f "$BACKUP_DIR/drafts.tar.gz"; then
-              mkdir -p "公众号写作/drafts"
-              tar -xzf "$BACKUP_DIR/drafts.tar.gz" -C "公众号写作"
-            fi
-
-            echo "[deploy] install dependencies and frontend artifact"
+            echo "[deploy] install release without touching runtime data"
+            cp -a "$STAGING_DIR"/. "$PROJECT_DIR"/
+            rm -f "$ARCHIVE"
             pnpm --dir web install --frozen-lockfile --prefer-offline
-            tar -xzf "$ARTIFACT" -C web
-            rm -f "$ARTIFACT"
             test -f web/dist/index.html
 
             echo "[deploy] restart PM2; Nginx keeps proxying port 3000"

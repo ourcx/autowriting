@@ -70,9 +70,11 @@
 当前受版本控制的 `.github/workflows/deploy.yml` 不在服务器执行 `git pull`：
 
 1. GitHub Runner checkout 并构建当前提交；
-2. Runner 使用 `git archive` 打包后端代码，并放入已构建的 `web/dist`；
+2. Runner 使用 `git archive` 打包源码，明确剔除 `node_modules`、`.env`、`web/data/`、`公众号写作/drafts/`、`logs/` 和 `web/logs/`，再放入已构建的 `web/dist`；
 3. Runner 通过 SCP 上传 `autowriting-release.tar.gz`；
-4. 服务器解压发布包、优先使用 pnpm 本地缓存安装依赖、重启 PM2。
+4. 服务器先备份 SQLite、草稿、两类日志、环境配置和本地源码 patch，再解压发布包、安装依赖、重启 PM2。
+
+服务器 Git 工作区是否干净、是否领先远端都不会阻断发布；线上本地源码修改会被发布版本替换，但部署前会保存到备份目录。运行数据和真实 `.env` 不会被发布包覆盖。
 
 因此服务器无法解析 `github.com` 时，不会阻断代码发布。服务器仍需要能解析 npm registry，**仅当 `pnpm-lock.yaml` 变化且本地 pnpm 缓存没有对应依赖时**才需要下载新依赖。
 
@@ -110,7 +112,7 @@ cat ~/.ssh/deploy_key
 
 ### 4. 服务器前置条件
 
-服务器需要 Node.js、pnpm、PM2、`tar`、`mktemp`，并提前创建项目目录：
+服务器需要 Node.js 20+、pnpm、PM2、`tar`、`mktemp`，并提前创建项目目录。GitHub Actions 自身使用 Node.js 24：
 
 ```bash
 mkdir -p /home/admin/autowriting

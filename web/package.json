@@ -24,6 +24,7 @@
     "typecheck": "tsc --noEmit",
     "typecheck:changed": "node scripts/typecheck-changed.mjs",
     "smoke": "node scripts/smoke.mjs",
+    "test:deploy": "node scripts/test-deploy-release.mjs",
     "verify": "pnpm lint && pnpm arch && pnpm typecheck:changed && pnpm build",
     "server": "node scripts/watch-server.mjs",
     "start": "concurrently --kill-others-on-fail -n server,vite \"npm run server\" \"wait-on http://localhost:3000/health && npm run dev\"",
