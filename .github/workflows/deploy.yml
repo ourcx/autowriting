@@ -5,105 +5,115 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      
-      - name: Install pnpm
-        run: npm install -g pnpm
-      
-      - name: Build frontend
-        run: |
-          cd web
-          pnpm install --frozen-lockfile
-          pnpm build
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
 
-      - name: Package deployment release
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Build frontend artifact
         run: |
           set -euo pipefail
-          rm -rf deploy-release
-          mkdir -p deploy-release
-          git archive --format=tar "$GITHUB_SHA" | tar -x -C deploy-release
-          cp -R web/dist deploy-release/web/dist
-          printf '%s\n' "$GITHUB_SHA" > deploy-release/.deploy-revision
-          tar -C deploy-release -czf autowriting-release.tar.gz .
+          pnpm --dir web install --frozen-lockfile
+          pnpm --dir web build
+          tar -C web -czf web-dist.tar.gz dist
 
-      - name: Upload deployment release
+      - name: Upload frontend artifact
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: autowriting-release.tar.gz
+          source: web-dist.tar.gz
           target: /home/admin/autowriting
           overwrite: true
           timeout: 30s
           command_timeout: 2m
           debug: true
-      
+
       - name: Deploy to server
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          command_timeout: 30m
+          command_timeout: 10m
           script: |
-            set -eu
+            set -euo pipefail
             PROJECT_DIR=/home/admin/autowriting
-            ARCHIVE="$PROJECT_DIR/autowriting-release.tar.gz"
-            STAGING_DIR="$(mktemp -d "$PROJECT_DIR/.deploy.XXXXXX")"
-            cleanup() {
-              rm -rf "$STAGING_DIR"
-            }
-            trap cleanup EXIT
+            ARTIFACT="$PROJECT_DIR/web-dist.tar.gz"
+            BACKUP_ROOT=/home/admin/autowriting-backups
+            TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
+            BACKUP_DIR="$BACKUP_ROOT/$TIMESTAMP"
 
-            echo "[deploy] extract release package"
-            test -f "$ARCHIVE"
-            tar -xzf "$ARCHIVE" -C "$STAGING_DIR"
-            test -f "$STAGING_DIR/web/package.json"
-            test -f "$STAGING_DIR/web/dist/index.html"
-            RELEASE_SHA="$(cat "$STAGING_DIR/.deploy-revision")"
-            NEEDS_INSTALL=1
-            if test -f "$PROJECT_DIR/web/package.json" \
-              && test -f "$PROJECT_DIR/web/pnpm-lock.yaml" \
-              && cmp -s "$STAGING_DIR/web/package.json" "$PROJECT_DIR/web/package.json" \
-              && cmp -s "$STAGING_DIR/web/pnpm-lock.yaml" "$PROJECT_DIR/web/pnpm-lock.yaml"; then
-              NEEDS_INSTALL=0
-            fi
-
-            echo "[deploy] deploy release $RELEASE_SHA"
             cd "$PROJECT_DIR"
-            # 只覆盖由 GitHub Actions 打包的代码和前端产物；运行时草稿、日志及
-            # 未跟踪的服务器配置保持不变，因此部署服务器无需访问 github.com。
-            git ls-files | while IFS= read -r tracked_file; do
-              if ! test -e "$STAGING_DIR/$tracked_file"; then
-                rm -f "$PROJECT_DIR/$tracked_file"
+            test -f "$ARTIFACT"
+
+            echo "[deploy] snapshot runtime data"
+            mkdir -p "$BACKUP_DIR"
+            if test -f web/data/app.db; then
+              if command -v sqlite3 >/dev/null 2>&1; then
+                sqlite3 web/data/app.db ".backup '$BACKUP_DIR/app.db'"
+              else
+                cp -a web/data/app.db "$BACKUP_DIR/app.db"
+                test ! -f web/data/app.db-wal || cp -a web/data/app.db-wal "$BACKUP_DIR/app.db-wal"
+                test ! -f web/data/app.db-shm || cp -a web/data/app.db-shm "$BACKUP_DIR/app.db-shm"
               fi
-            done
-            cp -a "$STAGING_DIR"/. "$PROJECT_DIR"/
-            rm -f "$ARCHIVE"
-            if test "$NEEDS_INSTALL" -eq 1; then
-              echo "[deploy] dependencies changed; install web dependencies"
-              cd web
-              pnpm install --frozen-lockfile --prefer-offline
-            else
-              echo "[deploy] dependencies unchanged; skip pnpm install"
             fi
-            echo "[deploy] restart pm2 app"
-            cd "$PROJECT_DIR/web"
+            if test -d "公众号写作/drafts"; then
+              tar -C "公众号写作" -czf "$BACKUP_DIR/drafts.tar.gz" drafts
+            fi
+            find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d -mtime +30 -exec rm -rf {} +
+
+            echo "[deploy] verify source tree"
+            DIRTY="$(git status --porcelain --untracked-files=no -- . \
+              ':(exclude)web/data' \
+              ':(exclude)公众号写作/drafts' \
+              ':(exclude)logs')"
+            if test -n "$DIRTY"; then
+              echo "Tracked source changes found on the server; deployment stopped."
+              echo "$DIRTY"
+              exit 1
+            fi
+
+            echo "[deploy] pull main branch"
+            git checkout main
+            git pull --ff-only origin main
+
+            echo "[deploy] restore runtime drafts after source update"
+            if test -f "$BACKUP_DIR/drafts.tar.gz"; then
+              mkdir -p "公众号写作/drafts"
+              tar -xzf "$BACKUP_DIR/drafts.tar.gz" -C "公众号写作"
+            fi
+
+            echo "[deploy] install dependencies and frontend artifact"
+            pnpm --dir web install --frozen-lockfile --prefer-offline
+            tar -xzf "$ARTIFACT" -C web
+            rm -f "$ARTIFACT"
+            test -f web/dist/index.html
+
+            echo "[deploy] restart PM2; Nginx keeps proxying port 3000"
+            cd web
             if pm2 describe autowriting >/dev/null 2>&1; then
               pm2 restart autowriting --update-env
             else
               pm2 start ecosystem.config.cjs --only autowriting
             fi
+
             echo "[deploy] health check"
             for attempt in 1 2 3 4 5; do
               if curl --fail --silent --show-error http://127.0.0.1:3000/health; then
@@ -116,5 +126,4 @@ jobs:
               fi
               sleep 2
             done
-            echo "[deploy] pm2 status"
             pm2 status autowriting
