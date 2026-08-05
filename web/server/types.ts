@@ -6,6 +6,7 @@ import type { Request } from "express"
 
 // Express Request 扩展
 export interface AuthedRequest extends Request {
+  authType?: "jwt" | "agent"
   user?: {
     id: string
     username: string

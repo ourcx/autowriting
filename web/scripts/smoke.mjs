@@ -123,6 +123,24 @@ cases.push({
   },
 })
 cases.push({
+  name: 'Agent API Key 不得访问管理员接口',
+  run: async () => {
+    const r = await fetch(`${BASE}/api/admin/users`, {
+      headers: { 'X-Agent-API-Key': SMOKE_AGENT_API_KEY },
+    })
+    if (r.status !== 403) throw new Error(`期望 403，实际 ${r.status}`)
+  },
+})
+cases.push({
+  name: 'Agent API Key 不得访问白名单外接口',
+  run: async () => {
+    const r = await fetch(`${BASE}/api/settings`, {
+      headers: { 'X-Agent-API-Key': SMOKE_AGENT_API_KEY },
+    })
+    if (r.status !== 403) throw new Error(`期望 403，实际 ${r.status}`)
+  },
+})
+cases.push({
   name: 'Agent API Key 应可写入和读取文章',
   run: async () => {
     const articleId = `20260805-agent-smoke-${Date.now()}`

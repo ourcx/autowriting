@@ -13,11 +13,29 @@ import { logger } from "./logger.ts"
 import { JWT_SECRET } from "./routes/auth.ts"
 import type { AuthedRequest } from "./types.ts"
 
+const AGENT_ROUTE_ALLOWLIST = [
+  { method: "GET", path: /^\/api\/agent\/status$/ },
+  { method: "GET", path: /^\/api\/articles$/ },
+  { method: "GET", path: /^\/api\/articles\/[^/]+$/ },
+  { method: "POST", path: /^\/api\/articles\/[^/]+$/ },
+  { method: "POST", path: /^\/api\/articles\/[^/]+\/generate$/ },
+  { method: "DELETE", path: /^\/api\/articles\/[^/]+$/ },
+  { method: "POST", path: /^\/api\/toutiao\/publish$/ },
+  { method: "POST", path: /^\/api\/xiaohongshu\/publish$/ },
+]
+
 function hasValidAgentApiKey(candidate: string): boolean {
   if (!AGENT_API_KEY || !candidate) return false
   const expected = Buffer.from(AGENT_API_KEY)
   const received = Buffer.from(candidate)
   return expected.length === received.length && timingSafeEqual(expected, received)
+}
+
+function isAgentRouteAllowed(req: AuthedRequest): boolean {
+  return AGENT_ROUTE_ALLOWLIST.some((route) => (
+    route.method === req.method
+    && route.path.test(req.originalUrl.split("?")[0])
+  ))
 }
 
 function authenticateAgent(req: AuthedRequest, res: Response, next: NextFunction): boolean {
@@ -31,6 +49,10 @@ function authenticateAgent(req: AuthedRequest, res: Response, next: NextFunction
     res.status(401).json({ error: "Agent API Key 无效" })
     return true
   }
+  if (!isAgentRouteAllowed(req)) {
+    res.status(403).json({ error: "Agent API 无权访问此接口" })
+    return true
+  }
 
   const user = findUserByUsername(AGENT_USERNAME)
   if (!user || user.disabled) {
@@ -38,6 +60,7 @@ function authenticateAgent(req: AuthedRequest, res: Response, next: NextFunction
     res.status(503).json({ error: "远程 Agent 绑定用户不可用" })
     return true
   }
+  req.authType = "agent"
   req.user = { id: user.id, username: user.username, role: user.role }
   next()
   return true
@@ -55,6 +78,7 @@ export function authMiddleware(req: AuthedRequest, res: Response, next: NextFunc
   const token = authHeader.slice(7)
   try {
     const payload = jwt.verify(token, JWT_SECRET) as { id: string; username: string; role: "admin" | "user" }
+    req.authType = "jwt"
     req.user = { id: payload.id, username: payload.username, role: payload.role }
     next()
   } catch {
@@ -64,7 +88,7 @@ export function authMiddleware(req: AuthedRequest, res: Response, next: NextFunc
 
 export function adminMiddleware(req: AuthedRequest, res: Response, next: NextFunction): void {
   authMiddleware(req, res, () => {
-    if (req.user?.role !== "admin") {
+    if (req.authType === "agent" || req.user?.role !== "admin") {
       res.status(403).json({ error: "无管理员权限" })
       return
     }

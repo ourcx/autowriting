@@ -19,6 +19,8 @@ pm2 restart autowriting --update-env
 
 未配置 `AGENT_API_KEY` 时远程能力保持关闭。`AGENT_USERNAME` 必须是平台中已存在且未禁用的用户；Agent 只能访问该用户的数据和账号绑定。
 
+Agent Key 使用独立能力白名单，不继承绑定用户的管理员权限。即使 `AGENT_USERNAME=admin`，Agent 也不能访问用户管理、监控、系统设置等白名单外接口。
+
 ## 认证
 
 所有请求添加：
@@ -84,3 +86,5 @@ Agent 可调用现有发布接口，例如：
 - `POST /api/xiaohongshu/publish`
 
 发布接口仍要求对应用户已在平台中绑定账号或提供有效 Cookie，并保留现有参数校验与发布记录。微信公众号接口暂未纳入远程 Agent API。建议先让 Agent 创建和生成文章，再由人工确认内容后触发发布。
+
+当前允许的完整接口列表以 `GET /api/agent/status` 返回的 `capabilities` 为准；其他受保护接口会返回 `403`。
