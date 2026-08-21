@@ -1,4 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  ClipboardEvent,
+  DragEvent,
+  KeyboardEvent,
+  RefObject,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Copy,
@@ -55,6 +65,14 @@ interface MaterialDetail {
   content_type?: string
   size?: number
   file_url?: string
+}
+
+interface MaterialDropzoneProps {
+  accept: string
+  file: File | null
+  imageOnly?: boolean
+  inputRef: RefObject<HTMLInputElement>
+  onFile: (file: File | null) => void
 }
 
 const WX_STORAGE_KEY = 'wechat_credentials'
@@ -114,6 +132,103 @@ function uploadAccept(type: UploadMaterialType): string {
 function materialDisplayName(item: WechatMaterialItem, type: MaterialType): string {
   if (type === 'news') return item.content?.news_item?.[0]?.title || '未命名图文'
   return item.name || '未命名素材'
+}
+
+function MaterialDropzone({
+  accept,
+  file,
+  imageOnly = false,
+  inputRef,
+  onFile,
+}: MaterialDropzoneProps) {
+  const [dragging, setDragging] = useState(false)
+
+  const acceptFile = useCallback((nextFile: File | null) => {
+    if (!nextFile) return
+    if (imageOnly && !nextFile.type.startsWith('image/')) {
+      toast.warn('请粘贴或拖入图片文件')
+      return
+    }
+    onFile(nextFile)
+  }, [imageOnly, onFile])
+
+  const handlePaste = useCallback((event: ClipboardEvent<HTMLDivElement>) => {
+    const pastedFile = Array.from(event.clipboardData.files).find(entry => (
+      imageOnly ? entry.type.startsWith('image/') : true
+    ))
+    if (!pastedFile) {
+      toast.warn(imageOnly ? '剪贴板中没有图片' : '剪贴板中没有可用文件')
+      return
+    }
+    event.preventDefault()
+    acceptFile(pastedFile)
+  }, [acceptFile, imageOnly])
+
+  const handleDrop = useCallback((event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    setDragging(false)
+    acceptFile(event.dataTransfer.files[0] ?? null)
+  }, [acceptFile])
+
+  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      inputRef.current?.click()
+    }
+  }, [inputRef])
+
+  return (
+    <div
+      className={`wm-dropzone${dragging ? ' is-dragging' : ''}${file ? ' has-file' : ''}`}
+      role="button"
+      tabIndex={0}
+      onClick={event => event.currentTarget.focus()}
+      onDoubleClick={() => inputRef.current?.click()}
+      onKeyDown={handleKeyDown}
+      onPaste={handlePaste}
+      onDragEnter={event => { event.preventDefault(); setDragging(true) }}
+      onDragOver={event => event.preventDefault()}
+      onDragLeave={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false)
+      }}
+      onDrop={handleDrop}
+    >
+      <input
+        ref={inputRef}
+        className="wm-dropzone-input"
+        type="file"
+        accept={accept}
+        onChange={event => acceptFile(event.target.files?.[0] ?? null)}
+      />
+      <div className="wm-dropzone-icon">
+        {file ? <FileImage size={21} /> : <Upload size={21} />}
+      </div>
+      <div className="wm-dropzone-copy">
+        <strong>{file ? file.name : imageOnly ? '粘贴剪贴板图片' : '拖入素材文件'}</strong>
+        <span>
+          {file
+            ? `${formatSize(file.size)} · 可重新粘贴或拖入替换`
+            : imageOnly
+              ? '点击此处后按 Ctrl+V，或直接拖入图片文件'
+              : '直接拖入文件，或按 Enter 选择文件'}
+        </span>
+      </div>
+      {file ? (
+        <button
+          className="wm-dropzone-clear"
+          type="button"
+          title="移除文件"
+          onClick={event => {
+            event.stopPropagation()
+            onFile(null)
+            if (inputRef.current) inputRef.current.value = ''
+          }}
+        >
+          <X size={14} />
+        </button>
+      ) : null}
+    </div>
+  )
 }
 
 async function copyText(text: string, successMessage: string) {
@@ -409,21 +524,17 @@ export default function WeChatMaterials() {
             <div className="wm-panel-kicker">正文图片</div>
             <h2>上传正文图片</h2>
             <p>转换为微信可访问地址，适用于文章内插图。</p>
-            <div className="wm-form-grid wm-form-grid--split">
-              <label className="wm-field">
-                <span>选择图片</span>
-                <input
-                  ref={contentFileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={e => setContentImageFile(e.target.files?.[0] ?? null)}
-                />
-              </label>
-              <div className="wm-inline-actions">
-                <div className="wm-inline-hint">
-                  {contentImageFile ? `已选择：${contentImageFile.name}` : '支持 jpg / png，服务端会自动压缩到微信要求'}
-                </div>
-                <button className="wm-oncolor-btn" disabled={contentImageUploading} onClick={handleUploadContentImage}>
+            <div className="wm-upload-stack">
+              <MaterialDropzone
+                accept="image/*"
+                file={contentImageFile}
+                imageOnly
+                inputRef={contentFileInputRef}
+                onFile={setContentImageFile}
+              />
+              <div className="wm-upload-footer">
+                <span>支持 JPG、PNG，服务端会自动压缩到微信要求</span>
+                <button className="wm-primary-btn" disabled={contentImageUploading || !contentImageFile} onClick={handleUploadContentImage}>
                   {contentImageUploading ? <Loader2 size={14} className="wm-spin" /> : <Upload size={14} />}
                   {contentImageUploading ? '上传中...' : '上传正文图片'}
                 </button>
@@ -465,53 +576,58 @@ export default function WeChatMaterials() {
             <div className="wm-panel-kicker">永久素材</div>
             <h2>上传永久素材</h2>
             <p>用于封面、缩略图、音频与视频，上传后获取 media_id。</p>
-            <div className="wm-form-grid">
+            <div className="wm-upload-stack">
               <label className="wm-field">
                 <span>素材类型</span>
-                <select value={uploadType} onChange={e => setUploadType(e.target.value as UploadMaterialType)}>
+                <select
+                  value={uploadType}
+                  onChange={e => {
+                    setUploadType(e.target.value as UploadMaterialType)
+                    setUploadFile(null)
+                    if (materialFileInputRef.current) materialFileInputRef.current.value = ''
+                  }}
+                >
                   <option value="image">图片</option>
                   <option value="voice">音频</option>
                   <option value="video">视频</option>
                 </select>
               </label>
-              <label className="wm-field">
-                <span>选择文件</span>
-                <input
-                  ref={materialFileInputRef}
-                  type="file"
-                  accept={uploadAccept(uploadType)}
-                  onChange={e => setUploadFile(e.target.files?.[0] ?? null)}
-                />
-              </label>
-              <label className="wm-field">
-                <span>视频标题</span>
-                <input
-                  type="text"
-                  disabled={uploadType !== 'video'}
-                  value={uploadTitle}
-                  onChange={e => setUploadTitle(e.target.value)}
-                  placeholder="仅视频素材需要"
-                />
-              </label>
-              <label className="wm-field">
-                <span>视频简介</span>
-                <input
-                  type="text"
-                  disabled={uploadType !== 'video'}
-                  value={uploadIntroduction}
-                  onChange={e => setUploadIntroduction(e.target.value)}
-                  placeholder="仅视频素材需要"
-                />
-              </label>
-            </div>
-            <div className="wm-panel-footer">
-              <div className="wm-inline-hint">
-                {uploadFile ? `已选择：${uploadFile.name}` : '上传成功后可在下方素材列表里立即查看并复制 media_id'}
+              <MaterialDropzone
+                accept={uploadAccept(uploadType)}
+                file={uploadFile}
+                imageOnly={uploadType === 'image'}
+                inputRef={materialFileInputRef}
+                onFile={setUploadFile}
+              />
+              {uploadType === 'video' ? (
+                <div className="wm-form-grid">
+                  <label className="wm-field">
+                    <span>视频标题</span>
+                    <input
+                      type="text"
+                      value={uploadTitle}
+                      onChange={e => setUploadTitle(e.target.value)}
+                      placeholder="填写视频标题"
+                    />
+                  </label>
+                  <label className="wm-field">
+                    <span>视频简介</span>
+                    <input
+                      type="text"
+                      value={uploadIntroduction}
+                      onChange={e => setUploadIntroduction(e.target.value)}
+                      placeholder="填写视频简介"
+                    />
+                  </label>
+                </div>
+              ) : null}
+              <div className="wm-upload-footer">
+                <span>上传成功后可在素材库中查看并复制 media_id</span>
+                <button className="wm-primary-btn" disabled={uploading || !uploadFile} onClick={handleUploadMaterial}>
+                  {uploading ? <Loader2 size={14} className="wm-spin" /> : <Upload size={14} />}
+                  {uploading ? '上传中...' : '上传永久素材'}
+                </button>
               </div>
-              <button className="wm-primary-btn" disabled={uploading} onClick={handleUploadMaterial}>
-                {uploading ? <Loader2 size={14} className="wm-spin" /> : <Upload size={14} />}
-                {uploading ? '上传中...' : '上传永久素材'}
-              </button>
             </div>
           </article>
         </section>
