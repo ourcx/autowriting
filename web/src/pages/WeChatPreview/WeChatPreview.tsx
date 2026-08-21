@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { AlertTriangle, Palette } from 'lucide-react'
 import WeChatRenderer from '../../components/WeChatRenderer/WeChatRenderer'
+import PageHeader from '../../components/PageHeader/PageHeader'
 import { fetchArticle } from '../../utils/apiHelpers'
 import {
   ArticleData,
@@ -57,17 +58,13 @@ export default function WeChatPreview() {
 
   return (
     <div className="wechat-preview-page">
-      {/* 顶部导航栏 */}
-      <header className="preview-nav">
-        <div className="preview-nav-inner">
-          <button className="wd-back-btn" onClick={() => navigate(-1)}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
-            返回
-          </button>
-          <div className="preview-nav-title">
+      <PageHeader
+        title={<div className="preview-nav-title">
             <span className="preview-nav-label">发布预览</span>
             <span className="preview-nav-article">{title}</span>
-          </div>
+          </div>}
+        onBack={() => navigate(-1)}
+        actions={<>
           <button
             className="preview-nav-styles-btn"
             onClick={() => navigate('/styles')}
@@ -104,8 +101,8 @@ export default function WeChatPreview() {
             </svg>
             小红书长文
           </button>
-        </div>
-      </header>
+        </>}
+      />
 
       {/* 内容区 */}
       <main className="preview-main">

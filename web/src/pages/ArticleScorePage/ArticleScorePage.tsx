@@ -8,6 +8,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BarChart2, Star, Trash2, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Minus, Plus, X } from 'lucide-react'
+import PageHeader from '../../components/PageHeader/PageHeader'
 import { toast } from '../../components/Toast/Toast'
 import './ArticleScorePage.css'
 
@@ -669,21 +670,15 @@ export default function ArticleScorePage() {
   return (
     <div className="asp-root">
 
-      {/* ── Header ── */}
-      <header className="asp-header">
-        <button className="wd-back-btn" onClick={() => navigate('/')}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
-          返回
-        </button>
-        <div className="asp-header-title">
-          <BarChart2 size={17} />
-          文章评分
-        </div>
-        <button className="asp-btn-add" onClick={() => setShowAddModal(true)}>
+      <PageHeader
+        title="文章评分"
+        icon={<BarChart2 size={17} />}
+        onBack={() => navigate('/')}
+        actions={<button className="asp-btn-add" onClick={() => setShowAddModal(true)}>
           <Plus size={14} />
           手动添加文章
-        </button>
-      </header>
+        </button>}
+      />
 
       <div className="asp-body">
 

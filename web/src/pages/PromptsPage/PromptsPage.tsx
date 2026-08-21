@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Plus, Edit2, Trash2, Copy, History, Eye, EyeOff,
-  ArrowLeft, RotateCcw, CheckCircle, Zap, Search,
+  RotateCcw, CheckCircle, Zap, Search,
 } from 'lucide-react'
+import PageHeader from '../../components/PageHeader/PageHeader'
 import '../../styles/PromptsPage.css'
 
 interface Prompt {
@@ -558,21 +559,15 @@ export default function PromptsPage() {
         <div className={`pp-toast pp-toast--${toast.type}`}>{toast.msg}</div>
       )}
 
-      {/* Header */}
-      <header className="pp-header">
-        <button className="wd-back-btn" onClick={() => navigate(-1)}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
-          返回
-        </button>
-        <div className="pp-header-title">
-          <Zap size={15} />
-          提示词管理
-        </div>
-        <button className="pp-create-btn" onClick={handleCreateNew}>
+      <PageHeader
+        title="提示词管理"
+        icon={<Zap size={15} />}
+        onBack={() => navigate(-1)}
+        actions={<button className="pp-create-btn" onClick={handleCreateNew}>
           <Plus size={14} />
           新建
-        </button>
-      </header>
+        </button>}
+      />
 
       <div className="pp-body">
         {/* 左侧列表 */}

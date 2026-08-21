@@ -35,6 +35,8 @@ app/dist/
 
 # 数据缓存（含 SQLite 数据库，可能含 API Key 等敏感数据）
 .cache/
+data/
+backups/
 
 # 运行时数据（部署服务器本地生成，不能继续纳入 Git）
 公众号写作/drafts/

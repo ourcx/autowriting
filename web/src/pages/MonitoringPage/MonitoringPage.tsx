@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { AlertCircle, Activity, Zap, TrendingUp, RefreshCw } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import axios, { AxiosError } from 'axios'
+import PageHeader from '../../components/PageHeader/PageHeader'
 import './MonitoringPage.css'
 
 interface LogEntry {
@@ -19,6 +21,7 @@ interface Alert {
 }
 
 export default function MonitoringPage() {
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<'logs' | 'metrics' | 'alerts' | 'health'>('metrics')
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [metrics, setMetrics] = useState<any>(null)
@@ -119,6 +122,12 @@ export default function MonitoringPage() {
 
   return (
     <div className="monitoring-page">
+      <PageHeader
+        title="系统监控"
+        icon={<Activity size={16} />}
+        subtitle="实时查看系统性能、日志和告警信息"
+        onBack={() => navigate('/admin')}
+      />
       <div className="monitoring-container">
         {/* 页面标题 */}
         <div className="monitoring-header">

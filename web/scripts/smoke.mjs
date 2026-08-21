@@ -10,7 +10,7 @@
  */
 
 import { spawn } from 'node:child_process'
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -22,6 +22,14 @@ const PORT = process.env.SMOKE_PORT || '3000'
 const BASE = `http://127.0.0.1:${PORT}`
 const SMOKE_AGENT_API_KEY = 'smoke-agent-api-key'
 const SMOKE_DATA_ROOT = mkdtempSync(join(tmpdir(), 'autowriting-smoke-'))
+const SMOKE_STATIC_ROOT = join(SMOKE_DATA_ROOT, 'dist')
+const SMOKE_INDEX_MARKER = `autowriting-smoke-index-${Date.now()}`
+
+mkdirSync(SMOKE_STATIC_ROOT, { recursive: true })
+writeFileSync(
+  join(SMOKE_STATIC_ROOT, 'index.html'),
+  `<!doctype html><html><body>${SMOKE_INDEX_MARKER}</body></html>`,
+)
 
 let serverProc = null
 let killed = false
@@ -52,9 +60,11 @@ function startServer() {
       ...process.env,
       PORT,
       LOG_LEVEL: 'WARN',
+      NODE_ENV: 'production',
       DATA_DIR: join(SMOKE_DATA_ROOT, 'data'),
       DRAFTS_DIR: join(SMOKE_DATA_ROOT, 'drafts'),
       LOG_DIR: join(SMOKE_DATA_ROOT, 'logs'),
+      STATIC_DIR: SMOKE_STATIC_ROOT,
       AGENT_API_KEY: SMOKE_AGENT_API_KEY,
       AGENT_USERNAME: 'admin',
     },
@@ -86,6 +96,38 @@ cases.push({
   run: async () => {
     const r = await fetch(`${BASE}/health`)
     if (!r.ok) throw new Error(`status=${r.status}`)
+  },
+})
+
+cases.push({
+  name: '生产模式首页应返回前端 index.html',
+  run: async () => {
+    const r = await fetch(`${BASE}/`)
+    if (!r.ok) throw new Error(`status=${r.status}`)
+    const body = await r.text()
+    if (!body.includes(SMOKE_INDEX_MARKER)) throw new Error('首页未返回前端构建产物')
+  },
+})
+
+cases.push({
+  name: '生产模式前端路由应回退到 index.html',
+  run: async () => {
+    const r = await fetch(`${BASE}/articles/example`)
+    if (!r.ok) throw new Error(`status=${r.status}`)
+    const body = await r.text()
+    if (!body.includes(SMOKE_INDEX_MARKER)) throw new Error('SPA 路由未回退到 index.html')
+  },
+})
+
+cases.push({
+  name: '未知 API 应返回 JSON 404，不得回退前端页面',
+  run: async () => {
+    const r = await fetch(`${BASE}/api/does-not-exist`)
+    if (r.status !== 404) throw new Error(`期望 404，实际 ${r.status}`)
+    const contentType = r.headers.get('content-type') || ''
+    if (!contentType.includes('application/json')) throw new Error(`响应不是 JSON: ${contentType}`)
+    const body = await r.json()
+    if (body.error !== '接口不存在') throw new Error(`错误信息不正确：${JSON.stringify(body)}`)
   },
 })
 

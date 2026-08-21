@@ -6,6 +6,7 @@ import {
   Send, Image, BookOpen, BarChart2, ChevronRight,
 } from 'lucide-react'
 import { toast } from '../../components/Toast/Toast'
+import PageHeader from '../../components/PageHeader/PageHeader'
 import './WeChatDrafts.css'
 
 /* ── HTML → Markdown（导入用）── */
@@ -331,12 +332,7 @@ export default function WeChatDrafts() {
   if (bound === false) {
     return (
       <div className="wd-root">
-        <header className="wd-header">
-          <button className="wd-back-btn" onClick={() => navigate(-1)}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>返回
-          </button>
-          <span className="wd-header-title">公众号</span>
-        </header>
+        <PageHeader title="公众号管理" onBack={() => navigate(-1)} />
         <div className="wd-empty">
           <div className="wd-empty-icon"><Link2 size={36} /></div>
           <p className="wd-empty-title">尚未绑定公众号</p>
@@ -357,14 +353,11 @@ export default function WeChatDrafts() {
   return (
     <div className="wd-root">
 
-      {/* ── Header ── */}
-      <header className="wd-header">
-        <button className="wd-back-btn" onClick={() => navigate(-1)}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>返回
-        </button>
-        <div className="wd-header-center">
-          <span className="wd-header-title">公众号管理</span>
-        </div>
+      <PageHeader
+        title="公众号管理"
+        subtitle="草稿、已发布文章与永久素材"
+        onBack={() => navigate(-1)}
+        actions={<>
         <button
           className="wd-refresh-btn"
           title="刷新"
@@ -380,7 +373,8 @@ export default function WeChatDrafts() {
         <button className="wd-refresh-btn" title="素材管理" onClick={() => navigate('/wechat/materials')}>
           <Image size={14} />
         </button>
-      </header>
+        </>}
+      />
 
       {/* ── Tabs ── */}
       <div className="wd-tabs">

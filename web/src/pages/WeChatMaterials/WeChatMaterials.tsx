@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft,
   Copy,
   ExternalLink,
   Eye,
@@ -17,6 +16,7 @@ import {
   Video,
   X,
 } from 'lucide-react'
+import PageHeader from '../../components/PageHeader/PageHeader'
 import { toast } from '../../components/Toast/Toast'
 import { fetchBlob, fetchJson } from '../../utils/apiHelpers'
 import './WeChatMaterials.css'
@@ -346,13 +346,7 @@ export default function WeChatMaterials() {
   if (bound === false) {
     return (
       <div className="wm-root">
-        <header className="wm-topbar">
-          <button className="wm-back-btn" onClick={() => navigate(-1)}>
-            <ArrowLeft size={14} />
-            返回
-          </button>
-          <div className="wm-topbar-title">公众号素材</div>
-        </header>
+        <PageHeader title="公众号素材" onBack={() => navigate(-1)} />
         <div className="wm-empty">
           <div className="wm-empty-icon"><FileImage size={36} /></div>
           <p className="wm-empty-title">尚未绑定公众号</p>
@@ -374,18 +368,12 @@ export default function WeChatMaterials() {
 
   return (
     <div className="wm-root">
-      <header className="wm-topbar">
-        <div className="wm-topbar-left">
-          <button className="wm-back-btn" onClick={() => navigate(-1)}>
-            <ArrowLeft size={14} />
-            返回
-          </button>
-          <div>
-            <div className="wm-topbar-title">公众号素材</div>
-            <div className="wm-topbar-subtitle">沿着实际发布流程设计：先处理正文图，再拿封面和 `media_id`。</div>
-          </div>
-        </div>
-        <div className="wm-topbar-actions">
+      <PageHeader
+        title="公众号素材"
+        subtitle="上传正文图片，管理封面、音频、视频与图文素材"
+        onBack={() => navigate(-1)}
+        actions={
+          <>
           <button className="wm-secondary-btn" onClick={() => navigate('/drafts')}>
             草稿箱
           </button>
@@ -393,37 +381,34 @@ export default function WeChatMaterials() {
             <RefreshCw size={14} className={loading ? 'wm-spin' : ''} />
             刷新
           </button>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       <main className="wm-main">
-        <section className="wm-hero">
-          <div className="wm-hero-copy">
-            <div className="wm-kicker">素材工作台</div>
-            <h1>把公众号发布里最麻烦的素材处理放到一个工作台里。</h1>
-            <p>正文图片需要先变成微信可识别的地址，封面和音视频需要拿到永久 `media_id`。这个页面只保留这两类高频动作。</p>
+        <section className="wm-page-intro">
+          <div>
+            <div className="wm-kicker">WECHAT ASSETS</div>
+            <h1>素材管理</h1>
+            <p>正文图片上传后可直接复制微信地址；封面和音视频上传后可获取永久 media_id。</p>
           </div>
-          <div className="wm-hero-stats">
-            <div className="wm-stat-card wm-stat-card--teal">
-              <span>当前素材类型</span>
-              <strong>{typeMeta[materialType].label}</strong>
-            </div>
-            <div className="wm-stat-card wm-stat-card--peach">
-              <span>已加载</span>
-              <strong>{items.length} / {total || 0}</strong>
-            </div>
-            <div className="wm-stat-card wm-stat-card--cream">
-              <span>当前能力</span>
-              <strong>正文图上传 + 永久素材管理</strong>
-            </div>
+          <div className="wm-page-count">
+            <span>{typeMeta[materialType].label}</span>
+            <strong>{items.length}<small> / {total || 0}</small></strong>
           </div>
         </section>
 
+        <div className="wm-section-heading">
+          <div>
+            <h2>上传素材</h2>
+            <p>根据使用场景选择上传入口，避免正文图片与永久素材混用。</p>
+          </div>
+        </div>
         <section className="wm-tool-grid">
           <article className="wm-panel wm-panel--feature wm-panel--teal">
             <div className="wm-panel-kicker">正文图片</div>
-            <h2>先把文章里的图转成微信可用地址</h2>
-            <p>适合编辑器里的本地图片、站内图片、复制来的图片。上传成功后，直接复制 URL 或 Markdown 回文章里。</p>
+            <h2>上传正文图片</h2>
+            <p>转换为微信可访问地址，适用于文章内插图。</p>
             <div className="wm-form-grid wm-form-grid--split">
               <label className="wm-field">
                 <span>选择图片</span>
@@ -478,8 +463,8 @@ export default function WeChatMaterials() {
 
           <article className="wm-panel wm-panel--feature wm-panel--cream">
             <div className="wm-panel-kicker">永久素材</div>
-            <h2>上传封面、音视频，直接拿到 `media_id`</h2>
-            <p>封面、缩略图、视频、音频走这里。正文图片不要上传成永久素材，正文请使用左侧能力。</p>
+            <h2>上传永久素材</h2>
+            <p>用于封面、缩略图、音频与视频，上传后获取 media_id。</p>
             <div className="wm-form-grid">
               <label className="wm-field">
                 <span>素材类型</span>
@@ -538,6 +523,12 @@ export default function WeChatMaterials() {
           </div>
         ) : null}
 
+        <div className="wm-section-heading">
+          <div>
+            <h2>素材库</h2>
+            <p>查找素材并复制 media_id 或 URL，也可以查看详情和删除。</p>
+          </div>
+        </div>
         <section className="wm-board">
           <div className="wm-board-toolbar">
             <div className="wm-type-tabs">
@@ -674,13 +665,6 @@ export default function WeChatMaterials() {
           ) : null}
 
           <section className="wm-list-panel">
-            <div className="wm-section-head">
-              <div>
-                <div className="wm-section-title">素材列表</div>
-                <div className="wm-section-desc">复用原来素材库最常用的动作：看图、复制 ID、复制 URL、删除素材。</div>
-              </div>
-            </div>
-
             {detailLoading ? (
               <div className="wm-loading">
                 <Loader2 size={18} className="wm-spin" />

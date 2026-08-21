@@ -12,6 +12,7 @@ import {
   COVER_PROVIDER_PRESETS,
   CONFIG_PRESETS,
 } from '../../utils/aiConfig'
+import PageHeader from '../../components/PageHeader/PageHeader'
 import { useConfigStore, setLocalConfig, fetchServerStatus } from '../../store/useConfigStore'
 import { testAIConnection } from '../../utils/apiHelpers'
 import './AISettings.css'
@@ -195,20 +196,17 @@ export default function AISettings() {
 
   return (
     <div className="as-root">
-      {/* ── Header ── */}
-      <header className="as-header">
-        <div className="as-header-left">
-          <button className="wd-back-btn" onClick={() => navigate(-1)}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
-            返回
+      <PageHeader
+        title="API 配置"
+        subtitle="管理文章生成、封面、搜索与图床服务"
+        onBack={() => navigate(-1)}
+        actions={(
+          <button className={`as-save-btn${saved ? ' as-save-btn--ok' : ''}`} onClick={handleSave}>
+            {saved ? <Check size={14} /> : <Save size={14} />}
+            {saved ? '已保存' : '保存'}
           </button>
-          <span className="as-header-title">API 配置</span>
-        </div>
-        <button className={`as-save-btn${saved ? ' as-save-btn--ok' : ''}`} onClick={handleSave}>
-          {saved ? <Check size={14} /> : <Save size={14} />}
-          {saved ? '已保存' : '保存'}
-        </button>
-      </header>
+        )}
+      />
 
       {/* ── 安全提示 Banner ── */}
       <div className="as-security-banner">

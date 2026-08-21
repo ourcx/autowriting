@@ -1,26 +1,52 @@
-FROM node:20-bookworm-slim
+FROM node:20-bookworm-slim AS build
 
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ARG PNPM_VERSION=10.32.1
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ git \
   && rm -rf /var/lib/apt/lists/* \
-  && corepack enable
+  && corepack enable \
+  && corepack prepare "pnpm@${PNPM_VERSION}" --activate
 
 WORKDIR /app
 
-COPY AGENTS.md ./AGENTS.md
 COPY web/package.json web/pnpm-lock.yaml ./
+COPY web/scripts/postinstall.cjs ./scripts/postinstall.cjs
 
 RUN pnpm install --frozen-lockfile --prod=false \
-  && pnpm exec playwright install --with-deps chromium \
-  && pnpm store prune
+  && pnpm exec playwright install chromium
 
 COPY web/ ./
 
 RUN pnpm build \
-  && mkdir -p /app/data /app/drafts /app/logs /app/writing-guide \
-  && chown -R node:node /app
+  && pnpm prune --prod
+
+FROM node:20-bookworm-slim AS runtime
+
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ARG PNPM_VERSION=10.32.1
+
+RUN corepack enable \
+  && corepack prepare "pnpm@${PNPM_VERSION}" --activate
+
+WORKDIR /app
+
+COPY --from=build /app/package.json /app/pnpm-lock.yaml ./
+COPY --from=build /app/node_modules ./node_modules
+
+RUN pnpm exec playwright install-deps chromium \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /ms-playwright /ms-playwright
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/server ./server
+COPY --from=build /app/server.ts ./server.ts
+COPY --from=build /app/tsconfig.json /app/tsconfig.node.json /app/tsconfig.server.json ./
+COPY AGENTS.md ./AGENTS.md
+
+RUN mkdir -p /app/data /app/drafts /app/logs /app/writing-guide \
+  && chown -R node:node /app /ms-playwright
 
 USER node
 

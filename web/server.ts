@@ -3,7 +3,7 @@
  */
 import express from "express"
 import cors from "cors"
-import { PORT, PROJECT_ROOT, DRAFTS_DIR, CACHE_DIR, SERVER_AI_CONFIG } from "./server/config.ts"
+import { PORT, PROJECT_ROOT, DRAFTS_DIR, CACHE_DIR, SERVER_AI_CONFIG, STATIC_DIR } from "./server/config.ts"
 import { logger } from "./server/logger.ts"
 import { performanceMonitorMiddleware } from "./server/performanceMonitor.ts"
 import articlesRouter from "./server/routes/articles.ts"
@@ -119,6 +119,16 @@ app.get("/api/config/status", (_req, res) => {
     dalleReady: hasCoverKey, stabilityReady: hasStabilityKey, siliconflowReady: hasSiliconflowKey,
   })
 })
+
+if (process.env.NODE_ENV === "production") {
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ error: "接口不存在" })
+  })
+  app.use(express.static(STATIC_DIR))
+  app.get("*", (_req, res) => {
+    res.sendFile("index.html", { root: STATIC_DIR })
+  })
+}
 
 for (const t of BUILTIN_TEMPLATES_DATA) { upsertTemplate(t) }
 console.log(`[DB] 内置模板已同步（${BUILTIN_TEMPLATES_DATA.length} 个）`)

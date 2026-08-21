@@ -1,10 +1,14 @@
+name: autowriting
+
 services:
   autowriting:
+    image: autowriting:local
     build:
       context: .
       dockerfile: Dockerfile
     container_name: autowriting
     restart: unless-stopped
+    init: true
     ports:
       - "${AUTOWRITING_PORT:-3000}:3000"
     env_file:

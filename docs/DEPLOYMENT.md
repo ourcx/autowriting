@@ -127,9 +127,13 @@ pm2 monit                 # 实时监控
 
 ### 1. 配置环境变量
 
+环境变量文件是可选的。直接运行一键脚本时，如果 `web/.env` 不存在，脚本会创建一个权限受限的空白文件；应用启动后可在浏览器「AI 配置」页面填写模型信息。
+
+需要在启动前统一配置服务端密钥时，再执行：
+
 ```bash
 cp web/.env.example web/.env
-# 编辑 web/.env，至少填写 ARTICLE_API_KEY 或 MAAS_API_KEY
+# 编辑 web/.env
 ```
 
 不要把真实 API Key、Cookie 或备份文件提交到 Git。
@@ -137,17 +141,22 @@ cp web/.env.example web/.env
 ### 2. 一键构建和启动
 
 ```bash
-# 构建镜像并后台启动
-docker compose up -d --build
+# 检查环境、构建、启动并等待健康和首页
+./scripts/docker-start.sh
 
 # 查看日志
 docker compose logs -f autowriting
 
 # 查看健康状态
 docker compose ps
+
+# 执行容器级验收
+./scripts/docker-smoke.sh
 ```
 
-默认访问地址：`http://localhost:3000`。如需改端口，在启动前设置 `AUTOWRITING_PORT`，例如 `AUTOWRITING_PORT=8080 docker compose up -d`。
+默认访问地址：`http://localhost:3000`。如需改端口，在启动前设置 `AUTOWRITING_PORT`，例如 `AUTOWRITING_PORT=8080 ./scripts/docker-start.sh`。
+
+镜像使用多阶段构建：构建阶段包含 Vite/Electron/ESLint 等开发依赖，最终运行阶段仅保留后端生产依赖、前端 `dist/`、Playwright Chromium 和原生模块。Express 在生产模式下同时托管 API、前端静态文件和 SPA 路由回退，因此不需要额外的 Nginx 容器即可运行完整 Web 应用。
 
 ### 3. 持久化数据
 
@@ -160,6 +169,33 @@ Compose 使用命名卷，容器重建不会丢失数据：
 | `autowriting_logs` | `/app/logs` | 应用结构化日志 |
 
 当前版本仍使用 SQLite 与本地 HNSW 向量索引；卷名保持稳定，为后续切换 MySQL/Qdrant 留出迁移边界。
+
+#### 从当前本机/PM2 数据迁入 Docker
+
+迁移前先停止 PM2 或本地后端，避免 SQLite WAL 继续写入。导入脚本会：
+
+- 检查宿主 `3000` 端口没有后端进程；
+- 用 `sqlite3 .backup` 创建一致的 SQLite 快照；
+- 复制 `web/data/` 中的 RAG、图片和其他运行文件；
+- 复制 `公众号写作/drafts/`；
+- 默认拒绝覆盖非空 Docker 卷；
+- 不删除、不修改原始目录。
+
+```bash
+# 首次导入空卷
+./scripts/docker-import-local-data.sh --yes
+
+# 导入后验证首页、API、卷、SQLite、草稿写入和 Playwright
+./scripts/docker-smoke.sh
+```
+
+只有确认 Docker 卷已有独立备份时，才可以使用 `--force` 覆盖非空卷；脚本会先创建覆盖前卷快照：
+
+```bash
+./scripts/docker-import-local-data.sh --yes --force
+```
+
+原始 `web/data/` 和 `公众号写作/drafts/` 至少保留 7–30 天，不要在容器首次启动后立即删除。
 
 #### 从旧 `/app/.cache` 升级
 
@@ -211,10 +247,39 @@ docker compose down
 
 # 拉取最新代码后重建
 git pull --ff-only
-docker compose up -d --build
+./scripts/docker-start.sh
 ```
 
 不要执行 `docker compose down -v`，它会删除命名卷中的运行时数据。
+
+### 6. 备份和恢复
+
+备份脚本会先短暂停止应用，确保 SQLite/WAL 和文件快照一致；完成后恢复原运行状态。备份目录权限为 `0700`，归档和校验文件为 `0600`。
+
+```bash
+# 默认写入 backups/YYYYmmdd-HHMMSS/
+./scripts/docker-backup.sh
+
+# 也可指定目录
+./scripts/docker-backup.sh /secure/path/autowriting-backup
+```
+
+备份包含：
+
+- `data.tar.gz`：SQLite、WAL、RAG/HNSW、上传、图片和调试工件；
+- `drafts.tar.gz`：文章、任务素材和各平台侧边文件；
+- `logs.tar.gz`：运行日志；
+- `web.env`：如果存在；
+- `SHA256SUMS` 和运行版本信息。
+
+恢复会覆盖当前卷，因此必须显式传入 `--yes`。恢复前脚本会自动把当前卷保存到 `backups/pre-restore-*`：
+
+```bash
+./scripts/docker-restore.sh backups/<timestamp> --yes
+./scripts/docker-smoke.sh
+```
+
+备份中可能含 API Key、用户文章和 Cookie 相关数据，应按敏感文件保管，不要提交 Git 或上传到公开位置。
 
 ---
 

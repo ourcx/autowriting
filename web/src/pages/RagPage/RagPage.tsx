@@ -13,6 +13,7 @@ import {
   ExternalLink, Cpu, Zap,
 } from 'lucide-react'
 import { toast } from '../../components/Toast/Toast'
+import PageHeader from '../../components/PageHeader/PageHeader'
 import { useConfigStore, updateLocalConfig } from '../../store/useConfigStore'
 import './RagPage.css'
 
@@ -235,18 +236,11 @@ export default function RagPage() {
   return (
     <div className="rp-root">
 
-      {/* ── Header ── */}
-      <header className="rp-header">
-        <button className="wd-back-btn" onClick={() => navigate('/')}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
-          返回
-        </button>
-        <div className="rp-header-title">
-          <Database size={17} />
-          向量知识库
-        </div>
-        <div style={{ width: 80 }} />
-      </header>
+      <PageHeader
+        title="向量知识库"
+        icon={<Database size={17} />}
+        onBack={() => navigate('/')}
+      />
 
       <div className="rp-body">
 

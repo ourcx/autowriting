@@ -327,11 +327,25 @@
 }
 
 .wr-tmpl-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 13px;
   font-weight: 600;
   color: var(--color-ink);
   white-space: nowrap;
   letter-spacing: -0.1px;
+}
+
+.wr-default-badge {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border-radius: 9999px;
+  background: rgba(45, 106, 79, 0.12);
+  color: #2d6a4f;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.5;
 }
 
 .wr-tmpl-desc {

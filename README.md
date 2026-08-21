@@ -46,15 +46,31 @@ npm start
 
 ## Docker 一键部署
 
-项目根目录已提供 `Dockerfile` 和 `docker-compose.yml`，运行：
+安装 Docker Desktop 或 Docker Engine 后，在项目根目录运行：
 
 ```bash
-cp web/.env.example web/.env
-# 编辑 web/.env，填写文章生成所需的 API Key
-docker compose up -d --build
+./scripts/docker-start.sh
 ```
 
-服务启动后访问 http://localhost:3000。SQLite、RAG 索引、上传图片、草稿和日志会分别保存在 Docker 命名卷中；详细持久化、备份和调试文件清理说明见 `docs/DEPLOYMENT.md`。
+脚本会检查 Docker、创建可选的私有 `web/.env`、构建镜像、启动容器并等待后端和首页就绪。API Key 可以启动后在浏览器「AI 配置」页面填写。
+
+服务启动后访问 http://localhost:3000。SQLite、RAG 索引、上传图片、草稿和日志会分别保存在 Docker 命名卷中。
+
+已有本地数据迁入 Docker：
+
+```bash
+./scripts/docker-import-local-data.sh --yes
+./scripts/docker-smoke.sh
+```
+
+备份与恢复：
+
+```bash
+./scripts/docker-backup.sh
+./scripts/docker-restore.sh backups/<timestamp> --yes
+```
+
+详细持久化、迁移、恢复和调试文件清理说明见 `docs/DEPLOYMENT.md`。
 
 ## 后续方向
 

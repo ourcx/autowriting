@@ -52,7 +52,7 @@ if (!IS_ELECTRON || ELECTRON_USER_DATA === '') {
 
 // ── 路径常量 ─────────────────────────────────────────────────────────────────
 
-let PROJECT_ROOT_DEFAULT, DATA_DIR_DEFAULT, DRAFTS_DIR_DEFAULT, AGENTS_FILE_DEFAULT, WRITING_GUIDE_FILE_DEFAULT
+let PROJECT_ROOT_DEFAULT, DATA_DIR_DEFAULT, DRAFTS_DIR_DEFAULT, AGENTS_FILE_DEFAULT, WRITING_GUIDE_FILE_DEFAULT, STATIC_DIR_DEFAULT
 
 if (IS_ELECTRON && ELECTRON_USER_DATA) {
   // Electron 模式：数据存放在系统 userData 目录
@@ -63,6 +63,7 @@ if (IS_ELECTRON && ELECTRON_USER_DATA) {
   DRAFTS_DIR_DEFAULT = path.join(ELECTRON_DOCUMENTS, 'autowriting', 'drafts')
   AGENTS_FILE_DEFAULT = path.join(ELECTRON_USER_DATA, 'AGENTS.md')
   WRITING_GUIDE_FILE_DEFAULT = path.join(ELECTRON_USER_DATA, '写作规范.md')
+  STATIC_DIR_DEFAULT = path.join(WEB_DIR, 'dist')
 } else {
   // 普通 Web 模式：路径相对于项目根目录
   PROJECT_ROOT_DEFAULT = path.join(WEB_DIR, '..')
@@ -71,6 +72,7 @@ if (IS_ELECTRON && ELECTRON_USER_DATA) {
   DRAFTS_DIR_DEFAULT = path.join(PROJECT_ROOT_DEFAULT, '公众号写作', 'drafts')
   AGENTS_FILE_DEFAULT = path.join(PROJECT_ROOT_DEFAULT, 'AGENTS.md')
   WRITING_GUIDE_FILE_DEFAULT = path.join(PROJECT_ROOT_DEFAULT, '写作参考', '写作规范.md')
+  STATIC_DIR_DEFAULT = path.join(WEB_DIR, 'dist')
 }
 
 export const PROJECT_ROOT = process.env.PROJECT_ROOT || PROJECT_ROOT_DEFAULT
@@ -80,6 +82,7 @@ export const WRITING_GUIDE_FILE = process.env.WRITING_GUIDE_FILE || WRITING_GUID
 export const DATA_DIR = process.env.DATA_DIR || DATA_DIR_DEFAULT
 export const LEGACY_DATA_DIR = process.env.LEGACY_DATA_DIR || ''
 export const LOG_DIR = process.env.LOG_DIR || path.join(PROJECT_ROOT, 'logs')
+export const STATIC_DIR = process.env.STATIC_DIR || STATIC_DIR_DEFAULT
 export const CACHE_DIR = path.join(DATA_DIR, 'covers')
 export const HISTORY_FILE = path.join(DATA_DIR, 'cover_history.json')
 

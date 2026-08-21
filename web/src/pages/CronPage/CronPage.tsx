@@ -2,10 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import {
-  ArrowLeft, Plus, Play, Pause, Trash2, RefreshCw, Clock,
+  Plus, Play, Pause, Trash2, RefreshCw, Clock,
   CheckCircle2, XCircle, AlertCircle, ChevronDown, Settings,
   Eye, EyeOff, Zap, TrendingUp, FileText, Paintbrush, Send, Activity,
 } from 'lucide-react'
+import PageHeader from '../../components/PageHeader/PageHeader'
 import { useAIReadiness, fetchServerStatus } from '../../store/useConfigStore'
 import { loadAIConfig } from '../../utils/aiConfig'
 import './CronPage.css'
@@ -276,17 +277,11 @@ export default function CronPage() {
   return (
     <div className="cp-root">
 
-      {/* ── Topbar ── */}
-      <header className="cp-topbar">
-        <button className="wd-back-btn" onClick={() => navigate(-1)}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
-          返回
-        </button>
-        <div className="cp-topbar-title">
-          <Clock size={15} />
-          定时任务
-        </div>
-        <div className="cp-topbar-actions">
+      <PageHeader
+        title="定时任务"
+        icon={<Clock size={15} />}
+        onBack={() => navigate(-1)}
+        actions={<div className="cp-topbar-actions">
           <button className="cp-icon-btn" onClick={() => { loadJobs(); loadLogs() }} title="刷新">
             <RefreshCw size={14} className={loading ? 'spin' : ''} />
           </button>
@@ -295,8 +290,8 @@ export default function CronPage() {
               <Plus size={14} /> 新建任务
             </button>
           )}
-        </div>
-      </header>
+        </div>}
+      />
 
       {/* ── AI 未配置 Banner ── */}
       {!articleReady && (

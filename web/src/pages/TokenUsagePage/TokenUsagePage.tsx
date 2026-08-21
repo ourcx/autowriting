@@ -4,7 +4,8 @@
  */
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Zap, TrendingUp, BarChart3, RefreshCw, Cpu } from 'lucide-react'
+import { Zap, TrendingUp, BarChart3, RefreshCw, Cpu } from 'lucide-react'
+import PageHeader from '../../components/PageHeader/PageHeader'
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -227,17 +228,11 @@ export default function TokenUsagePage() {
   return (
     <div className="tu-root">
 
-      {/* ══ 顶部导航 ══ */}
-      <header className="tu-header">
-        <button className="wd-back-btn" onClick={() => navigate(-1)}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
-          返回
-        </button>
-        <div className="tu-header-center">
-          <Zap size={15} className="tu-header-icon" />
-          <span className="tu-header-title">Token 用量</span>
-        </div>
-        <div className="tu-days-switch">
+      <PageHeader
+        title="Token 用量"
+        icon={<Zap size={15} className="tu-header-icon" />}
+        onBack={() => navigate(-1)}
+        actions={<div className="tu-days-switch">
           {[7, 30, 90].map(d => (
             <button
               key={d}
@@ -245,8 +240,8 @@ export default function TokenUsagePage() {
               onClick={() => setDays(d)}
             >{d}天</button>
           ))}
-        </div>
-      </header>
+        </div>}
+      />
 
       {/* ══ 加载 ══ */}
       {loading && (

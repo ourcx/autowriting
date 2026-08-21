@@ -1,9 +1,10 @@
 import { FormEvent, useCallback, useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import {
-  ArrowLeft, Eye, EyeOff, ExternalLink, Link2, Link2Off,
+  Eye, EyeOff, ExternalLink, Link2, Link2Off,
   RefreshCw, ShieldCheck, Users,
 } from "lucide-react"
+import PageHeader from "../../components/PageHeader/PageHeader"
 import {
   extractErrorMessage, fetchToutiaoAccount, fetchWechatAccount,
   ToutiaoAccount, WechatAccount,
@@ -170,13 +171,13 @@ export default function AccountPage() {
 
   return (
     <main className="ap-root">
-      <header className="ap-header">
-        <button className="ap-back" onClick={() => navigate("/")}>
-          <ArrowLeft size={16} /> 返回工作台
-        </button>
-        <div className="ap-brand"><span>Dashy</span><span className="ap-brand-slash">/</span> 用户页</div>
-        <div className="ap-header-note"><ShieldCheck size={14} /> 凭据仅保存在当前浏览器</div>
-      </header>
+      <PageHeader
+        title="用户页"
+        subtitle="管理内容平台连接与账号状态"
+        backLabel="返回工作台"
+        onBack={() => navigate("/")}
+        actions={<div className="ap-header-note"><ShieldCheck size={14} /> 凭据仅保存在当前浏览器</div>}
+      />
 
       <section className="ap-content">
         <div className="ap-intro">

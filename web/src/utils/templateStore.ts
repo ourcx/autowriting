@@ -3,6 +3,12 @@
  * 内置模板 + localStorage 自定义模板 CRUD
  */
 
+import {
+  CSS_BEST_PRACTICE,
+  CSS_EASTERN_LETTER,
+  DEFAULT_WECHAT_TEMPLATE_ID,
+} from "../../shared/defaultStyleTemplates"
+
 export interface TemplateItem {
   id: string
   name: string
@@ -892,6 +898,8 @@ export const CSS_AURORA = `/* ====== 极光紫 ====== */
 // ── 内置模板列表（前端本地副本，用于离线 fallback） ──────────────────────────
 
 export const BUILTIN_TEMPLATES: TemplateItem[] = [
+  { id: DEFAULT_WECHAT_TEMPLATE_ID, name: '默认样式', desc: '公众号最佳实践，正文、列表、代码与表格完整适配', accentColor: '#1e6bb8', css: CSS_BEST_PRACTICE, isBuiltin: true, createdAt: 0, updatedAt: 0 },
+  { id: 'eastern-letter', name: '东方笺谱', desc: '现代人文长文，宋体留白与朱砂点睛', accentColor: '#a33a2b', css: CSS_EASTERN_LETTER, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: 'default', name: '经典蓝', desc: '清爽专业，适合大多数文章', accentColor: '#1e6bb8', css: CSS_DEFAULT, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: 'morandi', name: '莫兰迪', desc: '低饱和自然色调，文艺感强', accentColor: '#4F6F52', css: CSS_MORANDI, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: 'minimal', name: '极简黑', desc: '干净有力，排版纯粹', accentColor: '#111111', css: CSS_MINIMAL, isBuiltin: true, createdAt: 0, updatedAt: 0 },
@@ -907,7 +915,7 @@ export async function fetchAllTemplates(): Promise<TemplateItem[]> {
     const resp = await fetch('/api/templates')
     if (!resp.ok) throw new Error('fetch failed')
     const data = await resp.json() as Array<Record<string, unknown>>
-    return data.map(t => ({
+    const serverTemplates = data.map(t => ({
       id:          String(t.id),
       name:        String(t.name),
       desc:        String(t.desc ?? ''),
@@ -917,6 +925,11 @@ export async function fetchAllTemplates(): Promise<TemplateItem[]> {
       createdAt:   Number(t.created_at  ?? t.createdAt  ?? 0),
       updatedAt:   Number(t.updated_at  ?? t.updatedAt  ?? 0),
     }))
+    const builtinIds = new Set(BUILTIN_TEMPLATES.map(template => template.id))
+    return [
+      ...BUILTIN_TEMPLATES,
+      ...serverTemplates.filter(template => !builtinIds.has(template.id)),
+    ]
   } catch {
     // fallback：内置模板 + localStorage 自定义
     return [...BUILTIN_TEMPLATES, ...loadCustomTemplatesLocal()]
@@ -990,17 +1003,19 @@ export function createNewTemplate(base?: Partial<TemplateItem>): TemplateItem {
     name: base?.name ?? '新模板',
     desc: base?.desc ?? '',
     accentColor: base?.accentColor ?? '#6366f1',
-    css: base?.css ?? CSS_DEFAULT.replace('/* ====== 经典蓝 ====== */', '/* ====== 自定义模板 ====== */'),
+    css: base?.css ?? CSS_BEST_PRACTICE.replace('/* ====== 默认样式 · 最佳实践 ====== */', '/* ====== 自定义模板 ====== */'),
     isBuiltin: false,
     createdAt: now,
     updatedAt: now,
   }
 }
 
-/** 用于预览的示例 Markdown，覆盖所有元素（含图片） */
+/** 用于预览的示例 Markdown，覆盖常见文章元素 */
 export const PREVIEW_MARKDOWN = `# 一级标题样式
 
-这是**正文段落**，包含*斜体*文字和\`行内代码\`示例。点击[这是链接](#)查看效果。段落文字随模板自动调整行高和间距。
+这是**正文段落**，包含*斜体*、~~删除线~~和\`行内代码\`示例。点击[这是链接](#)查看效果。段落文字随模板自动调整行高、字距和段间距。
+
+第二段用于观察连续阅读体验。好的公众号排版不只要“第一眼好看”，还要让长文在手机屏幕上保持稳定节奏。
 
 ## 二级标题
 
@@ -1010,6 +1025,7 @@ export const PREVIEW_MARKDOWN = `# 一级标题样式
 
 - 无序列表项 A
 - 无序列表项 B
+  - 嵌套列表用于验证层级
 - 支持 **加粗** 和 *斜体* 混排
 
 1. 有序列表一
@@ -1031,10 +1047,44 @@ export const PREVIEW_MARKDOWN = `# 一级标题样式
 function greet(name) {
   return \`Hello, \${name}!\`
 }
+
+console.log(greet("公众号读者"))
 \`\`\`
 
 | 表头 A | 表头 B | 表头 C |
 |--------|--------|--------|
 | 数据 1 | 数据 2 | 数据 3 |
 | 数据 4 | 数据 5 | 数据 6 |
+`
+
+/** Markdown 无法表达的扩展元素，用于完整检查模板细节 */
+export const PREVIEW_RICH_HTML = `
+<section class="callout callout-note">
+  <div class="callout-title"><span class="callout-icon">💡</span>提示块 · Note</div>
+  <p>适合放置背景信息、补充说明和读者需要记住的关键结论。</p>
+</section>
+<section class="callout callout-tip">
+  <div class="callout-title"><span class="callout-icon">✓</span>行动建议 · Tip</div>
+  <p>用不同语义色检查提示块在实际长文中的层次与可读性。</p>
+</section>
+<ul>
+  <li class="task-list-item"><input type="checkbox" checked disabled />已完成：核对标题、正文和引用样式</li>
+  <li class="task-list-item"><input type="checkbox" disabled />待完成：检查发布后的手机端效果</li>
+</ul>
+<div class="multiquote-2">
+  <p><strong>重点摘录：</strong>稳定、清晰、可复制，才是公众号默认样式的核心。</p>
+</div>
+<div class="table-container">
+  <table>
+    <thead><tr><th>场景</th><th>建议</th><th>效果</th></tr></thead>
+    <tbody>
+      <tr><td>长文阅读</td><td>控制行高与段距</td><td>更耐读</td></tr>
+      <tr><td>重点信息</td><td>使用提示块</td><td>层次清晰</td></tr>
+    </tbody>
+  </table>
+</div>
+<div class="block-equation">E = mc<sup>2</sup> · 公式与上下标预览</div>
+<section class="footnotes-sep">
+  <div class="footnote-item"><span class="footnote-num">[1]</span><p>参考资料区域用于验证脚注字号、颜色和对齐方式。</p></div>
+</section>
 `

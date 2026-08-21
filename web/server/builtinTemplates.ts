@@ -5,6 +5,11 @@
  */
 
 import type { StyleTemplate } from "./types.ts"
+import {
+  CSS_BEST_PRACTICE,
+  CSS_EASTERN_LETTER,
+  DEFAULT_WECHAT_TEMPLATE_ID,
+} from "../shared/defaultStyleTemplates.ts"
 
 const CSS_DEFAULT = `/* ====== 经典蓝 ====== */
 #wemd { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; color: #333333; line-height: 1.75; word-break: break-word; padding: 24px 40px 40px; }
@@ -137,6 +142,8 @@ const CSS_AURORA = `/* ====== 极光紫 ====== */
 #wemd tr:nth-child(even) td { background: #f8f5ff; }`
 
 export const BUILTIN_TEMPLATES_DATA: StyleTemplate[] = [
+  { id: DEFAULT_WECHAT_TEMPLATE_ID, name: "默认样式", desc: "公众号最佳实践，正文、列表、代码与表格完整适配", accentColor: "#1e6bb8", css: CSS_BEST_PRACTICE, isBuiltin: true, createdAt: 0, updatedAt: 0 },
+  { id: "eastern-letter", name: "东方笺谱", desc: "现代人文长文，宋体留白与朱砂点睛", accentColor: "#a33a2b", css: CSS_EASTERN_LETTER, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: "default", name: "经典蓝", desc: "清爽专业，适合大多数文章", accentColor: "#1e6bb8", css: CSS_DEFAULT, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: "morandi", name: "莫兰迪", desc: "低饱和自然色调，文艺感强", accentColor: "#4F6F52", css: CSS_MORANDI, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: "minimal", name: "极简黑", desc: "干净有力，排版纯粹", accentColor: "#111111", css: CSS_MINIMAL, isBuiltin: true, createdAt: 0, updatedAt: 0 },

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Trash2, Save, Copy, Check, Wand2, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
+import { Plus, Trash2, Save, Copy, Check, Wand2, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { toast, showConfirm } from '../../components/Toast/Toast'
+import PageHeader from '../../components/PageHeader/PageHeader'
 import { loadAIConfig } from '../../utils/aiConfig'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
@@ -14,7 +15,9 @@ import {
   createNewTemplate,
   BUILTIN_TEMPLATES,
   PREVIEW_MARKDOWN,
+  PREVIEW_RICH_HTML,
 } from '../../utils/templateStore'
+import { DEFAULT_WECHAT_TEMPLATE_ID } from '../../../shared/defaultStyleTemplates'
 import './StyleEditor.css'
 
 // ── Markdown 渲染 ──────────────────────────────────────────────────────────
@@ -30,7 +33,7 @@ function highlight(str: string, lang: string): string {
 }
 
 const mdParser = new MarkdownIt({ html: false, linkify: true, typographer: false, highlight })
-const previewHtml = mdParser.render(PREVIEW_MARKDOWN)
+const previewHtml = `${mdParser.render(PREVIEW_MARKDOWN)}${PREVIEW_RICH_HTML}`
 
 // ── 组件 ──────────────────────────────────────────────────────────────────
 
@@ -38,7 +41,7 @@ export default function StyleEditor() {
   const navigate = useNavigate()
 
   const [templates, setTemplates] = useState<TemplateItem[]>([])
-  const [selectedId, setSelectedId] = useState<string>('default')
+  const [selectedId, setSelectedId] = useState<string>(DEFAULT_WECHAT_TEMPLATE_ID)
   const [editName, setEditName] = useState('')
   const [editDesc, setEditDesc] = useState('')
   const [editColor, setEditColor] = useState('#1e6bb8')
@@ -199,7 +202,7 @@ export default function StyleEditor() {
       danger: true,
       onConfirm: async () => {
         await deleteCustomTemplate(selectedId)
-        setSelectedId('default')
+        setSelectedId(DEFAULT_WECHAT_TEMPLATE_ID)
       },
     })
   }
@@ -265,20 +268,16 @@ export default function StyleEditor() {
 
   return (
     <div className="se-root">
-      {/* ── 顶部导航 ── */}
-      <header className="se-header">
-        <div className="se-header-left">
-          <button className="wd-back-btn" onClick={() => navigate(-1)}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
-            返回
-          </button>
+      <PageHeader
+        title={(
           <div className="se-header-title">
             <span className="se-header-badge">样式管理</span>
             <span className="se-header-name">{editName || '未命名'}</span>
             {isDirty && <span className="se-dirty-dot" title="有未保存的改动" />}
           </div>
-        </div>
-        <div className="se-header-actions">
+        )}
+        onBack={() => navigate(-1)}
+        actions={<div className="se-header-actions">
           {isBuiltin ? (
             <button className="se-btn se-btn-secondary" onClick={handleClone}>
               <Copy size={14} />
@@ -300,8 +299,8 @@ export default function StyleEditor() {
               </button>
             </>
           )}
-        </div>
-      </header>
+        </div>}
+      />
 
       <div className="se-body">
         {/* ── 左侧模板列表 ── */}
@@ -316,7 +315,10 @@ export default function StyleEditor() {
               >
                 <span className="se-tmpl-dot" style={{ background: t.accentColor }} />
                 <div className="se-tmpl-info">
-                  <span className="se-tmpl-name">{t.name}</span>
+                  <span className="se-tmpl-name">
+                    {t.name}
+                    {t.id === DEFAULT_WECHAT_TEMPLATE_ID && <span className="se-default-badge">默认</span>}
+                  </span>
                   <span className="se-tmpl-desc">{t.desc}</span>
                 </div>
               </button>
@@ -518,7 +520,7 @@ export default function StyleEditor() {
         <div className="se-preview-pane" style={{ width: previewWidth }}>
           <div className="se-preview-header">
             <span className="se-preview-label">实时预览</span>
-            <span className="se-preview-sub">所有 Markdown 元素</span>
+            <span className="se-preview-sub">正文、列表、提示块、代码、表格与脚注</span>
           </div>
           <div className="se-preview-scroll">
             <div className="se-preview-card">

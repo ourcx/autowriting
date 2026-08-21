@@ -19,6 +19,7 @@ import ContentStats from '../../components/ContentStats/ContentStats'
 import GenerateModal from '../../components/GenerateModal/GenerateModal'
 import MaterialsCollector from '../../components/MaterialsCollector/MaterialsCollector'
 import TaskTemplateModal from '../../components/TaskTemplateModal/TaskTemplateModal'
+import PageHeader from '../../components/PageHeader/PageHeader'
 import {
   TaskTemplate,
   loadAllTaskTemplates,
@@ -321,14 +322,8 @@ export default function ArticleEditor() {
         </div>
       )}
 
-      {/* 顶部 Header */}
-      <div className="editor-header">
-        <button className="wd-back-btn" onClick={() => navigate('/')}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
-          返回
-        </button>
-
-        <div className="header-title">
+      <PageHeader
+        title={<div className="header-title">
           {editingTitle ? (
             <input
               type="text"
@@ -346,9 +341,9 @@ export default function ArticleEditor() {
               <Edit3 size={16} className="edit-icon" />
             </h2>
           )}
-        </div>
-
-        <div className="header-actions">
+        </div>}
+        onBack={() => navigate('/')}
+        actions={<div className="header-actions">
           <button
             className="btn btn-ghost"
             onClick={() => navigate('/settings')}
@@ -386,8 +381,8 @@ export default function ArticleEditor() {
               发布预览
             </button>
           )}
-        </div>
-      </div>
+        </div>}
+      />
 
       {/* Tabs + 内容区 */}
       <div className="editor-container">

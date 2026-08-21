@@ -22,7 +22,7 @@
   align-items: center;
 }
 
-.editor-header h2 {
+.header-title h2 {
   font-family: inherit;
   font-size: 20px;
   font-weight: 500;
@@ -37,7 +37,7 @@
   transition: background 0.2s;
 }
 
-.editor-header h2:hover {
+.header-title h2:hover {
   background: rgba(26, 58, 58, 0.05);
 }
 
@@ -46,7 +46,7 @@
   transition: opacity 0.2s;
 }
 
-.editor-header h2:hover .edit-icon {
+.header-title h2:hover .edit-icon {
   opacity: 1;
 }
 
@@ -982,25 +982,17 @@
 /* ── 响应式设计 ── */
 /* 响应式设计 */
 @media (max-width: 768px) {
-  .editor-header {
-    flex-direction: column;
-    align-items: flex-start;
-    padding: var(--spacing-sm) var(--spacing-md);
-    gap: var(--spacing-sm);
-  }
-
-  .editor-header h2 {
+  .header-title h2 {
     font-size: 18px;
   }
 
   .header-actions {
-    width: 100%;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
 
-  .btn {
-    flex: 1;
-    min-width: 100px;
+  .header-actions .btn {
+    flex: 0 0 auto;
+    min-width: max-content;
   }
 
   .editor-tabs {

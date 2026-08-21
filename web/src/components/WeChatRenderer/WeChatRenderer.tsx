@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import { fetchAllTemplates, BUILTIN_TEMPLATES, TemplateItem } from '../../utils/templateStore'
+import { DEFAULT_WECHAT_TEMPLATE_ID } from '../../../shared/defaultStyleTemplates'
 import { ImageLibrary } from '../ImageLibrary/ImageLibrary'
 import { generateXiaohongshuArticleMetadata, publishXiaohongshuNote } from '../../utils/apiHelpers'
 import { hasXiaohongshuCookies, loadXiaohongshuCookies } from '../../utils/accountBindings'
@@ -251,7 +252,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
 
   // 从服务端加载模板，初始用内置副本保证无白屏
   const [templates, setTemplates] = useState<TemplateItem[]>(BUILTIN_TEMPLATES)
-  const [templateId, setTemplateId] = useState('default')
+  const [templateId, setTemplateId] = useState(DEFAULT_WECHAT_TEMPLATE_ID)
   const [editedCss, setEditedCss] = useState(() => BUILTIN_TEMPLATES[0]?.css ?? '')
   const [fontSize, setFontSize] = useState(16)
   const [copied, setCopied] = useState(false)
@@ -350,8 +351,11 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
   useEffect(() => {
     fetchAllTemplates().then(all => {
       setTemplates(all)
-      const def = all.find(t => t.id === 'default') ?? all[0]
-      if (def) setEditedCss(def.css)
+      const defaultTemplate = all.find(t => t.id === DEFAULT_WECHAT_TEMPLATE_ID) ?? all[0]
+      if (defaultTemplate) {
+        setTemplateId(defaultTemplate.id)
+        setEditedCss(defaultTemplate.css)
+      }
     }).catch(() => { })
   }, [])
 
@@ -364,8 +368,9 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
         if (still) {
           setEditedCss(still.css)
         } else {
-          setTemplateId('default')
-          setEditedCss(all[0]?.css ?? '')
+          const defaultTemplate = all.find(t => t.id === DEFAULT_WECHAT_TEMPLATE_ID) ?? all[0]
+          setTemplateId(defaultTemplate?.id ?? DEFAULT_WECHAT_TEMPLATE_ID)
+          setEditedCss(defaultTemplate?.css ?? '')
         }
       }).catch(() => { })
     }
@@ -865,7 +870,10 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                   >
                     <span className="wr-tmpl-dot" style={{ background: t.accentColor }} />
                     <div className="wr-tmpl-info">
-                      <span className="wr-tmpl-name">{t.name}</span>
+                      <span className="wr-tmpl-name">
+                        {t.name}
+                        {t.id === DEFAULT_WECHAT_TEMPLATE_ID && <span className="wr-default-badge">默认</span>}
+                      </span>
                       <span className="wr-tmpl-desc">{t.desc}</span>
                     </div>
                     {templateId === t.id && <span className="wr-tmpl-check"><Check size={12} /></span>}

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Settings, Palette, AlertTriangle, Database, BookOpen, LogOut, Shield, Zap, Clock, Star, Image, User } from 'lucide-react'
 import Dashboard from '../Dashboard/Dashboard'
 import OnboardingGuide from '../../components/OnboardingGuide/OnboardingGuide'
+import PageHeader from '../../components/PageHeader/PageHeader'
 import { useAIReadiness, fetchServerStatus } from '../../store/useConfigStore'
 import { useAuth, logout } from '../../store/useAuth'
 import './DashboardPage.css'
@@ -39,14 +40,12 @@ export default function DashboardPage() {
 
   return (
     <div className="dp-root">
-      {/* ── Header ── */}
-      <header className="dp-header">
-        <div className="dp-logo" onClick={() => navigate('/')}>
+      <PageHeader
+        title={<div className="dp-logo" onClick={() => navigate('/')}>
           <div className="dp-logo-mark">D</div>
           <span>Dashy</span>
-        </div>
-
-        <nav className="dp-nav">
+        </div>}
+        actions={<nav className="dp-nav">
           {!apiKeyReady && (
             <button
               className="dp-nav-btn dp-nav-btn--warn"
@@ -109,8 +108,8 @@ export default function DashboardPage() {
             <LogOut size={14} />
             登出
           </button>
-        </nav>
-      </header>
+        </nav>}
+      />
 
       {/* ── 主体内容（占满剩余高度） ── */}
       <div className="dp-body">
