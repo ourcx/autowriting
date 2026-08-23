@@ -272,7 +272,7 @@ cases.push({
   },
 })
 cases.push({
-  name: '画布生成接口应校验 prompt',
+  name: '画布生成接口应要求文章内容源',
   run: async () => {
     const r = await fetch(`${BASE}/api/canvas/generate/stream`, {
       method: 'POST',

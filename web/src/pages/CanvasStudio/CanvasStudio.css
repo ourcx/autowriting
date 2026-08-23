@@ -70,6 +70,31 @@
   line-height: 1.5;
 }
 
+.cs-article-select {
+  display: flex;
+  flex: 0 0 250px;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-md);
+  background: var(--color-canvas);
+  color: var(--color-muted);
+}
+
+.cs-article-select select {
+  min-width: 0;
+  flex: 1;
+  height: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--color-body-strong);
+  font: inherit;
+  font-size: 12px;
+}
+
 .cs-toolbar textarea:focus {
   border-color: var(--color-brand-teal);
 }
@@ -379,6 +404,10 @@
 
   .cs-toolbar {
     flex-direction: column;
+  }
+
+  .cs-article-select {
+    flex-basis: 42px;
   }
 
   .cs-generate {

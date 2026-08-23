@@ -7,14 +7,18 @@ import type { AIConfig, AuthedRequest } from "../types.ts"
 import { buildLLMRequest, callLLMWithRetry } from "../utils/index.ts"
 import { parseCanvasDocument } from "../../shared/canvasDsl.ts"
 import type { CanvasDocument } from "../../shared/canvasDsl.ts"
+import {
+  hydrateCanvasDocument,
+  parseCanvasSources,
+} from "../../shared/canvasArticle.ts"
+import type { CanvasSource } from "../../shared/canvasArticle.ts"
 
 const router = Router()
 router.use(authMiddleware)
 
 const PROMPT_MAX_LENGTH = 3000
-const DOCUMENT_MAX_LENGTH = 30000
 
-const CANVAS_SYSTEM_PROMPT = `你是公众号视觉画布设计师。请把用户需求转换成严格 JSON，不要输出 Markdown、解释或代码围栏。
+const CANVAS_SYSTEM_PROMPT = `你是公众号长图排版引擎。文章内容由系统提供，你只能安排版式，绝对不能创作、改写、概括或省略正文。
 
 画布 DSL：
 {
@@ -27,21 +31,23 @@ const CANVAS_SYSTEM_PROMPT = `你是公众号视觉画布设计师。请把用�
 }
 
 节点仅允许四种：
-1. text: {"id":"","type":"text","x":0,"y":0,"width":300,"height":100,"rotation":0,"opacity":1,"text":"","fill":"#0a0a0a","fontSize":32,"fontWeight":600,"lineHeight":1.3,"align":"left"}
-2. image: {"id":"","type":"image","x":0,"y":0,"width":300,"height":240,"rotation":0,"opacity":1,"src":"https://...","fit":"cover","radius":8}
+1. text: {"id":"","sourceId":"source-0","type":"text","x":0,"y":0,"width":650,"height":100,"rotation":0,"opacity":1,"fill":"#0a0a0a","fontSize":30,"fontWeight":400,"lineHeight":1.7,"align":"left"}
+2. image: {"id":"","sourceId":"source-3","type":"image","x":0,"y":0,"width":650,"height":420,"rotation":0,"opacity":1,"fit":"cover","radius":8}
 3. shape: {"id":"","type":"shape","x":0,"y":0,"width":300,"height":100,"rotation":0,"opacity":1,"shape":"rect|ellipse","fill":"#ffffff","stroke":"#000000","strokeWidth":0,"radius":8}
 4. motif: {"id":"","type":"motif","x":0,"y":0,"width":300,"height":100,"rotation":0,"opacity":1,"motif":"wave|dots|arch|spark|frame","fill":"#e8b94a","stroke":"#e8b94a","strokeWidth":4}
 
 规则：
 - 响应首字符必须是 {，末字符必须是 }，只输出一个完整 JSON 对象。
 - 不得输出 Markdown 代码围栏、解释文字、注释、省略号或未闭合 JSON。
-- nodes 至少包含 1 个节点，每个节点必须包含对应类型列出的全部字段。
-- 节点按数组顺序从底到顶绘制，最多 40 个。
-- 画布宽度建议 750，高度 750-1800。
-- 多图海报使用 2-5 个 image 节点；没有用户图片 URL 时可以省略图片节点，不得编造 URL。
+- 每个内容源必须且只能出现一次，text/image 节点必须填写对应 sourceId。
+- text 节点不得输出 text，image 节点不得输出 src；系统会根据 sourceId 回填原文和图片。
+- 节点按数组顺序从底到顶绘制；装饰节点不得遮挡正文。
+- 这是公众号文章长图，不是封面或海报：画布宽度固定 750，高度按全文内容计算，可为 2000-30000。
+- 正文字号 28-34，行高 1.6-1.9，单栏主体宽度 620-660，左右留白至少 44。
+- 标题、章节、正文、引用、列表和图片应形成连续的纵向阅读流，不得大面积留空。
 - 只用纯色，确保文字与背景对比清晰。
 - 不输出任意 SVG、HTML、脚本、CSS、事件或外部字体。
-- 文本忠于用户提供的信息，不虚构数据、姓名和结论。`
+- 不得生成“在这里填写”“示例”“______”等占位内容。`
 
 interface CanvasCompletionData {
   choices?: Array<{
@@ -173,7 +179,8 @@ async function generateCanvasWithRepair(input: {
   model: string
   headers: Record<string, string>
   prompt: string
-  currentDocument: string
+  articleTitle: string
+  sources: CanvasSource[]
   onRepair?: () => void
   onAttempt?: (completion: CanvasCompletionData, attempt: number) => void
 }): Promise<{
@@ -182,11 +189,17 @@ async function generateCanvasWithRepair(input: {
   attempts: CanvasCompletionData[]
   repaired: boolean
 }> {
+  const sourceManifest = JSON.stringify(input.sources.map(source => ({
+    id: source.id,
+    kind: source.kind,
+    text: source.kind === "image" ? undefined : source.text,
+    alt: source.kind === "image" ? source.alt : undefined,
+  })))
   const messages = [
     { role: "system", content: CANVAS_SYSTEM_PROMPT },
     {
       role: "user",
-      content: `${input.prompt}${input.currentDocument ? `\n\n在当前画布基础上修改：\n${input.currentDocument}` : ""}`,
+      content: `排版偏好：${input.prompt}\n\n必须完整排版以下内容源，节点只能引用这些 sourceId：\n${sourceManifest}`,
     },
   ]
   const first = await callStructuredCanvas(input.url, {
@@ -200,7 +213,11 @@ async function generateCanvasWithRepair(input: {
 
   try {
     return {
-      document: parseCanvasFromCompletion(first),
+      document: hydrateCanvasDocument(
+        parseCanvasFromCompletion(first),
+        input.sources,
+        input.articleTitle,
+      ),
       completion: first,
       attempts: [first],
       repaired: false,
@@ -219,7 +236,7 @@ async function generateCanvasWithRepair(input: {
           role: "user",
           content: malformed
             ? `把下面的模型输出修复成合法画布 DSL：\n${malformed}`
-            : `上一轮没有返回可用正文。请直接根据需求重新生成画布 DSL：\n${input.prompt}${input.currentDocument ? `\n当前画布：${input.currentDocument}` : ""}`,
+            : `上一轮没有返回可用正文。请根据排版偏好和内容源重新生成：\n偏好：${input.prompt}\n内容源：${sourceManifest}`,
         },
       ],
       temperature: 0,
@@ -228,7 +245,11 @@ async function generateCanvasWithRepair(input: {
     }, input.headers, 2)
     input.onAttempt?.(repair, 2)
     return {
-      document: parseCanvasFromCompletion(repair),
+      document: hydrateCanvasDocument(
+        parseCanvasFromCompletion(repair),
+        input.sources,
+        input.articleTitle,
+      ),
       completion: repair,
       attempts: [first, repair],
       repaired: true,
@@ -239,12 +260,13 @@ async function generateCanvasWithRepair(input: {
 router.post("/generate", async (req: AuthedRequest, res) => {
   const debugStartedAt = Date.now()
   const debugTraceId = `canvas-${debugStartedAt}-${Math.random().toString(36).slice(2, 8)}`
-  const prompt = String(req.body?.prompt || "").trim().slice(0, PROMPT_MAX_LENGTH)
+  const prompt = String(req.body?.prompt || "排版为清晰耐读的公众号长图").trim().slice(0, PROMPT_MAX_LENGTH)
+  const sources = parseCanvasSources(req.body?.sources)
   // #region debug-point A:request-entry
-  if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "pre-fix", hypothesisId: "A", traceId: debugTraceId, location: "server/routes/canvas.ts:request-entry", msg: "[DEBUG] Canvas request entered Node route", data: { promptLength: prompt.length, hasDocument: Boolean(req.body?.document) }, ts: Date.now() }) }).catch(() => {})
+  if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "pre-fix", hypothesisId: "A", traceId: debugTraceId, location: "server/routes/canvas.ts:request-entry", msg: "[DEBUG] Canvas request entered Node route", data: { promptLength: prompt.length, sourceCount: sources.length }, ts: Date.now() }) }).catch(() => {})
   // #endregion
-  if (!prompt) {
-    res.status(400).json({ error: "请输入画布需求" })
+  if (sources.length === 0) {
+    res.status(400).json({ error: "请先选择一篇包含正文的公众号文章" })
     return
   }
 
@@ -261,26 +283,20 @@ router.post("/generate", async (req: AuthedRequest, res) => {
     return
   }
 
-  let currentDocument = ""
-  if (req.body?.document) {
-    try {
-      currentDocument = JSON.stringify(parseCanvasDocument(req.body.document)).slice(0, DOCUMENT_MAX_LENGTH)
-    } catch {
-      currentDocument = ""
-    }
-  }
+  const articleTitle = sources.find(source => source.kind === "title")?.text || "公众号长图"
 
   try {
     const { url, model, headers } = buildLLMRequest(aiConfig)
     // #region debug-point BCD:before-upstream
-    if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "pre-fix", hypothesisId: "B,C,D", traceId: debugTraceId, location: "server/routes/canvas.ts:before-upstream", msg: "[DEBUG] Canvas upstream request starting", data: { elapsedMs: Date.now() - debugStartedAt, provider: aiConfig.articleProvider, model, documentLength: currentDocument.length, maxTokens: 8000 }, ts: Date.now() }) }).catch(() => {})
+    if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "pre-fix", hypothesisId: "B,C,D", traceId: debugTraceId, location: "server/routes/canvas.ts:before-upstream", msg: "[DEBUG] Canvas upstream request starting", data: { elapsedMs: Date.now() - debugStartedAt, provider: aiConfig.articleProvider, model, sourceCount: sources.length, maxTokens: 8000 }, ts: Date.now() }) }).catch(() => {})
     // #endregion
     const generated = await generateCanvasWithRepair({
       url,
       model,
       headers,
       prompt,
-      currentDocument,
+      articleTitle,
+      sources,
     })
     const { document } = generated
     // #region debug-point BCD:upstream-complete
@@ -311,9 +327,10 @@ router.post("/generate", async (req: AuthedRequest, res) => {
 router.post("/generate/stream", async (req: AuthedRequest, res) => {
   const debugStartedAt = Date.now()
   const debugTraceId = `canvas-stream-${debugStartedAt}-${Math.random().toString(36).slice(2, 8)}`
-  const prompt = String(req.body?.prompt || "").trim().slice(0, PROMPT_MAX_LENGTH)
-  if (!prompt) {
-    res.status(400).json({ error: "请输入画布需求" })
+  const prompt = String(req.body?.prompt || "排版为清晰耐读的公众号长图").trim().slice(0, PROMPT_MAX_LENGTH)
+  const sources = parseCanvasSources(req.body?.sources)
+  if (sources.length === 0) {
+    res.status(400).json({ error: "请先选择一篇包含正文的公众号文章" })
     return
   }
 
@@ -330,14 +347,7 @@ router.post("/generate/stream", async (req: AuthedRequest, res) => {
     return
   }
 
-  let currentDocument = ""
-  if (req.body?.document) {
-    try {
-      currentDocument = JSON.stringify(parseCanvasDocument(req.body.document)).slice(0, DOCUMENT_MAX_LENGTH)
-    } catch {
-      currentDocument = ""
-    }
-  }
+  const articleTitle = sources.find(source => source.kind === "title")?.text || "公众号长图"
 
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8")
   res.setHeader("Cache-Control", "no-cache")
@@ -352,7 +362,7 @@ router.post("/generate/stream", async (req: AuthedRequest, res) => {
   const heartbeat = setInterval(() => send("heartbeat", { elapsedMs: Date.now() - debugStartedAt }), 15000)
 
   // #region debug-point B:stream-open
-  if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "post-fix", hypothesisId: "B", traceId: debugTraceId, location: "server/routes/canvas.ts:stream-open", msg: "[DEBUG] Canvas SSE stream opened", data: { elapsedMs: Date.now() - debugStartedAt, promptLength: prompt.length, documentLength: currentDocument.length }, ts: Date.now() }) }).catch(() => {})
+  if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "post-fix", hypothesisId: "B", traceId: debugTraceId, location: "server/routes/canvas.ts:stream-open", msg: "[DEBUG] Canvas SSE stream opened", data: { elapsedMs: Date.now() - debugStartedAt, promptLength: prompt.length, sourceCount: sources.length }, ts: Date.now() }) }).catch(() => {})
   // #endregion
 
   try {
@@ -362,7 +372,8 @@ router.post("/generate/stream", async (req: AuthedRequest, res) => {
       model,
       headers,
       prompt,
-      currentDocument,
+      articleTitle,
+      sources,
       onRepair: () => send("progress", { message: "正在修复模型输出..." }),
       onAttempt: (completion, attempt) => {
         // #region debug-point F:completion-shape

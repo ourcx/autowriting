@@ -4,6 +4,7 @@ export type CanvasMotif = "wave" | "dots" | "arch" | "spark" | "frame"
 
 interface CanvasNodeBase {
   id: string
+  sourceId?: string
   type: CanvasNodeType
   x: number
   y: number
@@ -115,9 +116,12 @@ function urlIn(value: unknown): string {
 function baseNode(record: Record<string, unknown>, index: number): CanvasNodeBase {
   return {
     id: textIn(record.id, `node-${index + 1}`, 64).replace(/[^a-zA-Z0-9_-]/g, "-"),
+    sourceId: typeof record.sourceId === "string"
+      ? textIn(record.sourceId, "", 64).replace(/[^a-zA-Z0-9_-]/g, "-")
+      : undefined,
     type: record.type as CanvasNodeType,
     x: numberIn(record.x, 0, -2000, 4000),
-    y: numberIn(record.y, 0, -2000, 8000),
+    y: numberIn(record.y, 0, -2000, 30000),
     width: numberIn(record.width, 160, 8, 2000),
     height: numberIn(record.height, 80, 8, 4000),
     rotation: numberIn(record.rotation, 0, -360, 360),
@@ -178,7 +182,7 @@ function parseNode(value: unknown, index: number): CanvasNode | null {
 
 export function parseCanvasDocument(value: unknown): CanvasDocument {
   const record = asRecord(value)
-  const rawNodes = Array.isArray(record.nodes) ? record.nodes.slice(0, 40) : []
+  const rawNodes = Array.isArray(record.nodes) ? record.nodes.slice(0, 140) : []
   const nodes = rawNodes.map(parseNode).filter((node): node is CanvasNode => node !== null)
   if (nodes.length === 0) throw new Error("画布至少需要一个有效节点")
 
@@ -186,7 +190,7 @@ export function parseCanvasDocument(value: unknown): CanvasDocument {
     version: 1,
     name: textIn(record.name, "未命名画布", 80),
     width: numberIn(record.width, 750, 320, 1600),
-    height: numberIn(record.height, 1000, 320, 5000),
+    height: numberIn(record.height, 1000, 320, 32000),
     background: colorIn(record.background, "#fffaf0"),
     nodes,
   }

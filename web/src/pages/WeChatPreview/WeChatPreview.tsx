@@ -74,7 +74,7 @@ export default function WeChatPreview() {
           </button>
           <button
             className="preview-nav-styles-btn"
-            onClick={() => navigate('/canvas')}
+            onClick={() => navigate(`/canvas?articleId=${encodeURIComponent(articleId || '')}`)}
           >
             <Shapes size={14} />
             视觉画布

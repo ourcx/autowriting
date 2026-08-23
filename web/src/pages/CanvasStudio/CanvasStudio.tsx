@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import {
   ArrowDown,
   ArrowUp,
@@ -8,6 +8,7 @@ import {
   Download,
   Image,
   LayoutTemplate,
+  FileText,
   Shapes,
   Sparkles,
   Square,
@@ -17,18 +18,33 @@ import {
 import PageHeader from "../../components/PageHeader/PageHeader"
 import CanvasRenderer from "../../components/CanvasRenderer/CanvasRenderer"
 import { toast } from "../../components/Toast/Toast"
-import { generateCanvasDocument } from "../../utils/apiHelpers"
+import {
+  fetchArticle,
+  fetchArticleList,
+  fetchUploadedArticleImages,
+  generateCanvasDocument,
+} from "../../utils/apiHelpers"
 import { loadAIConfig } from "../../utils/aiConfig"
+import {
+  createEmptyArticleData,
+  loadLocalArticleData,
+  normalizeArticleData,
+} from "../../utils/articleData"
+import type { ArticleData } from "../../utils/articleData"
 import {
   CanvasDocument,
   CanvasNode,
   DEFAULT_CANVAS_DOCUMENT,
   parseCanvasDocument,
 } from "../../../shared/canvasDsl"
+import {
+  createArticleCanvas,
+  extractCanvasSources,
+} from "../../../shared/canvasArticle"
+import type { CanvasSource } from "../../../shared/canvasArticle"
 import "./CanvasStudio.css"
 
-const STORAGE_KEY = "visual-canvas-document-v1"
-const SAMPLE_IMAGE = "https://copilot-cn.bytedance.net/api/ide/v1/text_to_image?prompt=editorial%20still%20life%20with%20printed%20magazine%20pages%2C%20camera%2C%20notebook%20and%20flowers%20on%20a%20bright%20studio%20table%2C%20realistic%20photography%2C%20warm%20natural%20light%2C%20high%20detail&image_size=landscape_4_3"
+const STORAGE_KEY = "visual-article-canvas-v2"
 
 type InspectorTab = "properties" | "dsl"
 
@@ -36,12 +52,12 @@ function cloneDefaultDocument(): CanvasDocument {
   return JSON.parse(JSON.stringify(DEFAULT_CANVAS_DOCUMENT)) as CanvasDocument
 }
 
-function loadDocument(): CanvasDocument {
+function loadDocument(articleId: string): CanvasDocument | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? parseCanvasDocument(JSON.parse(raw)) : cloneDefaultDocument()
+    const raw = localStorage.getItem(`${STORAGE_KEY}:${articleId}`)
+    return raw ? parseCanvasDocument(JSON.parse(raw)) : null
   } catch {
-    return cloneDefaultDocument()
+    return null
   }
 }
 
@@ -66,7 +82,7 @@ function makeNode(type: CanvasNode["type"], index: number): CanvasNode {
     return { ...base, type, text: "输入文字", fill: "#0a0a0a", fontSize: 34, fontWeight: 600, lineHeight: 1.3, align: "left" }
   }
   if (type === "image") {
-    return { ...base, type, src: SAMPLE_IMAGE, fit: "cover", radius: 8, height: 240 }
+    return { ...base, type, src: "", fit: "cover", radius: 8, height: 240 }
   }
   if (type === "shape") {
     return { ...base, type, shape: "rect", fill: "#b8a4ed", stroke: "transparent", strokeWidth: 0, radius: 8 }
@@ -76,14 +92,21 @@ function makeNode(type: CanvasNode["type"], index: number): CanvasNode {
 
 export default function CanvasStudio() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const articleId = searchParams.get("articleId") || ""
   const svgRef = useRef<SVGSVGElement>(null)
-  const [document, setDocument] = useState<CanvasDocument>(loadDocument)
+  const [document, setDocument] = useState<CanvasDocument>(cloneDefaultDocument)
   const [selectedId, setSelectedId] = useState<string | null>(document.nodes[document.nodes.length - 1]?.id ?? null)
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("properties")
   const [dslDraft, setDslDraft] = useState(() => JSON.stringify(document, null, 2))
   const [aiPrompt, setAiPrompt] = useState("")
   const [generating, setGenerating] = useState(false)
   const [generationMessage, setGenerationMessage] = useState("")
+  const [articles, setArticles] = useState<Array<{ id: string; title: string; status: string }>>([])
+  const [articleData, setArticleData] = useState<ArticleData>(createEmptyArticleData)
+  const [sources, setSources] = useState<CanvasSource[]>([])
+  const [articleLoading, setArticleLoading] = useState(false)
+  const [loadedArticleId, setLoadedArticleId] = useState("")
 
   const selectedNode = useMemo(
     () => document.nodes.find(node => node.id === selectedId) ?? null,
@@ -91,9 +114,79 @@ export default function CanvasStudio() {
   )
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(document))
+    let cancelled = false
+    fetchArticleList()
+      .then(items => {
+        if (cancelled) return
+        setArticles(items)
+        if (!articleId && items.length > 0) {
+          setSearchParams({ articleId: items[0].id }, { replace: true })
+        }
+      })
+      .catch(() => {
+        if (!cancelled) toast.error("文章列表加载失败")
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [articleId, setSearchParams])
+
+  useEffect(() => {
+    if (!articleId) {
+      setArticleData(createEmptyArticleData())
+      setSources([])
+      setLoadedArticleId("")
+      return
+    }
+    let cancelled = false
+    setArticleLoading(true)
+    setSources([])
+    setLoadedArticleId("")
+    const loadArticle = async () => {
+      try {
+        const data = articleId.startsWith("local:")
+          ? loadLocalArticleData(articleId)
+          : normalizeArticleData(await fetchArticle(articleId))
+        const uploaded = articleId.startsWith("local:")
+          ? []
+          : await fetchUploadedArticleImages(articleId).catch(() => [])
+        const cover = localStorage.getItem(`cover_image_${articleId}`)
+        const extraImages = [
+          ...(cover ? [{ src: cover, alt: "文章封面" }] : []),
+          ...uploaded,
+        ]
+        const nextSources = extractCanvasSources({
+          title: data.title || data.article.split("\n")[0]?.replace(/^#+\s*/, "") || "未命名文章",
+          article: data.article,
+          materials: data.materials,
+          extraImages,
+        })
+        if (cancelled) return
+        setArticleData(data)
+        setSources(nextSources)
+        setLoadedArticleId(articleId)
+        const nextDocument = loadDocument(articleId)
+          || createArticleCanvas(data.title || "公众号长图", nextSources)
+        setDocument(nextDocument)
+        setSelectedId(nextDocument.nodes[nextDocument.nodes.length - 1]?.id ?? null)
+      } catch {
+        if (!cancelled) toast.error("公众号文章加载失败")
+      } finally {
+        if (!cancelled) setArticleLoading(false)
+      }
+    }
+    void loadArticle()
+    return () => {
+      cancelled = true
+    }
+  }, [articleId])
+
+  useEffect(() => {
+    if (articleId && loadedArticleId === articleId && sources.length > 0) {
+      localStorage.setItem(`${STORAGE_KEY}:${articleId}`, JSON.stringify(document))
+    }
     setDslDraft(JSON.stringify(document, null, 2))
-  }, [document])
+  }, [articleId, document, loadedArticleId, sources.length])
 
   const updateNode = (id: string, patch: Partial<CanvasNode>) => {
     setDocument(current => ({
@@ -138,16 +231,16 @@ export default function CanvasStudio() {
   }
 
   const handleGenerate = async () => {
-    if (!aiPrompt.trim()) {
-      toast.warn("请先描述要生成的画布")
+    if (sources.length === 0 || !articleData.article.trim()) {
+      toast.warn("请先选择一篇已生成正文的公众号文章")
       return
     }
     setGenerating(true)
     setGenerationMessage("正在连接 AI...")
     try {
       const nextDocument = await generateCanvasDocument(
-        aiPrompt.trim(),
-        document,
+        aiPrompt.trim() || "排版为清晰耐读、图文交错的公众号长图",
+        sources,
         loadAIConfig(),
         setGenerationMessage,
       )
@@ -185,6 +278,48 @@ export default function CanvasStudio() {
     URL.revokeObjectURL(url)
   }
 
+  const downloadPng = async () => {
+    const svg = serializeSvg()
+    if (!svg) return
+    const svgUrl = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }))
+    try {
+      const image = new window.Image()
+      image.crossOrigin = "anonymous"
+      await new Promise<void>((resolve, reject) => {
+        image.onload = () => resolve()
+        image.onerror = () => reject(new Error("画布中的图片无法加载"))
+        image.src = svgUrl
+      })
+
+      const segmentHeight = 6000
+      const segmentCount = Math.ceil(document.height / segmentHeight)
+      for (let index = 0; index < segmentCount; index += 1) {
+        const sourceY = index * segmentHeight
+        const height = Math.min(segmentHeight, document.height - sourceY)
+        const canvas = window.document.createElement("canvas")
+        canvas.width = document.width
+        canvas.height = height
+        const context = canvas.getContext("2d")
+        if (!context) throw new Error("浏览器无法创建 PNG 画布")
+        context.drawImage(image, 0, sourceY, document.width, height, 0, 0, document.width, height)
+        const blob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob(value => value ? resolve(value) : reject(new Error("PNG 编码失败")), "image/png")
+        })
+        const url = URL.createObjectURL(blob)
+        const anchor = window.document.createElement("a")
+        anchor.href = url
+        anchor.download = `${document.name || "article"}${segmentCount > 1 ? `-${index + 1}` : ""}.png`
+        anchor.click()
+        URL.revokeObjectURL(url)
+      }
+      toast.success(segmentCount > 1 ? `已导出 ${segmentCount} 张公众号长图` : "公众号长图已导出")
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "PNG 导出失败")
+    } finally {
+      URL.revokeObjectURL(svgUrl)
+    }
+  }
+
   const copyDsl = async () => {
     await navigator.clipboard.writeText(JSON.stringify(document, null, 2))
     toast.success("已复制画布 DSL")
@@ -193,9 +328,11 @@ export default function CanvasStudio() {
   return (
     <div className="cs-root">
       <PageHeader
-        title="视觉画布"
+        title="公众号长图"
         icon={<Shapes size={16} />}
-        subtitle="AI 生成受约束的 SVG 多图文布局"
+        subtitle={articleId
+          ? `${articleData.title || "当前文章"} · ${sources.filter(source => source.kind !== "image").length} 个内容块 · ${sources.filter(source => source.kind === "image").length} 张图片`
+          : "选择公众号文章后由 AI 负责排版"}
         onBack={() => navigate("/")}
         actions={(
           <>
@@ -207,24 +344,53 @@ export default function CanvasStudio() {
               <Copy size={14} />
               复制 DSL
             </button>
-            <button className="cs-header-btn cs-header-btn--primary" onClick={downloadSvg}>
+            <button className="cs-header-btn" onClick={downloadSvg}>
               <Download size={14} />
-              下载 SVG
+              SVG 源文件
+            </button>
+            <button className="cs-header-btn cs-header-btn--primary" onClick={downloadPng}>
+              <Image size={14} />
+              下载公众号长图
             </button>
           </>
         )}
       />
 
       <div className="cs-toolbar">
+        <label className="cs-article-select">
+          <FileText size={15} />
+          <select
+            value={articleId}
+            onChange={event => {
+              const nextArticleId = event.target.value
+              setSearchParams(nextArticleId ? { articleId: nextArticleId } : {}, { replace: true })
+            }}
+            aria-label="选择公众号文章"
+          >
+            <option value="">选择公众号文章</option>
+            {articleId && !articles.some(article => article.id === articleId) ? (
+              <option value={articleId}>{articleData.title || articleId}</option>
+            ) : null}
+            {articles.map(article => (
+              <option key={article.id} value={article.id}>
+                {article.title || article.id}
+              </option>
+            ))}
+          </select>
+        </label>
         <textarea
           value={aiPrompt}
           onChange={event => setAiPrompt(event.target.value)}
-          placeholder="例如：做一张人物访谈长图，使用三张图片、杂志式留白、暖红标题和黑色引语块"
+          placeholder="可选：指定排版风格，例如“杂志式留白、暖红标题、图片穿插正文”；AI 不会改写文章"
           rows={2}
         />
-        <button className="cs-generate" disabled={generating} onClick={handleGenerate}>
+        <button
+          className="cs-generate"
+          disabled={generating || articleLoading || sources.length === 0}
+          onClick={handleGenerate}
+        >
           <Sparkles size={15} />
-          {generating ? generationMessage || "生成中..." : "AI 生成画布"}
+          {generating ? generationMessage || "生成中..." : "AI 排版全文"}
         </button>
       </div>
 

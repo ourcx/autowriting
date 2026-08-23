@@ -5,6 +5,7 @@
 import axios, { AxiosError } from 'axios'
 import { AIConfig } from './aiConfig'
 import { CanvasDocument, parseCanvasDocument } from '../../shared/canvasDsl'
+import type { CanvasSource } from '../../shared/canvasArticle'
 
 export interface WechatAccount {
   nickname: string
@@ -120,7 +121,7 @@ export async function fetchArticleList() {
 
 export async function generateCanvasDocument(
   prompt: string,
-  document: CanvasDocument,
+  sources: CanvasSource[],
   aiConfig: AIConfig,
   onProgress?: (message: string) => void,
 ): Promise<CanvasDocument> {
@@ -131,7 +132,7 @@ export async function generateCanvasDocument(
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ prompt, document, aiConfig }),
+    body: JSON.stringify({ prompt, sources, aiConfig }),
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({})) as { error?: string }
@@ -169,6 +170,23 @@ export async function generateCanvasDocument(
   if (buffer.trim()) consumeBlock(buffer)
   if (!result) throw new Error('画布生成结束，但没有收到有效结果')
   return result
+}
+
+export async function fetchUploadedArticleImages(articleId: string): Promise<Array<{ src: string; alt: string }>> {
+  const response = await axios.get('/api/images/uploaded', { params: { articleId } })
+  const rows = Array.isArray(response.data) ? response.data : []
+  return rows.flatMap((row: unknown) => {
+    if (!row || typeof row !== 'object') return []
+    const record = row as Record<string, unknown>
+    const src = typeof record.url === 'string' ? record.url : ''
+    if (!src) return []
+    const alt = typeof record.originalName === 'string'
+      ? record.originalName
+      : typeof record.original_name === 'string'
+        ? record.original_name
+        : '文章图片'
+    return [{ src, alt }]
+  })
 }
 
 // ── 删除文章 ──

@@ -63,6 +63,18 @@
 3. 第二轮返回 276 字合法 JSON，最终成功输出 `result`，`repaired=true`。
 4. 单独验证 `message.content=null + tool_calls[].function.arguments`，无需修复即可生成画布。
 
+## Follow-up: canvas content fidelity
+
+线上旧画布包含 12 个节点：7 个占位文本、4 个装饰、1 个形状、0 张图片。根因是请求没有携带公众号文章，模型同时承担了内容生成与排版。
+
+修复后：
+
+1. 文章被确定性拆分为标题、章节、正文、引用、列表和图片内容源。
+2. AI 只返回 `sourceId`、坐标和视觉属性，不能返回正文或图片地址。
+3. 服务端覆盖 AI 伪造内容，并按文章顺序补齐漏排内容。
+4. 最坏场景测试中，AI 仅排版 1 个来源并伪造文字；最终仍保留全部 5 个原文文本和 1 张图片，伪造文字为 0。
+5. 浏览器测试中，示例文章完整生成 7 个文本块和 3 张图片，画布自动扩展至 2405px。
+
 ## Verification Conclusion
 
 修复后连接不再在模型等待期间保持静默；持续超过 Nginx 空闲阈值时，15 秒 heartbeat 会刷新 upstream read timeout。等待用户在线上环境确认。
