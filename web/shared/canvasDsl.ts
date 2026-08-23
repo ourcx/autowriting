@@ -1,6 +1,8 @@
-export type CanvasNodeType = "text" | "image" | "shape" | "motif"
+export type CanvasNodeType = "text" | "image" | "shape" | "motif" | "path"
 export type CanvasShape = "rect" | "ellipse"
 export type CanvasMotif = "wave" | "dots" | "arch" | "spark" | "frame"
+
+export type CanvasTextVariant = "plain" | "banner" | "card" | "quote" | "sticky"
 
 interface CanvasNodeBase {
   id: string
@@ -17,7 +19,13 @@ interface CanvasNodeBase {
 export interface CanvasTextNode extends CanvasNodeBase {
   type: "text"
   text: string
+  variant: CanvasTextVariant
   fill: string
+  background: string
+  borderColor: string
+  borderWidth: number
+  radius: number
+  padding: number
   fontSize: number
   fontWeight: number
   lineHeight: number
@@ -48,7 +56,20 @@ export interface CanvasMotifNode extends CanvasNodeBase {
   strokeWidth: number
 }
 
-export type CanvasNode = CanvasTextNode | CanvasImageNode | CanvasShapeNode | CanvasMotifNode
+export interface CanvasPathNode extends CanvasNodeBase {
+  type: "path"
+  d: string
+  fill: string
+  stroke: string
+  strokeWidth: number
+}
+
+export type CanvasNode =
+  | CanvasTextNode
+  | CanvasImageNode
+  | CanvasShapeNode
+  | CanvasMotifNode
+  | CanvasPathNode
 
 export interface CanvasDocument {
   version: 1
@@ -57,6 +78,61 @@ export interface CanvasDocument {
   height: number
   background: string
   nodes: CanvasNode[]
+}
+
+function characterWidthUnits(character: string): number {
+  if (/\s/.test(character)) return 0.35
+  if (character.charCodeAt(0) <= 127) {
+    if (/[A-Z0-9]/.test(character)) return 0.68
+    if (/[.,:;'"!?()[\]{}]/.test(character)) return 0.42
+    return 0.58
+  }
+  return 1.05
+}
+
+export function wrapCanvasText(
+  text: string,
+  width: number,
+  fontSize: number,
+  padding = 0,
+): string[] {
+  const maxUnits = Math.max(1, (width - padding * 2) / fontSize)
+  const lines: string[] = []
+  for (const paragraph of text.split("\n")) {
+    if (!paragraph) {
+      lines.push("")
+      continue
+    }
+    let line = ""
+    let units = 0
+    for (const character of Array.from(paragraph)) {
+      const nextUnits = characterWidthUnits(character)
+      if (line && units + nextUnits > maxUnits) {
+        lines.push(line)
+        line = character
+        units = nextUnits
+      } else {
+        line += character
+        units += nextUnits
+      }
+    }
+    if (line) lines.push(line)
+  }
+  return lines
+}
+
+export function estimateCanvasTextHeight(
+  text: string,
+  width: number,
+  fontSize: number,
+  lineHeight: number,
+  padding = 0,
+): number {
+  return Math.ceil(
+    wrapCanvasText(text, width, fontSize, padding).length * fontSize * lineHeight
+    + padding * 2
+    + 8,
+  )
 }
 
 const DEFAULT_IMAGE_A = "https://copilot-cn.bytedance.net/api/ide/v1/text_to_image?prompt=editorial%20portrait%20of%20a%20Chinese%20independent%20designer%20in%20a%20bright%20minimal%20studio%2C%20natural%20window%20light%2C%20warm%20neutral%20palette%2C%20documentary%20photography%2C%20high%20detail&image_size=portrait_4_3"
@@ -71,14 +147,14 @@ export const DEFAULT_CANVAS_DOCUMENT: CanvasDocument = {
   nodes: [
     { id: "shape-bg", type: "shape", shape: "rect", x: 0, y: 0, width: 750, height: 1000, rotation: 0, opacity: 1, fill: "#fffaf0", stroke: "#fffaf0", strokeWidth: 0, radius: 0 },
     { id: "motif-arch", type: "motif", motif: "arch", x: 500, y: 36, width: 210, height: 230, rotation: 0, opacity: 1, fill: "#ffb084", stroke: "#0a0a0a", strokeWidth: 0 },
-    { id: "title", type: "text", x: 48, y: 48, width: 430, height: 150, rotation: 0, opacity: 1, text: "把复杂的事，\\n做得清楚而漂亮", fill: "#0a0a0a", fontSize: 46, fontWeight: 700, lineHeight: 1.18, align: "left" },
-    { id: "subtitle", type: "text", x: 52, y: 215, width: 380, height: 70, rotation: 0, opacity: 1, text: "CREATIVE PRACTICE · 2026", fill: "#6a6a6a", fontSize: 17, fontWeight: 600, lineHeight: 1.4, align: "left" },
+    { id: "title", type: "text", x: 48, y: 48, width: 430, height: 150, rotation: 0, opacity: 1, text: "把复杂的事，\\n做得清楚而漂亮", variant: "plain", fill: "#0a0a0a", background: "transparent", borderColor: "transparent", borderWidth: 0, radius: 0, padding: 0, fontSize: 46, fontWeight: 700, lineHeight: 1.18, align: "left" },
+    { id: "subtitle", type: "text", x: 52, y: 215, width: 380, height: 70, rotation: 0, opacity: 1, text: "CREATIVE PRACTICE · 2026", variant: "plain", fill: "#6a6a6a", background: "transparent", borderColor: "transparent", borderWidth: 0, radius: 0, padding: 0, fontSize: 17, fontWeight: 600, lineHeight: 1.4, align: "left" },
     { id: "image-main", type: "image", x: 48, y: 310, width: 420, height: 500, rotation: 0, opacity: 1, src: DEFAULT_IMAGE_A, fit: "cover", radius: 8 },
     { id: "image-detail", type: "image", x: 490, y: 560, width: 212, height: 250, rotation: 0, opacity: 1, src: DEFAULT_IMAGE_B, fit: "cover", radius: 8 },
     { id: "quote-bg", type: "shape", shape: "rect", x: 470, y: 305, width: 232, height: 220, rotation: 0, opacity: 1, fill: "#1a3a3a", stroke: "#1a3a3a", strokeWidth: 0, radius: 8 },
-    { id: "quote", type: "text", x: 494, y: 340, width: 184, height: 140, rotation: 0, opacity: 1, text: "设计不是装饰，\\n而是让信息\\n拥有秩序。", fill: "#ffffff", fontSize: 25, fontWeight: 600, lineHeight: 1.45, align: "left" },
+    { id: "quote", type: "text", x: 494, y: 340, width: 184, height: 140, rotation: 0, opacity: 1, text: "设计不是装饰，\\n而是让信息\\n拥有秩序。", variant: "plain", fill: "#ffffff", background: "transparent", borderColor: "transparent", borderWidth: 0, radius: 0, padding: 0, fontSize: 25, fontWeight: 600, lineHeight: 1.45, align: "left" },
     { id: "footer-line", type: "motif", motif: "wave", x: 48, y: 872, width: 654, height: 46, rotation: 0, opacity: 1, fill: "#e8b94a", stroke: "#e8b94a", strokeWidth: 8 },
-    { id: "footer", type: "text", x: 48, y: 930, width: 654, height: 40, rotation: 0, opacity: 1, text: "DASHY VISUAL STORY", fill: "#0a0a0a", fontSize: 16, fontWeight: 700, lineHeight: 1.2, align: "right" },
+    { id: "footer", type: "text", x: 48, y: 930, width: 654, height: 40, rotation: 0, opacity: 1, text: "DASHY VISUAL STORY", variant: "plain", fill: "#0a0a0a", background: "transparent", borderColor: "transparent", borderWidth: 0, radius: 0, padding: 0, fontSize: 16, fontWeight: 700, lineHeight: 1.2, align: "right" },
   ],
 }
 
@@ -113,6 +189,12 @@ function urlIn(value: unknown): string {
   return ""
 }
 
+function pathIn(value: unknown): string {
+  const path = textIn(value, "", 4000).trim()
+  if (!path || !/[Mm]/.test(path)) return ""
+  return /^[MmLlHhVvCcSsQqTtAaZzEe0-9.,+\-\s]+$/.test(path) ? path : ""
+}
+
 function baseNode(record: Record<string, unknown>, index: number): CanvasNodeBase {
   return {
     id: textIn(record.id, `node-${index + 1}`, 64).replace(/[^a-zA-Z0-9_-]/g, "-"),
@@ -131,7 +213,7 @@ function baseNode(record: Record<string, unknown>, index: number): CanvasNodeBas
 
 function parseNode(value: unknown, index: number): CanvasNode | null {
   const record = asRecord(value)
-  if (!["text", "image", "shape", "motif"].includes(String(record.type))) return null
+  if (!["text", "image", "shape", "motif", "path"].includes(String(record.type))) return null
   const base = baseNode(record, index)
 
   if (record.type === "text") {
@@ -139,7 +221,15 @@ function parseNode(value: unknown, index: number): CanvasNode | null {
       ...base,
       type: "text",
       text: textIn(record.text, "文本", 600),
+      variant: ["plain", "banner", "card", "quote", "sticky"].includes(String(record.variant))
+        ? record.variant as CanvasTextVariant
+        : "plain",
       fill: colorIn(record.fill, "#0a0a0a"),
+      background: colorIn(record.background, "transparent"),
+      borderColor: colorIn(record.borderColor, "transparent"),
+      borderWidth: numberIn(record.borderWidth, 0, 0, 20),
+      radius: numberIn(record.radius, 0, 0, 100),
+      padding: numberIn(record.padding, 0, 0, 80),
       fontSize: numberIn(record.fontSize, 28, 10, 180),
       fontWeight: numberIn(record.fontWeight, 500, 300, 900),
       lineHeight: numberIn(record.lineHeight, 1.3, 0.8, 3),
@@ -168,14 +258,26 @@ function parseNode(value: unknown, index: number): CanvasNode | null {
       radius: numberIn(record.radius, 0, 0, 200),
     }
   }
+  if (record.type === "motif") {
+    return {
+      ...base,
+      type: "motif",
+      motif: ["wave", "dots", "arch", "spark", "frame"].includes(String(record.motif))
+        ? record.motif as CanvasMotif
+        : "wave",
+      fill: colorIn(record.fill, "#e8b94a"),
+      stroke: colorIn(record.stroke, "#e8b94a"),
+      strokeWidth: numberIn(record.strokeWidth, 4, 0, 40),
+    }
+  }
+  const d = pathIn(record.d)
+  if (!d) return null
   return {
     ...base,
-    type: "motif",
-    motif: ["wave", "dots", "arch", "spark", "frame"].includes(String(record.motif))
-      ? record.motif as CanvasMotif
-      : "wave",
-    fill: colorIn(record.fill, "#e8b94a"),
-    stroke: colorIn(record.stroke, "#e8b94a"),
+    type: "path",
+    d,
+    fill: colorIn(record.fill, "transparent"),
+    stroke: colorIn(record.stroke, "#333333"),
     strokeWidth: numberIn(record.strokeWidth, 4, 0, 40),
   }
 }

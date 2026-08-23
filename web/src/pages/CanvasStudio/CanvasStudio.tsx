@@ -10,6 +10,7 @@ import {
   LayoutTemplate,
   FileText,
   MoveVertical,
+  PenTool,
   Shapes,
   Sparkles,
   Square,
@@ -66,6 +67,7 @@ function nodeLabel(node: CanvasNode): string {
   if (node.type === "text") return node.text.split("\n")[0] || "文本"
   if (node.type === "image") return "图片"
   if (node.type === "shape") return node.shape === "ellipse" ? "椭圆" : "矩形"
+  if (node.type === "path") return "AI SVG 路径"
   return `SVG · ${node.motif}`
 }
 
@@ -80,13 +82,38 @@ function makeNode(type: CanvasNode["type"], index: number): CanvasNode {
     opacity: 1,
   }
   if (type === "text") {
-    return { ...base, type, text: "输入文字", fill: "#0a0a0a", fontSize: 34, fontWeight: 600, lineHeight: 1.3, align: "left" }
+    return {
+      ...base,
+      type,
+      text: "输入文字",
+      variant: "card",
+      fill: "#0a0a0a",
+      background: "#ffffff",
+      borderColor: "#333333",
+      borderWidth: 2,
+      radius: 8,
+      padding: 20,
+      fontSize: 34,
+      fontWeight: 600,
+      lineHeight: 1.3,
+      align: "left",
+    }
   }
   if (type === "image") {
     return { ...base, type, src: "", fit: "cover", radius: 8, height: 240 }
   }
   if (type === "shape") {
     return { ...base, type, shape: "rect", fill: "#b8a4ed", stroke: "transparent", strokeWidth: 0, radius: 8 }
+  }
+  if (type === "path") {
+    return {
+      ...base,
+      type,
+      d: "M 10 70 C 70 10 220 10 290 70",
+      fill: "transparent",
+      stroke: "#e0745d",
+      strokeWidth: 6,
+    }
   }
   return { ...base, type, motif: "wave", fill: "#e8b94a", stroke: "#e8b94a", strokeWidth: 8, height: 80 }
 }
@@ -253,7 +280,7 @@ export default function CanvasStudio() {
     setGenerationMessage("正在连接 AI...")
     try {
       const nextDocument = await generateCanvasDocument(
-        aiPrompt.trim() || "排版为清晰耐读、图文交错的公众号长图",
+        aiPrompt.trim() || "手帐采访风公众号长图：奶油纸张底色、浅蓝和浅橙内容面板、深灰细描边，穿插回形针、麦克风、铅笔、引号和勾线 SVG 装饰",
         sources,
         loadAIConfig(),
         setGenerationMessage,
@@ -415,7 +442,7 @@ export default function CanvasStudio() {
             <button onClick={() => addNode("text")}><Type size={16} />文本</button>
             <button onClick={() => addNode("image")}><Image size={16} />图片</button>
             <button onClick={() => addNode("shape")}><Square size={16} />形状</button>
-            <button onClick={() => addNode("motif")}><Sparkles size={16} />SVG</button>
+            <button onClick={() => addNode("path")}><PenTool size={16} />SVG 路径</button>
           </div>
 
           <div className="cs-panel-row">
@@ -533,12 +560,29 @@ export default function CanvasStudio() {
                   {selectedNode.type === "text" ? (
                     <>
                       <label>
+                        <span>内容版式</span>
+                        <select
+                          value={selectedNode.variant}
+                          onChange={event => updateNode(selectedNode.id, {
+                            variant: event.target.value as typeof selectedNode.variant,
+                          })}
+                        >
+                          <option value="plain">正文</option>
+                          <option value="banner">章节条</option>
+                          <option value="card">内容卡片</option>
+                          <option value="quote">引用面板</option>
+                          <option value="sticky">便签</option>
+                        </select>
+                      </label>
+                      <label>
                         <span>文字</span>
                         <textarea value={selectedNode.text} rows={5} onChange={event => updateNode(selectedNode.id, { text: event.target.value })} />
                       </label>
                       <div className="cs-property-grid">
                         <label><span>字号</span><input type="number" value={selectedNode.fontSize} onChange={event => updateNode(selectedNode.id, { fontSize: Number(event.target.value) })} /></label>
                         <label><span>颜色</span><input type="color" value={selectedNode.fill} onChange={event => updateNode(selectedNode.id, { fill: event.target.value })} /></label>
+                        <label><span>背景</span><input type="color" value={selectedNode.background === "transparent" ? "#ffffff" : selectedNode.background} onChange={event => updateNode(selectedNode.id, { background: event.target.value })} /></label>
+                        <label><span>描边</span><input type="color" value={selectedNode.borderColor === "transparent" ? "#333333" : selectedNode.borderColor} onChange={event => updateNode(selectedNode.id, { borderColor: event.target.value, borderWidth: Math.max(1, selectedNode.borderWidth) })} /></label>
                       </div>
                     </>
                   ) : null}
@@ -548,7 +592,13 @@ export default function CanvasStudio() {
                       <textarea value={selectedNode.src} rows={5} onChange={event => updateNode(selectedNode.id, { src: event.target.value })} />
                     </label>
                   ) : null}
-                  {selectedNode.type === "shape" || selectedNode.type === "motif" ? (
+                  {selectedNode.type === "path" ? (
+                    <label>
+                      <span>SVG Path</span>
+                      <textarea value={selectedNode.d} rows={6} onChange={event => updateNode(selectedNode.id, { d: event.target.value })} />
+                    </label>
+                  ) : null}
+                  {selectedNode.type === "shape" || selectedNode.type === "motif" || selectedNode.type === "path" ? (
                     <div className="cs-property-grid">
                       <label><span>填充</span><input type="color" value={selectedNode.fill === "transparent" ? "#ffffff" : selectedNode.fill} onChange={event => updateNode(selectedNode.id, { fill: event.target.value })} /></label>
                       <label><span>描边</span><input type="color" value={selectedNode.stroke === "transparent" ? "#000000" : selectedNode.stroke} onChange={event => updateNode(selectedNode.id, { stroke: event.target.value })} /></label>

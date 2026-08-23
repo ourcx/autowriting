@@ -3,8 +3,8 @@ import type {
   CanvasDocument,
   CanvasMotifNode,
   CanvasNode,
-  CanvasTextNode,
 } from "../../../shared/canvasDsl"
+import { wrapCanvasText } from "../../../shared/canvasDsl"
 import "./CanvasRenderer.css"
 
 interface CanvasRendererProps {
@@ -20,18 +20,6 @@ interface DragState {
   id: string
   offsetX: number
   offsetY: number
-}
-
-function wrapText(node: CanvasTextNode): string[] {
-  const maxCharacters = Math.max(1, Math.floor(node.width / (node.fontSize * 0.92)))
-  return node.text.split("\n").flatMap(paragraph => {
-    if (!paragraph) return [""]
-    const lines: string[] = []
-    for (let index = 0; index < paragraph.length; index += maxCharacters) {
-      lines.push(paragraph.slice(index, index + maxCharacters))
-    }
-    return lines
-  })
 }
 
 function renderMotif(node: CanvasMotifNode) {
@@ -97,25 +85,53 @@ function renderMotif(node: CanvasMotifNode) {
 
 function renderNode(node: CanvasNode) {
   if (node.type === "text") {
-    const lines = wrapText(node)
+    const lines = wrapCanvasText(node.text, node.width, node.fontSize, node.padding)
     const anchor = node.align === "center" ? "middle" : node.align === "right" ? "end" : "start"
-    const textX = node.align === "center" ? node.width / 2 : node.align === "right" ? node.width : 0
+    const textX = node.align === "center"
+      ? node.width / 2
+      : node.align === "right"
+        ? node.width - node.padding
+        : node.padding
     return (
-      <text
-        x={textX}
-        y={node.fontSize}
-        fill={node.fill}
-        fontFamily='Inter, "PingFang SC", "Microsoft YaHei", sans-serif'
-        fontSize={node.fontSize}
-        fontWeight={node.fontWeight}
-        textAnchor={anchor}
-      >
-        {lines.map((line, index) => (
-          <tspan key={`${node.id}-${index}`} x={textX} dy={index === 0 ? 0 : node.fontSize * node.lineHeight}>
-            {line || " "}
-          </tspan>
-        ))}
-      </text>
+      <>
+        {node.background !== "transparent" || node.borderWidth > 0 ? (
+          <rect
+            width={node.width}
+            height={node.height}
+            rx={node.radius}
+            fill={node.background}
+            stroke={node.borderColor}
+            strokeWidth={node.borderWidth}
+          />
+        ) : null}
+        {node.variant === "quote" ? (
+          <text
+            x={node.width - node.padding - 52}
+            y={node.padding + 50}
+            fill={node.borderColor}
+            opacity={0.35}
+            fontFamily="Georgia, serif"
+            fontSize={78}
+          >
+            ”
+          </text>
+        ) : null}
+        <text
+          x={textX}
+          y={node.padding + node.fontSize}
+          fill={node.fill}
+          fontFamily='Inter, "PingFang SC", "Microsoft YaHei", sans-serif'
+          fontSize={node.fontSize}
+          fontWeight={node.fontWeight}
+          textAnchor={anchor}
+        >
+          {lines.map((line, index) => (
+            <tspan key={`${node.id}-${index}`} x={textX} dy={index === 0 ? 0 : node.fontSize * node.lineHeight}>
+              {line || " "}
+            </tspan>
+          ))}
+        </text>
+      </>
     )
   }
   if (node.type === "image") {
@@ -164,6 +180,27 @@ function renderNode(node: CanvasNode) {
         stroke={node.stroke}
         strokeWidth={node.strokeWidth}
       />
+    )
+  }
+  if (node.type === "path") {
+    const clipId = `canvas-path-clip-${node.id}`
+    return (
+      <>
+        <defs>
+          <clipPath id={clipId}>
+            <rect width={node.width} height={node.height} />
+          </clipPath>
+        </defs>
+        <path
+          d={node.d}
+          fill={node.fill}
+          stroke={node.stroke}
+          strokeWidth={node.strokeWidth}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          clipPath={`url(#${clipId})`}
+        />
+      </>
     )
   }
   return renderMotif(node)
@@ -217,6 +254,8 @@ export default function CanvasRenderer({
       {document.nodes.map(node => (
         <g
           key={node.id}
+          data-node-id={node.id}
+          data-node-type={node.type}
           className={interactive ? "canvas-renderer__node" : undefined}
           opacity={node.opacity}
           transform={`translate(${node.x} ${node.y}) rotate(${node.rotation} ${node.width / 2} ${node.height / 2})`}

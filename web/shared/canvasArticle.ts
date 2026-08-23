@@ -1,5 +1,5 @@
 import type { CanvasDocument, CanvasImageNode, CanvasNode, CanvasTextNode } from "./canvasDsl.ts"
-import { parseCanvasDocument } from "./canvasDsl.ts"
+import { estimateCanvasTextHeight, parseCanvasDocument } from "./canvasDsl.ts"
 
 export type CanvasSourceKind = "title" | "heading" | "paragraph" | "quote" | "list" | "image"
 
@@ -161,15 +161,6 @@ export function parseCanvasSources(value: unknown): CanvasSource[] {
   })
 }
 
-function estimateTextHeight(text: string, width: number, fontSize: number, lineHeight: number): number {
-  const charactersPerLine = Math.max(1, Math.floor(width / (fontSize * 0.92)))
-  const lineCount = text.split("\n").reduce(
-    (count, line) => count + Math.max(1, Math.ceil(line.length / charactersPerLine)),
-    0,
-  )
-  return Math.ceil(lineCount * fontSize * lineHeight + 8)
-}
-
 function fallbackNode(source: CanvasSource, y: number): CanvasTextNode | CanvasImageNode {
   if (source.kind === "image") {
     return {
@@ -189,21 +180,23 @@ function fallbackNode(source: CanvasSource, y: number): CanvasTextNode | CanvasI
   }
 
   const style = source.kind === "title"
-    ? { fontSize: 52, fontWeight: 800, lineHeight: 1.25, fill: "#161616" }
+    ? { fontSize: 52, fontWeight: 800, lineHeight: 1.25, fill: "#161616", variant: "plain" as const, background: "transparent", borderColor: "transparent", borderWidth: 0, radius: 0, padding: 0 }
     : source.kind === "heading"
-      ? { fontSize: 38, fontWeight: 750, lineHeight: 1.3, fill: "#163f3b" }
+      ? { fontSize: 38, fontWeight: 750, lineHeight: 1.3, fill: "#356fb8", variant: "banner" as const, background: "#dce9f8", borderColor: "#3d3d3d", borderWidth: 2, radius: 12, padding: 22 }
       : source.kind === "quote"
-        ? { fontSize: 32, fontWeight: 600, lineHeight: 1.55, fill: "#9f3d2f" }
-        : { fontSize: 30, fontWeight: 400, lineHeight: 1.75, fill: "#292929" }
+        ? { fontSize: 32, fontWeight: 600, lineHeight: 1.55, fill: "#333333", variant: "quote" as const, background: "#dce9f8", borderColor: "#3d3d3d", borderWidth: 2, radius: 12, padding: 28 }
+        : source.kind === "list"
+          ? { fontSize: 30, fontWeight: 500, lineHeight: 1.7, fill: "#333333", variant: "card" as const, background: "#fff0d7", borderColor: "#3d3d3d", borderWidth: 2, radius: 10, padding: 24 }
+          : { fontSize: 30, fontWeight: 400, lineHeight: 1.75, fill: "#333333", variant: "plain" as const, background: "transparent", borderColor: "transparent", borderWidth: 0, radius: 0, padding: 0 }
   const text = source.text || ""
   return {
     id: `node-${source.id}`,
     sourceId: source.id,
     type: "text",
-    x: source.kind === "quote" ? 80 : 50,
+    x: 50,
     y,
-    width: source.kind === "quote" ? 590 : 650,
-    height: estimateTextHeight(text, source.kind === "quote" ? 590 : 650, style.fontSize, style.lineHeight),
+    width: 650,
+    height: estimateCanvasTextHeight(text, 650, style.fontSize, style.lineHeight, style.padding),
     rotation: 0,
     opacity: 1,
     text,
@@ -238,7 +231,7 @@ export function hydrateCanvasDocument(
   const parsed = parseCanvasDocument(value)
   const candidates = new Map<string, CanvasTextNode | CanvasImageNode>()
   const decorativeNodes = parsed.nodes
-    .filter(node => node.type === "shape" || node.type === "motif")
+    .filter(node => node.type === "shape" || node.type === "motif" || node.type === "path")
     .slice(0, 24)
   for (const node of parsed.nodes) {
     if ((node.type === "text" || node.type === "image") && node.sourceId && !candidates.has(node.sourceId)) {
@@ -258,30 +251,44 @@ export function hydrateCanvasDocument(
     if (node.type === "text" && source.kind !== "image") {
       const text = source.text || ""
       const body = source.kind === "paragraph" || source.kind === "list"
+      const fallback = fallbackNode(source, y) as CanvasTextNode
       const fontSize = source.kind === "title"
         ? Math.min(60, Math.max(44, node.fontSize))
         : source.kind === "heading"
           ? Math.min(44, Math.max(34, node.fontSize))
           : Math.min(body ? 34 : 38, Math.max(body ? 28 : 30, node.fontSize))
-      const width = Math.min(660, Math.max(body ? 610 : 540, node.width))
-      const x = Math.min(700 - width, Math.max(50, node.x))
+      const width = 650
+      const variant = node.variant === "plain" ? fallback.variant : node.variant
+      const padding = Math.max(node.padding, fallback.padding)
       node = {
         ...node,
         sourceId: source.id,
-        x,
+        x: 50,
         y: Math.max(y, Math.min(node.y, y + 120)),
         width,
         text,
+        variant,
+        background: node.background === "transparent" ? fallback.background : node.background,
+        borderColor: node.borderColor === "transparent" ? fallback.borderColor : node.borderColor,
+        borderWidth: Math.max(node.borderWidth, fallback.borderWidth),
+        radius: Math.max(node.radius, fallback.radius),
+        padding,
         fontSize,
         lineHeight: Math.max(body ? 1.6 : 1.3, node.lineHeight),
-        height: estimateTextHeight(text, width, fontSize, Math.max(body ? 1.6 : 1.3, node.lineHeight)),
+        height: estimateCanvasTextHeight(
+          text,
+          width,
+          fontSize,
+          Math.max(body ? 1.6 : 1.3, node.lineHeight),
+          padding,
+        ),
       }
     } else if (node.type === "image" && source.kind === "image") {
-      const width = Math.min(660, Math.max(520, node.width))
+      const width = 650
       node = {
         ...node,
         sourceId: source.id,
-        x: Math.min(700 - width, Math.max(50, node.x)),
+        x: 50,
         y: Math.max(y, Math.min(node.y, y + 120)),
         width,
         height: Math.max(320, node.height),

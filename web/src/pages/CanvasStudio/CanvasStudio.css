@@ -228,6 +228,7 @@
 .cs-layer-type--image { background: var(--color-brand-peach); }
 .cs-layer-type--shape { background: var(--color-brand-lavender); }
 .cs-layer-type--motif { background: var(--color-brand-ochre); }
+.cs-layer-type--path { background: #b9d9f5; }
 
 .cs-layer-actions {
   display: flex;
@@ -363,7 +364,8 @@
 }
 
 .cs-properties input,
-.cs-properties textarea {
+.cs-properties textarea,
+.cs-properties select {
   width: 100%;
   min-width: 0;
   border: 1px solid var(--color-hairline);
@@ -380,6 +382,11 @@
   padding: 0 10px;
 }
 
+.cs-properties select {
+  height: 36px;
+  padding: 0 10px;
+}
+
 .cs-properties input[type="color"] {
   height: 36px;
   padding: 4px;
@@ -392,7 +399,8 @@
 }
 
 .cs-properties input:focus,
-.cs-properties textarea:focus {
+.cs-properties textarea:focus,
+.cs-properties select:focus {
   border-color: var(--color-brand-teal);
 }
 
