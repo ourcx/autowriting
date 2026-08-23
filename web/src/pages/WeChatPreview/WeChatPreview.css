@@ -215,3 +215,19 @@
     flex-shrink: 0;
   }
 }
+
+@media (max-width: 720px) {
+  .preview-nav-title {
+    min-width: 0;
+    align-items: flex-start;
+  }
+
+  .preview-nav-label {
+    display: none;
+  }
+
+  .preview-nav-article {
+    max-width: 88px;
+    font-size: 14px;
+  }
+}

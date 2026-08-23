@@ -377,12 +377,37 @@
 
 /* CSS 编辑器区 */
 .wr-css-editor-wrap {
-  flex: 1;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
   border-top: 1px solid var(--color-hairline);
-  padding-top: 4px;
+  background: var(--color-canvas);
+}
+
+.wr-css-editor-wrap.is-open {
+  flex-basis: 46%;
+  min-height: 180px;
+}
+
+.wr-css-editor-toggle {
+  display: flex;
+  flex: 0 0 42px;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--color-body-strong);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wr-css-editor-toggle:hover {
+  background: var(--color-surface-card);
 }
 
 .wr-css-hint {
@@ -394,6 +419,23 @@
   border-radius: 4px;
   letter-spacing: 0;
   text-transform: none;
+}
+
+.wr-css-chevron {
+  margin-left: auto;
+  color: var(--color-muted);
+  transition: transform 0.15s;
+}
+
+.wr-css-editor-wrap.is-open .wr-css-chevron {
+  transform: rotate(180deg);
+}
+
+.wr-css-editor-summary {
+  margin: -3px 12px 12px;
+  color: var(--color-muted-soft);
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .wr-css-textarea {
@@ -507,6 +549,12 @@
 .wr-article-card #wemd {
   padding-left:  60px;
   padding-right: 60px;
+}
+
+.wr-article-card #wemd .task-list-status {
+  display: inline-block;
+  min-width: 1.5em;
+  font-weight: 700;
 }
 
 /* ── 空状态 ──────────────────────────────────────────────────── */
@@ -1110,6 +1158,56 @@
   color: #2a6a3a;
   border-color: #8ad4a8;
   background: #f0f8f2;
+}
+
+@media (max-width: 800px) {
+  .wr-toolbar {
+    min-height: 52px;
+    overflow-x: auto;
+    padding: 0 12px;
+  }
+
+  .wr-toolbar-left,
+  .wr-toolbar-right {
+    flex: 0 0 auto;
+  }
+
+  .wr-main {
+    display: block;
+    overflow-y: auto;
+  }
+
+  .wr-sidebar {
+    width: 100% !important;
+    min-width: 0;
+    max-width: none;
+    max-height: 300px;
+    border-right: 0;
+    border-bottom: 1px solid var(--color-hairline);
+  }
+
+  .wr-template-list {
+    max-height: 190px;
+  }
+
+  .wr-resizer {
+    display: none;
+  }
+
+  .wr-preview {
+    min-height: 620px;
+    overflow: visible;
+    padding: 20px 12px 48px;
+  }
+
+  .wr-article-card {
+    border-radius: 8px;
+  }
+
+  .wr-article-card #wemd {
+    padding-right: 24px;
+    padding-left: 24px;
+  }
 }
 
 .wr-tt-cookie-btn.bound:hover {

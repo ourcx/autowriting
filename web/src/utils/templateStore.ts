@@ -6,6 +6,9 @@
 import {
   CSS_BEST_PRACTICE,
   CSS_EASTERN_LETTER,
+  CSS_GALLERY_STORY,
+  CSS_RECEIPT_NOTE,
+  CSS_SUNSET_FILM,
   DEFAULT_WECHAT_TEMPLATE_ID,
 } from "../../shared/defaultStyleTemplates"
 
@@ -900,6 +903,9 @@ export const CSS_AURORA = `/* ====== 极光紫 ====== */
 export const BUILTIN_TEMPLATES: TemplateItem[] = [
   { id: DEFAULT_WECHAT_TEMPLATE_ID, name: '默认样式', desc: '公众号最佳实践，正文、列表、代码与表格完整适配', accentColor: '#1e6bb8', css: CSS_BEST_PRACTICE, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: 'eastern-letter', name: '东方笺谱', desc: '现代人文长文，宋体留白与朱砂点睛', accentColor: '#a33a2b', css: CSS_EASTERN_LETTER, isBuiltin: true, createdAt: 0, updatedAt: 0 },
+  { id: 'receipt-note', name: '黑白小票', desc: '清单感与打印纸质感，适合教程和复盘', accentColor: '#171717', css: CSS_RECEIPT_NOTE, isBuiltin: true, createdAt: 0, updatedAt: 0 },
+  { id: 'sunset-film', name: '落日胶片', desc: '暖红与琥珀色调，适合故事和观点长文', accentColor: '#b33d25', css: CSS_SUNSET_FILM, isBuiltin: true, createdAt: 0, updatedAt: 0 },
+  { id: 'gallery-story', name: '留白画册', desc: '大留白与图片叙事，适合人物和品牌故事', accentColor: '#80503f', css: CSS_GALLERY_STORY, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: 'default', name: '经典蓝', desc: '清爽专业，适合大多数文章', accentColor: '#1e6bb8', css: CSS_DEFAULT, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: 'morandi', name: '莫兰迪', desc: '低饱和自然色调，文艺感强', accentColor: '#4F6F52', css: CSS_MORANDI, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: 'minimal', name: '极简黑', desc: '干净有力，排版纯粹', accentColor: '#111111', css: CSS_MINIMAL, isBuiltin: true, createdAt: 0, updatedAt: 0 },
@@ -1019,12 +1025,13 @@ export const PREVIEW_MARKDOWN = `# 一级标题样式
 
 ## 二级标题
 
-> 这是引用块，适合强调重要内容或引用他人观点。可以包含**加粗**文字。
+> [!NOTE] 这是提示块，适合补充背景信息和读者需要记住的关键结论。
 
 ### 三级标题
 
-- 无序列表项 A
-- 无序列表项 B
+- [x] 已完成：核对文章结构和标题层级
+- [ ] 待完成：检查发布后的手机端效果
+- 无序列表项
   - 嵌套列表用于验证层级
 - 支持 **加粗** 和 *斜体* 混排
 
@@ -1057,34 +1064,39 @@ console.log(greet("公众号读者"))
 | 数据 4 | 数据 5 | 数据 6 |
 `
 
-/** Markdown 无法表达的扩展元素，用于完整检查模板细节 */
-export const PREVIEW_RICH_HTML = `
-<section class="callout callout-note">
-  <div class="callout-title"><span class="callout-icon">💡</span>提示块 · Note</div>
-  <p>适合放置背景信息、补充说明和读者需要记住的关键结论。</p>
-</section>
-<section class="callout callout-tip">
-  <div class="callout-title"><span class="callout-icon">✓</span>行动建议 · Tip</div>
-  <p>用不同语义色检查提示块在实际长文中的层次与可读性。</p>
-</section>
-<ul>
-  <li class="task-list-item"><input type="checkbox" checked disabled />已完成：核对标题、正文和引用样式</li>
-  <li class="task-list-item"><input type="checkbox" disabled />待完成：检查发布后的手机端效果</li>
-</ul>
-<div class="multiquote-2">
-  <p><strong>重点摘录：</strong>稳定、清晰、可复制，才是公众号默认样式的核心。</p>
-</div>
-<div class="table-container">
-  <table>
-    <thead><tr><th>场景</th><th>建议</th><th>效果</th></tr></thead>
-    <tbody>
-      <tr><td>长文阅读</td><td>控制行高与段距</td><td>更耐读</td></tr>
-      <tr><td>重点信息</td><td>使用提示块</td><td>层次清晰</td></tr>
-    </tbody>
-  </table>
-</div>
-<div class="block-equation">E = mc<sup>2</sup> · 公式与上下标预览</div>
-<section class="footnotes-sep">
-  <div class="footnote-item"><span class="footnote-num">[1]</span><p>参考资料区域用于验证脚注字号、颜色和对齐方式。</p></div>
-</section>
+/** 组件模式用于集中检查模板对扩展语义块的覆盖程度。 */
+export const PREVIEW_COMPONENTS_MARKDOWN = `# 样式组件总览
+
+## 标题与强调
+
+### 三级标题
+
+普通正文、**重点文字**、*斜体说明*、~~删除内容~~、[链接文本](#)与\`inline code\`。
+
+> 普通引用块用于展示摘录和观点。
+
+> [!TIP] 行动建议提示块，用于展示可执行的下一步。
+
+> [!IMPORTANT] 重点提示块，用于展示核心结论。
+
+> [!WARNING] 注意提示块，用于展示风险和限制。
+
+- [x] 已完成事项
+- [ ] 待处理事项
+
+![图片与图注预览](https://picsum.photos/seed/components/600/320)
+
+*图片说明文字*
+
+| 内容类型 | 展示重点 |
+|---|---|
+| 表格 | 边框、底色、对齐 |
+| 代码 | 字体、背景、高亮 |
+
+\`\`\`typescript
+interface ArticleStyle {
+  name: string
+  accentColor: string
+}
+\`\`\`
 `

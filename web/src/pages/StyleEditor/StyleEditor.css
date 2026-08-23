@@ -710,13 +710,22 @@
 }
 
 .se-preview-header {
-  padding: 14px 18px 11px;
+  min-height: 58px;
+  padding: 10px 12px 10px 16px;
   background: var(--color-surface-soft);
   border-bottom: 1px solid var(--color-hairline);
   flex-shrink: 0;
   display: flex;
-  align-items: baseline;
-  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.se-preview-header > div:first-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .se-preview-label {
@@ -730,6 +739,50 @@
 .se-preview-sub {
   font-size: 11px;
   color: var(--color-muted-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.se-preview-controls,
+.se-segmented {
+  display: flex;
+  align-items: center;
+}
+
+.se-preview-controls {
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+.se-segmented {
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--color-hairline);
+  border-radius: 8px;
+  background: var(--color-canvas);
+}
+
+.se-segmented button {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.se-segmented button:hover {
+  color: var(--color-ink);
+}
+
+.se-segmented button.active {
+  background: var(--color-brand-teal);
+  color: #fff;
 }
 
 .se-preview-scroll {
@@ -745,6 +798,8 @@
 
 /* 预览卡片 */
 .se-preview-card {
+  width: 100%;
+  margin: 0 auto;
   background: #ffffff;
   border-radius: 14px;
   border: 1px solid var(--color-hairline);
@@ -753,6 +808,14 @@
     0 2px 8px rgba(0,0,0,0.06),
     0 8px 24px rgba(0,0,0,0.08);
   animation: card-slide-in 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.se-preview-card--mobile {
+  max-width: 390px;
+}
+
+.se-preview-card--wide {
+  max-width: 640px;
 }
 
 @keyframes card-slide-in {
@@ -771,4 +834,54 @@
 #wemd {
   display: block;
   min-height: 60px;
+}
+
+.se-preview-card #wemd .task-list-status {
+  display: inline-block;
+  min-width: 1.5em;
+  font-weight: 700;
+}
+
+@media (max-width: 800px) {
+  .se-body {
+    display: block;
+    overflow-y: auto;
+  }
+
+  .se-sidebar {
+    width: 100% !important;
+    max-width: none;
+    height: 240px;
+    border-right: 0;
+    border-bottom: 1px solid var(--color-hairline);
+  }
+
+  .se-resizer {
+    display: none;
+  }
+
+  .se-editor-pane {
+    min-height: 620px;
+    border-bottom: 1px solid var(--color-hairline);
+  }
+
+  .se-meta-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .se-meta-input {
+    width: 100%;
+  }
+
+  .se-preview-pane {
+    width: 100% !important;
+    min-width: 0;
+    max-width: none;
+    min-height: 720px;
+  }
+
+  .se-preview-scroll {
+    padding: 18px 12px 48px;
+  }
 }

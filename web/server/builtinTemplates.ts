@@ -8,6 +8,9 @@ import type { StyleTemplate } from "./types.ts"
 import {
   CSS_BEST_PRACTICE,
   CSS_EASTERN_LETTER,
+  CSS_GALLERY_STORY,
+  CSS_RECEIPT_NOTE,
+  CSS_SUNSET_FILM,
   DEFAULT_WECHAT_TEMPLATE_ID,
 } from "../shared/defaultStyleTemplates.ts"
 
@@ -144,6 +147,9 @@ const CSS_AURORA = `/* ====== 极光紫 ====== */
 export const BUILTIN_TEMPLATES_DATA: StyleTemplate[] = [
   { id: DEFAULT_WECHAT_TEMPLATE_ID, name: "默认样式", desc: "公众号最佳实践，正文、列表、代码与表格完整适配", accentColor: "#1e6bb8", css: CSS_BEST_PRACTICE, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: "eastern-letter", name: "东方笺谱", desc: "现代人文长文，宋体留白与朱砂点睛", accentColor: "#a33a2b", css: CSS_EASTERN_LETTER, isBuiltin: true, createdAt: 0, updatedAt: 0 },
+  { id: "receipt-note", name: "黑白小票", desc: "清单感与打印纸质感，适合教程和复盘", accentColor: "#171717", css: CSS_RECEIPT_NOTE, isBuiltin: true, createdAt: 0, updatedAt: 0 },
+  { id: "sunset-film", name: "落日胶片", desc: "暖红与琥珀色调，适合故事和观点长文", accentColor: "#b33d25", css: CSS_SUNSET_FILM, isBuiltin: true, createdAt: 0, updatedAt: 0 },
+  { id: "gallery-story", name: "留白画册", desc: "大留白与图片叙事，适合人物和品牌故事", accentColor: "#80503f", css: CSS_GALLERY_STORY, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: "default", name: "经典蓝", desc: "清爽专业，适合大多数文章", accentColor: "#1e6bb8", css: CSS_DEFAULT, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: "morandi", name: "莫兰迪", desc: "低饱和自然色调，文艺感强", accentColor: "#4F6F52", css: CSS_MORANDI, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: "minimal", name: "极简黑", desc: "干净有力，排版纯粹", accentColor: "#111111", css: CSS_MINIMAL, isBuiltin: true, createdAt: 0, updatedAt: 0 },

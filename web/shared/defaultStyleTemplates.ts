@@ -926,3 +926,148 @@ export const CSS_EASTERN_LETTER = `/* ====== 东方笺谱 · 现代人文长文 
   color: #ffdcd7;
   background-color: #67060c;
 }`
+
+export const CSS_RECEIPT_NOTE = `/* ====== 黑白小票 · 信息清单 ====== */
+#wemd {
+  max-width: 677px;
+  margin: 0 auto;
+  padding: 24px 28px;
+  color: #171717;
+  font-family: "Courier New", "Songti SC", "SimSun", monospace;
+  font-size: 15px;
+  line-height: 1.75;
+  word-break: break-word;
+  border-top: 4px dashed #171717;
+  border-bottom: 4px dashed #171717;
+}
+#wemd p { margin: 16px 0; color: #262626; line-height: 1.75; text-align: left; }
+#wemd h1 { margin: 32px 0 28px; padding: 14px 0; border-top: 2px dashed #171717; border-bottom: 2px dashed #171717; text-align: center; }
+#wemd h1 .content { display: block; color: #000; font-size: 25px; font-weight: 900; letter-spacing: 2px; }
+#wemd h2 { margin: 30px 0 18px; text-align: left; }
+#wemd h2 .content { display: block; padding: 8px 10px; background: #171717; color: #fff; font-size: 18px; font-weight: 700; }
+#wemd h3 { margin: 24px 0 12px; }
+#wemd h3 .content { display: inline-block; padding-bottom: 3px; border-bottom: 2px solid #171717; color: #171717; font-size: 16px; font-weight: 700; }
+#wemd h4 .content, #wemd h5 .content, #wemd h6 .content { color: #171717; font-size: 15px; text-decoration: underline; }
+#wemd h1 .prefix, #wemd h1 .suffix, #wemd h2 .prefix, #wemd h2 .suffix,
+#wemd h3 .prefix, #wemd h3 .suffix, #wemd h4 .prefix, #wemd h4 .suffix,
+#wemd h5 .prefix, #wemd h5 .suffix, #wemd h6 .prefix, #wemd h6 .suffix { display: none; }
+#wemd ul, #wemd ol { margin: 16px 0; padding-left: 24px; }
+#wemd li { margin: 8px 0; color: #262626; }
+#wemd blockquote, #wemd .multiquote-1 { margin: 22px 0; padding: 14px 16px; border: 1px dotted #171717; background: #f8f8f8; color: #333; }
+#wemd .callout { margin: 22px 0; padding: 14px 16px; border: 1px dashed #171717; border-left: 4px solid #171717; background: #fafafa; }
+#wemd .callout-title { margin-bottom: 7px; color: #171717; font-size: 13px; font-weight: 800; text-transform: uppercase; }
+#wemd .callout p { margin: 0; }
+#wemd strong { color: #000; font-weight: 800; }
+#wemd mark { padding: 1px 4px; background: #e5e5e5; color: #000; }
+#wemd a { color: #171717; font-weight: 700; text-decoration: underline; }
+#wemd hr { margin: 26px 0; border: 0; border-top: 2px dashed #171717; }
+#wemd p code, #wemd li code { padding: 2px 5px; background: #171717; color: #fff; font-family: inherit; }
+#wemd pre.custom { margin: 20px 0; padding: 16px; overflow-x: auto; border: 1px solid #171717; background: #f5f5f5; }
+#wemd pre code { color: #171717; font-family: "Courier New", monospace; font-size: 13px; }
+#wemd figure { margin: 24px 0; text-align: center; }
+#wemd img { display: block; max-width: 100%; margin: 0 auto; border: 2px solid #171717; filter: grayscale(1); }
+#wemd figcaption { margin-top: 8px; color: #555; font-size: 12px; }
+#wemd .table-container { margin: 22px 0; overflow-x: auto; }
+#wemd table { width: 100%; border-collapse: collapse; font-size: 13px; }
+#wemd th { padding: 8px; border: 1px solid #171717; background: #171717; color: #fff; text-align: left; }
+#wemd td { padding: 8px; border: 1px dashed #777; color: #222; }
+#wemd .task-list-item { list-style: none; margin-left: -20px; }
+#wemd .task-list-status { display: inline-block; width: 20px; color: #000; font-weight: 800; }`
+
+export const CSS_SUNSET_FILM = `/* ====== 落日胶片 · 复古叙事 ====== */
+#wemd {
+  max-width: 677px;
+  margin: 0 auto;
+  padding: 28px 30px;
+  color: #5d4037;
+  font-family: "Songti SC", "STSong", "Georgia", serif;
+  font-size: 16px;
+  line-height: 1.9;
+  letter-spacing: 0.6px;
+  word-break: break-word;
+}
+#wemd p { margin: 24px 0; color: #5d4037; line-height: 1.9; text-align: justify; }
+#wemd h1 { margin: 54px 0 44px; padding: 18px 0; border-top: 4px double #b33d25; border-bottom: 1px solid #b33d25; text-align: center; }
+#wemd h1 .content { color: #b33d25; font-size: 27px; font-weight: 800; letter-spacing: 3px; }
+#wemd h2 { margin: 46px 0 26px; }
+#wemd h2 .content { display: inline-block; padding: 8px 16px; background: #b33d25; box-shadow: 4px 4px 0 rgba(179, 61, 37, 0.18); color: #fffaf0; font-size: 19px; font-weight: 700; }
+#wemd h3 { margin: 36px 0 18px; }
+#wemd h3 .content { display: inline-block; padding-left: 10px; border-left: 4px solid #d98c45; color: #8d5b4c; font-size: 18px; font-weight: 700; }
+#wemd h4 .content, #wemd h5 .content, #wemd h6 .content { color: #b33d25; border-bottom: 2px solid #f2c94c; font-weight: 700; }
+#wemd h1 .prefix, #wemd h1 .suffix, #wemd h2 .prefix, #wemd h2 .suffix,
+#wemd h3 .prefix, #wemd h3 .suffix, #wemd h4 .prefix, #wemd h4 .suffix,
+#wemd h5 .prefix, #wemd h5 .suffix, #wemd h6 .prefix, #wemd h6 .suffix { display: none; }
+#wemd ul, #wemd ol { margin: 20px 0; padding-left: 24px; }
+#wemd li { margin: 10px 0; color: #5d4037; line-height: 1.8; }
+#wemd blockquote, #wemd .multiquote-1 { margin: 28px 0; padding: 20px 22px; border: 0; background: #5d4037; color: #fff8e7; }
+#wemd blockquote p, #wemd .multiquote-1 p { margin: 0; color: #fff8e7; }
+#wemd .callout { margin: 26px 0; padding: 16px 18px; border-left: 4px solid #d98c45; background: #fff3df; color: #5d4037; }
+#wemd .callout-warning, #wemd .callout-caution { border-left-color: #b33d25; }
+#wemd .callout-title { margin-bottom: 8px; color: #b33d25; font-size: 14px; font-weight: 800; }
+#wemd .callout p { margin: 0; }
+#wemd strong { color: #b33d25; font-weight: 800; }
+#wemd mark { padding: 1px 5px; background: #f2c94c; color: #5d4037; }
+#wemd a { color: #b33d25; text-decoration: none; border-bottom: 1px solid #d98c45; }
+#wemd hr { margin: 34px 0; border: 0; border-top: 1px dashed #d98c45; }
+#wemd p code, #wemd li code { padding: 2px 6px; background: #f8e4ce; color: #b33d25; }
+#wemd pre.custom { margin: 24px 0; padding: 18px; overflow-x: auto; background: #30231f; border-radius: 4px; }
+#wemd pre code { color: #f7d9af; font-size: 13px; }
+#wemd figure { margin: 32px 0; text-align: center; }
+#wemd img { display: block; max-width: 100%; margin: 0 auto; border: 8px solid #fff8e7; box-shadow: 0 7px 20px rgba(93, 64, 55, 0.22); }
+#wemd figcaption { margin-top: 10px; color: #8d5b4c; font-size: 13px; font-style: italic; }
+#wemd .table-container { margin: 26px 0; overflow-x: auto; }
+#wemd table { width: 100%; border-collapse: collapse; font-size: 14px; }
+#wemd th { padding: 9px; border: 1px solid #b33d25; background: #b33d25; color: #fff8e7; }
+#wemd td { padding: 9px; border: 1px solid #dfb994; color: #5d4037; }
+#wemd tr:nth-child(2n) td { background: #fff3df; }
+#wemd .task-list-item { list-style: none; margin-left: -20px; }
+#wemd .task-list-status { display: inline-block; width: 22px; color: #b33d25; font-weight: 800; }`
+
+export const CSS_GALLERY_STORY = `/* ====== 留白画册 · 图片故事 ====== */
+#wemd {
+  max-width: 677px;
+  margin: 0 auto;
+  padding: 36px 28px;
+  color: #3a3734;
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", "SimSun", serif;
+  font-size: 17px;
+  line-height: 2;
+  letter-spacing: 0.035em;
+  word-break: break-word;
+}
+#wemd p { max-width: 34em; margin: 0 auto 30px; color: #3a3734; font-size: 17px; line-height: 2; text-align: left; }
+#wemd h1 { max-width: 12em; margin: 58px auto 88px; text-align: center; }
+#wemd h1 .content { color: #2b2927; font-size: 36px; font-weight: 700; line-height: 1.42; letter-spacing: 0.08em; }
+#wemd h2 { max-width: 22em; margin: 72px auto 32px; }
+#wemd h2 .content { display: block; color: #2b2927; font-size: 25px; font-weight: 700; letter-spacing: 0.06em; }
+#wemd h3 { max-width: 38em; margin: 42px auto 20px; }
+#wemd h3 .content { color: #80503f; font-size: 15px; font-weight: 700; letter-spacing: 0.12em; }
+#wemd h4, #wemd h5, #wemd h6 { max-width: 40em; margin: 30px auto 15px; }
+#wemd h4 .content, #wemd h5 .content, #wemd h6 .content { color: #625b55; font-size: 16px; font-weight: 700; }
+#wemd h1 .prefix, #wemd h1 .suffix, #wemd h2 .prefix, #wemd h2 .suffix,
+#wemd h3 .prefix, #wemd h3 .suffix, #wemd h4 .prefix, #wemd h4 .suffix,
+#wemd h5 .prefix, #wemd h5 .suffix, #wemd h6 .prefix, #wemd h6 .suffix { display: none; }
+#wemd ul, #wemd ol { max-width: 34em; margin: 24px auto 34px; padding-left: 24px; }
+#wemd li { margin: 10px 0; line-height: 1.9; }
+#wemd blockquote, #wemd .multiquote-1 { margin: 54px 0; padding: 36px 28px; border: 0; background: #2b2927; color: #f7f2e9; }
+#wemd blockquote p, #wemd .multiquote-1 p { margin: 0 auto; color: #f7f2e9; font-size: 18px; line-height: 1.9; text-align: center; }
+#wemd .callout { max-width: 34em; margin: 36px auto; padding: 20px 22px; border: 0; border-left: 3px solid #80503f; background: #f5f1eb; color: #504a45; }
+#wemd .callout-title { margin-bottom: 8px; color: #80503f; font-size: 13px; font-weight: 800; letter-spacing: 0.08em; }
+#wemd .callout p { margin: 0; font-size: 15px; }
+#wemd strong { color: #80503f; font-weight: 700; }
+#wemd mark { padding: 0 3px; background: #eadfd2; color: #3a3734; }
+#wemd a { color: #80503f; text-decoration: none; border-bottom: 1px solid #bda89b; }
+#wemd hr { width: 52px; margin: 64px auto; border: 0; border-top: 1px solid #9b8f86; }
+#wemd figure { margin: 56px -28px; text-align: center; }
+#wemd img { display: block; width: 100%; max-width: 100%; margin: 0 auto; }
+#wemd figcaption { max-width: 36em; margin: 13px auto 0; color: #8b8179; font-size: 13px; letter-spacing: 0.08em; }
+#wemd p code, #wemd li code { padding: 2px 5px; background: #eee9e2; color: #80503f; }
+#wemd pre.custom { max-width: 40em; margin: 34px auto; padding: 18px; overflow-x: auto; background: #2b2927; }
+#wemd pre code { color: #f7f2e9; font-size: 13px; }
+#wemd .table-container { margin: 42px 0; overflow-x: auto; }
+#wemd table { width: 100%; border-collapse: collapse; font-size: 14px; }
+#wemd th, #wemd td { padding: 10px; border-bottom: 1px solid #d8d0c7; text-align: left; }
+#wemd th { color: #80503f; font-weight: 700; }
+#wemd tr:nth-child(2n) td { background: #f8f5f0; }
+#wemd .task-list-item { list-style: none; margin-left: -20px; }
+#wemd .task-list-status { display: inline-block; width: 22px; color: #80503f; font-weight: 800; }`

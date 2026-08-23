@@ -1,11 +1,11 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { toast } from '../Toast/Toast'
-import { Copy, Check, Minus, Plus, ExternalLink, Send, Loader2, Image as ImageIcon, Settings, Palette, Sparkles, Wand2 } from 'lucide-react'
+import { Copy, Check, Minus, Plus, ExternalLink, Send, Loader2, Image as ImageIcon, Settings, Palette, Sparkles, Wand2, Code2, ChevronDown } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import MarkdownIt from 'markdown-it'
-import hljs from 'highlight.js'
 import { fetchAllTemplates, BUILTIN_TEMPLATES, TemplateItem } from '../../utils/templateStore'
 import { DEFAULT_WECHAT_TEMPLATE_ID } from '../../../shared/defaultStyleTemplates'
+import { renderWechatMarkdown } from '../../utils/wechatMarkdown'
 import { ImageLibrary } from '../ImageLibrary/ImageLibrary'
 import { generateXiaohongshuArticleMetadata, publishXiaohongshuNote } from '../../utils/apiHelpers'
 import { hasXiaohongshuCookies, loadXiaohongshuCookies } from '../../utils/accountBindings'
@@ -21,24 +21,6 @@ interface WeChatRendererProps {
   platformMode?: PlatformMode
 }
 
-// ── Markdown ──────────────────────────────────────────────────────────────────
-
-function highlightCode(str: string, lang: string): string {
-  if (lang && hljs.getLanguage(lang)) {
-    try {
-      return `<pre><code class="hljs language-${lang}">${hljs.highlight(str, { language: lang, ignoreIllegals: true }).value}</code></pre>`
-    } catch { /* ignore */ }
-  }
-  const esc = str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  return `<pre><code class="hljs">${esc}</code></pre>`
-}
-
-const md = new MarkdownIt({ html: false, linkify: true, typographer: false, highlight: highlightCode })
-
-function renderMarkdown(content: string): string {
-  return content?.trim() ? md.render(content) : ''
-}
-
 // ── 复制到公众号：getComputedStyle 内联所有样式（等价于 juice，无需额外依赖）──
 
 /**
@@ -51,15 +33,22 @@ function renderMarkdown(content: string): string {
 // 注意：不内联 width / max-width ——这两个值是相对于隐藏容器（677px）算出的固定像素，
 // 粘到微信编辑器（~600px）后会导致子元素溢出、margin 失效。
 const INLINE_PROPS = [
-  'color', 'background-color',
-  'font-size', 'font-weight', 'font-style',
+  'color', 'background-color', 'background-image', 'background-position',
+  'background-size', 'background-repeat',
+  'font-family', 'font-size', 'font-weight', 'font-style',
   'line-height', 'letter-spacing', 'text-align', 'text-decoration',
+  'text-decoration-line', 'text-decoration-color', 'text-decoration-style',
+  'text-transform', 'text-indent',
   'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
   'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
   'border-top-width', 'border-top-style', 'border-top-color',
+  'border-right-width', 'border-right-style', 'border-right-color',
+  'border-bottom-width', 'border-bottom-style', 'border-bottom-color',
   'border-left-width', 'border-left-style', 'border-left-color',
-  'border-radius',
-  'display',
+  'border-radius', 'box-shadow',
+  'display', 'vertical-align', 'list-style-type',
+  'white-space', 'word-break', 'overflow-wrap',
+  'overflow-x', 'overflow-y', 'break-inside', 'filter',
 ] as const
 
 // 常见默认值集合，命中则跳过内联（减少 HTML 体积）
@@ -96,6 +85,9 @@ function inlineComputedStyles(root: HTMLElement): void {
       ) return
       parts.push(`${prop}:${val}`)
     })
+    if (el instanceof HTMLImageElement) {
+      parts.push('max-width:100%', 'height:auto')
+    }
     if (parts.length) el.setAttribute('style', parts.join(';'))
   })
 }
@@ -254,6 +246,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
   const [templates, setTemplates] = useState<TemplateItem[]>(BUILTIN_TEMPLATES)
   const [templateId, setTemplateId] = useState(DEFAULT_WECHAT_TEMPLATE_ID)
   const [editedCss, setEditedCss] = useState(() => BUILTIN_TEMPLATES[0]?.css ?? '')
+  const [cssEditorOpen, setCssEditorOpen] = useState(false)
   const [fontSize, setFontSize] = useState(16)
   const [copied, setCopied] = useState(false)
   const [ttCopied, setTtCopied] = useState(false)
@@ -378,7 +371,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
     return () => window.removeEventListener('wxtemplates-updated', sync)
   }, [templateId])
 
-  const html = renderMarkdown(content)
+  const html = renderWechatMarkdown(content)
   const charCount = content?.replace(/\s/g, '').length ?? 0
 
   // 今日头条：轮询 Chromium 安装状态，直到 ready 或 failed
@@ -881,19 +874,25 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                 ))}
               </div>
 
-              <div className="wr-css-editor-wrap">
-                <p className="wr-sidebar-section-label" style={{ marginBottom: 8 }}>
-                  自定义 CSS
+              <div className={`wr-css-editor-wrap${cssEditorOpen ? ' is-open' : ''}`}>
+                <button className="wr-css-editor-toggle" onClick={() => setCssEditorOpen(open => !open)}>
+                  <Code2 size={13} />
+                  <span>高级 CSS</span>
                   <span className="wr-css-hint">实时预览</span>
-                </p>
-                <textarea
-                  className="wr-css-textarea"
-                  value={editedCss}
-                  onChange={e => { setEditedCss(e.target.value); setTemplateId('custom') }}
-                  spellCheck={false}
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                />
+                  <ChevronDown size={13} className="wr-css-chevron" />
+                </button>
+                {cssEditorOpen ? (
+                  <textarea
+                    className="wr-css-textarea"
+                    value={editedCss}
+                    onChange={e => { setEditedCss(e.target.value); setTemplateId('custom') }}
+                    spellCheck={false}
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                  />
+                ) : (
+                  <p className="wr-css-editor-summary">选择模板即可预览；需要微调时再展开 CSS。</p>
+                )}
               </div>
             </div>
 

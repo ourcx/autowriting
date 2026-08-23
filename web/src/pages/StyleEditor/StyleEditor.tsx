@@ -1,12 +1,24 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Trash2, Save, Copy, Check, Wand2, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
+import {
+  Plus,
+  Trash2,
+  Save,
+  Copy,
+  Check,
+  Wand2,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  FileText,
+  LayoutGrid,
+  Monitor,
+  Smartphone,
+} from 'lucide-react'
 import { toast, showConfirm } from '../../components/Toast/Toast'
 import PageHeader from '../../components/PageHeader/PageHeader'
 import { loadAIConfig } from '../../utils/aiConfig'
-import MarkdownIt from 'markdown-it'
-import hljs from 'highlight.js'
 import {
   TemplateItem,
   fetchAllTemplates,
@@ -15,25 +27,11 @@ import {
   createNewTemplate,
   BUILTIN_TEMPLATES,
   PREVIEW_MARKDOWN,
-  PREVIEW_RICH_HTML,
+  PREVIEW_COMPONENTS_MARKDOWN,
 } from '../../utils/templateStore'
+import { renderWechatMarkdown } from '../../utils/wechatMarkdown'
 import { DEFAULT_WECHAT_TEMPLATE_ID } from '../../../shared/defaultStyleTemplates'
 import './StyleEditor.css'
-
-// ── Markdown 渲染 ──────────────────────────────────────────────────────────
-
-function highlight(str: string, lang: string): string {
-  if (lang && hljs.getLanguage(lang)) {
-    try {
-      return `<pre><code class="hljs language-${lang}">${hljs.highlight(str, { language: lang, ignoreIllegals: true }).value}</code></pre>`
-    } catch { /* ignore */ }
-  }
-  const esc = str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  return `<pre><code class="hljs">${esc}</code></pre>`
-}
-
-const mdParser = new MarkdownIt({ html: false, linkify: true, typographer: false, highlight })
-const previewHtml = `${mdParser.render(PREVIEW_MARKDOWN)}${PREVIEW_RICH_HTML}`
 
 // ── 组件 ──────────────────────────────────────────────────────────────────
 
@@ -61,6 +59,8 @@ export default function StyleEditor() {
   // ── 拖拽分栏宽度 ─────────────────────────────────────────────
   const [sidebarWidth, setSidebarWidth] = useState(220)
   const [previewWidth, setPreviewWidth] = useState(380)
+  const [previewMode, setPreviewMode] = useState<'article' | 'components'>('article')
+  const [previewViewport, setPreviewViewport] = useState<'mobile' | 'wide'>('mobile')
 
   const sidebarResizerRef = useRef<HTMLDivElement>(null)
   const previewResizerRef = useRef<HTMLDivElement>(null)
@@ -154,6 +154,10 @@ export default function StyleEditor() {
 
   const isBuiltin = BUILTIN_TEMPLATES.some(t => t.id === selectedId)
   const selectedTemplate = templates.find(t => t.id === selectedId)
+  const previewHtml = useMemo(
+    () => renderWechatMarkdown(previewMode === 'article' ? PREVIEW_MARKDOWN : PREVIEW_COMPONENTS_MARKDOWN),
+    [previewMode],
+  )
 
   // 保存（自定义）
   const handleSave = async () => {
@@ -519,11 +523,47 @@ export default function StyleEditor() {
         {/* ── 右侧实时预览 ── */}
         <div className="se-preview-pane" style={{ width: previewWidth }}>
           <div className="se-preview-header">
-            <span className="se-preview-label">实时预览</span>
-            <span className="se-preview-sub">正文、列表、提示块、代码、表格与脚注</span>
+            <div>
+              <span className="se-preview-label">实时预览</span>
+              <span className="se-preview-sub">与公众号发布预览共用渲染结构</span>
+            </div>
+            <div className="se-preview-controls">
+              <div className="se-segmented" aria-label="预览内容">
+                <button
+                  className={previewMode === 'article' ? 'active' : ''}
+                  onClick={() => setPreviewMode('article')}
+                  title="文章预览"
+                >
+                  <FileText size={13} />
+                </button>
+                <button
+                  className={previewMode === 'components' ? 'active' : ''}
+                  onClick={() => setPreviewMode('components')}
+                  title="组件总览"
+                >
+                  <LayoutGrid size={13} />
+                </button>
+              </div>
+              <div className="se-segmented" aria-label="预览宽度">
+                <button
+                  className={previewViewport === 'mobile' ? 'active' : ''}
+                  onClick={() => setPreviewViewport('mobile')}
+                  title="手机宽度"
+                >
+                  <Smartphone size={13} />
+                </button>
+                <button
+                  className={previewViewport === 'wide' ? 'active' : ''}
+                  onClick={() => setPreviewViewport('wide')}
+                  title="宽屏预览"
+                >
+                  <Monitor size={13} />
+                </button>
+              </div>
+            </div>
           </div>
           <div className="se-preview-scroll">
-            <div className="se-preview-card">
+            <div className={`se-preview-card se-preview-card--${previewViewport}`}>
               <div
                 id="wemd"
                 dangerouslySetInnerHTML={{ __html: previewHtml }}
