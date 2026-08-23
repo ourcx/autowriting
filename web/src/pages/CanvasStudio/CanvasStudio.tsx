@@ -9,6 +9,7 @@ import {
   Image,
   LayoutTemplate,
   FileText,
+  MoveVertical,
   Shapes,
   Sparkles,
   Square,
@@ -217,6 +218,19 @@ export default function CanvasStudio() {
       ;[nodes[index], nodes[target]] = [nodes[target], nodes[index]]
       return { ...current, nodes }
     })
+  }
+
+  const setCanvasHeight = (height: number) => {
+    const nextHeight = Math.min(32000, Math.max(320, Math.round(height || 320)))
+    setDocument(current => ({ ...current, width: 750, height: nextHeight }))
+  }
+
+  const fitCanvasHeight = () => {
+    const contentBottom = document.nodes.reduce(
+      (bottom, node) => Math.max(bottom, node.y + node.height),
+      0,
+    )
+    setCanvasHeight(contentBottom + 60)
   }
 
   const applyDsl = () => {
@@ -430,7 +444,22 @@ export default function CanvasStudio() {
         <section className="cs-stage">
           <div className="cs-stage-meta">
             <strong>{document.name}</strong>
-            <span>{document.width} × {document.height}</span>
+            <div className="cs-height-control">
+              <span>750 ×</span>
+              <input
+                type="number"
+                min="320"
+                max="32000"
+                step="100"
+                value={document.height}
+                onChange={event => setCanvasHeight(Number(event.target.value))}
+                aria-label="画布高度"
+              />
+              <span>px</span>
+              <button title="适应内容高度" onClick={fitCanvasHeight}>
+                <MoveVertical size={14} />
+              </button>
+            </div>
           </div>
           <div className="cs-canvas-shell">
             <CanvasRenderer
@@ -465,6 +494,27 @@ export default function CanvasStudio() {
                 <span>背景</span>
                 <input type="color" value={document.background} onChange={event => setDocument(current => ({ ...current, background: event.target.value }))} />
               </label>
+              <div className="cs-property-grid">
+                <label>
+                  <span>公众号宽度</span>
+                  <input value="750 px" disabled />
+                </label>
+                <label>
+                  <span>画布高度</span>
+                  <input
+                    type="number"
+                    min="320"
+                    max="32000"
+                    step="100"
+                    value={document.height}
+                    onChange={event => setCanvasHeight(Number(event.target.value))}
+                  />
+                </label>
+              </div>
+              <button className="cs-fit-height" onClick={fitCanvasHeight}>
+                <MoveVertical size={14} />
+                适应内容高度
+              </button>
               {selectedNode ? (
                 <>
                   <div className="cs-property-heading">{nodeLabel(selectedNode)}</div>

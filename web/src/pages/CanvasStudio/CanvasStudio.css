@@ -265,6 +265,47 @@
   color: var(--color-muted);
 }
 
+.cs-height-control {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.cs-height-control input {
+  width: 78px;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid var(--color-hairline);
+  border-radius: 5px;
+  outline: none;
+  background: var(--color-canvas);
+  color: var(--color-body-strong);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.cs-height-control input:focus {
+  border-color: var(--color-brand-teal);
+}
+
+.cs-height-control button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--color-hairline);
+  border-radius: 5px;
+  background: var(--color-canvas);
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.cs-height-control button:hover {
+  border-color: var(--color-brand-mint);
+  color: var(--color-brand-teal);
+}
+
 .cs-canvas-shell {
   width: min(100%, 660px);
   margin: 0 auto;
@@ -358,6 +399,27 @@
 .cs-property-heading {
   padding-top: 8px;
   border-top: 1px solid var(--color-hairline);
+}
+
+.cs-fit-height {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 36px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-sm);
+  background: var(--color-canvas);
+  color: var(--color-body);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cs-fit-height:hover {
+  border-color: var(--color-brand-mint);
+  color: var(--color-brand-teal);
 }
 
 .cs-property-grid {
