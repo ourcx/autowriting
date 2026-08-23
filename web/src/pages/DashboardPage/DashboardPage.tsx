@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings, Palette, AlertTriangle, Database, BookOpen, LogOut, Shield, Zap, Clock, Star, Image, User } from 'lucide-react'
+import { Settings, Palette, AlertTriangle, Database, BookOpen, LogOut, Shield, Zap, Clock, Star, Image, User, Shapes } from 'lucide-react'
 import Dashboard from '../Dashboard/Dashboard'
 import OnboardingGuide from '../../components/OnboardingGuide/OnboardingGuide'
 import PageHeader from '../../components/PageHeader/PageHeader'
@@ -94,6 +94,10 @@ export default function DashboardPage() {
           <button className="dp-nav-btn" onClick={() => navigate('/styles')}>
             <Palette size={14} />
             样式
+          </button>
+          <button className="dp-nav-btn" onClick={() => navigate('/canvas')}>
+            <Shapes size={14} />
+            画布
           </button>
           {isAdmin && (
             <button className="dp-nav-btn" onClick={() => navigate('/admin')}>

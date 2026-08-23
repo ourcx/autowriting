@@ -151,6 +151,19 @@ cases.push({
   },
 })
 cases.push({
+  name: '未授权生成视觉画布应被拒（401/403）',
+  run: async () => {
+    const r = await fetch(`${BASE}/api/canvas/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: '测试画布' }),
+    })
+    if (r.status !== 401 && r.status !== 403) {
+      throw new Error(`期望 401/403，实际 ${r.status}`)
+    }
+  },
+})
+cases.push({
   name: '错误 Agent API Key 应被拒绝',
   run: async () => {
     const r = await fetch(`${BASE}/api/agent/status`, {
@@ -256,6 +269,20 @@ cases.push({
     smokeUserId = j.user?.id
     if (!token) throw new Error('响应中没有 token')
     if (!smokeUserId) throw new Error('响应中没有用户 ID')
+  },
+})
+cases.push({
+  name: '画布生成接口应校验 prompt',
+  run: async () => {
+    const r = await fetch(`${BASE}/api/canvas/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ prompt: '' }),
+    })
+    if (r.status !== 400) throw new Error(`期望 400，实际 ${r.status}`)
   },
 })
 cases.push({

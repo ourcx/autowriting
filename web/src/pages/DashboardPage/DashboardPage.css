@@ -131,3 +131,13 @@
   min-height: 0;
   overflow: hidden;
 }
+
+@media (max-width: 1500px) {
+  .dp-nav-btn {
+    padding: 0 10px;
+  }
+
+  .dp-nav {
+    gap: 4px;
+  }
+}

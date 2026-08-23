@@ -1,0 +1,20 @@
+.canvas-renderer {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #fff;
+  touch-action: none;
+  user-select: none;
+}
+
+.canvas-renderer__node {
+  cursor: grab;
+}
+
+.canvas-renderer__node:active {
+  cursor: grabbing;
+}
+
+.canvas-renderer__selection {
+  vector-effect: non-scaling-stroke;
+}

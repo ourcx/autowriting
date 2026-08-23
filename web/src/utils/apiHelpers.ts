@@ -4,6 +4,7 @@
 
 import axios, { AxiosError } from 'axios'
 import { AIConfig } from './aiConfig'
+import { CanvasDocument, parseCanvasDocument } from '../../shared/canvasDsl'
 
 export interface WechatAccount {
   nickname: string
@@ -115,6 +116,19 @@ export async function fetchArticleList() {
     status: 'draft' | 'generated' | 'published'
     createdAt: string
   }>
+}
+
+export async function generateCanvasDocument(
+  prompt: string,
+  document: CanvasDocument,
+  aiConfig: AIConfig,
+): Promise<CanvasDocument> {
+  const response = await axios.post('/api/canvas/generate', {
+    prompt,
+    document,
+    aiConfig,
+  })
+  return parseCanvasDocument(response.data?.document)
 }
 
 // ── 删除文章 ──

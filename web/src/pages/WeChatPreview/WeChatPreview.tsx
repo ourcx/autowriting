@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { AlertTriangle, Palette } from 'lucide-react'
+import { AlertTriangle, Palette, Shapes } from 'lucide-react'
 import WeChatRenderer from '../../components/WeChatRenderer/WeChatRenderer'
 import PageHeader from '../../components/PageHeader/PageHeader'
 import { fetchArticle } from '../../utils/apiHelpers'
@@ -71,6 +71,13 @@ export default function WeChatPreview() {
           >
             <Palette size={14} />
             管理样式
+          </button>
+          <button
+            className="preview-nav-styles-btn"
+            onClick={() => navigate('/canvas')}
+          >
+            <Shapes size={14} />
+            视觉画布
           </button>
           <button
             className={`wr-platform-tab ${platformMode === 'wechat' ? 'active' : ''}`}
