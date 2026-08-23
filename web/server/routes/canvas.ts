@@ -6,6 +6,7 @@ import { logger } from "../logger.ts"
 import type { AIConfig, AuthedRequest } from "../types.ts"
 import { buildLLMRequest, callLLMWithRetry } from "../utils/index.ts"
 import { parseCanvasDocument } from "../../shared/canvasDsl.ts"
+import type { CanvasDocument } from "../../shared/canvasDsl.ts"
 
 const router = Router()
 router.use(authMiddleware)
@@ -32,6 +33,9 @@ const CANVAS_SYSTEM_PROMPT = `你是公众号视觉画布设计师。请把用�
 4. motif: {"id":"","type":"motif","x":0,"y":0,"width":300,"height":100,"rotation":0,"opacity":1,"motif":"wave|dots|arch|spark|frame","fill":"#e8b94a","stroke":"#e8b94a","strokeWidth":4}
 
 规则：
+- 响应首字符必须是 {，末字符必须是 }，只输出一个完整 JSON 对象。
+- 不得输出 Markdown 代码围栏、解释文字、注释、省略号或未闭合 JSON。
+- nodes 至少包含 1 个节点，每个节点必须包含对应类型列出的全部字段。
 - 节点按数组顺序从底到顶绘制，最多 40 个。
 - 画布宽度建议 750，高度 750-1800。
 - 多图海报使用 2-5 个 image 节点；没有用户图片 URL 时可以省略图片节点，不得编造 URL。
@@ -39,14 +43,197 @@ const CANVAS_SYSTEM_PROMPT = `你是公众号视觉画布设计师。请把用�
 - 不输出任意 SVG、HTML、脚本、CSS、事件或外部字体。
 - 文本忠于用户提供的信息，不虚构数据、姓名和结论。`
 
-function extractJson(output: string): unknown {
-  const cleaned = output
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim()
-  const json = cleaned.match(/\{[\s\S]*\}/)?.[0]
-  if (!json) throw new Error("AI 未返回有效画布 JSON")
-  return JSON.parse(json)
+interface CanvasCompletionData {
+  choices?: Array<{
+    finish_reason?: string
+    message?: {
+      content?: unknown
+      reasoning_content?: unknown
+      tool_calls?: Array<{ function?: { arguments?: unknown } }>
+    }
+  }>
+  usage?: {
+    prompt_tokens?: number
+    completion_tokens?: number
+    total_tokens?: number
+  }
+}
+
+function textFromContent(content: unknown): string {
+  if (typeof content === "string") return content
+  if (!Array.isArray(content)) return ""
+  return content.map(part => {
+    if (typeof part === "string") return part
+    if (!part || typeof part !== "object") return ""
+    const record = part as Record<string, unknown>
+    return typeof record.text === "string"
+      ? record.text
+      : typeof record.content === "string"
+        ? record.content
+        : ""
+  }).join("")
+}
+
+function completionCandidates(data: CanvasCompletionData): string[] {
+  const message = data.choices?.[0]?.message
+  if (!message) return []
+  const candidates = [
+    textFromContent(message.content),
+    ...(message.tool_calls || []).map(call => textFromContent(call.function?.arguments)),
+    textFromContent(message.reasoning_content),
+  ]
+  return [...new Set(candidates.map(value => value.trim()).filter(Boolean))]
+}
+
+function balancedJsonObjects(text: string): unknown[] {
+  const values: unknown[] = []
+  for (let start = 0; start < text.length; start += 1) {
+    if (text[start] !== "{") continue
+    let depth = 0
+    let quoted = false
+    let escaped = false
+    for (let index = start; index < text.length; index += 1) {
+      const character = text[index]
+      if (quoted) {
+        if (escaped) escaped = false
+        else if (character === "\\") escaped = true
+        else if (character === "\"") quoted = false
+        continue
+      }
+      if (character === "\"") quoted = true
+      else if (character === "{") depth += 1
+      else if (character === "}") {
+        depth -= 1
+        if (depth === 0) {
+          try {
+            values.push(JSON.parse(text.slice(start, index + 1)))
+          } catch {
+            // 继续寻找后续完整对象，避免一段坏 JSON 阻断整个响应。
+          }
+          break
+        }
+      }
+    }
+  }
+  return values
+}
+
+function parseCanvasFromCompletion(data: CanvasCompletionData): CanvasDocument {
+  for (const candidate of completionCandidates(data)) {
+    for (const value of balancedJsonObjects(candidate)) {
+      const record = value && typeof value === "object" && !Array.isArray(value)
+        ? value as Record<string, unknown>
+        : {}
+      for (const documentValue of [record.document, record.canvas, value]) {
+        try {
+          return parseCanvasDocument(documentValue)
+        } catch {
+          // 尝试同一响应中的下一个候选对象。
+        }
+      }
+    }
+  }
+  throw new Error("AI 未返回可解析的画布 DSL")
+}
+
+function completionShape(data: CanvasCompletionData) {
+  const message = data.choices?.[0]?.message
+  return {
+    finishReason: data.choices?.[0]?.finish_reason || "",
+    messageKeys: message ? Object.keys(message).sort() : [],
+    contentType: Array.isArray(message?.content) ? "array" : typeof message?.content,
+    contentLength: textFromContent(message?.content).length,
+    reasoningLength: textFromContent(message?.reasoning_content).length,
+    toolCallCount: message?.tool_calls?.length || 0,
+  }
+}
+
+async function callStructuredCanvas(
+  url: string,
+  body: Record<string, unknown>,
+  headers: Record<string, string>,
+  maxRetries = 3,
+): Promise<CanvasCompletionData> {
+  try {
+    const response = await callLLMWithRetry(url, {
+      ...body,
+      response_format: { type: "json_object" },
+    }, headers, maxRetries)
+    return response.data as CanvasCompletionData
+  } catch (error: unknown) {
+    const status = (error as { response?: { status?: number } }).response?.status
+    if (status !== 400 && status !== 422) throw error
+    const response = await callLLMWithRetry(url, body, headers, maxRetries)
+    return response.data as CanvasCompletionData
+  }
+}
+
+async function generateCanvasWithRepair(input: {
+  url: string
+  model: string
+  headers: Record<string, string>
+  prompt: string
+  currentDocument: string
+  onRepair?: () => void
+  onAttempt?: (completion: CanvasCompletionData, attempt: number) => void
+}): Promise<{
+  document: CanvasDocument
+  completion: CanvasCompletionData
+  attempts: CanvasCompletionData[]
+  repaired: boolean
+}> {
+  const messages = [
+    { role: "system", content: CANVAS_SYSTEM_PROMPT },
+    {
+      role: "user",
+      content: `${input.prompt}${input.currentDocument ? `\n\n在当前画布基础上修改：\n${input.currentDocument}` : ""}`,
+    },
+  ]
+  const first = await callStructuredCanvas(input.url, {
+    model: input.model,
+    messages,
+    temperature: 0.2,
+    max_tokens: 8000,
+    stream: false,
+  }, input.headers)
+  input.onAttempt?.(first, 1)
+
+  try {
+    return {
+      document: parseCanvasFromCompletion(first),
+      completion: first,
+      attempts: [first],
+      repaired: false,
+    }
+  } catch {
+    input.onRepair?.()
+    const malformed = completionCandidates(first).join("\n").slice(0, 20000)
+    const repair = await callStructuredCanvas(input.url, {
+      model: input.model,
+      messages: [
+        {
+          role: "system",
+          content: `${CANVAS_SYSTEM_PROMPT}\n\n你现在是 JSON 修复器。只输出一个完整 JSON 对象，首字符必须是 {，末字符必须是 }。不要解释，不要使用代码围栏。`,
+        },
+        {
+          role: "user",
+          content: malformed
+            ? `把下面的模型输出修复成合法画布 DSL：\n${malformed}`
+            : `上一轮没有返回可用正文。请直接根据需求重新生成画布 DSL：\n${input.prompt}${input.currentDocument ? `\n当前画布：${input.currentDocument}` : ""}`,
+        },
+      ],
+      temperature: 0,
+      max_tokens: 8000,
+      stream: false,
+    }, input.headers, 2)
+    input.onAttempt?.(repair, 2)
+    return {
+      document: parseCanvasFromCompletion(repair),
+      completion: repair,
+      attempts: [first, repair],
+      repaired: true,
+    }
+  }
 }
 
 router.post("/generate", async (req: AuthedRequest, res) => {
@@ -86,42 +273,28 @@ router.post("/generate", async (req: AuthedRequest, res) => {
   try {
     const { url, model, headers } = buildLLMRequest(aiConfig)
     // #region debug-point BCD:before-upstream
-    if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "pre-fix", hypothesisId: "B,C,D", traceId: debugTraceId, location: "server/routes/canvas.ts:before-upstream", msg: "[DEBUG] Canvas upstream request starting", data: { elapsedMs: Date.now() - debugStartedAt, provider: aiConfig.articleProvider, model, documentLength: currentDocument.length, maxTokens: 4000 }, ts: Date.now() }) }).catch(() => {})
+    if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "pre-fix", hypothesisId: "B,C,D", traceId: debugTraceId, location: "server/routes/canvas.ts:before-upstream", msg: "[DEBUG] Canvas upstream request starting", data: { elapsedMs: Date.now() - debugStartedAt, provider: aiConfig.articleProvider, model, documentLength: currentDocument.length, maxTokens: 8000 }, ts: Date.now() }) }).catch(() => {})
     // #endregion
-    const response = await callLLMWithRetry(url, {
+    const generated = await generateCanvasWithRepair({
+      url,
       model,
-      messages: [
-        { role: "system", content: CANVAS_SYSTEM_PROMPT },
-        {
-          role: "user",
-          content: `${prompt}${currentDocument ? `\n\n在当前画布基础上修改：\n${currentDocument}` : ""}`,
-        },
-      ],
-      temperature: 0.65,
-      max_tokens: 4000,
-      stream: false,
-    }, headers)
-
-    const data = response.data as typeof response.data & {
-      usage?: {
-        prompt_tokens?: number
-        completion_tokens?: number
-        total_tokens?: number
-      }
-    }
-    const output = data.choices[0]?.message?.content ?? ""
-    const document = parseCanvasDocument(extractJson(output))
+      headers,
+      prompt,
+      currentDocument,
+    })
+    const { document } = generated
     // #region debug-point BCD:upstream-complete
-    if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "pre-fix", hypothesisId: "B,C,D", traceId: debugTraceId, location: "server/routes/canvas.ts:upstream-complete", msg: "[DEBUG] Canvas upstream request completed", data: { elapsedMs: Date.now() - debugStartedAt, outputLength: output.length, nodeCount: document.nodes.length }, ts: Date.now() }) }).catch(() => {})
+    if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "pre-fix", hypothesisId: "B,C,D", traceId: debugTraceId, location: "server/routes/canvas.ts:upstream-complete", msg: "[DEBUG] Canvas upstream request completed", data: { elapsedMs: Date.now() - debugStartedAt, repaired: generated.repaired, attempts: generated.attempts.map(completionShape), nodeCount: document.nodes.length }, ts: Date.now() }) }).catch(() => {})
     // #endregion
-    if (data.usage) {
+    for (const attempt of generated.attempts) {
+      if (!attempt.usage) continue
       recordTokenUsage({
         userId: req.user?.id,
         operation: "generate",
         model,
-        inputTokens: data.usage.prompt_tokens,
-        outputTokens: data.usage.completion_tokens,
-        totalTokens: data.usage.total_tokens,
+        inputTokens: attempt.usage.prompt_tokens,
+        outputTokens: attempt.usage.completion_tokens,
+        totalTokens: attempt.usage.total_tokens,
       })
     }
     res.json({ document })
@@ -184,42 +357,34 @@ router.post("/generate/stream", async (req: AuthedRequest, res) => {
 
   try {
     const { url, model, headers } = buildLLMRequest(aiConfig)
-    const response = await callLLMWithRetry(url, {
+    const generated = await generateCanvasWithRepair({
+      url,
       model,
-      messages: [
-        { role: "system", content: CANVAS_SYSTEM_PROMPT },
-        {
-          role: "user",
-          content: `${prompt}${currentDocument ? `\n\n在当前画布基础上修改：\n${currentDocument}` : ""}`,
-        },
-      ],
-      temperature: 0.65,
-      max_tokens: 4000,
-      stream: false,
-    }, headers)
-
-    const data = response.data as typeof response.data & {
-      usage?: {
-        prompt_tokens?: number
-        completion_tokens?: number
-        total_tokens?: number
-      }
-    }
-    const output = data.choices[0]?.message?.content ?? ""
-    const document = parseCanvasDocument(extractJson(output))
-    if (data.usage) {
+      headers,
+      prompt,
+      currentDocument,
+      onRepair: () => send("progress", { message: "正在修复模型输出..." }),
+      onAttempt: (completion, attempt) => {
+        // #region debug-point F:completion-shape
+        if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "post-fix", hypothesisId: "F", traceId: debugTraceId, location: "server/routes/canvas.ts:completion-shape", msg: "[DEBUG] Canvas completion structure received", data: { elapsedMs: Date.now() - debugStartedAt, attempt, ...completionShape(completion) }, ts: Date.now() }) }).catch(() => {})
+        // #endregion
+      },
+    })
+    const { document } = generated
+    for (const attempt of generated.attempts) {
+      if (!attempt.usage) continue
       recordTokenUsage({
         userId: req.user?.id,
         operation: "generate",
         model,
-        inputTokens: data.usage.prompt_tokens,
-        outputTokens: data.usage.completion_tokens,
-        totalTokens: data.usage.total_tokens,
+        inputTokens: attempt.usage.prompt_tokens,
+        outputTokens: attempt.usage.completion_tokens,
+        totalTokens: attempt.usage.total_tokens,
       })
     }
     send("result", { document })
     // #region debug-point B:stream-complete
-    if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "post-fix", hypothesisId: "B", traceId: debugTraceId, location: "server/routes/canvas.ts:stream-complete", msg: "[DEBUG] Canvas SSE result sent", data: { elapsedMs: Date.now() - debugStartedAt, outputLength: output.length, nodeCount: document.nodes.length }, ts: Date.now() }) }).catch(() => {})
+    if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "post-fix", hypothesisId: "B,F", traceId: debugTraceId, location: "server/routes/canvas.ts:stream-complete", msg: "[DEBUG] Canvas SSE result sent", data: { elapsedMs: Date.now() - debugStartedAt, repaired: generated.repaired, nodeCount: document.nodes.length }, ts: Date.now() }) }).catch(() => {})
     // #endregion
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "AI 生成画布失败"

@@ -43,6 +43,26 @@
 3. 上游 4.024s 完成后成功发送 `result`，总响应 4.026941s、HTTP 200。
 4. 响应包含 374 bytes，事件顺序为 `progress` → `result`。
 
+## Follow-up: invalid model output
+
+用户确认网关超时后出现 `AI 未返回有效画布 JSON`。
+
+| ID | Hypothesis | Result |
+| --- | --- | --- |
+| F1 | 模型结果不在纯字符串 `message.content` | Pending |
+| F2 | 响应包含多个 JSON/解释文字，贪婪正则解析失败 | Confirmed design flaw |
+| F3 | 推理模型耗尽输出预算，`content` 为空 | Pending |
+| F4 | 供应商未启用结构化 JSON 输出 | Confirmed design flaw |
+
+修复策略：请求 `response_format=json_object`，不支持时自动降级；兼容数组 content、tool call arguments 和 reasoning content；使用平衡括号提取多个 JSON 候选；首轮失败后执行一次低温度 JSON 修复调用。
+
+### Repair verification
+
+1. 首轮返回 17 字解释文字、无 JSON，结构日志正常记录且不包含正文。
+2. 服务端发送“正在修复模型输出”进度事件。
+3. 第二轮返回 276 字合法 JSON，最终成功输出 `result`，`repaired=true`。
+4. 单独验证 `message.content=null + tool_calls[].function.arguments`，无需修复即可生成画布。
+
 ## Verification Conclusion
 
 修复后连接不再在模型等待期间保持静默；持续超过 Nginx 空闲阈值时，15 秒 heartbeat 会刷新 upstream read timeout。等待用户在线上环境确认。
