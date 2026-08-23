@@ -12,6 +12,11 @@ import {
   parseCanvasSources,
 } from "../../shared/canvasArticle.ts"
 import type { CanvasSource } from "../../shared/canvasArticle.ts"
+import {
+  hydrateWechatBlockDocument,
+  parseWechatBlockDocument,
+} from "../../shared/wechatBlockDsl.ts"
+import type { WechatBlockDocument } from "../../shared/wechatBlockDsl.ts"
 
 const router = Router()
 router.use(authMiddleware)
@@ -50,6 +55,38 @@ const CANVAS_SYSTEM_PROMPT = `你是公众号长图排版引擎。文章内容�
 - path.d 只能使用标准 SVG 路径命令和数字，坐标必须落在节点 width/height 内，不得遮挡文字。
 - 只用纯色，确保文字与背景对比清晰。
 - 不输出 SVG 标签、HTML、脚本、CSS、事件或外部字体。
+- 不得生成“在这里填写”“示例”“______”等占位内容。`
+
+const BLOCK_SYSTEM_PROMPT = `你是微信公众号 HTML 内容块排版引擎。文章内容由系统提供，你只能设计样式和局部 SVG 装饰，绝对不能创作、改写、概括、合并、拆分或省略正文。
+
+块文档 DSL：
+{
+  "version": 1,
+  "name": "排版名称",
+  "width": 677,
+  "background": "#ffffff",
+  "pageBackground": "#f4f1e8",
+  "font": "system|serif|rounded",
+  "blocks": []
+}
+
+blocks 仅允许两种：
+1. content: {"id":"","type":"content","sourceId":"source-0","variant":"plain|title|banner|card|quote|highlight|image","background":"transparent","color":"#262626","accentColor":"#2f6f62","borderColor":"transparent","borderWidth":0,"radius":0,"padding":0,"marginTop":0,"marginBottom":22,"fontSize":17,"fontWeight":400,"lineHeight":1.9,"align":"left","imageFit":"cover|contain","imageRadius":6}
+2. decoration: {"id":"","type":"decoration","anchorSourceId":"source-0","placement":"before|after","d":"M 0 20 C 60 0 120 40 180 20","viewBoxWidth":180,"viewBoxHeight":40,"width":150,"height":36,"align":"left|center|right","fill":"transparent","stroke":"#2f6f62","strokeWidth":3,"marginTop":4,"marginBottom":16}
+
+规则：
+- 响应首字符必须是 {，末字符必须是 }，只输出一个完整 JSON 对象。
+- 不得输出 Markdown 代码围栏、解释、注释、HTML、CSS、SVG 标签或外部资源地址。
+- 每个内容源必须且只能出现一次，content 必须引用对应 sourceId。
+- content 不得输出 text、src 或 alt；系统会从 sourceId 回填原文与图片。
+- content 必须严格保持内容源原顺序，不得交换段落。
+- 图片内容源只能使用 image 版式，其他内容源不得使用 image。
+- 这是公众号长文，不是海报：保持连续纵向阅读、清晰层级、17-18px 正文、1.7-2.0 行高和克制留白。
+- 卡片、标题条、引用、强调色需要围绕文章主题形成统一视觉语言，不要每段都做成卡片。
+- 可以生成 2-8 个局部 decoration。装饰必须由你根据主题原创为 path，不得依赖预设图标名。
+- decoration 必须通过 anchorSourceId 和 placement 锚定到正文附近，不得遮挡正文。
+- path.d 只能使用标准 SVG Path 命令和数字，坐标必须在 viewBox 范围内。
+- 只使用高对比纯色；不使用渐变、外部字体、脚本、事件和 URL。
 - 不得生成“在这里填写”“示例”“______”等占位内容。`
 
 interface CanvasCompletionData {
@@ -145,6 +182,25 @@ function parseCanvasFromCompletion(data: CanvasCompletionData): CanvasDocument {
   throw new Error("AI 未返回可解析的画布 DSL")
 }
 
+function parseBlockFromCompletion(data: CanvasCompletionData): WechatBlockDocument {
+  for (const candidate of completionCandidates(data)) {
+    for (const value of balancedJsonObjects(candidate)) {
+      const record = value && typeof value === "object" && !Array.isArray(value)
+        ? value as Record<string, unknown>
+        : {}
+      for (const documentValue of [record.document, record.blocksDocument, value]) {
+        try {
+          const parsed = parseWechatBlockDocument(documentValue)
+          if (parsed.blocks.length > 0) return parsed
+        } catch {
+          // 尝试同一响应中的下一个候选对象。
+        }
+      }
+    }
+  }
+  throw new Error("AI 未返回可解析的公众号块 DSL")
+}
+
 function completionShape(data: CanvasCompletionData) {
   const message = data.choices?.[0]?.message
   return {
@@ -185,7 +241,7 @@ async function generateCanvasWithRepair(input: {
   articleTitle: string
   sources: CanvasSource[]
   onRepair?: () => void
-  onAttempt?: (completion: CanvasCompletionData, attempt: number) => void
+  onAttempt?: (_completion: CanvasCompletionData, _attempt: number) => void
 }): Promise<{
   document: CanvasDocument
   completion: CanvasCompletionData
@@ -256,6 +312,80 @@ async function generateCanvasWithRepair(input: {
       completion: repair,
       attempts: [first, repair],
       repaired: true,
+    }
+  }
+}
+
+async function generateBlockWithRepair(input: {
+  url: string
+  model: string
+  headers: Record<string, string>
+  prompt: string
+  articleTitle: string
+  sources: CanvasSource[]
+  onRepair?: () => void
+}): Promise<{
+  document: WechatBlockDocument
+  attempts: CanvasCompletionData[]
+}> {
+  const sourceManifest = JSON.stringify(input.sources.map(source => ({
+    id: source.id,
+    kind: source.kind,
+    text: source.kind === "image" ? undefined : source.text,
+    alt: source.kind === "image" ? source.alt : undefined,
+  })))
+  const messages = [
+    { role: "system", content: BLOCK_SYSTEM_PROMPT },
+    {
+      role: "user",
+      content: `排版偏好：${input.prompt}\n\n必须完整排版以下内容源，content 只能引用这些 sourceId：\n${sourceManifest}`,
+    },
+  ]
+  const first = await callStructuredCanvas(input.url, {
+    model: input.model,
+    messages,
+    temperature: 0.2,
+    max_tokens: 8000,
+    stream: false,
+  }, input.headers)
+
+  try {
+    return {
+      document: hydrateWechatBlockDocument(
+        parseBlockFromCompletion(first),
+        input.sources,
+        input.articleTitle,
+      ),
+      attempts: [first],
+    }
+  } catch {
+    input.onRepair?.()
+    const malformed = completionCandidates(first).join("\n").slice(0, 20000)
+    const repair = await callStructuredCanvas(input.url, {
+      model: input.model,
+      messages: [
+        {
+          role: "system",
+          content: `${BLOCK_SYSTEM_PROMPT}\n\n你现在是 JSON 修复器。只输出一个完整 JSON 对象，不要解释。`,
+        },
+        {
+          role: "user",
+          content: malformed
+            ? `把下面的模型输出修复成合法公众号块 DSL：\n${malformed}`
+            : `请根据排版偏好和内容源重新生成：\n偏好：${input.prompt}\n内容源：${sourceManifest}`,
+        },
+      ],
+      temperature: 0,
+      max_tokens: 8000,
+      stream: false,
+    }, input.headers, 2)
+    return {
+      document: hydrateWechatBlockDocument(
+        parseBlockFromCompletion(repair),
+        input.sources,
+        input.articleTitle,
+      ),
+      attempts: [first, repair],
     }
   }
 }
@@ -407,6 +537,78 @@ router.post("/generate/stream", async (req: AuthedRequest, res) => {
     if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "post-fix", hypothesisId: "B,C", traceId: debugTraceId, location: "server/routes/canvas.ts:stream-error", msg: "[DEBUG] Canvas SSE generation failed", data: { elapsedMs: Date.now() - debugStartedAt, errorName: error instanceof Error ? error.name : "unknown", message }, ts: Date.now() }) }).catch(() => {})
     // #endregion
     logger.error("CANVAS", "AI 流式生成画布失败", { error: message, userId: req.user?.id })
+  } finally {
+    clearInterval(heartbeat)
+    if (!res.writableEnded) res.end()
+  }
+})
+
+router.post("/generate-block/stream", async (req: AuthedRequest, res) => {
+  const startedAt = Date.now()
+  const prompt = String(req.body?.prompt || "排版为清晰耐读的公众号文章").trim().slice(0, PROMPT_MAX_LENGTH)
+  const sources = parseCanvasSources(req.body?.sources)
+  if (sources.length === 0) {
+    res.status(400).json({ error: "请先选择一篇包含正文的公众号文章" })
+    return
+  }
+
+  const clientAiConfig = req.body?.aiConfig && typeof req.body.aiConfig === "object"
+    ? req.body.aiConfig as AIConfig
+    : {}
+  const aiConfig: AIConfig = { ...SERVER_AI_CONFIG, ...clientAiConfig }
+  if (!aiConfig.articleApiKey && aiConfig.articleProvider !== "maas") {
+    res.status(400).json({ error: "请先在 AI 配置中填写文章模型的 API Key" })
+    return
+  }
+  if (aiConfig.articleProvider === "maas" && !aiConfig.maasApiKey) {
+    res.status(400).json({ error: "请先在 AI 配置中填写 MaaS API Key" })
+    return
+  }
+
+  const articleTitle = sources.find(source => source.kind === "title")?.text || "公众号块排版"
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8")
+  res.setHeader("Cache-Control", "no-cache")
+  res.setHeader("Connection", "keep-alive")
+  res.setHeader("X-Accel-Buffering", "no")
+  res.flushHeaders()
+
+  const send = (event: string, data: unknown) => {
+    if (!res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+  }
+  send("progress", { message: "正在生成 HTML 块结构..." })
+  const heartbeat = setInterval(() => send("heartbeat", { elapsedMs: Date.now() - startedAt }), 15000)
+
+  try {
+    const { url, model, headers } = buildLLMRequest(aiConfig)
+    const generated = await generateBlockWithRepair({
+      url,
+      model,
+      headers,
+      prompt,
+      articleTitle,
+      sources,
+      onRepair: () => send("progress", { message: "正在修复块排版结构..." }),
+    })
+    for (const attempt of generated.attempts) {
+      if (!attempt.usage) continue
+      recordTokenUsage({
+        userId: req.user?.id,
+        operation: "generate",
+        model,
+        inputTokens: attempt.usage.prompt_tokens,
+        outputTokens: attempt.usage.completion_tokens,
+        totalTokens: attempt.usage.total_tokens,
+      })
+    }
+    send("result", { document: generated.document })
+    send("done", {})
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "AI 生成块排版失败"
+    send("error", { message })
+    logger.error("CANVAS", "AI 流式生成块排版失败", {
+      error: message,
+      userId: req.user?.id,
+    })
   } finally {
     clearInterval(heartbeat)
     if (!res.writableEnded) res.end()

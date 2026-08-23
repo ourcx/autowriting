@@ -164,6 +164,19 @@ cases.push({
   },
 })
 cases.push({
+  name: '未授权生成公众号块排版应被拒（401/403）',
+  run: async () => {
+    const r = await fetch(`${BASE}/api/canvas/generate-block/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: '测试块排版' }),
+    })
+    if (r.status !== 401 && r.status !== 403) {
+      throw new Error(`期望 401/403，实际 ${r.status}`)
+    }
+  },
+})
+cases.push({
   name: '错误 Agent API Key 应被拒绝',
   run: async () => {
     const r = await fetch(`${BASE}/api/agent/status`, {

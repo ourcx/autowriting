@@ -6,6 +6,10 @@ import axios, { AxiosError } from 'axios'
 import { AIConfig } from './aiConfig'
 import { CanvasDocument, parseCanvasDocument } from '../../shared/canvasDsl'
 import type { CanvasSource } from '../../shared/canvasArticle'
+import {
+  parseWechatBlockDocument,
+  type WechatBlockDocument,
+} from '../../shared/wechatBlockDsl'
 
 export interface WechatAccount {
   nickname: string
@@ -169,6 +173,59 @@ export async function generateCanvasDocument(
   }
   if (buffer.trim()) consumeBlock(buffer)
   if (!result) throw new Error('画布生成结束，但没有收到有效结果')
+  return result
+}
+
+export async function generateWechatBlockDocument(
+  prompt: string,
+  sources: CanvasSource[],
+  aiConfig: AIConfig,
+  onProgress?: (message: string) => void,
+): Promise<WechatBlockDocument> {
+  const token = localStorage.getItem('auth_token')
+  const response = await fetch('/api/canvas/generate-block/stream', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ prompt, sources, aiConfig }),
+  })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({})) as { error?: string }
+    throw new Error(error.error || `HTTP ${response.status}`)
+  }
+  if (!response.body) throw new Error('浏览器不支持流式响应')
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let result: WechatBlockDocument | null = null
+
+  const consumeBlock = (block: string) => {
+    const event = block.match(/^event:\s*(.+)$/m)?.[1]?.trim()
+    const dataText = block.match(/^data:\s*(.+)$/m)?.[1]?.trim()
+    if (!event || !dataText) return
+    const data = JSON.parse(dataText) as { message?: string; document?: unknown }
+    if (event === 'progress' && data.message) onProgress?.(data.message)
+    if (event === 'heartbeat') onProgress?.('AI 正在编排 HTML 内容块...')
+    if (event === 'error') throw new Error(data.message || 'AI 块排版生成失败')
+    if (event === 'result') result = parseWechatBlockDocument(data.document)
+  }
+
+  while (true) {
+    const { done, value } = await reader.read()
+    buffer += decoder.decode(value, { stream: !done })
+    let boundary = buffer.indexOf('\n\n')
+    while (boundary >= 0) {
+      consumeBlock(buffer.slice(0, boundary))
+      buffer = buffer.slice(boundary + 2)
+      boundary = buffer.indexOf('\n\n')
+    }
+    if (done) break
+  }
+  if (buffer.trim()) consumeBlock(buffer)
+  if (!result) throw new Error('块排版生成结束，但没有收到有效结果')
   return result
 }
 

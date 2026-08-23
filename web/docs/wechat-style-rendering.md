@@ -45,9 +45,25 @@
 - 手机宽度与宽屏预览切换。
 - 自定义 CSS 实时预览。
 
-## 视觉画布
+## HTML 块排版
 
-`/canvas` 是独立于 Markdown 的第二种文档模型。画布使用 `shared/canvasDsl.ts` 定义的 JSON DSL，并通过 SVG 渲染。进入画布时需要选择一篇公众号文章；从文章预览进入时会自动携带当前 `articleId`。
+`/canvas` 默认进入 HTML 块排版模式。该模式使用纵向文档流承载完整公众号文章，并保留局部 SVG 作为 AI 可生成的装饰能力，不再要求整篇正文都绘制在 SVG 中。
+
+块排版使用 `shared/wechatBlockDsl.ts` 定义的安全 DSL：
+
+- `content`：通过 `sourceId` 引用标题、章节、正文、引用、列表或图片，只保存版式和内联样式。
+- `decoration`：通过 `anchorSourceId` 锚定在正文前后，仅允许经过校验的 SVG Path。
+- 文档宽度固定为微信正文预览宽度 677px，高度由 HTML 内容自然增长。
+- AI 不能返回正文、图片地址、任意 HTML 或 CSS；服务端会按文章原顺序强制回填全部内容。
+- 每篇文章的块排版单独保存在浏览器本地，不覆盖 SVG 画布数据。
+- 编辑器支持正文块选择、版式、颜色、字号、行高、间距、边框和图片显示方式调整。
+- “复制公众号内容”直接复制带内联样式的 HTML，可粘贴到公众号编辑器。
+
+Markdown 预览继续使用原有 `renderWechatMarkdown()` 和主题 CSS，不读取块排版数据，两种流程互不影响。
+
+## SVG 画布
+
+`/canvas?mode=svg` 保留原有 SVG 长图模式。画布使用 `shared/canvasDsl.ts` 定义的 JSON DSL，并通过 SVG 渲染。进入画布时需要选择一篇公众号文章；从文章预览进入时会自动携带当前 `articleId`。
 
 当前支持：
 

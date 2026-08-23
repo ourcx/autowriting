@@ -54,6 +54,40 @@
   background: var(--color-surface-soft);
 }
 
+.cs-mode-switch {
+  display: grid;
+  flex: 0 0 224px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-md);
+  background: var(--color-canvas);
+}
+
+.cs-mode-switch button {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: var(--rounded-sm);
+  background: transparent;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cs-mode-switch button.active {
+  background: var(--color-brand-teal);
+  color: #fff;
+}
+
 .cs-toolbar textarea {
   flex: 1;
   min-height: 44px;
@@ -477,6 +511,10 @@
   }
 
   .cs-article-select {
+    flex-basis: 42px;
+  }
+
+  .cs-mode-switch {
     flex-basis: 42px;
   }
 

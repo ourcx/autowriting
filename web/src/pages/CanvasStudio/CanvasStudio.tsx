@@ -9,6 +9,7 @@ import {
   Image,
   LayoutTemplate,
   FileText,
+  PanelLeft,
   MoveVertical,
   PenTool,
   Shapes,
@@ -19,12 +20,14 @@ import {
 } from "lucide-react"
 import PageHeader from "../../components/PageHeader/PageHeader"
 import CanvasRenderer from "../../components/CanvasRenderer/CanvasRenderer"
+import WechatBlockEditor from "../../components/WechatBlockEditor/WechatBlockEditor"
 import { toast } from "../../components/Toast/Toast"
 import {
   fetchArticle,
   fetchArticleList,
   fetchUploadedArticleImages,
   generateCanvasDocument,
+  generateWechatBlockDocument,
 } from "../../utils/apiHelpers"
 import { loadAIConfig } from "../../utils/aiConfig"
 import {
@@ -44,11 +47,19 @@ import {
   extractCanvasSources,
 } from "../../../shared/canvasArticle"
 import type { CanvasSource } from "../../../shared/canvasArticle"
+import {
+  createWechatBlockDocument,
+  hydrateWechatBlockDocument,
+  parseWechatBlockDocument,
+} from "../../../shared/wechatBlockDsl"
+import type { WechatBlockDocument } from "../../../shared/wechatBlockDsl"
 import "./CanvasStudio.css"
 
 const STORAGE_KEY = "visual-article-canvas-v2"
+const BLOCK_STORAGE_KEY = "visual-article-blocks-v1"
 
 type InspectorTab = "properties" | "dsl"
+type StudioMode = "blocks" | "svg"
 
 function cloneDefaultDocument(): CanvasDocument {
   return JSON.parse(JSON.stringify(DEFAULT_CANVAS_DOCUMENT)) as CanvasDocument
@@ -58,6 +69,21 @@ function loadDocument(articleId: string): CanvasDocument | null {
   try {
     const raw = localStorage.getItem(`${STORAGE_KEY}:${articleId}`)
     return raw ? parseCanvasDocument(JSON.parse(raw)) : null
+  } catch {
+    return null
+  }
+}
+
+function loadBlockDocument(
+  articleId: string,
+  sources: CanvasSource[],
+  name: string,
+): WechatBlockDocument | null {
+  try {
+    const raw = localStorage.getItem(`${BLOCK_STORAGE_KEY}:${articleId}`)
+    return raw
+      ? hydrateWechatBlockDocument(parseWechatBlockDocument(JSON.parse(raw)), sources, name)
+      : null
   } catch {
     return null
   }
@@ -122,9 +148,15 @@ export default function CanvasStudio() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const articleId = searchParams.get("articleId") || ""
+  const mode: StudioMode = searchParams.get("mode") === "svg" ? "svg" : "blocks"
   const svgRef = useRef<SVGSVGElement>(null)
+  const blockContentRef = useRef<HTMLElement>(null)
   const [document, setDocument] = useState<CanvasDocument>(cloneDefaultDocument)
+  const [blockDocument, setBlockDocument] = useState<WechatBlockDocument>(() => (
+    createWechatBlockDocument("公众号块排版", [])
+  ))
   const [selectedId, setSelectedId] = useState<string | null>(document.nodes[document.nodes.length - 1]?.id ?? null)
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("properties")
   const [dslDraft, setDslDraft] = useState(() => JSON.stringify(document, null, 2))
   const [aiPrompt, setAiPrompt] = useState("")
@@ -148,7 +180,11 @@ export default function CanvasStudio() {
         if (cancelled) return
         setArticles(items)
         if (!articleId && items.length > 0) {
-          setSearchParams({ articleId: items[0].id }, { replace: true })
+          setSearchParams(current => {
+            const next = new URLSearchParams(current)
+            next.set("articleId", items[0].id)
+            return next
+          }, { replace: true })
         }
       })
       .catch(() => {
@@ -195,8 +231,15 @@ export default function CanvasStudio() {
         setLoadedArticleId(articleId)
         const nextDocument = loadDocument(articleId)
           || createArticleCanvas(data.title || "公众号长图", nextSources)
+        const nextBlockDocument = loadBlockDocument(
+          articleId,
+          nextSources,
+          data.title || "公众号块排版",
+        ) || createWechatBlockDocument(data.title || "公众号块排版", nextSources)
         setDocument(nextDocument)
+        setBlockDocument(nextBlockDocument)
         setSelectedId(nextDocument.nodes[nextDocument.nodes.length - 1]?.id ?? null)
+        setSelectedBlockId(nextBlockDocument.blocks[0]?.id ?? null)
       } catch {
         if (!cancelled) toast.error("公众号文章加载失败")
       } finally {
@@ -215,6 +258,12 @@ export default function CanvasStudio() {
     }
     setDslDraft(JSON.stringify(document, null, 2))
   }, [articleId, document, loadedArticleId, sources.length])
+
+  useEffect(() => {
+    if (articleId && loadedArticleId === articleId && sources.length > 0) {
+      localStorage.setItem(`${BLOCK_STORAGE_KEY}:${articleId}`, JSON.stringify(blockDocument))
+    }
+  }, [articleId, blockDocument, loadedArticleId, sources.length])
 
   const updateNode = (id: string, patch: Partial<CanvasNode>) => {
     setDocument(current => ({
@@ -279,6 +328,18 @@ export default function CanvasStudio() {
     setGenerating(true)
     setGenerationMessage("正在连接 AI...")
     try {
+      if (mode === "blocks") {
+        const nextDocument = await generateWechatBlockDocument(
+          aiPrompt.trim() || "现代杂志式公众号排版：清晰章节、克制留白、图片穿插正文，并根据文章主题生成少量线稿 SVG 装饰",
+          sources,
+          loadAIConfig(),
+          setGenerationMessage,
+        )
+        setBlockDocument(nextDocument)
+        setSelectedBlockId(nextDocument.blocks[0]?.id ?? null)
+        toast.success("AI 块排版已生成")
+        return
+      }
       const nextDocument = await generateCanvasDocument(
         aiPrompt.trim() || "手帐采访风公众号长图：奶油纸张底色、浅蓝和浅橙内容面板、深灰细描边，穿插回形针、麦克风、铅笔、引号和勾线 SVG 装饰",
         sources,
@@ -366,11 +427,51 @@ export default function CanvasStudio() {
     toast.success("已复制画布 DSL")
   }
 
+  const copyBlockContent = () => {
+    const source = blockContentRef.current
+    if (!source) return
+    const clone = source.cloneNode(true) as HTMLElement
+    clone.removeAttribute("class")
+    clone.querySelectorAll("[class], [data-block-id]").forEach(node => {
+      node.removeAttribute("class")
+      node.removeAttribute("data-block-id")
+    })
+    const container = window.document.createElement("div")
+    container.style.cssText = "position:fixed;left:-10000px;top:0;width:677px;background:#fff;"
+    container.appendChild(clone)
+    window.document.body.appendChild(container)
+    try {
+      const selection = window.getSelection()
+      if (!selection) throw new Error("浏览器无法访问剪贴板")
+      const range = window.document.createRange()
+      range.selectNode(clone)
+      selection.removeAllRanges()
+      selection.addRange(range)
+      const copied = window.document.execCommand("copy")
+      selection.removeAllRanges()
+      if (!copied) throw new Error("浏览器拒绝复制富文本")
+      toast.success("已复制公众号富文本，可直接粘贴到编辑器")
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "复制公众号内容失败")
+    } finally {
+      window.document.body.removeChild(container)
+    }
+  }
+
+  const setMode = (nextMode: StudioMode) => {
+    setSearchParams(current => {
+      const next = new URLSearchParams(current)
+      if (nextMode === "svg") next.set("mode", "svg")
+      else next.delete("mode")
+      return next
+    }, { replace: true })
+  }
+
   return (
     <div className="cs-root">
       <PageHeader
-        title="公众号长图"
-        icon={<Shapes size={16} />}
+        title="公众号视觉排版"
+        icon={mode === "blocks" ? <PanelLeft size={16} /> : <Shapes size={16} />}
         subtitle={articleId
           ? `${articleData.title || "当前文章"} · ${sources.filter(source => source.kind !== "image").length} 个内容块 · ${sources.filter(source => source.kind === "image").length} 张图片`
           : "选择公众号文章后由 AI 负责排版"}
@@ -381,30 +482,54 @@ export default function CanvasStudio() {
               <LayoutTemplate size={14} />
               Markdown 样式
             </button>
-            <button className="cs-header-btn" onClick={copyDsl}>
-              <Copy size={14} />
-              复制 DSL
-            </button>
-            <button className="cs-header-btn" onClick={downloadSvg}>
-              <Download size={14} />
-              SVG 源文件
-            </button>
-            <button className="cs-header-btn cs-header-btn--primary" onClick={downloadPng}>
-              <Image size={14} />
-              下载公众号长图
-            </button>
+            {mode === "blocks" ? (
+              <button className="cs-header-btn cs-header-btn--primary" onClick={copyBlockContent}>
+                <Copy size={14} />
+                复制公众号内容
+              </button>
+            ) : (
+              <>
+                <button className="cs-header-btn" onClick={copyDsl}>
+                  <Copy size={14} />
+                  复制 DSL
+                </button>
+                <button className="cs-header-btn" onClick={downloadSvg}>
+                  <Download size={14} />
+                  SVG 源文件
+                </button>
+                <button className="cs-header-btn cs-header-btn--primary" onClick={downloadPng}>
+                  <Image size={14} />
+                  下载公众号长图
+                </button>
+              </>
+            )}
           </>
         )}
       />
 
       <div className="cs-toolbar">
+        <div className="cs-mode-switch" role="group" aria-label="排版模式">
+          <button className={mode === "blocks" ? "active" : ""} onClick={() => setMode("blocks")}>
+            <PanelLeft size={15} />
+            HTML 块排版
+          </button>
+          <button className={mode === "svg" ? "active" : ""} onClick={() => setMode("svg")}>
+            <Shapes size={15} />
+            SVG 画布
+          </button>
+        </div>
         <label className="cs-article-select">
           <FileText size={15} />
           <select
             value={articleId}
             onChange={event => {
               const nextArticleId = event.target.value
-              setSearchParams(nextArticleId ? { articleId: nextArticleId } : {}, { replace: true })
+              setSearchParams(current => {
+                const next = new URLSearchParams(current)
+                if (nextArticleId) next.set("articleId", nextArticleId)
+                else next.delete("articleId")
+                return next
+              }, { replace: true })
             }}
             aria-label="选择公众号文章"
           >
@@ -422,7 +547,9 @@ export default function CanvasStudio() {
         <textarea
           value={aiPrompt}
           onChange={event => setAiPrompt(event.target.value)}
-          placeholder="可选：指定排版风格，例如“杂志式留白、暖红标题、图片穿插正文”；AI 不会改写文章"
+          placeholder={mode === "blocks"
+            ? "可选：指定 HTML 块排版风格，例如“杂志式留白、暖红标题、图片穿插正文”"
+            : "可选：指定 SVG 长图风格；AI 不会改写文章"}
           rows={2}
         />
         <button
@@ -431,11 +558,25 @@ export default function CanvasStudio() {
           onClick={handleGenerate}
         >
           <Sparkles size={15} />
-          {generating ? generationMessage || "生成中..." : "AI 排版全文"}
+          {generating
+            ? generationMessage || "生成中..."
+            : mode === "blocks"
+              ? "AI 生成块排版"
+              : "AI 排版 SVG"}
         </button>
       </div>
 
-      <main className="cs-workspace">
+      {mode === "blocks" ? (
+        <WechatBlockEditor
+          document={blockDocument}
+          sources={sources}
+          selectedId={selectedBlockId}
+          contentRef={blockContentRef}
+          onSelect={setSelectedBlockId}
+          onChange={setBlockDocument}
+        />
+      ) : (
+        <main className="cs-workspace">
         <aside className="cs-layers">
           <div className="cs-panel-title">添加元素</div>
           <div className="cs-add-grid">
@@ -616,7 +757,8 @@ export default function CanvasStudio() {
             </div>
           )}
         </aside>
-      </main>
+        </main>
+      )}
     </div>
   )
 }

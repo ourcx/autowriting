@@ -1,0 +1,357 @@
+.wbe-workspace {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  grid-template-columns: 240px minmax(380px, 1fr) 280px;
+  overflow: hidden;
+}
+
+.wbe-outline,
+.wbe-inspector {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--color-surface-soft);
+}
+
+.wbe-outline {
+  padding: 14px 12px;
+  border-right: 1px solid var(--color-hairline);
+}
+
+.wbe-inspector {
+  border-left: 1px solid var(--color-hairline);
+}
+
+.wbe-panel-row,
+.wbe-inspector-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 38px;
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.wbe-panel-row {
+  padding: 0 4px 8px;
+}
+
+.wbe-panel-row span {
+  color: var(--color-muted-soft);
+  font-weight: 500;
+}
+
+.wbe-inspector-title {
+  justify-content: flex-start;
+  gap: 7px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.wbe-block-list {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+}
+
+.wbe-block-list > button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 8px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: var(--rounded-sm);
+  background: transparent;
+  color: var(--color-body);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wbe-block-list > button:hover {
+  background: var(--color-surface-card);
+}
+
+.wbe-block-list > button.active {
+  border-color: var(--color-brand-mint);
+  background: #eaf5f1;
+  color: var(--color-ink);
+}
+
+.wbe-block-list > button > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wbe-block-icon {
+  display: grid;
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--color-brand-mint);
+  color: var(--color-ink);
+}
+
+.wbe-block-icon--decoration {
+  background: #b9d9f5;
+}
+
+.wbe-outline-actions {
+  display: flex;
+  gap: 6px;
+  padding-top: 12px;
+}
+
+.wbe-outline-actions button {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-sm);
+  background: var(--color-canvas);
+  color: var(--color-body);
+  cursor: pointer;
+}
+
+.wbe-outline-actions button:hover:not(:disabled) {
+  border-color: var(--color-brand-mint);
+  color: var(--color-brand-teal);
+}
+
+.wbe-outline-actions button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.wbe-stage {
+  min-width: 0;
+  overflow: auto;
+  padding: 18px 28px 48px;
+}
+
+.wbe-stage-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: min(100%, 677px);
+  margin: 0 auto 10px;
+  color: var(--color-body);
+  font-size: 12px;
+}
+
+.wbe-stage-meta span {
+  color: var(--color-muted);
+}
+
+.wbe-paper {
+  width: min(100%, 677px);
+  margin: 0 auto;
+  overflow: hidden;
+  box-shadow: 0 14px 36px rgba(10, 10, 10, 0.16);
+}
+
+.wbe-document {
+  min-height: 760px;
+  box-sizing: border-box;
+  color-scheme: light;
+}
+
+.wbe-document *,
+.wbe-document *::before,
+.wbe-document *::after {
+  box-sizing: border-box;
+}
+
+.wbe-rendered-block {
+  position: relative;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.wbe-rendered-block::after {
+  position: absolute;
+  z-index: 2;
+  inset: -3px;
+  border: 1px dashed transparent;
+  content: "";
+  pointer-events: none;
+}
+
+.wbe-rendered-block:hover::after {
+  border-color: rgba(47, 111, 98, 0.42);
+}
+
+.wbe-rendered-block.is-selected::after {
+  border: 2px solid var(--color-brand-teal);
+}
+
+.wbe-rendered-block h1,
+.wbe-rendered-block h2,
+.wbe-rendered-block p,
+.wbe-rendered-block blockquote,
+.wbe-rendered-block figure,
+.wbe-rendered-block section {
+  box-sizing: border-box;
+}
+
+.wbe-properties {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.wbe-properties label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wbe-properties label > span,
+.wbe-property-heading {
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.wbe-properties input,
+.wbe-properties textarea,
+.wbe-properties select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-sm);
+  outline: none;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 12px;
+}
+
+.wbe-properties input:not([type="color"]) {
+  height: 36px;
+  padding: 0 10px;
+}
+
+.wbe-properties select {
+  height: 36px;
+  padding: 0 10px;
+}
+
+.wbe-properties textarea {
+  padding: 9px 10px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.wbe-properties input:focus,
+.wbe-properties textarea:focus,
+.wbe-properties select:focus {
+  border-color: var(--color-brand-teal);
+}
+
+.wbe-property-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.wbe-property-heading {
+  padding-top: 12px;
+  border-top: 1px solid var(--color-hairline);
+}
+
+.wbe-color-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 52px;
+  gap: 6px;
+}
+
+.wbe-color-field input[type="color"] {
+  height: 36px;
+  padding: 4px;
+}
+
+.wbe-color-field button {
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-sm);
+  background: var(--color-canvas);
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.wbe-color-field button.active {
+  border-color: var(--color-brand-teal);
+  color: var(--color-brand-teal);
+}
+
+.wbe-empty-selection {
+  padding: 28px 12px;
+  color: var(--color-muted-soft);
+  font-size: 12px;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .wbe-workspace {
+    display: flex;
+    overflow: visible;
+    flex-direction: column;
+  }
+
+  .wbe-outline,
+  .wbe-inspector {
+    width: 100%;
+    max-height: none;
+    overflow: visible;
+    border: 0;
+    border-bottom: 1px solid var(--color-hairline);
+  }
+
+  .wbe-block-list {
+    max-height: 220px;
+  }
+
+  .wbe-stage {
+    order: -1;
+    padding: 18px 12px 36px;
+  }
+
+  .wbe-inspector {
+    min-height: 520px;
+  }
+}
+
+@media (max-width: 520px) {
+  .wbe-stage-meta {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .wbe-document {
+    padding: 28px 20px 40px !important;
+  }
+}
