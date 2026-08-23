@@ -153,7 +153,7 @@ cases.push({
 cases.push({
   name: '未授权生成视觉画布应被拒（401/403）',
   run: async () => {
-    const r = await fetch(`${BASE}/api/canvas/generate`, {
+    const r = await fetch(`${BASE}/api/canvas/generate/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt: '测试画布' }),
@@ -274,7 +274,7 @@ cases.push({
 cases.push({
   name: '画布生成接口应校验 prompt',
   run: async () => {
-    const r = await fetch(`${BASE}/api/canvas/generate`, {
+    const r = await fetch(`${BASE}/api/canvas/generate/stream`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

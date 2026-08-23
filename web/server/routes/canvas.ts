@@ -50,6 +50,94 @@ function extractJson(output: string): unknown {
 }
 
 router.post("/generate", async (req: AuthedRequest, res) => {
+  const debugStartedAt = Date.now()
+  const debugTraceId = `canvas-${debugStartedAt}-${Math.random().toString(36).slice(2, 8)}`
+  const prompt = String(req.body?.prompt || "").trim().slice(0, PROMPT_MAX_LENGTH)
+  // #region debug-point A:request-entry
+  if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "pre-fix", hypothesisId: "A", traceId: debugTraceId, location: "server/routes/canvas.ts:request-entry", msg: "[DEBUG] Canvas request entered Node route", data: { promptLength: prompt.length, hasDocument: Boolean(req.body?.document) }, ts: Date.now() }) }).catch(() => {})
+  // #endregion
+  if (!prompt) {
+    res.status(400).json({ error: "请输入画布需求" })
+    return
+  }
+
+  const clientAiConfig = req.body?.aiConfig && typeof req.body.aiConfig === "object"
+    ? req.body.aiConfig as AIConfig
+    : {}
+  const aiConfig: AIConfig = { ...SERVER_AI_CONFIG, ...clientAiConfig }
+  if (!aiConfig.articleApiKey && aiConfig.articleProvider !== "maas") {
+    res.status(400).json({ error: "请先在 AI 配置中填写文章模型的 API Key" })
+    return
+  }
+  if (aiConfig.articleProvider === "maas" && !aiConfig.maasApiKey) {
+    res.status(400).json({ error: "请先在 AI 配置中填写 MaaS API Key" })
+    return
+  }
+
+  let currentDocument = ""
+  if (req.body?.document) {
+    try {
+      currentDocument = JSON.stringify(parseCanvasDocument(req.body.document)).slice(0, DOCUMENT_MAX_LENGTH)
+    } catch {
+      currentDocument = ""
+    }
+  }
+
+  try {
+    const { url, model, headers } = buildLLMRequest(aiConfig)
+    // #region debug-point BCD:before-upstream
+    if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "pre-fix", hypothesisId: "B,C,D", traceId: debugTraceId, location: "server/routes/canvas.ts:before-upstream", msg: "[DEBUG] Canvas upstream request starting", data: { elapsedMs: Date.now() - debugStartedAt, provider: aiConfig.articleProvider, model, documentLength: currentDocument.length, maxTokens: 4000 }, ts: Date.now() }) }).catch(() => {})
+    // #endregion
+    const response = await callLLMWithRetry(url, {
+      model,
+      messages: [
+        { role: "system", content: CANVAS_SYSTEM_PROMPT },
+        {
+          role: "user",
+          content: `${prompt}${currentDocument ? `\n\n在当前画布基础上修改：\n${currentDocument}` : ""}`,
+        },
+      ],
+      temperature: 0.65,
+      max_tokens: 4000,
+      stream: false,
+    }, headers)
+
+    const data = response.data as typeof response.data & {
+      usage?: {
+        prompt_tokens?: number
+        completion_tokens?: number
+        total_tokens?: number
+      }
+    }
+    const output = data.choices[0]?.message?.content ?? ""
+    const document = parseCanvasDocument(extractJson(output))
+    // #region debug-point BCD:upstream-complete
+    if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "pre-fix", hypothesisId: "B,C,D", traceId: debugTraceId, location: "server/routes/canvas.ts:upstream-complete", msg: "[DEBUG] Canvas upstream request completed", data: { elapsedMs: Date.now() - debugStartedAt, outputLength: output.length, nodeCount: document.nodes.length }, ts: Date.now() }) }).catch(() => {})
+    // #endregion
+    if (data.usage) {
+      recordTokenUsage({
+        userId: req.user?.id,
+        operation: "generate",
+        model,
+        inputTokens: data.usage.prompt_tokens,
+        outputTokens: data.usage.completion_tokens,
+        totalTokens: data.usage.total_tokens,
+      })
+    }
+    res.json({ document })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "AI 生成画布失败"
+    // #region debug-point BCE:error
+    if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "pre-fix", hypothesisId: "B,C,E", traceId: debugTraceId, location: "server/routes/canvas.ts:error", msg: "[DEBUG] Canvas generation failed", data: { elapsedMs: Date.now() - debugStartedAt, errorName: error instanceof Error ? error.name : "unknown", message }, ts: Date.now() }) }).catch(() => {})
+    // #endregion
+    logger.error("CANVAS", "AI 生成画布失败", { error: message, userId: req.user?.id })
+    res.status(500).json({ error: message })
+  }
+})
+
+router.post("/generate/stream", async (req: AuthedRequest, res) => {
+  const debugStartedAt = Date.now()
+  const debugTraceId = `canvas-stream-${debugStartedAt}-${Math.random().toString(36).slice(2, 8)}`
   const prompt = String(req.body?.prompt || "").trim().slice(0, PROMPT_MAX_LENGTH)
   if (!prompt) {
     res.status(400).json({ error: "请输入画布需求" })
@@ -77,6 +165,22 @@ router.post("/generate", async (req: AuthedRequest, res) => {
       currentDocument = ""
     }
   }
+
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8")
+  res.setHeader("Cache-Control", "no-cache")
+  res.setHeader("Connection", "keep-alive")
+  res.setHeader("X-Accel-Buffering", "no")
+  res.flushHeaders()
+
+  const send = (event: string, data: unknown) => {
+    if (!res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+  }
+  send("progress", { message: "正在生成画布结构..." })
+  const heartbeat = setInterval(() => send("heartbeat", { elapsedMs: Date.now() - debugStartedAt }), 15000)
+
+  // #region debug-point B:stream-open
+  if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "post-fix", hypothesisId: "B", traceId: debugTraceId, location: "server/routes/canvas.ts:stream-open", msg: "[DEBUG] Canvas SSE stream opened", data: { elapsedMs: Date.now() - debugStartedAt, promptLength: prompt.length, documentLength: currentDocument.length }, ts: Date.now() }) }).catch(() => {})
+  // #endregion
 
   try {
     const { url, model, headers } = buildLLMRequest(aiConfig)
@@ -113,11 +217,20 @@ router.post("/generate", async (req: AuthedRequest, res) => {
         totalTokens: data.usage.total_tokens,
       })
     }
-    res.json({ document })
+    send("result", { document })
+    // #region debug-point B:stream-complete
+    if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "post-fix", hypothesisId: "B", traceId: debugTraceId, location: "server/routes/canvas.ts:stream-complete", msg: "[DEBUG] Canvas SSE result sent", data: { elapsedMs: Date.now() - debugStartedAt, outputLength: output.length, nodeCount: document.nodes.length }, ts: Date.now() }) }).catch(() => {})
+    // #endregion
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "AI 生成画布失败"
-    logger.error("CANVAS", "AI 生成画布失败", { error: message, userId: req.user?.id })
-    res.status(500).json({ error: message })
+    send("error", { message })
+    // #region debug-point BC:stream-error
+    if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "post-fix", hypothesisId: "B,C", traceId: debugTraceId, location: "server/routes/canvas.ts:stream-error", msg: "[DEBUG] Canvas SSE generation failed", data: { elapsedMs: Date.now() - debugStartedAt, errorName: error instanceof Error ? error.name : "unknown", message }, ts: Date.now() }) }).catch(() => {})
+    // #endregion
+    logger.error("CANVAS", "AI 流式生成画布失败", { error: message, userId: req.user?.id })
+  } finally {
+    clearInterval(heartbeat)
+    if (!res.writableEnded) res.end()
   }
 })
 

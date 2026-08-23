@@ -83,6 +83,7 @@ export default function CanvasStudio() {
   const [dslDraft, setDslDraft] = useState(() => JSON.stringify(document, null, 2))
   const [aiPrompt, setAiPrompt] = useState("")
   const [generating, setGenerating] = useState(false)
+  const [generationMessage, setGenerationMessage] = useState("")
 
   const selectedNode = useMemo(
     () => document.nodes.find(node => node.id === selectedId) ?? null,
@@ -142,8 +143,14 @@ export default function CanvasStudio() {
       return
     }
     setGenerating(true)
+    setGenerationMessage("正在连接 AI...")
     try {
-      const nextDocument = await generateCanvasDocument(aiPrompt.trim(), document, loadAIConfig())
+      const nextDocument = await generateCanvasDocument(
+        aiPrompt.trim(),
+        document,
+        loadAIConfig(),
+        setGenerationMessage,
+      )
       setDocument(nextDocument)
       setSelectedId(nextDocument.nodes[nextDocument.nodes.length - 1]?.id ?? null)
       toast.success("AI 画布已生成")
@@ -151,6 +158,7 @@ export default function CanvasStudio() {
       toast.error(error instanceof Error ? error.message : "AI 画布生成失败")
     } finally {
       setGenerating(false)
+      setGenerationMessage("")
     }
   }
 
@@ -216,7 +224,7 @@ export default function CanvasStudio() {
         />
         <button className="cs-generate" disabled={generating} onClick={handleGenerate}>
           <Sparkles size={15} />
-          {generating ? "生成中..." : "AI 生成画布"}
+          {generating ? generationMessage || "生成中..." : "AI 生成画布"}
         </button>
       </div>
 
