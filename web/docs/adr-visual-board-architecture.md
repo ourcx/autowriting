@@ -42,6 +42,8 @@ ArticleData
 
 用户提示词与上传的 `.txt`、`.md`、`.json`、`.svg`、`.xml`、`.drawio` 文件均标记为不可信参考。服务端只提取视觉与布局信息，并限制长度；文件内容不能覆盖系统约束。
 
+Design System Markdown 中可识别的颜色、字体层级、间距和圆角会先解析为 `CanvasDesignTokens`，再由服务端覆盖到最终 DSL。模型负责理解结构，代码负责执行 Token。
+
 ### 布局层
 
 HTML Block 支持：
@@ -49,6 +51,8 @@ HTML Block 支持：
 - `content`：单个内容源。
 - `section`：组合 2-8 个连续内容源，支持纵向、双栏、主体对比和重点加双栏。
 - `decoration`：锚定到内容源前后的安全 SVG Path。
+
+`section.itemStyles` 按 `sourceId` 保存内部文字的独立样式，保证组合布局中的文字仍可单独选择和修改。
 
 自由画板保留 SVG Scene Graph。服务端会对 AI 坐标执行：
 

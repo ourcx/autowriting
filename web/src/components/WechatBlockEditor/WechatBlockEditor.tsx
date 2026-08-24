@@ -18,6 +18,7 @@ import type {
   WechatContentBlock,
   WechatDecorationBlock,
   WechatSectionBlock,
+  WechatTextStyleOverride,
 } from "../../../shared/wechatBlockDsl"
 import "./WechatBlockEditor.css"
 
@@ -34,6 +35,7 @@ const FONT_STACKS: Record<WechatBlockDocument["font"], string> = {
   system: "-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif",
   serif: "'Songti SC', SimSun, serif",
   rounded: "'PingFang SC', 'Microsoft YaHei', sans-serif",
+  friendly: "Fredoka, Poppins, -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif",
 }
 
 function blockLabel(block: WechatBlock, source?: CanvasSource): string {
@@ -48,7 +50,7 @@ function sectionContentBlock(
   section: WechatSectionBlock,
 ): WechatContentBlock {
   const fallback = createWechatContentBlock(source)
-  return {
+  const sectionDefault: WechatContentBlock = {
     ...fallback,
     background: "transparent",
     color: section.color,
@@ -65,22 +67,42 @@ function sectionContentBlock(
         ? Math.min(22, fallback.fontSize)
         : fallback.fontSize,
   }
+  return {
+    ...sectionDefault,
+    ...(section.itemStyles[source.id] || {}),
+  }
 }
 
 function SectionContent({
   block,
   sources,
+  selectedId,
+  onSelect,
 }: {
   block: WechatSectionBlock
   sources: CanvasSource[]
+  selectedId: string | null
+  onSelect: (id: string) => void
 }) {
-  const renderSource = (source: CanvasSource) => (
-    <SourceContent
-      key={source.id}
-      block={sectionContentBlock(source, block)}
-      source={source}
-    />
-  )
+  const renderSource = (source: CanvasSource) => {
+    const selectionId = `${block.id}::${source.id}`
+    return (
+      <div
+        key={source.id}
+        className={`wbe-section-item${selectedId === selectionId ? " is-selected" : ""}`}
+        data-section-source-id={source.id}
+        onClick={event => {
+          event.stopPropagation()
+          onSelect(selectionId)
+        }}
+      >
+        <SourceContent
+          block={sectionContentBlock(source, block)}
+          source={source}
+        />
+      </div>
+    )
+  }
   const wrapperStyle: CSSProperties = {
     margin: `${block.marginTop}px 0 ${block.marginBottom}px`,
     padding: block.padding,
@@ -146,6 +168,9 @@ function contentStyle(block: WechatContentBlock): CSSProperties {
     color: block.color,
     fontSize: block.fontSize,
     fontWeight: block.fontWeight,
+    fontStyle: block.fontStyle,
+    textDecoration: block.textDecoration,
+    letterSpacing: block.letterSpacing,
     lineHeight: block.lineHeight,
     textAlign: block.align,
     overflowWrap: "break-word",
@@ -302,7 +327,14 @@ export function WechatBlockRenderer({
             {block.type === "decoration"
               ? <Decoration block={block} />
               : block.type === "section"
-                ? <SectionContent block={block} sources={sectionSources} />
+                ? (
+                  <SectionContent
+                    block={block}
+                    sources={sectionSources}
+                    selectedId={selectedId}
+                    onSelect={onSelect}
+                  />
+                )
                 : <SourceContent block={block} source={source as CanvasSource} />}
           </div>
         )
@@ -383,6 +415,16 @@ export default function WechatBlockEditor({
 }: WechatBlockEditorProps) {
   const sourceMap = new Map(sources.map(source => [source.id, source]))
   const selectedBlock = document.blocks.find(block => block.id === selectedId) ?? null
+  const [selectedSectionId, selectedSectionSourceId] = selectedId?.split("::") || []
+  const selectedSection = document.blocks.find((block): block is WechatSectionBlock => (
+    block.type === "section" && block.id === selectedSectionId
+  )) ?? null
+  const selectedSectionSource = selectedSectionSourceId
+    ? sourceMap.get(selectedSectionSourceId) ?? null
+    : null
+  const selectedSectionText = selectedSection && selectedSectionSource
+    ? sectionContentBlock(selectedSectionSource, selectedSection)
+    : null
 
   const updateDocument = (patch: Partial<WechatBlockDocument>) => {
     onChange({ ...document, ...patch })
@@ -394,6 +436,22 @@ export default function WechatBlockEditor({
       blocks: document.blocks.map(block => (
         block.id === selectedBlock.id ? { ...block, ...patch } as WechatBlock : block
       )),
+    })
+  }
+  const updateSectionItemStyle = (patch: WechatTextStyleOverride) => {
+    if (!selectedSection || !selectedSectionSourceId) return
+    onChange({
+      ...document,
+      blocks: document.blocks.map(block => block.id === selectedSection.id && block.type === "section" ? {
+        ...block,
+        itemStyles: {
+          ...block.itemStyles,
+          [selectedSectionSourceId]: {
+            ...(block.itemStyles[selectedSectionSourceId] || {}),
+            ...patch,
+          },
+        },
+      } : block),
     })
   }
   const moveDecoration = (direction: -1 | 1) => {
@@ -437,24 +495,43 @@ export default function WechatBlockEditor({
           {document.blocks.map(block => {
             const source = block.type === "content" ? sourceMap.get(block.sourceId) : undefined
             return (
-              <button
-                key={block.id}
-                className={selectedId === block.id ? "active" : ""}
-                onClick={() => onSelect(block.id)}
-              >
-                <span className={`wbe-block-icon wbe-block-icon--${block.type}`}>
-                  {block.type === "decoration"
-                    ? <Sparkles size={14} />
-                    : block.type === "section"
-                      ? <Columns size={14} />
-                    : source?.kind === "image"
-                      ? <ImageIcon size={14} />
-                      : source?.kind === "quote"
-                        ? <Quote size={14} />
-                        : <Type size={14} />}
-                </span>
-                <span>{blockLabel(block, source)}</span>
-              </button>
+              <div className="wbe-block-group" key={block.id}>
+                <button
+                  className={selectedId === block.id ? "active" : ""}
+                  onClick={() => onSelect(block.id)}
+                >
+                  <span className={`wbe-block-icon wbe-block-icon--${block.type}`}>
+                    {block.type === "decoration"
+                      ? <Sparkles size={14} />
+                      : block.type === "section"
+                        ? <Columns size={14} />
+                        : source?.kind === "image"
+                          ? <ImageIcon size={14} />
+                          : source?.kind === "quote"
+                            ? <Quote size={14} />
+                            : <Type size={14} />}
+                  </span>
+                  <span>{blockLabel(block, source)}</span>
+                </button>
+                {block.type === "section" ? (
+                  <div className="wbe-section-children">
+                    {block.sourceIds.map(sourceId => {
+                      const childSource = sourceMap.get(sourceId)
+                      const childSelectionId = `${block.id}::${sourceId}`
+                      return (
+                        <button
+                          key={sourceId}
+                          className={selectedId === childSelectionId ? "active" : ""}
+                          onClick={() => onSelect(childSelectionId)}
+                        >
+                          {childSource?.kind === "image" ? <ImageIcon size={13} /> : <Type size={13} />}
+                          <span>{childSource?.text?.split("\n")[0] || childSource?.alt || "内容"}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : null}
+              </div>
             )
           })}
         </div>
@@ -518,6 +595,7 @@ export default function WechatBlockEditor({
               <option value="system">系统黑体</option>
               <option value="serif">宋体</option>
               <option value="rounded">圆润黑体</option>
+              <option value="friendly">设计文件字体</option>
             </select>
           </label>
           <div className="wbe-property-grid">
@@ -553,6 +631,7 @@ export default function WechatBlockEditor({
               <div className="wbe-property-grid">
                 <NumberField label="字号" value={selectedBlock.fontSize} min={12} max={48} onChange={fontSize => updateBlock({ fontSize })} />
                 <NumberField label="字重" value={selectedBlock.fontWeight} min={300} max={900} step={100} onChange={fontWeight => updateBlock({ fontWeight })} />
+                <NumberField label="字距" value={selectedBlock.letterSpacing} min={0} max={8} step={0.5} onChange={letterSpacing => updateBlock({ letterSpacing })} />
                 <NumberField label="行高" value={selectedBlock.lineHeight} min={1} max={2.6} step={0.1} onChange={lineHeight => updateBlock({ lineHeight })} />
                 <NumberField label="内边距" value={selectedBlock.padding} min={0} max={48} onChange={padding => updateBlock({ padding })} />
                 <NumberField label="圆角" value={selectedBlock.radius} min={0} max={32} onChange={radius => updateBlock({ radius })} />
@@ -568,6 +647,29 @@ export default function WechatBlockEditor({
                   <option value="right">右对齐</option>
                 </select>
               </label>
+              <div className="wbe-text-format" role="group" aria-label="文字格式">
+                <button
+                  className={selectedBlock.fontWeight >= 700 ? "active" : ""}
+                  title="粗体"
+                  onClick={() => updateBlock({ fontWeight: selectedBlock.fontWeight >= 700 ? 400 : 700 })}
+                >
+                  B
+                </button>
+                <button
+                  className={selectedBlock.fontStyle === "italic" ? "active" : ""}
+                  title="斜体"
+                  onClick={() => updateBlock({ fontStyle: selectedBlock.fontStyle === "italic" ? "normal" : "italic" })}
+                >
+                  I
+                </button>
+                <button
+                  className={selectedBlock.textDecoration === "underline" ? "active" : ""}
+                  title="下划线"
+                  onClick={() => updateBlock({ textDecoration: selectedBlock.textDecoration === "underline" ? "none" : "underline" })}
+                >
+                  U
+                </button>
+              </div>
             </>
           ) : null}
 
@@ -627,7 +729,80 @@ export default function WechatBlockEditor({
             </>
           ) : null}
 
-          {!selectedBlock ? <div className="wbe-empty-selection">选择正文块后调整样式</div> : null}
+          {selectedSection && selectedSectionSource && selectedSectionText ? (
+            <>
+              <div className="wbe-property-heading">
+                文字 · {selectedSectionSource.text?.slice(0, 28) || selectedSectionSource.alt || "图片"}
+              </div>
+              {selectedSectionSource.kind === "image" ? (
+                <div className="wbe-empty-selection">图片样式由组合区域控制</div>
+              ) : (
+                <>
+                  <label>
+                    <span>文字版式</span>
+                    <select
+                      value={selectedSectionText.variant}
+                      onChange={event => updateSectionItemStyle({
+                        variant: event.target.value as Exclude<WechatContentBlock["variant"], "image">,
+                      })}
+                    >
+                      <option value="plain">正文</option>
+                      <option value="title">大标题</option>
+                      <option value="banner">章节条</option>
+                      <option value="card">内容卡片</option>
+                      <option value="quote">引用面板</option>
+                      <option value="highlight">文字高亮</option>
+                    </select>
+                  </label>
+                  <div className="wbe-property-grid">
+                    <ColorField label="文字" value={selectedSectionText.color} fallback="#262626" onChange={color => updateSectionItemStyle({ color })} />
+                    <ColorField label="背景" value={selectedSectionText.background} fallback="#ffffff" onChange={background => updateSectionItemStyle({ background })} />
+                    <ColorField label="强调色" value={selectedSectionText.accentColor} fallback="#5263a5" onChange={accentColor => updateSectionItemStyle({ accentColor })} />
+                    <NumberField label="字号" value={selectedSectionText.fontSize} min={12} max={48} onChange={fontSize => updateSectionItemStyle({ fontSize })} />
+                    <NumberField label="字重" value={selectedSectionText.fontWeight} min={300} max={900} step={100} onChange={fontWeight => updateSectionItemStyle({ fontWeight })} />
+                    <NumberField label="字距" value={selectedSectionText.letterSpacing} min={0} max={8} step={0.5} onChange={letterSpacing => updateSectionItemStyle({ letterSpacing })} />
+                    <NumberField label="行高" value={selectedSectionText.lineHeight} min={1} max={2.6} step={0.1} onChange={lineHeight => updateSectionItemStyle({ lineHeight })} />
+                  </div>
+                  <label>
+                    <span>对齐</span>
+                    <select
+                      value={selectedSectionText.align}
+                      onChange={event => updateSectionItemStyle({ align: event.target.value as WechatContentBlock["align"] })}
+                    >
+                      <option value="left">左对齐</option>
+                      <option value="center">居中</option>
+                      <option value="right">右对齐</option>
+                    </select>
+                  </label>
+                  <div className="wbe-text-format" role="group" aria-label="文字格式">
+                    <button
+                      className={selectedSectionText.fontWeight >= 700 ? "active" : ""}
+                      title="粗体"
+                      onClick={() => updateSectionItemStyle({ fontWeight: selectedSectionText.fontWeight >= 700 ? 400 : 700 })}
+                    >
+                      B
+                    </button>
+                    <button
+                      className={selectedSectionText.fontStyle === "italic" ? "active" : ""}
+                      title="斜体"
+                      onClick={() => updateSectionItemStyle({ fontStyle: selectedSectionText.fontStyle === "italic" ? "normal" : "italic" })}
+                    >
+                      I
+                    </button>
+                    <button
+                      className={selectedSectionText.textDecoration === "underline" ? "active" : ""}
+                      title="下划线"
+                      onClick={() => updateSectionItemStyle({ textDecoration: selectedSectionText.textDecoration === "underline" ? "none" : "underline" })}
+                    >
+                      U
+                    </button>
+                  </div>
+                </>
+              )}
+            </>
+          ) : null}
+
+          {!selectedBlock && !selectedSection ? <div className="wbe-empty-selection">选择正文块后调整样式</div> : null}
         </div>
       </aside>
     </main>

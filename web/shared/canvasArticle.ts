@@ -1,5 +1,6 @@
 import type { CanvasDocument, CanvasImageNode, CanvasNode, CanvasTextNode } from "./canvasDsl.ts"
 import { estimateCanvasTextHeight, parseCanvasDocument } from "./canvasDsl.ts"
+import type { CanvasDesignTokens } from "./canvasDesignTemplates.ts"
 
 export type CanvasSourceKind = "title" | "heading" | "paragraph" | "quote" | "list" | "image"
 
@@ -240,6 +241,7 @@ function hydrateFreeformCanvas(
   sources: CanvasSource[],
   name: string,
   decorativeNodes: CanvasNode[],
+  designTokens?: CanvasDesignTokens | null,
 ): CanvasDocument {
   const canvasWidth = Math.min(1280, Math.max(750, parsed.width))
   const margin = 40
@@ -280,6 +282,38 @@ function hydrateFreeformCanvas(
         lineHeight,
         height: estimateCanvasTextHeight(text, width, fontSize, lineHeight, padding),
       }
+      if (designTokens) {
+        const heading = source.kind === "heading"
+        const title = source.kind === "title"
+        node = {
+          ...node,
+          fill: designTokens.text,
+          background: node.variant === "plain" ? "transparent" : designTokens.surface,
+          borderColor: node.variant === "plain" ? "transparent" : designTokens.border,
+          fontSize: title
+            ? designTokens.h1Size
+            : heading
+              ? designTokens.h2Size
+              : designTokens.bodySize,
+          fontWeight: title
+            ? designTokens.h1Weight
+            : heading
+              ? designTokens.h2Weight
+              : designTokens.bodyWeight,
+          lineHeight: title
+            ? designTokens.h1LineHeight
+            : heading
+              ? designTokens.h2LineHeight
+              : designTokens.bodyLineHeight,
+        }
+        node.height = estimateCanvasTextHeight(
+          text,
+          width,
+          node.fontSize,
+          node.lineHeight,
+          padding,
+        )
+      }
     } else if (node.type === "image" && source.kind === "image") {
       node = {
         ...node,
@@ -313,7 +347,32 @@ function hydrateFreeformCanvas(
     name: name || parsed.name,
     width: canvasWidth,
     height: Math.max(parsed.height, contentBottom + margin),
-    nodes: [...decorativeNodes, ...contentNodes],
+    background: designTokens?.surfaceSoft || parsed.background,
+    nodes: [
+      ...decorativeNodes.map((node, index): CanvasNode => {
+        if (!designTokens) return node
+        if (node.type === "path" || node.type === "motif") {
+          return {
+            ...node,
+            stroke: index % 2 === 0 ? designTokens.primary : designTokens.secondary,
+            fill: node.fill === "transparent" ? "transparent" : designTokens.tertiary,
+          }
+        }
+        if (node.type === "shape") {
+          return {
+            ...node,
+            fill: index % 3 === 0
+              ? designTokens.primary
+              : index % 3 === 1
+                ? designTokens.secondary
+                : designTokens.tertiary,
+            stroke: designTokens.border,
+          }
+        }
+        return node
+      }),
+      ...contentNodes,
+    ],
   })
 }
 
@@ -321,7 +380,10 @@ export function hydrateCanvasDocument(
   value: unknown,
   sources: CanvasSource[],
   name: string,
-  options: { layoutMode?: "article" | "freeform" } = {},
+  options: {
+    layoutMode?: "article" | "freeform"
+    designTokens?: CanvasDesignTokens | null
+  } = {},
 ): CanvasDocument {
   const parsed = parseCanvasDocument(value)
   const candidates = new Map<string, CanvasTextNode | CanvasImageNode>()
@@ -341,6 +403,7 @@ export function hydrateCanvasDocument(
       sources,
       name,
       decorativeNodes,
+      options.designTokens,
     )
   }
 

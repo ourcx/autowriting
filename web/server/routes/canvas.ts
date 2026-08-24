@@ -20,8 +20,12 @@ import type { WechatBlockDocument } from "../../shared/wechatBlockDsl.ts"
 import {
   buildCanvasDesignBrief,
   normalizeCanvasDesignTemplateId,
+  parseCanvasDesignTokens,
 } from "../../shared/canvasDesignTemplates.ts"
-import type { CanvasDesignTemplateId } from "../../shared/canvasDesignTemplates.ts"
+import type {
+  CanvasDesignTemplateId,
+  CanvasDesignTokens,
+} from "../../shared/canvasDesignTemplates.ts"
 
 const router = Router()
 router.use(authMiddleware)
@@ -77,9 +81,9 @@ const BLOCK_SYSTEM_PROMPT = `你是微信公众号 HTML 内容块排版引擎。
 }
 
 blocks 仅允许三种：
-1. content: {"id":"","type":"content","sourceId":"source-0","variant":"plain|title|banner|card|quote|highlight|image","background":"transparent","color":"#262626","accentColor":"#2f6f62","borderColor":"transparent","borderWidth":0,"radius":0,"padding":0,"marginTop":0,"marginBottom":22,"fontSize":17,"fontWeight":400,"lineHeight":1.9,"align":"left","imageFit":"cover|contain","imageRadius":6}
+1. content: {"id":"","type":"content","sourceId":"source-0","variant":"plain|title|banner|card|quote|highlight|image","background":"transparent","color":"#262626","accentColor":"#2f6f62","borderColor":"transparent","borderWidth":0,"radius":0,"padding":0,"marginTop":0,"marginBottom":22,"fontSize":17,"fontWeight":400,"fontStyle":"normal|italic","textDecoration":"none|underline","letterSpacing":0,"lineHeight":1.9,"align":"left","imageFit":"cover|contain","imageRadius":6}
 2. decoration: {"id":"","type":"decoration","anchorSourceId":"source-0","placement":"before|after","d":"M 0 20 C 60 0 120 40 180 20","viewBoxWidth":180,"viewBoxHeight":40,"width":150,"height":36,"align":"left|center|right","fill":"transparent","stroke":"#2f6f62","strokeWidth":3,"marginTop":4,"marginBottom":16}
-3. section: {"id":"","type":"section","sourceIds":["source-1","source-2"],"layout":"stack|two-column|comparison|feature","background":"#ffffff","color":"#262626","accentColor":"#5263a5","borderColor":"#dee0e3","borderWidth":1,"radius":8,"padding":20,"gap":16,"marginTop":8,"marginBottom":24,"divider":true}
+3. section: {"id":"","type":"section","sourceIds":["source-1","source-2"],"layout":"stack|two-column|comparison|feature","background":"#ffffff","color":"#262626","accentColor":"#5263a5","borderColor":"#dee0e3","borderWidth":1,"radius":8,"padding":20,"gap":16,"marginTop":8,"marginBottom":24,"divider":true,"itemStyles":{"source-1":{"fontSize":22,"fontWeight":700,"color":"#1f2329"}}}
 
 规则：
 - 响应首字符必须是 {，末字符必须是 }，只输出一个完整 JSON 对象。
@@ -248,6 +252,7 @@ async function generateCanvasWithRepair(input: {
   prompt: string
   articleTitle: string
   sources: CanvasSource[]
+  designTokens: CanvasDesignTokens | null
   onRepair?: () => void
   onAttempt?: (_completion: CanvasCompletionData, _attempt: number) => void
 }): Promise<{
@@ -284,7 +289,10 @@ async function generateCanvasWithRepair(input: {
         parseCanvasFromCompletion(first),
         input.sources,
         input.articleTitle,
-        { layoutMode: "freeform" },
+        {
+          layoutMode: "freeform",
+          designTokens: input.designTokens,
+        },
       ),
       completion: first,
       attempts: [first],
@@ -317,7 +325,10 @@ async function generateCanvasWithRepair(input: {
         parseCanvasFromCompletion(repair),
         input.sources,
         input.articleTitle,
-        { layoutMode: "freeform" },
+        {
+          layoutMode: "freeform",
+          designTokens: input.designTokens,
+        },
       ),
       completion: repair,
       attempts: [first, repair],
@@ -334,6 +345,7 @@ async function generateBlockWithRepair(input: {
   articleTitle: string
   sources: CanvasSource[]
   templateId: CanvasDesignTemplateId
+  designTokens: CanvasDesignTokens | null
   onRepair?: () => void
 }): Promise<{
   document: WechatBlockDocument
@@ -366,7 +378,10 @@ async function generateBlockWithRepair(input: {
         parseBlockFromCompletion(first),
         input.sources,
         input.articleTitle,
-        { templateId: input.templateId },
+        {
+          templateId: input.templateId,
+          designTokens: input.designTokens,
+        },
       ),
       attempts: [first],
     }
@@ -396,7 +411,10 @@ async function generateBlockWithRepair(input: {
         parseBlockFromCompletion(repair),
         input.sources,
         input.articleTitle,
-        { templateId: input.templateId },
+        {
+          templateId: input.templateId,
+          designTokens: input.designTokens,
+        },
       ),
       attempts: [first, repair],
     }
@@ -411,6 +429,7 @@ router.post("/generate", async (req: AuthedRequest, res) => {
     userPrompt: String(req.body?.prompt || "排版为清晰耐读的公众号长图").slice(0, PROMPT_MAX_LENGTH),
     designReference: req.body?.designReference,
   })
+  const designTokens = parseCanvasDesignTokens(req.body?.designReference)
   const sources = parseCanvasSources(req.body?.sources)
   // #region debug-point A:request-entry
   if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "pre-fix", hypothesisId: "A", traceId: debugTraceId, location: "server/routes/canvas.ts:request-entry", msg: "[DEBUG] Canvas request entered Node route", data: { promptLength: prompt.length, sourceCount: sources.length }, ts: Date.now() }) }).catch(() => {})
@@ -447,6 +466,7 @@ router.post("/generate", async (req: AuthedRequest, res) => {
       prompt,
       articleTitle,
       sources,
+      designTokens,
     })
     const { document } = generated
     // #region debug-point BCD:upstream-complete
@@ -482,6 +502,7 @@ router.post("/generate/stream", async (req: AuthedRequest, res) => {
     userPrompt: String(req.body?.prompt || "排版为清晰耐读的公众号长图").slice(0, PROMPT_MAX_LENGTH),
     designReference: req.body?.designReference,
   })
+  const designTokens = parseCanvasDesignTokens(req.body?.designReference)
   const sources = parseCanvasSources(req.body?.sources)
   if (sources.length === 0) {
     res.status(400).json({ error: "请先选择一篇包含正文的公众号文章" })
@@ -528,6 +549,7 @@ router.post("/generate/stream", async (req: AuthedRequest, res) => {
       prompt,
       articleTitle,
       sources,
+      designTokens,
       onRepair: () => send("progress", { message: "正在修复模型输出..." }),
       onAttempt: (completion, attempt) => {
         // #region debug-point F:completion-shape
@@ -567,6 +589,7 @@ router.post("/generate/stream", async (req: AuthedRequest, res) => {
 router.post("/generate-block/stream", async (req: AuthedRequest, res) => {
   const startedAt = Date.now()
   const templateId = normalizeCanvasDesignTemplateId(req.body?.templateId)
+  const designTokens = parseCanvasDesignTokens(req.body?.designReference)
   const prompt = buildCanvasDesignBrief({
     templateId,
     userPrompt: String(req.body?.prompt || "排版为清晰耐读的公众号文章").slice(0, PROMPT_MAX_LENGTH),
@@ -614,6 +637,7 @@ router.post("/generate-block/stream", async (req: AuthedRequest, res) => {
       articleTitle,
       sources,
       templateId,
+      designTokens,
       onRepair: () => send("progress", { message: "正在修复块排版结构..." }),
     })
     for (const attempt of generated.attempts) {

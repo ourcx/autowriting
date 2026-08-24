@@ -67,6 +67,10 @@
 
 编辑器支持拖入 `.txt`、`.md`、`.json`、`.svg`、`.xml`、`.drawio` 文件。文件内容只作为不可信设计参考传给模型，服务端限制长度并明确禁止其覆盖正文保护、DSL 和安全规则。
 
+对于包含 `Colors`、`Typography`、`Spacing`、`Border Radius` 等章节的 Design System Markdown，服务端会确定性提取主色、辅助色、背景、边框、标题/正文字号、字重、行高、圆角、内边距和章节间距，并在 AI 输出后再次覆盖到安全 DSL。设计还原不依赖模型是否主动遵循 Token。
+
+组合区域中的每个 `sourceId` 都有独立 `itemStyles`。用户可从左侧展开项或画布正文中选中具体文字，修改版式、颜色、字号、字重、字距、行高、对齐、粗体、斜体和下划线；样式随文章画布自动保存。
+
 Markdown 预览继续使用原有 `renderWechatMarkdown()` 和主题 CSS，不读取块排版数据，两种流程互不影响。
 
 ## SVG 画布

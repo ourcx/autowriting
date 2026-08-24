@@ -61,7 +61,13 @@
   overflow-y: auto;
 }
 
-.wbe-block-list > button {
+.wbe-block-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wbe-block-group > button {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -79,20 +85,47 @@
   cursor: pointer;
 }
 
-.wbe-block-list > button:hover {
+.wbe-block-group > button:hover,
+.wbe-section-children button:hover {
   background: var(--color-surface-card);
 }
 
-.wbe-block-list > button.active {
+.wbe-block-group > button.active,
+.wbe-section-children button.active {
   border-color: var(--color-brand-mint);
   background: #eaf5f1;
   color: var(--color-ink);
 }
 
-.wbe-block-list > button > span:last-child {
+.wbe-block-group > button > span:last-child,
+.wbe-section-children button > span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.wbe-section-children {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 18px;
+}
+
+.wbe-section-children button {
+  display: flex;
+  min-width: 0;
+  min-height: 32px;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--rounded-sm);
+  background: transparent;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
 }
 
 .wbe-block-icon {
@@ -203,6 +236,27 @@
 
 .wbe-rendered-block.is-selected::after {
   border: 2px solid var(--color-brand-teal);
+}
+
+.wbe-section-item {
+  position: relative;
+}
+
+.wbe-section-item::after {
+  position: absolute;
+  z-index: 3;
+  inset: -3px;
+  border: 1px dashed transparent;
+  content: "";
+  pointer-events: none;
+}
+
+.wbe-section-item:hover::after {
+  border-color: rgba(82, 99, 165, 0.45);
+}
+
+.wbe-section-item.is-selected::after {
+  border: 2px solid #5263a5;
 }
 
 .wbe-rendered-block h1,
@@ -334,6 +388,39 @@
 .wbe-properties .wbe-checkbox-field > span {
   color: var(--color-body);
   font-size: 12px;
+}
+
+.wbe-text-format {
+  display: flex;
+  gap: 6px;
+}
+
+.wbe-text-format button {
+  width: 36px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-sm);
+  background: var(--color-canvas);
+  color: var(--color-body);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.wbe-text-format button:nth-child(2) {
+  font-style: italic;
+}
+
+.wbe-text-format button:nth-child(3) {
+  text-decoration: underline;
+}
+
+.wbe-text-format button.active {
+  border-color: var(--color-brand-teal);
+  background: #eaf5f1;
+  color: var(--color-brand-teal);
 }
 
 @media (max-width: 900px) {
