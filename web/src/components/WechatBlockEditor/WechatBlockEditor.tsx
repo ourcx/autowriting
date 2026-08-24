@@ -23,11 +23,14 @@ import type {
   WechatBlock,
   WechatBlockDocument,
   WechatBlockTheme,
+  WechatAssetBlock,
   WechatContentBlock,
   WechatDecorationBlock,
   WechatIconName,
   WechatSectionBlock,
   WechatSectionIcon,
+  WechatSurfaceKind,
+  WechatSurfaceStyle,
   WechatTextStyleOverride,
 } from "../../../shared/wechatBlockDsl"
 import "./WechatBlockEditor.css"
@@ -50,6 +53,77 @@ const FONT_STACKS: Record<WechatBlockDocument["font"], string> = {
 }
 
 const EDITORIAL_DISPLAY_FONT = "'Archivo Black', Impact, 'Arial Black', 'PingFang SC', sans-serif"
+const GENERATED_IMAGE_ENDPOINT = "https://copilot-cn.bytedance.net/api/ide/v1/text_to_image"
+
+function colorWithOpacity(color: string, opacity: number): string {
+  const hex = color.match(/^#([0-9a-f]{6})$/i)?.[1]
+  const rgb = color.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i)
+  const red = hex ? Number.parseInt(hex.slice(0, 2), 16) : Number(rgb?.[1])
+  const green = hex ? Number.parseInt(hex.slice(2, 4), 16) : Number(rgb?.[2])
+  const blue = hex ? Number.parseInt(hex.slice(4, 6), 16) : Number(rgb?.[3])
+  if (![red, green, blue].every(Number.isFinite)) return color
+  return `rgba(${red}, ${green}, ${blue}, ${opacity})`
+}
+
+function surfaceCss(
+  surface: WechatSurfaceStyle | undefined,
+  fallback: string,
+): CSSProperties {
+  if (!surface || surface.kind === "none") return { background: fallback }
+  const primary = surface.colors[0] || fallback
+  const secondary = surface.colors[1] || primary
+  const pattern = colorWithOpacity(surface.patternColor, surface.opacity)
+  if (surface.kind === "solid") return { background: primary }
+  if (surface.kind === "linear") {
+    return {
+      backgroundColor: primary,
+      backgroundImage: `linear-gradient(${surface.angle}deg, ${primary}, ${secondary})`,
+    }
+  }
+  if (surface.kind === "stripes") {
+    const stripe = Math.max(2, Math.round(surface.size / 2))
+    return {
+      backgroundColor: primary,
+      backgroundImage: `repeating-linear-gradient(${surface.angle}deg, ${pattern} 0, ${pattern} ${stripe}px, transparent ${stripe}px, transparent ${surface.size}px)`,
+    }
+  }
+  if (surface.kind === "dots") {
+    return {
+      backgroundColor: primary,
+      backgroundImage: `radial-gradient(circle, ${pattern} 1.2px, transparent 1.5px)`,
+      backgroundSize: `${surface.size}px ${surface.size}px`,
+    }
+  }
+  if (surface.kind === "grid") {
+    return {
+      backgroundColor: primary,
+      backgroundImage: `linear-gradient(${pattern} 1px, transparent 1px), linear-gradient(90deg, ${pattern} 1px, transparent 1px)`,
+      backgroundSize: `${surface.size}px ${surface.size}px`,
+    }
+  }
+  return {
+    backgroundColor: primary,
+    backgroundImage: `repeating-linear-gradient(0deg, transparent 0, transparent ${surface.size - 1}px, ${pattern} ${surface.size - 1}px, ${pattern} ${surface.size}px)`,
+    backgroundSize: `100% ${surface.size}px`,
+  }
+}
+
+function generatedAssetUrl(block: WechatAssetBlock): string {
+  const prompt = [
+    block.prompt,
+    "No embedded text, no logo, no watermark.",
+    "Clean web editorial asset suitable for a WeChat article.",
+  ].join(" ")
+  return `${GENERATED_IMAGE_ENDPOINT}?prompt=${encodeURIComponent(prompt)}&image_size=${block.imageSize}`
+}
+
+function generatedAssetRatio(block: WechatAssetBlock): string {
+  if (block.imageSize === "landscape_16_9") return "16 / 9"
+  if (block.imageSize === "landscape_4_3") return "4 / 3"
+  if (block.imageSize === "portrait_16_9") return "9 / 16"
+  if (block.imageSize === "portrait_4_3") return "3 / 4"
+  return "1 / 1"
+}
 
 function SectionIcon({ icon }: { icon: WechatSectionIcon }) {
   const props = {
@@ -91,6 +165,7 @@ function SectionIcon({ icon }: { icon: WechatSectionIcon }) {
 
 function blockLabel(block: WechatBlock, source?: CanvasSource): string {
   if (block.type === "decoration") return "AI SVG 装饰"
+  if (block.type === "asset") return "AI 图片素材"
   if (block.type === "section") return `${block.layout} · ${block.sourceIds.length} 项`
   if (source?.kind === "image") return source.alt || "文章图片"
   return source?.text?.split("\n")[0] || "内容块"
@@ -171,7 +246,7 @@ function SectionContent({
     padding: block.padding,
     border: `${block.borderWidth}px solid ${block.borderColor}`,
     borderRadius: block.radius,
-    background: block.background,
+    ...surfaceCss(block.surfaceStyle, block.background),
     color: block.color,
     boxShadow: block.shadow === "soft" ? "0 4px 6px -1px rgba(0, 0, 0, 0.1)" : undefined,
     overflow: "hidden",
@@ -405,6 +480,38 @@ function Decoration({ block }: { block: WechatDecorationBlock }) {
   )
 }
 
+function GeneratedAsset({ block }: { block: WechatAssetBlock }) {
+  const marginLeft = block.align === "right" ? "auto" : block.align === "center" ? "auto" : 0
+  const marginRight = block.align === "left" ? "auto" : block.align === "center" ? "auto" : 0
+  return (
+    <figure
+      data-wechat-material-wrapper="true"
+      style={{
+        width: block.width,
+        maxWidth: "100%",
+        aspectRatio: generatedAssetRatio(block),
+        marginTop: block.marginTop,
+        marginBottom: block.marginBottom,
+        marginLeft,
+        marginRight,
+      }}
+    >
+      <img
+        data-wechat-material="true"
+        src={generatedAssetUrl(block)}
+        alt=""
+        style={{
+          display: "block",
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          borderRadius: block.radius,
+        }}
+      />
+    </figure>
+  )
+}
+
 export function WechatBlockRenderer({
   document,
   sources,
@@ -424,7 +531,7 @@ export function WechatBlockRenderer({
         width: document.width,
         maxWidth: "100%",
         padding: "42px 40px 56px",
-        background: document.background,
+        ...surfaceCss(document.theme.canvasStyle, document.background),
         fontFamily: FONT_STACKS[document.font],
       }}
       onClick={event => {
@@ -453,7 +560,9 @@ export function WechatBlockRenderer({
           >
             {block.type === "decoration"
               ? <Decoration block={block} />
-              : block.type === "section"
+              : block.type === "asset"
+                ? <GeneratedAsset block={block} />
+                : block.type === "section"
                 ? (
                   <SectionContent
                     block={block}
@@ -540,6 +649,106 @@ function ColorField({
   )
 }
 
+function SurfaceFields({
+  value,
+  fallback,
+  onChange,
+}: {
+  value?: WechatSurfaceStyle
+  fallback: string
+  onChange: (value: WechatSurfaceStyle) => void
+}) {
+  const surface: WechatSurfaceStyle = value || {
+    kind: "none",
+    colors: [fallback],
+    patternColor: "#d1d5db",
+    angle: 135,
+    size: 20,
+    opacity: 0.12,
+  }
+  const updateColor = (index: number, color: string) => {
+    const colors = [...surface.colors]
+    colors[index] = color
+    onChange({ ...surface, colors })
+  }
+  return (
+    <>
+      <label>
+        <span>背景效果</span>
+        <select
+          value={surface.kind}
+          onChange={event => onChange({
+            ...surface,
+            kind: event.target.value as WechatSurfaceKind,
+          })}
+        >
+          <option value="none">纯背景</option>
+          <option value="solid">纯色填充</option>
+          <option value="linear">线性渐变</option>
+          <option value="stripes">斜向条纹</option>
+          <option value="dots">点阵</option>
+          <option value="grid">网格</option>
+          <option value="ruled-paper">横线稿纸</option>
+        </select>
+      </label>
+      {surface.kind !== "none" ? (
+        <div className="wbe-property-grid">
+          <ColorField
+            label="底色"
+            value={surface.colors[0] || fallback}
+            fallback={fallback}
+            onChange={color => updateColor(0, color)}
+          />
+          {surface.kind === "linear" ? (
+            <ColorField
+              label="渐变色"
+              value={surface.colors[1] || surface.colors[0] || fallback}
+              fallback={fallback}
+              onChange={color => updateColor(1, color)}
+            />
+          ) : null}
+          {["stripes", "dots", "grid", "ruled-paper"].includes(surface.kind) ? (
+            <ColorField
+              label="纹理色"
+              value={surface.patternColor}
+              fallback="#d1d5db"
+              onChange={patternColor => onChange({ ...surface, patternColor })}
+            />
+          ) : null}
+          {surface.kind !== "solid" ? (
+            <>
+              <NumberField
+                label="纹理尺寸"
+                value={surface.size}
+                min={6}
+                max={80}
+                onChange={size => onChange({ ...surface, size })}
+              />
+              <NumberField
+                label="纹理透明度"
+                value={surface.opacity}
+                min={0.02}
+                max={0.5}
+                step={0.02}
+                onChange={opacity => onChange({ ...surface, opacity })}
+              />
+            </>
+          ) : null}
+          {surface.kind === "linear" || surface.kind === "stripes" ? (
+            <NumberField
+              label="角度"
+              value={surface.angle}
+              min={0}
+              max={360}
+              onChange={angle => onChange({ ...surface, angle })}
+            />
+          ) : null}
+        </div>
+      ) : null}
+    </>
+  )
+}
+
 export default function WechatBlockEditor({
   document,
   sources,
@@ -589,29 +798,39 @@ export default function WechatBlockEditor({
       } : block),
     })
   }
-  const moveDecoration = (direction: -1 | 1) => {
-    if (!selectedBlock || selectedBlock.type !== "decoration") return
+  const moveAuxiliary = (direction: -1 | 1) => {
+    if (!selectedBlock || (selectedBlock.type !== "decoration" && selectedBlock.type !== "asset")) return
     const index = document.blocks.findIndex(block => block.id === selectedBlock.id)
     const target = index + direction
     if (target < 0 || target >= document.blocks.length) return
     const blocks = [...document.blocks]
     ;[blocks[index], blocks[target]] = [blocks[target], blocks[index]]
-    const previousContent = blocks
+    const previousAnchor = blocks
       .slice(0, target)
       .reverse()
-      .find((block): block is WechatContentBlock => block.type === "content")
-    const nextContent = blocks
+      .find(block => block.type === "content" || block.type === "section")
+    const nextAnchor = blocks
       .slice(target + 1)
-      .find((block): block is WechatContentBlock => block.type === "content")
+      .find(block => block.type === "content" || block.type === "section")
+    const previousSourceId = previousAnchor?.type === "content"
+      ? previousAnchor.sourceId
+      : previousAnchor?.type === "section"
+        ? previousAnchor.sourceIds[previousAnchor.sourceIds.length - 1]
+        : ""
+    const nextSourceId = nextAnchor?.type === "content"
+      ? nextAnchor.sourceId
+      : nextAnchor?.type === "section"
+        ? nextAnchor.sourceIds[0]
+        : ""
     blocks[target] = {
       ...selectedBlock,
-      anchorSourceId: previousContent?.sourceId || nextContent?.sourceId || selectedBlock.anchorSourceId,
-      placement: previousContent ? "after" : "before",
+      anchorSourceId: previousSourceId || nextSourceId || selectedBlock.anchorSourceId,
+      placement: previousSourceId ? "after" : "before",
     }
     onChange({ ...document, blocks })
   }
-  const deleteDecoration = () => {
-    if (!selectedBlock || selectedBlock.type !== "decoration") return
+  const deleteAuxiliary = () => {
+    if (!selectedBlock || (selectedBlock.type !== "decoration" && selectedBlock.type !== "asset")) return
     onChange({
       ...document,
       blocks: document.blocks.filter(block => block.id !== selectedBlock.id),
@@ -638,6 +857,8 @@ export default function WechatBlockEditor({
                   <span className={`wbe-block-icon wbe-block-icon--${block.type}`}>
                     {block.type === "decoration"
                       ? <Sparkles size={14} />
+                      : block.type === "asset"
+                        ? <ImageIcon size={14} />
                       : block.type === "section"
                         ? <Columns size={14} />
                         : source?.kind === "image"
@@ -672,23 +893,23 @@ export default function WechatBlockEditor({
         </div>
         <div className="wbe-outline-actions">
           <button
-            title="上移 SVG 装饰"
-            disabled={selectedBlock?.type !== "decoration"}
-            onClick={() => moveDecoration(-1)}
+            title="上移装饰或素材"
+            disabled={selectedBlock?.type !== "decoration" && selectedBlock?.type !== "asset"}
+            onClick={() => moveAuxiliary(-1)}
           >
             <ArrowUp size={15} />
           </button>
           <button
-            title="下移 SVG 装饰"
-            disabled={selectedBlock?.type !== "decoration"}
-            onClick={() => moveDecoration(1)}
+            title="下移装饰或素材"
+            disabled={selectedBlock?.type !== "decoration" && selectedBlock?.type !== "asset"}
+            onClick={() => moveAuxiliary(1)}
           >
             <ArrowDown size={15} />
           </button>
           <button
-            title="删除 SVG 装饰"
-            disabled={selectedBlock?.type !== "decoration"}
-            onClick={deleteDecoration}
+            title="删除装饰或素材"
+            disabled={selectedBlock?.type !== "decoration" && selectedBlock?.type !== "asset"}
+            onClick={deleteAuxiliary}
           >
             <Trash2 size={15} />
           </button>
@@ -738,6 +959,13 @@ export default function WechatBlockEditor({
             <ColorField label="正文背景" value={document.background} fallback="#ffffff" onChange={background => updateDocument({ background })} />
             <ColorField label="工作区背景" value={document.pageBackground} fallback="#f4f1e8" onChange={pageBackground => updateDocument({ pageBackground })} />
           </div>
+          <SurfaceFields
+            value={document.theme.canvasStyle}
+            fallback={document.background}
+            onChange={canvasStyle => updateDocument({
+              theme: { ...document.theme, canvasStyle },
+            })}
+          />
 
           {selectedBlock?.type === "content" ? (
             <>
@@ -827,6 +1055,55 @@ export default function WechatBlockEditor({
                 <NumberField label="线宽" value={selectedBlock.strokeWidth} min={0} max={20} onChange={strokeWidth => updateBlock({ strokeWidth })} />
                 <NumberField label="下间距" value={selectedBlock.marginBottom} min={0} max={64} onChange={marginBottom => updateBlock({ marginBottom })} />
               </div>
+            </>
+          ) : null}
+
+          {selectedBlock?.type === "asset" ? (
+            <>
+              <div className="wbe-property-heading">AI 图片素材</div>
+              <label>
+                <span>图片生成提示词</span>
+                <textarea
+                  value={selectedBlock.prompt}
+                  rows={7}
+                  onChange={event => updateBlock({ prompt: event.target.value })}
+                />
+              </label>
+              <label>
+                <span>图片比例</span>
+                <select
+                  value={selectedBlock.imageSize}
+                  onChange={event => updateBlock({
+                    imageSize: event.target.value as WechatAssetBlock["imageSize"],
+                  })}
+                >
+                  <option value="landscape_16_9">横图 16:9</option>
+                  <option value="landscape_4_3">横图 4:3</option>
+                  <option value="square_hd">高清方图</option>
+                  <option value="square">方图</option>
+                  <option value="portrait_4_3">竖图 4:3</option>
+                  <option value="portrait_16_9">竖图 16:9</option>
+                </select>
+              </label>
+              <div className="wbe-property-grid">
+                <NumberField label="宽度" value={selectedBlock.width} min={80} max={677} onChange={width => updateBlock({ width })} />
+                <NumberField label="圆角" value={selectedBlock.radius} min={0} max={32} onChange={radius => updateBlock({ radius })} />
+                <NumberField label="上间距" value={selectedBlock.marginTop} min={0} max={80} onChange={marginTop => updateBlock({ marginTop })} />
+                <NumberField label="下间距" value={selectedBlock.marginBottom} min={0} max={80} onChange={marginBottom => updateBlock({ marginBottom })} />
+              </div>
+              <label>
+                <span>对齐</span>
+                <select
+                  value={selectedBlock.align}
+                  onChange={event => updateBlock({
+                    align: event.target.value as WechatAssetBlock["align"],
+                  })}
+                >
+                  <option value="left">左对齐</option>
+                  <option value="center">居中</option>
+                  <option value="right">右对齐</option>
+                </select>
+              </label>
             </>
           ) : null}
 
@@ -952,6 +1229,11 @@ export default function WechatBlockEditor({
                 <NumberField label="上间距" value={selectedBlock.marginTop} min={0} max={80} onChange={marginTop => updateBlock({ marginTop })} />
                 <NumberField label="下间距" value={selectedBlock.marginBottom} min={0} max={80} onChange={marginBottom => updateBlock({ marginBottom })} />
               </div>
+              <SurfaceFields
+                value={selectedBlock.surfaceStyle}
+                fallback={selectedBlock.background}
+                onChange={surfaceStyle => updateBlock({ surfaceStyle })}
+              />
               <label className="wbe-checkbox-field">
                 <input
                   type="checkbox"

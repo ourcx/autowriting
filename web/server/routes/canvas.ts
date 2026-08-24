@@ -36,7 +36,9 @@ const DESIGN_PLAN_SYSTEM_PROMPT = `你是视觉设计文件分析器。输入会
   "palette": {"primary":"","secondary":"","accent":"","surface":"","surfaceAlt":"","text":"","muted":"","border":""},
   "typography": {"display":"","headline":"","subhead":"","body":"","caption":"","overline":"","mono":""},
   "geometry": {"radius":"","border":"","shadow":"","spacing":""},
+  "backgroundLanguage": {"canvas":"","sections":"","patterns":[]},
   "components": [{"name":"","appearance":"","useWhen":""}],
+  "materialIdeas": [{"anchorRole":"","purpose":"","imagePrompt":""}],
   "layoutRules": [""],
   "contentRoles": [{"role":"","recommendedVariant":"plain|title|banner|card|quote|highlight|lede|overline|metric","rule":""}],
   "forbidden": [""],
@@ -78,7 +80,12 @@ const CANVAS_SYSTEM_PROMPT = `你是公众号长图排版引擎。文章内容�
 - path.d 只能使用标准 SVG 路径命令和数字，坐标必须落在节点 width/height 内，不得遮挡文字。
 - 只用纯色，确保文字与背景对比清晰。
 - 不输出 SVG 标签、HTML、脚本、CSS、事件或外部字体。
-- 不得生成“在这里填写”“示例”“______”等占位内容。`
+- 不得生成“在这里填写”“示例”“______”等占位内容。
+
+以下仅是能力参考，不得照抄 sourceId、颜色或主题：
+参考 A（杂志）：theme.canvasStyle=solid；标题 title；首段 lede；章节使用 editorial + plain，无完整边框，以 overline、红色强调边和大留白建立层级。
+参考 B（研究手册）：theme.canvasStyle=grid；正文 section 交替使用 plain 与 callout；重点区 surfaceStyle=dots；章节前可放置 book-open/lightbulb 图标。
+参考 C（视觉故事）：theme.canvasStyle=linear；关键章节使用 feature；在主题切换处插入 landscape_16_9 asset；其他正文保持无框，避免整页卡片化。`
 
 const BLOCK_SYSTEM_PROMPT = `你是微信公众号 HTML 内容块排版引擎。文章内容由系统提供，你只能设计样式和局部 SVG 装饰，绝对不能创作、改写、概括、合并、拆分或省略正文。
 
@@ -98,15 +105,17 @@ const BLOCK_SYSTEM_PROMPT = `你是微信公众号 HTML 内容块排版引擎。
     "displaySize":34,"displayWeight":800,"displayLineHeight":1.25,
     "headingSize":23,"headingWeight":700,"headingLineHeight":1.4,
     "bodySize":17,"bodyWeight":400,"bodyLineHeight":1.8,
-    "radius":6,"sectionGap":24
+    "radius":6,"sectionGap":24,
+    "canvasStyle":{"kind":"none|solid|linear|stripes|dots|grid|ruled-paper","colors":["#ffffff","#f7f7f7"],"patternColor":"rgba(47,111,98,0.12)","angle":135,"size":20,"opacity":0.12}
   },
   "blocks": []
 }
 
-blocks 仅允许三种：
+blocks 仅允许四种：
 1. content: {"id":"","type":"content","sourceId":"source-0","variant":"plain|title|banner|card|quote|highlight|lede|overline|metric|image","background":"transparent","color":"#262626","accentColor":"#2f6f62","borderColor":"transparent","borderWidth":0,"radius":0,"padding":0,"marginTop":0,"marginBottom":22,"fontSize":17,"fontWeight":400,"fontStyle":"normal|italic","textDecoration":"none|underline","letterSpacing":0,"lineHeight":1.9,"align":"left","imageFit":"cover|contain","imageRadius":6}
 2. decoration: {"id":"","type":"decoration","anchorSourceId":"source-0","placement":"before|after","d":"M 0 20 C 60 0 120 40 180 20","viewBoxWidth":180,"viewBoxHeight":40,"width":150,"height":36,"align":"left|center|right","fill":"transparent","stroke":"#2f6f62","strokeWidth":3,"marginTop":4,"marginBottom":16}
-3. section: {"id":"","type":"section","sourceIds":["source-1","source-2"],"layout":"stack|two-column|comparison|feature|editorial","preset":"plain|soft|feature|editorial|callout","background":"transparent","color":"#262626","accentColor":"#5263a5","borderColor":"#dee0e3","borderWidth":0,"radius":0,"padding":0,"gap":16,"marginTop":8,"marginBottom":24,"divider":true,"accentStyle":"none|top|left|bottom|tri-color","shadow":"none|soft","leadSourceId":"source-2","overlineSourceId":"source-1","icon":{"kind":"lucide|path","name":"book-open|quote|lightbulb|sparkles|mic|trending-up|check-circle|arrow-right|bar-chart","d":"","color":"#5263a5","size":24,"position":"top-left|top-right|inline"},"itemStyles":{"source-1":{"variant":"overline","fontSize":11,"fontWeight":700,"color":"#1f2329"},"source-2":{"variant":"lede","fontSize":20}}}
+3. asset: {"id":"","type":"asset","anchorSourceId":"source-2","placement":"before|after","prompt":"具体、可生成的英文图片描述","imageSize":"square_hd|square|portrait_4_3|portrait_16_9|landscape_4_3|landscape_16_9","width":320,"radius":0,"align":"left|center|right","marginTop":12,"marginBottom":24}
+4. section: {"id":"","type":"section","sourceIds":["source-1","source-2"],"layout":"stack|two-column|comparison|feature|editorial","preset":"plain|soft|feature|editorial|callout","background":"transparent","surfaceStyle":{"kind":"none|solid|linear|stripes|dots|grid|ruled-paper","colors":["#ffffff","#f7f7f7"],"patternColor":"rgba(82,99,165,0.12)","angle":135,"size":20,"opacity":0.12},"color":"#262626","accentColor":"#5263a5","borderColor":"#dee0e3","borderWidth":0,"radius":0,"padding":0,"gap":16,"marginTop":8,"marginBottom":24,"divider":true,"accentStyle":"none|top|left|bottom|tri-color","shadow":"none|soft","leadSourceId":"source-2","overlineSourceId":"source-1","icon":{"kind":"lucide|path","name":"book-open|quote|lightbulb|sparkles|mic|trending-up|check-circle|arrow-right|bar-chart","d":"","color":"#5263a5","size":24,"position":"top-left|top-right|inline"},"itemStyles":{"source-1":{"variant":"overline","fontSize":11,"fontWeight":700,"color":"#1f2329"},"source-2":{"variant":"lede","fontSize":20}}}
 
 规则：
 - 响应首字符必须是 {，末字符必须是 }，只输出一个完整 JSON 对象。
@@ -114,6 +123,7 @@ blocks 仅允许三种：
 - 每个内容源必须且只能出现一次：可以由 content.sourceId 单独引用，或由一个 section.sourceIds 组合引用，但不能同时出现。
 - content 不得输出 text、src 或 alt；系统会从 sourceId 回填原文与图片。
 - content 和 section 必须严格保持内容源原顺序，不得交换段落；section 只能组合 2-8 个连续 sourceId。
+- asset 和 decoration 不占用内容源，只能锚定已有 sourceId；最多生成 4 个 asset 和 8 个 decoration。
 - 图片内容源只能使用 image 版式，其他内容源不得使用 image。
 - 先用 theme 定义一次全局颜色、字体和几何规则；block 未填写的样式会继承 theme，避免重复输出大量属性。
 - theme 必须忠实复制设计分析结果中的 palette、typography、radius、spacing 和 shadow 语义；禁止回退到默认绿灰、奶油色或通用 Markdown 风格。
@@ -125,11 +135,21 @@ blocks 仅允许三种：
 - 默认 borderWidth=0，以留白、背景层级和强调边组织内容；只有设计文件明确要求描边时才增加边框。不要把每个 section 都画成有边框的卡片。
 - 避免相邻重复强调：标题已有下划线或强调边时，第一个 section 不再重复同色顶部边。除非设计明确要求，带完整边框的 section 不得超过总数的四分之一。
 - 图标优先使用 lucide 白名单；没有合适图标时才用 AI 生成的安全 path。图标必须服务于语义，不得每个 section 重复同一图标。
+- 使用 canvasStyle 和 section.surfaceStyle 建立背景层级。长文背景可以使用极浅的 dots、grid 或 ruled-paper；重点 section 可使用 linear、stripes 或独立底色。纹理必须低对比，不能影响正文可读性，禁止所有区域使用同一种背景。
+- asset 用于真正有信息或氛围价值的题图、章节插图和宽幅分隔素材。prompt 必须使用英文 SDXL 风格描述，包含具体主体、构图、媒介、光线和配色，并明确 no text、no logo、no watermark。不得输出 URL，程序会固定调用图片生成服务。
 - 可以生成 0-8 个局部 decoration。设计文件禁止装饰、纹理或渐变时必须输出 0 个 decoration；否则装饰必须由你根据主题原创为 path，不得依赖预设图标名。
 - decoration 必须通过 anchorSourceId 和 placement 锚定到正文附近，不得遮挡正文。
 - path.d 只能使用标准 SVG Path 命令和数字，坐标必须在 viewBox 范围内。
-- 只使用高对比纯色；不使用渐变、外部字体、脚本、事件和 URL。
-- 不得生成“在这里填写”“示例”“______”等占位内容。`
+- 不输出外部字体、脚本、事件和 URL。渐变与纹理只能通过受控 surfaceStyle 表达。
+- 不得生成“在这里填写”“示例”“______”等占位内容。
+
+布局参考片段（只学习组合方式，不得照抄颜色或 sourceId）：
+A. 杂志留白：
+{"theme":{"canvasStyle":{"kind":"solid","colors":["#fafafa"]}},"blocks":[{"type":"content","sourceId":"source-0","variant":"title"},{"type":"section","sourceIds":["source-1","source-2","source-3"],"layout":"editorial","preset":"plain","leadSourceId":"source-1","accentStyle":"left"}]}
+B. 研究手册：
+{"theme":{"canvasStyle":{"kind":"grid","colors":["#fffdf8"],"patternColor":"rgba(59,130,246,0.10)","size":24}},"blocks":[{"type":"section","sourceIds":["source-1","source-2"],"layout":"feature","preset":"soft","surfaceStyle":{"kind":"dots","colors":["#ffffff"],"patternColor":"rgba(249,115,22,0.12)","size":18},"icon":{"kind":"lucide","name":"lightbulb","size":24}}]}
+C. 视觉故事：
+{"blocks":[{"type":"asset","anchorSourceId":"source-1","placement":"after","prompt":"Editorial paper collage about the article subject, layered cut paper composition, soft daylight, restrained brand palette, high detail, no text, no logo, no watermark","imageSize":"landscape_16_9","width":597},{"type":"section","sourceIds":["source-2","source-3","source-4"],"layout":"two-column","preset":"plain","surfaceStyle":{"kind":"linear","colors":["#ffffff","#f5f7ff"],"angle":135}}]}`
 
 interface CanvasCompletionData {
   choices?: Array<{
@@ -249,10 +269,18 @@ function assertDesignRichness(
 ): void {
   if (!required) return
   const sections = document.blocks.filter(block => block.type === "section")
+  const hasVisualMaterial = document.blocks.some(block => (
+    block.type === "asset" || block.type === "decoration"
+  ))
+  const hasCanvasTreatment = document.theme.canvasStyle.kind !== "none"
+    && document.theme.canvasStyle.kind !== "solid"
   const expressive = sections.some(section => (
     section.layout !== "stack"
+    || section.preset !== "plain"
     || section.accentStyle !== "none"
     || section.shadow !== "none"
+    || Boolean(section.icon)
+    || Boolean(section.surfaceStyle && !["none", "solid"].includes(section.surfaceStyle.kind))
     || Object.values(section.itemStyles).some(style => (
       style.variant === "lede"
       || style.variant === "overline"
@@ -260,7 +288,7 @@ function assertDesignRichness(
       || style.variant === "quote"
     ))
   ))
-  if (sections.length < 2 || !expressive) {
+  if (sections.length < 2 || (!expressive && !hasVisualMaterial && !hasCanvasTreatment)) {
     throw new Error("AI 未充分使用设计文件与组合布局能力")
   }
 }

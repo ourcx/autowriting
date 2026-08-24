@@ -17,6 +17,24 @@ export type WechatBlockAlign = "left" | "center" | "right"
 export type WechatBlockFont = "system" | "serif" | "rounded" | "friendly"
   | "editorial"
 
+export type WechatSurfaceKind =
+  | "none"
+  | "solid"
+  | "linear"
+  | "stripes"
+  | "dots"
+  | "grid"
+  | "ruled-paper"
+
+export interface WechatSurfaceStyle {
+  kind: WechatSurfaceKind
+  colors: string[]
+  patternColor: string
+  angle: number
+  size: number
+  opacity: number
+}
+
 export interface WechatBlockTheme {
   font: WechatBlockFont
   canvas: string
@@ -39,6 +57,7 @@ export interface WechatBlockTheme {
   bodyLineHeight: number
   radius: number
   sectionGap: number
+  canvasStyle: WechatSurfaceStyle
 }
 
 export type WechatSectionPreset =
@@ -111,6 +130,28 @@ export interface WechatDecorationBlock {
   marginBottom: number
 }
 
+export type WechatGeneratedImageSize =
+  | "square_hd"
+  | "square"
+  | "portrait_4_3"
+  | "portrait_16_9"
+  | "landscape_4_3"
+  | "landscape_16_9"
+
+export interface WechatAssetBlock {
+  id: string
+  type: "asset"
+  anchorSourceId: string
+  placement: "before" | "after"
+  prompt: string
+  imageSize: WechatGeneratedImageSize
+  width: number
+  radius: number
+  align: WechatBlockAlign
+  marginTop: number
+  marginBottom: number
+}
+
 export type WechatSectionLayout = "stack" | "two-column" | "comparison" | "feature"
   | "editorial"
 export type WechatSectionAccent = "none" | "top" | "left" | "bottom" | "tri-color"
@@ -148,13 +189,18 @@ export interface WechatSectionBlock {
   divider: boolean
   accentStyle: WechatSectionAccent
   shadow: "none" | "soft"
+  surfaceStyle?: WechatSurfaceStyle
   leadSourceId?: string
   overlineSourceId?: string
   icon?: WechatSectionIcon
   itemStyles: Record<string, WechatTextStyleOverride>
 }
 
-export type WechatBlock = WechatContentBlock | WechatDecorationBlock | WechatSectionBlock
+export type WechatBlock =
+  | WechatContentBlock
+  | WechatDecorationBlock
+  | WechatAssetBlock
+  | WechatSectionBlock
 
 export interface WechatBlockDocument {
   version: 1
@@ -189,6 +235,14 @@ export const DEFAULT_WECHAT_BLOCK_THEME: WechatBlockTheme = {
   bodyLineHeight: 1.8,
   radius: 6,
   sectionGap: 24,
+  canvasStyle: {
+    kind: "none",
+    colors: ["#ffffff"],
+    patternColor: "rgba(47,111,98,0.12)",
+    angle: 135,
+    size: 20,
+    opacity: 0.12,
+  },
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -210,6 +264,40 @@ function numberIn(value: unknown, fallback: number, min: number, max: number): n
 function colorIn(value: unknown, fallback: string): string {
   const color = textIn(value, fallback, 32)
   return /^(#[0-9a-f]{3,8}|rgba?\([0-9.,\s%]+\)|transparent)$/i.test(color) ? color : fallback
+}
+
+function parseSurfaceStyle(
+  value: unknown,
+  fallbackColor: string,
+): WechatSurfaceStyle {
+  const record = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+  const kinds: WechatSurfaceKind[] = [
+    "none",
+    "solid",
+    "linear",
+    "stripes",
+    "dots",
+    "grid",
+    "ruled-paper",
+  ]
+  const colors = Array.isArray(record.colors)
+    ? record.colors
+      .slice(0, 3)
+      .map(color => colorIn(color, ""))
+      .filter(Boolean)
+    : []
+  return {
+    kind: kinds.includes(record.kind as WechatSurfaceKind)
+      ? record.kind as WechatSurfaceKind
+      : "none",
+    colors: colors.length > 0 ? colors : [fallbackColor],
+    patternColor: colorIn(record.patternColor, "rgba(47,111,98,0.12)"),
+    angle: numberIn(record.angle, 135, 0, 360),
+    size: numberIn(record.size, 20, 6, 80),
+    opacity: numberIn(record.opacity, 0.12, 0.02, 0.5),
+  }
 }
 
 function fontIn(value: unknown, fallback: WechatBlockFont): WechatBlockFont {
@@ -244,6 +332,10 @@ function parseTheme(value: unknown): WechatBlockTheme {
     bodyLineHeight: numberIn(record.bodyLineHeight, DEFAULT_WECHAT_BLOCK_THEME.bodyLineHeight, 1.2, 2.4),
     radius: numberIn(record.radius, DEFAULT_WECHAT_BLOCK_THEME.radius, 0, 32),
     sectionGap: numberIn(record.sectionGap, DEFAULT_WECHAT_BLOCK_THEME.sectionGap, 8, 96),
+    canvasStyle: parseSurfaceStyle(
+      record.canvasStyle,
+      colorIn(record.canvas, DEFAULT_WECHAT_BLOCK_THEME.canvas),
+    ),
   }
 }
 
@@ -360,6 +452,47 @@ function parseDecorationBlock(
   }
 }
 
+function parseAssetBlock(
+  record: Record<string, unknown>,
+  index: number,
+): WechatAssetBlock | null {
+  const prompt = textIn(record.prompt, "", 600)
+    .split("")
+    .map(character => {
+      const code = character.charCodeAt(0)
+      return code >= 32 && code !== 127 ? character : " "
+    })
+    .join("")
+    .trim()
+  if (!prompt) return null
+  const sizes: WechatGeneratedImageSize[] = [
+    "square_hd",
+    "square",
+    "portrait_4_3",
+    "portrait_16_9",
+    "landscape_4_3",
+    "landscape_16_9",
+  ]
+  const aligns: WechatBlockAlign[] = ["left", "center", "right"]
+  return {
+    id: idIn(record.id, `asset-${index + 1}`),
+    type: "asset",
+    anchorSourceId: idIn(record.anchorSourceId, ""),
+    placement: record.placement === "before" ? "before" : "after",
+    prompt,
+    imageSize: sizes.includes(record.imageSize as WechatGeneratedImageSize)
+      ? record.imageSize as WechatGeneratedImageSize
+      : "landscape_16_9",
+    width: numberIn(record.width, 320, 80, 677),
+    radius: numberIn(record.radius, 0, 0, 32),
+    align: aligns.includes(record.align as WechatBlockAlign)
+      ? record.align as WechatBlockAlign
+      : "center",
+    marginTop: numberIn(record.marginTop, 12, 0, 80),
+    marginBottom: numberIn(record.marginBottom, 24, 0, 80),
+  }
+}
+
 function parseSectionIcon(
   value: unknown,
   theme: WechatBlockTheme,
@@ -471,6 +604,9 @@ function parseSectionBlock(
       ? record.accentStyle as WechatSectionAccent
       : defaultAccent,
     shadow: record.shadow === "soft" ? "soft" : "none",
+    surfaceStyle: record.surfaceStyle
+      ? parseSurfaceStyle(record.surfaceStyle, colorIn(record.background, framed ? theme.surface : "transparent"))
+      : undefined,
     leadSourceId: sourceIds.includes(String(record.leadSourceId)) ? String(record.leadSourceId) : undefined,
     overlineSourceId: sourceIds.includes(String(record.overlineSourceId)) ? String(record.overlineSourceId) : undefined,
     icon: parseSectionIcon(record.icon, theme),
@@ -489,6 +625,10 @@ export function parseWechatBlockDocument(value: unknown): WechatBlockDocument {
       if (block.type === "decoration") {
         const decoration = parseDecorationBlock(block, index)
         return decoration ? [decoration] : []
+      }
+      if (block.type === "asset") {
+        const asset = parseAssetBlock(block, index)
+        return asset ? [asset] : []
       }
       if (block.type === "section") {
         const section = parseSectionBlock(block, index, theme)
@@ -726,13 +866,21 @@ export function hydrateWechatBlockDocument(
   const sourceIndex = new Map(sources.map((source, index) => [source.id, index]))
   const contentCandidates = new Map<string, WechatContentBlock>()
   const sectionCandidates = new Map<string, WechatSectionBlock>()
-  const decorations = parsed.blocks
-    .filter((block): block is WechatDecorationBlock => (
-      block.type === "decoration"
+  const anchoredMaterials = parsed.blocks
+    .filter((block): block is WechatDecorationBlock | WechatAssetBlock => (
+      (block.type === "decoration" || block.type === "asset")
       && sourceIds.has(block.anchorSourceId)
     ))
-    .slice(0, 24)
-    .map((block, index) => ({ ...block, id: `decoration-${index + 1}` }))
+    .filter((block, index, blocks) => (
+      blocks
+        .slice(0, index)
+        .filter(candidate => candidate.type === block.type)
+        .length < (block.type === "asset" ? 4 : 8)
+    ))
+    .map((block, index) => ({
+      ...block,
+      id: `${block.type}-${index + 1}`,
+    }))
 
   for (const block of parsed.blocks) {
     if (
@@ -754,19 +902,24 @@ export function hydrateWechatBlockDocument(
   const blocks: WechatBlock[] = []
   for (let sourcePosition = 0; sourcePosition < sources.length; sourcePosition += 1) {
     const source = sources[sourcePosition]
-    blocks.push(...decorations.filter(block => (
+    blocks.push(...anchoredMaterials.filter(block => (
       block.anchorSourceId === source.id && block.placement === "before"
     )))
 
     const section = sectionCandidates.get(source.id)
     if (section) {
+      blocks.push(...anchoredMaterials.filter(block => (
+        block.placement === "before"
+        && block.anchorSourceId !== source.id
+        && section.sourceIds.includes(block.anchorSourceId)
+      )))
       blocks.push({
         ...section,
         id: `section-${source.id}`,
         sourceIds: [...section.sourceIds],
       })
       const lastSourceId = section.sourceIds[section.sourceIds.length - 1]
-      blocks.push(...decorations.filter(block => (
+      blocks.push(...anchoredMaterials.filter(block => (
         section.sourceIds.includes(block.anchorSourceId)
         && block.placement === "after"
       )).map(block => ({ ...block, anchorSourceId: lastSourceId })))
@@ -803,7 +956,7 @@ export function hydrateWechatBlockDocument(
           : Math.min(28, candidate.fontSize),
     } : fallback)
 
-    blocks.push(...decorations.filter(block => (
+    blocks.push(...anchoredMaterials.filter(block => (
       block.anchorSourceId === source.id && block.placement === "after"
     )))
   }

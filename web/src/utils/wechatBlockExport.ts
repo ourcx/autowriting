@@ -6,6 +6,9 @@ function stripEditorAttributes(root: HTMLElement): void {
   root.querySelectorAll("*").forEach(node => {
     node.removeAttribute("class")
     node.removeAttribute("data-block-id")
+    node.removeAttribute("data-wechat-icon")
+    node.removeAttribute("data-wechat-material")
+    node.removeAttribute("data-wechat-material-wrapper")
     node.removeAttribute("contenteditable")
     node.removeAttribute("tabindex")
   })
@@ -49,6 +52,11 @@ function normalizeWechatElements(root: HTMLElement): void {
 
   Array.from(root.children).forEach(child => {
     if (!(child instanceof HTMLElement)) return
+    if (child.getAttribute("data-wechat-material-wrapper") === "true") {
+      child.style.maxWidth = "100%"
+      child.removeAttribute("data-wechat-material-wrapper")
+      return
+    }
     child.style.marginLeft = `${WECHAT_SIDE_SPACE}px`
     child.style.marginRight = `${WECHAT_SIDE_SPACE}px`
     child.style.maxWidth = `calc(100% - ${WECHAT_SIDE_SPACE * 2}px)`
@@ -74,6 +82,11 @@ function normalizeWechatElements(root: HTMLElement): void {
       image.removeAttribute("data-wechat-icon")
       return
     }
+    if (image.getAttribute("data-wechat-material") === "true") {
+      image.style.maxWidth = "100%"
+      image.removeAttribute("data-wechat-material")
+      return
+    }
     image.style.display = "block"
     image.style.width = "100%"
     image.style.maxWidth = "100%"
@@ -92,8 +105,8 @@ function normalizeWechatElements(root: HTMLElement): void {
 export function buildWechatBlockHtml(source: HTMLElement): string {
   const clone = source.cloneNode(true) as HTMLElement
   replaceSvgDecorations(clone)
-  stripEditorAttributes(clone)
   normalizeWechatElements(clone)
+  stripEditorAttributes(clone)
   return clone.outerHTML
 }
 

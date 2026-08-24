@@ -51,10 +51,13 @@ HTML Block 支持：
 - `content`：单个内容源。
 - `section`：组合 2-8 个连续内容源，支持纵向、双栏、主体对比和重点加双栏。
 - `decoration`：锚定到内容源前后的安全 SVG Path。
+- `asset`：锚定到内容源前后的 AI 图片素材，AI 只提供提示词，图片服务地址由程序固定。
 
 `section.itemStyles` 按 `sourceId` 保存内部文字的独立样式，保证组合布局中的文字仍可单独选择和修改。
 
 扩展视觉能力包括文档级 `theme`、`editorial` 布局、`lede` 导语、`overline` 眉题、`metric` 数据强调、顶部/左侧/底部强调边、三色轨道、可选阴影、Lucide 图标白名单和 AI 安全 Path 图标。边框默认关闭，由 Design 文件明确要求时再启用。若 AI 没有使用这些结构形成明显区别于 Markdown 的结果，服务端会重试而不是静默回退为普通正文。
+
+`theme.canvasStyle` 与 `section.surfaceStyle` 提供纯色、渐变、条纹、点阵、网格和稿纸背景。它们由安全参数编译为内联样式，不接收任意 CSS；AI 生成素材只允许固定图片服务，不允许模型提供 URL。
 
 自由画板保留 SVG Scene Graph。服务端会对 AI 坐标执行：
 
