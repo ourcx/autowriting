@@ -144,6 +144,11 @@
   cursor: wait;
 }
 
+.cs-header-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
 .cs-workspace {
   display: grid;
   flex: 1;

@@ -10,6 +10,12 @@ import {
   parseWechatBlockDocument,
   type WechatBlockDocument,
 } from '../../shared/wechatBlockDsl'
+import type { CanvasDesignTemplateId } from '../../shared/canvasDesignTemplates'
+
+export interface CanvasDesignInput {
+  templateId: CanvasDesignTemplateId
+  designReference?: string
+}
 
 export interface WechatAccount {
   nickname: string
@@ -128,6 +134,7 @@ export async function generateCanvasDocument(
   sources: CanvasSource[],
   aiConfig: AIConfig,
   onProgress?: (message: string) => void,
+  design?: CanvasDesignInput,
 ): Promise<CanvasDocument> {
   const token = localStorage.getItem('auth_token')
   const response = await fetch('/api/canvas/generate/stream', {
@@ -136,7 +143,7 @@ export async function generateCanvasDocument(
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ prompt, sources, aiConfig }),
+    body: JSON.stringify({ prompt, sources, aiConfig, ...design }),
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({})) as { error?: string }
@@ -181,6 +188,7 @@ export async function generateWechatBlockDocument(
   sources: CanvasSource[],
   aiConfig: AIConfig,
   onProgress?: (message: string) => void,
+  design?: CanvasDesignInput,
 ): Promise<WechatBlockDocument> {
   const token = localStorage.getItem('auth_token')
   const response = await fetch('/api/canvas/generate-block/stream', {
@@ -189,7 +197,7 @@ export async function generateWechatBlockDocument(
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ prompt, sources, aiConfig }),
+    body: JSON.stringify({ prompt, sources, aiConfig, ...design }),
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({})) as { error?: string }
@@ -254,6 +262,46 @@ export async function deleteArticle(articleId: string): Promise<void> {
 export async function fetchWechatAccount(headers: Record<string, string>): Promise<WechatAccount> {
   const response = await axios.get('/api/wechat/account', { headers })
   return response.data as WechatAccount
+}
+
+export async function fetchWechatBindingStatus(
+  headers: Record<string, string>,
+): Promise<{ bound: boolean; appId: string | null }> {
+  const response = await axios.get('/api/wechat/status', { headers })
+  return response.data as { bound: boolean; appId: string | null }
+}
+
+export async function uploadWechatThumb(
+  url: string,
+  headers: Record<string, string>,
+): Promise<string> {
+  const response = await axios.post('/api/wechat/upload-thumb', { url }, { headers })
+  const mediaId = (response.data as { media_id?: string }).media_id
+  if (!mediaId) throw new Error('微信封面上传成功但未返回 media_id')
+  return mediaId
+}
+
+export async function pushWechatDraft(input: {
+  title: string
+  content: string
+  digest: string
+  thumbMediaId?: string
+}, headers: Record<string, string>): Promise<{
+  media_id: string
+  rewritten_images?: number
+  failed_images?: Array<{ url: string; error: string }>
+}> {
+  const response = await axios.post('/api/wechat/draft', {
+    title: input.title,
+    content: input.content,
+    digest: input.digest,
+    thumb_media_id: input.thumbMediaId,
+  }, { headers })
+  return response.data as {
+    media_id: string
+    rewritten_images?: number
+    failed_images?: Array<{ url: string; error: string }>
+  }
 }
 
 export async function fetchToutiaoAccount(cookies: string, forceRefresh = false): Promise<ToutiaoAccount> {

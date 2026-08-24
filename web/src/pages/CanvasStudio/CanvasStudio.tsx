@@ -12,6 +12,7 @@ import {
   PanelLeft,
   MoveVertical,
   PenTool,
+  Send,
   Shapes,
   Sparkles,
   Square,
@@ -20,6 +21,7 @@ import {
 } from "lucide-react"
 import PageHeader from "../../components/PageHeader/PageHeader"
 import CanvasRenderer from "../../components/CanvasRenderer/CanvasRenderer"
+import CanvasDesignInput from "../../components/CanvasDesignInput/CanvasDesignInput"
 import WechatBlockEditor from "../../components/WechatBlockEditor/WechatBlockEditor"
 import { toast } from "../../components/Toast/Toast"
 import {
@@ -28,8 +30,15 @@ import {
   fetchUploadedArticleImages,
   generateCanvasDocument,
   generateWechatBlockDocument,
+  pushWechatDraft,
+  uploadWechatThumb,
 } from "../../utils/apiHelpers"
+import { getWechatHeaders, loadWechatCredentials } from "../../utils/accountBindings"
 import { loadAIConfig } from "../../utils/aiConfig"
+import {
+  buildWechatBlockHtml,
+  copyWechatBlockHtml,
+} from "../../utils/wechatBlockExport"
 import {
   createEmptyArticleData,
   loadLocalArticleData,
@@ -53,6 +62,10 @@ import {
   parseWechatBlockDocument,
 } from "../../../shared/wechatBlockDsl"
 import type { WechatBlockDocument } from "../../../shared/wechatBlockDsl"
+import {
+  DEFAULT_CANVAS_DESIGN_TEMPLATE_ID,
+  type CanvasDesignTemplateId,
+} from "../../../shared/canvasDesignTemplates"
 import "./CanvasStudio.css"
 
 const STORAGE_KEY = "visual-article-canvas-v2"
@@ -160,7 +173,13 @@ export default function CanvasStudio() {
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("properties")
   const [dslDraft, setDslDraft] = useState(() => JSON.stringify(document, null, 2))
   const [aiPrompt, setAiPrompt] = useState("")
+  const [designTemplateId, setDesignTemplateId] = useState<CanvasDesignTemplateId>(
+    DEFAULT_CANVAS_DESIGN_TEMPLATE_ID,
+  )
+  const [designReference, setDesignReference] = useState("")
+  const [designFileName, setDesignFileName] = useState("")
   const [generating, setGenerating] = useState(false)
+  const [pushing, setPushing] = useState(false)
   const [generationMessage, setGenerationMessage] = useState("")
   const [articles, setArticles] = useState<Array<{ id: string; title: string; status: string }>>([])
   const [articleData, setArticleData] = useState<ArticleData>(createEmptyArticleData)
@@ -298,7 +317,7 @@ export default function CanvasStudio() {
 
   const setCanvasHeight = (height: number) => {
     const nextHeight = Math.min(32000, Math.max(320, Math.round(height || 320)))
-    setDocument(current => ({ ...current, width: 750, height: nextHeight }))
+    setDocument(current => ({ ...current, height: nextHeight }))
   }
 
   const fitCanvasHeight = () => {
@@ -330,10 +349,14 @@ export default function CanvasStudio() {
     try {
       if (mode === "blocks") {
         const nextDocument = await generateWechatBlockDocument(
-          aiPrompt.trim() || "现代杂志式公众号排版：清晰章节、克制留白、图片穿插正文，并根据文章主题生成少量线稿 SVG 装饰",
+          aiPrompt.trim(),
           sources,
           loadAIConfig(),
           setGenerationMessage,
+          {
+            templateId: designTemplateId,
+            designReference,
+          },
         )
         setBlockDocument(nextDocument)
         setSelectedBlockId(nextDocument.blocks[0]?.id ?? null)
@@ -341,10 +364,14 @@ export default function CanvasStudio() {
         return
       }
       const nextDocument = await generateCanvasDocument(
-        aiPrompt.trim() || "手帐采访风公众号长图：奶油纸张底色、浅蓝和浅橙内容面板、深灰细描边，穿插回形针、麦克风、铅笔、引号和勾线 SVG 装饰",
+        aiPrompt.trim(),
         sources,
         loadAIConfig(),
         setGenerationMessage,
+        {
+          templateId: designTemplateId,
+          designReference,
+        },
       )
       setDocument(nextDocument)
       setSelectedId(nextDocument.nodes[nextDocument.nodes.length - 1]?.id ?? null)
@@ -380,9 +407,9 @@ export default function CanvasStudio() {
     URL.revokeObjectURL(url)
   }
 
-  const downloadPng = async () => {
+  const renderPngSegments = async (segmentHeight = 6000): Promise<Blob[]> => {
     const svg = serializeSvg()
-    if (!svg) return
+    if (!svg) throw new Error("画板尚未渲染")
     const svgUrl = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }))
     try {
       const image = new window.Image()
@@ -393,8 +420,8 @@ export default function CanvasStudio() {
         image.src = svgUrl
       })
 
-      const segmentHeight = 6000
       const segmentCount = Math.ceil(document.height / segmentHeight)
+      const blobs: Blob[] = []
       for (let index = 0; index < segmentCount; index += 1) {
         const sourceY = index * segmentHeight
         const height = Math.min(segmentHeight, document.height - sourceY)
@@ -407,18 +434,28 @@ export default function CanvasStudio() {
         const blob = await new Promise<Blob>((resolve, reject) => {
           canvas.toBlob(value => value ? resolve(value) : reject(new Error("PNG 编码失败")), "image/png")
         })
-        const url = URL.createObjectURL(blob)
+        blobs.push(blob)
+      }
+      return blobs
+    } finally {
+      URL.revokeObjectURL(svgUrl)
+    }
+  }
+
+  const downloadPng = async () => {
+    try {
+      const blobs = await renderPngSegments()
+      for (let index = 0; index < blobs.length; index += 1) {
+        const url = URL.createObjectURL(blobs[index])
         const anchor = window.document.createElement("a")
         anchor.href = url
-        anchor.download = `${document.name || "article"}${segmentCount > 1 ? `-${index + 1}` : ""}.png`
+        anchor.download = `${document.name || "article"}${blobs.length > 1 ? `-${index + 1}` : ""}.png`
         anchor.click()
         URL.revokeObjectURL(url)
       }
-      toast.success(segmentCount > 1 ? `已导出 ${segmentCount} 张公众号长图` : "公众号长图已导出")
+      toast.success(blobs.length > 1 ? `已导出 ${blobs.length} 张公众号长图` : "公众号长图已导出")
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "PNG 导出失败")
-    } finally {
-      URL.revokeObjectURL(svgUrl)
     }
   }
 
@@ -427,34 +464,120 @@ export default function CanvasStudio() {
     toast.success("已复制画布 DSL")
   }
 
-  const copyBlockContent = () => {
+  const copyBlockContent = async () => {
     const source = blockContentRef.current
     if (!source) return
-    const clone = source.cloneNode(true) as HTMLElement
-    clone.removeAttribute("class")
-    clone.querySelectorAll("[class], [data-block-id]").forEach(node => {
-      node.removeAttribute("class")
-      node.removeAttribute("data-block-id")
-    })
-    const container = window.document.createElement("div")
-    container.style.cssText = "position:fixed;left:-10000px;top:0;width:677px;background:#fff;"
-    container.appendChild(clone)
-    window.document.body.appendChild(container)
     try {
-      const selection = window.getSelection()
-      if (!selection) throw new Error("浏览器无法访问剪贴板")
-      const range = window.document.createRange()
-      range.selectNode(clone)
-      selection.removeAllRanges()
-      selection.addRange(range)
-      const copied = window.document.execCommand("copy")
-      selection.removeAllRanges()
-      if (!copied) throw new Error("浏览器拒绝复制富文本")
+      await copyWechatBlockHtml(source)
       toast.success("已复制公众号富文本，可直接粘贴到编辑器")
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "复制公众号内容失败")
+    }
+  }
+
+  const blobToDataUrl = (blob: Blob): Promise<string> => new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => typeof reader.result === "string"
+      ? resolve(reader.result)
+      : reject(new Error("图片编码失败"))
+    reader.onerror = () => reject(new Error("图片读取失败"))
+    reader.readAsDataURL(blob)
+  })
+
+  const submitWechatHtml = async (
+    html: string,
+    coverUrl: string,
+    successMessage: string,
+  ) => {
+    const articleTitle = articleData.title.trim()
+      || sources.find(item => item.kind === "title")?.text?.trim()
+      || ""
+    if (!html || !articleTitle) {
+      toast.warn("当前文章没有可推送的标题或内容")
+      return false
+    }
+    if (!loadWechatCredentials()) {
+      toast.warn("请先绑定公众号", {
+        action: { label: "去绑定", onClick: () => navigate("/account") },
+      })
+      return false
+    }
+    const headers = getWechatHeaders()
+    let thumbMediaId: string | undefined
+    if (coverUrl) {
+      try {
+        thumbMediaId = await uploadWechatThumb(coverUrl, headers)
+      } catch {
+        toast.warn("封面上传失败，将使用公众号默认封面继续推送")
+      }
+    }
+    const result = await pushWechatDraft({
+      title: articleTitle,
+      content: html,
+      digest: articleData.article.replace(/\s+/g, " ").slice(0, 120),
+      thumbMediaId,
+    }, headers)
+    if (result.failed_images?.length) {
+      toast.warn(`草稿已推送，但有 ${result.failed_images.length} 张图片未能转存`, { duration: 5000 })
+    } else {
+      toast.success(successMessage, {
+        duration: 0,
+        action: {
+          label: "去发布",
+          onClick: () => window.open("https://mp.weixin.qq.com", "_blank"),
+        },
+      })
+    }
+    return true
+  }
+
+  const pushBlockToWechat = async () => {
+    const source = blockContentRef.current
+    if (!source) return
+    setPushing(true)
+    try {
+      const coverUrl = sources.find(item => item.kind === "image")?.src
+        || localStorage.getItem(`cover_image_${articleId}`)
+        || ""
+      await submitWechatHtml(
+        buildWechatBlockHtml(source),
+        coverUrl,
+        "块排版已推送到微信公众号草稿箱",
+      )
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "公众号草稿推送失败")
     } finally {
-      window.document.body.removeChild(container)
+      setPushing(false)
+    }
+  }
+
+  const pushCanvasToWechat = async () => {
+    if (!loadWechatCredentials()) {
+      toast.warn("请先绑定公众号", {
+        action: { label: "去绑定", onClick: () => navigate("/account") },
+      })
+      return
+    }
+    setPushing(true)
+    try {
+      const blobs = await renderPngSegments(2400)
+      const totalBytes = blobs.reduce((total, blob) => total + blob.size, 0)
+      if (totalBytes > 32 * 1024 * 1024) {
+        throw new Error("画板 PNG 超过 32MB，请缩短画布或分段后再推送")
+      }
+      const dataUrls = await Promise.all(blobs.map(blobToDataUrl))
+      const html = `<section style="margin:0;padding:0;width:100%;background:#ffffff;">${dataUrls.map(url => (
+        `<p style="margin:0;padding:0;line-height:0;"><img src="${url}" style="display:block;width:100%;max-width:100%;height:auto;margin:0;" /></p>`
+      )).join("")}</section>`
+      await submitWechatHtml(
+        html,
+        dataUrls[0] || "",
+        `自由画板已作为 ${dataUrls.length} 张图片推送到微信公众号草稿箱`,
+      )
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "自由画板推送失败")
+    } finally {
+      setPushing(false)
     }
   }
 
@@ -483,10 +606,20 @@ export default function CanvasStudio() {
               Markdown 样式
             </button>
             {mode === "blocks" ? (
-              <button className="cs-header-btn cs-header-btn--primary" onClick={copyBlockContent}>
-                <Copy size={14} />
-                复制公众号内容
-              </button>
+              <>
+                <button className="cs-header-btn" onClick={() => void copyBlockContent()}>
+                  <Copy size={14} />
+                  复制公众号内容
+                </button>
+                <button
+                  className="cs-header-btn cs-header-btn--primary"
+                  disabled={pushing}
+                  onClick={() => void pushBlockToWechat()}
+                >
+                  <Send size={14} />
+                  {pushing ? "推送中..." : "推送公众号"}
+                </button>
+              </>
             ) : (
               <>
                 <button className="cs-header-btn" onClick={copyDsl}>
@@ -500,6 +633,14 @@ export default function CanvasStudio() {
                 <button className="cs-header-btn cs-header-btn--primary" onClick={downloadPng}>
                   <Image size={14} />
                   下载公众号长图
+                </button>
+                <button
+                  className="cs-header-btn cs-header-btn--primary"
+                  disabled={pushing}
+                  onClick={() => void pushCanvasToWechat()}
+                >
+                  <Send size={14} />
+                  {pushing ? "推送中..." : "推送公众号"}
                 </button>
               </>
             )}
@@ -515,7 +656,7 @@ export default function CanvasStudio() {
           </button>
           <button className={mode === "svg" ? "active" : ""} onClick={() => setMode("svg")}>
             <Shapes size={15} />
-            SVG 画布
+            自由画板
           </button>
         </div>
         <label className="cs-article-select">
@@ -548,8 +689,8 @@ export default function CanvasStudio() {
           value={aiPrompt}
           onChange={event => setAiPrompt(event.target.value)}
           placeholder={mode === "blocks"
-            ? "可选：指定 HTML 块排版风格，例如“杂志式留白、暖红标题、图片穿插正文”"
-            : "可选：指定 SVG 长图风格；AI 不会改写文章"}
+            ? "补充偏好（不可信输入）：模板会负责结构、视觉 Token 和防重叠约束"
+            : "补充画板偏好（不可信输入）：模板会负责结构、视觉 Token 和防重叠约束"}
           rows={2}
         />
         <button
@@ -562,9 +703,21 @@ export default function CanvasStudio() {
             ? generationMessage || "生成中..."
             : mode === "blocks"
               ? "AI 生成块排版"
-              : "AI 排版 SVG"}
+              : "AI 生成画板"}
         </button>
       </div>
+
+      <CanvasDesignInput
+        templateId={designTemplateId}
+        fileName={designFileName}
+        onTemplateChange={setDesignTemplateId}
+        onDesignReferenceChange={(content, fileName) => {
+          setDesignReference(content)
+          setDesignFileName(fileName)
+          if (content) setDesignTemplateId("design-reference")
+        }}
+        onError={message => toast.error(message)}
+      />
 
       {mode === "blocks" ? (
         <WechatBlockEditor
@@ -613,7 +766,7 @@ export default function CanvasStudio() {
           <div className="cs-stage-meta">
             <strong>{document.name}</strong>
             <div className="cs-height-control">
-              <span>750 ×</span>
+              <span>{document.width} ×</span>
               <input
                 type="number"
                 min="320"
@@ -664,8 +817,8 @@ export default function CanvasStudio() {
               </label>
               <div className="cs-property-grid">
                 <label>
-                  <span>公众号宽度</span>
-                  <input value="750 px" disabled />
+                  <span>画板宽度</span>
+                  <input value={`${document.width} px`} disabled />
                 </label>
                 <label>
                   <span>画布高度</span>

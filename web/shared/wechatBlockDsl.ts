@@ -1,4 +1,5 @@
 import type { CanvasSource, CanvasSourceKind } from "./canvasArticle.ts"
+import type { CanvasDesignTemplateId } from "./canvasDesignTemplates.ts"
 
 export type WechatBlockVariant =
   | "plain"
@@ -52,7 +53,27 @@ export interface WechatDecorationBlock {
   marginBottom: number
 }
 
-export type WechatBlock = WechatContentBlock | WechatDecorationBlock
+export type WechatSectionLayout = "stack" | "two-column" | "comparison" | "feature"
+
+export interface WechatSectionBlock {
+  id: string
+  type: "section"
+  sourceIds: string[]
+  layout: WechatSectionLayout
+  background: string
+  color: string
+  accentColor: string
+  borderColor: string
+  borderWidth: number
+  radius: number
+  padding: number
+  gap: number
+  marginTop: number
+  marginBottom: number
+  divider: boolean
+}
+
+export type WechatBlock = WechatContentBlock | WechatDecorationBlock | WechatSectionBlock
 
 export interface WechatBlockDocument {
   version: 1
@@ -153,6 +174,36 @@ function parseDecorationBlock(
   }
 }
 
+function parseSectionBlock(
+  record: Record<string, unknown>,
+  index: number,
+): WechatSectionBlock | null {
+  const sourceIds = Array.isArray(record.sourceIds)
+    ? [...new Set(record.sourceIds.map(value => idIn(value, "")).filter(Boolean))].slice(0, 8)
+    : []
+  if (sourceIds.length < 2) return null
+  const layouts: WechatSectionLayout[] = ["stack", "two-column", "comparison", "feature"]
+  return {
+    id: idIn(record.id, `section-${index + 1}`),
+    type: "section",
+    sourceIds,
+    layout: layouts.includes(record.layout as WechatSectionLayout)
+      ? record.layout as WechatSectionLayout
+      : "stack",
+    background: colorIn(record.background, "#ffffff"),
+    color: colorIn(record.color, "#262626"),
+    accentColor: colorIn(record.accentColor, "#5263a5"),
+    borderColor: colorIn(record.borderColor, "#dee0e3"),
+    borderWidth: numberIn(record.borderWidth, 1, 0, 8),
+    radius: numberIn(record.radius, 8, 0, 32),
+    padding: numberIn(record.padding, 20, 0, 48),
+    gap: numberIn(record.gap, 16, 0, 40),
+    marginTop: numberIn(record.marginTop, 8, 0, 80),
+    marginBottom: numberIn(record.marginBottom, 24, 0, 80),
+    divider: record.divider !== false,
+  }
+}
+
 export function parseWechatBlockDocument(value: unknown): WechatBlockDocument {
   const record = asRecord(value)
   const rawBlocks = Array.isArray(record.blocks) ? record.blocks.slice(0, 140) : []
@@ -163,6 +214,10 @@ export function parseWechatBlockDocument(value: unknown): WechatBlockDocument {
       if (block.type === "decoration") {
         const decoration = parseDecorationBlock(block, index)
         return decoration ? [decoration] : []
+      }
+      if (block.type === "section") {
+        const section = parseSectionBlock(block, index)
+        return section ? [section] : []
       }
       return []
     } catch {
@@ -212,7 +267,7 @@ function fallbackStyle(kind: CanvasSourceKind): Omit<WechatContentBlock, "id" | 
   return { ...common, variant: "plain", background: "transparent", color: "#2c2c2c", padding: 0, marginBottom: 22, fontSize: 17, fontWeight: 400, lineHeight: 1.9 }
 }
 
-function fallbackContentBlock(source: CanvasSource): WechatContentBlock {
+export function createWechatContentBlock(source: CanvasSource): WechatContentBlock {
   return {
     id: `block-${source.id}`,
     type: "content",
@@ -232,18 +287,141 @@ export function createWechatBlockDocument(
     background: "#ffffff",
     pageBackground: "#f4f1e8",
     font: "system",
-    blocks: sources.map(fallbackContentBlock),
+    blocks: sources.map(createWechatContentBlock),
   }
+}
+
+function validSection(
+  section: WechatSectionBlock,
+  sourceIndex: Map<string, number>,
+): boolean {
+  const indexes = section.sourceIds.map(id => sourceIndex.get(id))
+  if (indexes.some(index => index === undefined)) return false
+  return indexes.every((index, offset) => (
+    typeof index === "number"
+    && index === (indexes[0] as number) + offset
+  ))
+}
+
+function createTemplateSection(
+  sourceIds: string[],
+  templateId: CanvasDesignTemplateId,
+  index: number,
+): WechatSectionBlock {
+  if (templateId === "weekly-dashboard") {
+    return {
+      id: `template-section-${index}`,
+      type: "section",
+      sourceIds,
+      layout: "comparison",
+      background: "#ffffff",
+      color: "#1f2329",
+      accentColor: "#5263a5",
+      borderColor: "#dee0e3",
+      borderWidth: 1,
+      radius: 8,
+      padding: 20,
+      gap: 16,
+      marginTop: 8,
+      marginBottom: 24,
+      divider: true,
+    }
+  }
+  if (templateId === "interview-notes") {
+    return {
+      id: `template-section-${index}`,
+      type: "section",
+      sourceIds,
+      layout: "two-column",
+      background: "#fff8ec",
+      color: "#2d2b27",
+      accentColor: "#d9855b",
+      borderColor: "#ead8bd",
+      borderWidth: 1,
+      radius: 8,
+      padding: 20,
+      gap: 14,
+      marginTop: 8,
+      marginBottom: 24,
+      divider: false,
+    }
+  }
+  return {
+    id: `template-section-${index}`,
+    type: "section",
+    sourceIds,
+    layout: "feature",
+    background: "#ffffff",
+    color: "#262626",
+    accentColor: "#2f6f62",
+    borderColor: "#e3e5e7",
+    borderWidth: 1,
+    radius: 6,
+    padding: 20,
+    gap: 16,
+    marginTop: 8,
+    marginBottom: 24,
+    divider: false,
+  }
+}
+
+function applyTemplateSections(
+  blocks: WechatBlock[],
+  sources: CanvasSource[],
+  templateId: CanvasDesignTemplateId,
+): WechatBlock[] {
+  if (blocks.filter(block => block.type === "section").length >= 2 || sources.length < 4) {
+    return blocks
+  }
+  const sourceMap = new Map(sources.map(source => [source.id, source]))
+  const result: WechatBlock[] = []
+  const pending: WechatContentBlock[] = []
+  let sectionIndex = 0
+
+  const flush = () => {
+    while (pending.length > 0) {
+      const chunk = pending.splice(0, Math.min(4, pending.length))
+      if (chunk.length === 1) result.push(chunk[0])
+      else {
+        result.push(createTemplateSection(
+          chunk.map(block => block.sourceId),
+          templateId,
+          sectionIndex++,
+        ))
+      }
+    }
+  }
+
+  for (const block of blocks) {
+    if (block.type !== "content") {
+      flush()
+      result.push(block)
+      continue
+    }
+    const source = sourceMap.get(block.sourceId)
+    if (source?.kind === "title") {
+      flush()
+      result.push(block)
+      continue
+    }
+    if (source?.kind === "heading" && pending.length > 0) flush()
+    pending.push(block)
+  }
+  flush()
+  return result
 }
 
 export function hydrateWechatBlockDocument(
   value: unknown,
   sources: CanvasSource[],
   name: string,
+  options: { templateId?: CanvasDesignTemplateId } = {},
 ): WechatBlockDocument {
   const parsed = parseWechatBlockDocument(value)
   const sourceIds = new Set(sources.map(source => source.id))
+  const sourceIndex = new Map(sources.map((source, index) => [source.id, index]))
   const contentCandidates = new Map<string, WechatContentBlock>()
+  const sectionCandidates = new Map<string, WechatSectionBlock>()
   const decorations = parsed.blocks
     .filter((block): block is WechatDecorationBlock => (
       block.type === "decoration"
@@ -260,16 +438,40 @@ export function hydrateWechatBlockDocument(
     ) {
       contentCandidates.set(block.sourceId, block)
     }
+    if (
+      block.type === "section"
+      && validSection(block, sourceIndex)
+      && !sectionCandidates.has(block.sourceIds[0])
+    ) {
+      sectionCandidates.set(block.sourceIds[0], block)
+    }
   }
 
   const blocks: WechatBlock[] = []
-  for (const source of sources) {
+  for (let sourcePosition = 0; sourcePosition < sources.length; sourcePosition += 1) {
+    const source = sources[sourcePosition]
     blocks.push(...decorations.filter(block => (
       block.anchorSourceId === source.id && block.placement === "before"
     )))
 
+    const section = sectionCandidates.get(source.id)
+    if (section) {
+      blocks.push({
+        ...section,
+        id: `section-${source.id}`,
+        sourceIds: [...section.sourceIds],
+      })
+      const lastSourceId = section.sourceIds[section.sourceIds.length - 1]
+      blocks.push(...decorations.filter(block => (
+        section.sourceIds.includes(block.anchorSourceId)
+        && block.placement === "after"
+      )).map(block => ({ ...block, anchorSourceId: lastSourceId })))
+      sourcePosition += section.sourceIds.length - 1
+      continue
+    }
+
     const candidate = contentCandidates.get(source.id)
-    const fallback = fallbackContentBlock(source)
+    const fallback = createWechatContentBlock(source)
     blocks.push(candidate ? {
       ...candidate,
       id: `block-${source.id}`,
@@ -292,6 +494,8 @@ export function hydrateWechatBlockDocument(
   return {
     ...parsed,
     name: name || parsed.name,
-    blocks,
+    blocks: options.templateId
+      ? applyTemplateSections(blocks, sources, options.templateId)
+      : blocks,
   }
 }

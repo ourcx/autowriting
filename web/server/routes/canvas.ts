@@ -17,6 +17,11 @@ import {
   parseWechatBlockDocument,
 } from "../../shared/wechatBlockDsl.ts"
 import type { WechatBlockDocument } from "../../shared/wechatBlockDsl.ts"
+import {
+  buildCanvasDesignBrief,
+  normalizeCanvasDesignTemplateId,
+} from "../../shared/canvasDesignTemplates.ts"
+import type { CanvasDesignTemplateId } from "../../shared/canvasDesignTemplates.ts"
 
 const router = Router()
 router.use(authMiddleware)
@@ -47,9 +52,10 @@ const CANVAS_SYSTEM_PROMPT = `你是公众号长图排版引擎。文章内容�
 - 每个内容源必须且只能出现一次，text/image 节点必须填写对应 sourceId。
 - text 节点不得输出 text，image 节点不得输出 src；系统会根据 sourceId 回填原文和图片。
 - 节点按数组顺序从底到顶绘制；装饰节点不得遮挡正文。
-- 这是公众号文章长图，不是封面或海报：画布宽度固定 750，高度按全文内容计算，可为 2000-30000。
-- 所有内容节点统一 x=50、width=650，保持左右对齐；正文字号 28-34，行高 1.6-1.9。
-- 标题、章节、正文、引用、列表和图片应形成连续的纵向阅读流，不得大面积留空。
+- 这是可编辑的公众号自由画板，不是封面海报：默认宽度 750；模板明确要求数据看板时可使用 1280；高度按内容计算，可为 640-30000。
+- 使用 12 栏网格组织内容。允许多卡片、双栏和对比布局，但所有内容必须位于画布边界内。
+- 正文字号 14-28，标题 24-60；文本节点高度必须覆盖全部换行内容。
+- 标题、章节、正文、引用、列表和图片必须完整出现。服务端会重新计算文字高度并移动发生物理碰撞的内容节点。
 - 优先生成手帐采访风：奶油底色、浅蓝与浅橙内容面板、深灰细描边；章节用 banner，引用用 quote，列表用 card/sticky。
 - 所有装饰必须由你根据文章主题原创为 path 节点，不得依赖预设图标名；可以组合多个 path 形成插画。
 - path.d 只能使用标准 SVG 路径命令和数字，坐标必须落在节点 width/height 内，不得遮挡文字。
@@ -70,19 +76,21 @@ const BLOCK_SYSTEM_PROMPT = `你是微信公众号 HTML 内容块排版引擎。
   "blocks": []
 }
 
-blocks 仅允许两种：
+blocks 仅允许三种：
 1. content: {"id":"","type":"content","sourceId":"source-0","variant":"plain|title|banner|card|quote|highlight|image","background":"transparent","color":"#262626","accentColor":"#2f6f62","borderColor":"transparent","borderWidth":0,"radius":0,"padding":0,"marginTop":0,"marginBottom":22,"fontSize":17,"fontWeight":400,"lineHeight":1.9,"align":"left","imageFit":"cover|contain","imageRadius":6}
 2. decoration: {"id":"","type":"decoration","anchorSourceId":"source-0","placement":"before|after","d":"M 0 20 C 60 0 120 40 180 20","viewBoxWidth":180,"viewBoxHeight":40,"width":150,"height":36,"align":"left|center|right","fill":"transparent","stroke":"#2f6f62","strokeWidth":3,"marginTop":4,"marginBottom":16}
+3. section: {"id":"","type":"section","sourceIds":["source-1","source-2"],"layout":"stack|two-column|comparison|feature","background":"#ffffff","color":"#262626","accentColor":"#5263a5","borderColor":"#dee0e3","borderWidth":1,"radius":8,"padding":20,"gap":16,"marginTop":8,"marginBottom":24,"divider":true}
 
 规则：
 - 响应首字符必须是 {，末字符必须是 }，只输出一个完整 JSON 对象。
 - 不得输出 Markdown 代码围栏、解释、注释、HTML、CSS、SVG 标签或外部资源地址。
-- 每个内容源必须且只能出现一次，content 必须引用对应 sourceId。
+- 每个内容源必须且只能出现一次：可以由 content.sourceId 单独引用，或由一个 section.sourceIds 组合引用，但不能同时出现。
 - content 不得输出 text、src 或 alt；系统会从 sourceId 回填原文与图片。
-- content 必须严格保持内容源原顺序，不得交换段落。
+- content 和 section 必须严格保持内容源原顺序，不得交换段落；section 只能组合 2-8 个连续 sourceId。
 - 图片内容源只能使用 image 版式，其他内容源不得使用 image。
 - 这是公众号长文，不是海报：保持连续纵向阅读、清晰层级、17-18px 正文、1.7-2.0 行高和克制留白。
-- 卡片、标题条、引用、强调色需要围绕文章主题形成统一视觉语言，不要每段都做成卡片。
+- 必须使用 2-8 个 section 形成明显区别于 Markdown 的组合布局。短段落、对比主体或图片与说明优先使用 two-column/comparison/feature，长正文使用 stack。
+- 卡片、标题条、引用、强调色需要围绕文章主题形成统一视觉语言，不要每段都做成独立卡片。
 - 可以生成 2-8 个局部 decoration。装饰必须由你根据主题原创为 path，不得依赖预设图标名。
 - decoration 必须通过 anchorSourceId 和 placement 锚定到正文附近，不得遮挡正文。
 - path.d 只能使用标准 SVG Path 命令和数字，坐标必须在 viewBox 范围内。
@@ -276,6 +284,7 @@ async function generateCanvasWithRepair(input: {
         parseCanvasFromCompletion(first),
         input.sources,
         input.articleTitle,
+        { layoutMode: "freeform" },
       ),
       completion: first,
       attempts: [first],
@@ -308,6 +317,7 @@ async function generateCanvasWithRepair(input: {
         parseCanvasFromCompletion(repair),
         input.sources,
         input.articleTitle,
+        { layoutMode: "freeform" },
       ),
       completion: repair,
       attempts: [first, repair],
@@ -323,6 +333,7 @@ async function generateBlockWithRepair(input: {
   prompt: string
   articleTitle: string
   sources: CanvasSource[]
+  templateId: CanvasDesignTemplateId
   onRepair?: () => void
 }): Promise<{
   document: WechatBlockDocument
@@ -338,7 +349,7 @@ async function generateBlockWithRepair(input: {
     { role: "system", content: BLOCK_SYSTEM_PROMPT },
     {
       role: "user",
-      content: `排版偏好：${input.prompt}\n\n必须完整排版以下内容源，content 只能引用这些 sourceId：\n${sourceManifest}`,
+      content: `受控设计规范：${input.prompt}\n\n必须完整排版以下内容源，content 或 section 只能引用这些 sourceId：\n${sourceManifest}`,
     },
   ]
   const first = await callStructuredCanvas(input.url, {
@@ -355,6 +366,7 @@ async function generateBlockWithRepair(input: {
         parseBlockFromCompletion(first),
         input.sources,
         input.articleTitle,
+        { templateId: input.templateId },
       ),
       attempts: [first],
     }
@@ -384,6 +396,7 @@ async function generateBlockWithRepair(input: {
         parseBlockFromCompletion(repair),
         input.sources,
         input.articleTitle,
+        { templateId: input.templateId },
       ),
       attempts: [first, repair],
     }
@@ -393,7 +406,11 @@ async function generateBlockWithRepair(input: {
 router.post("/generate", async (req: AuthedRequest, res) => {
   const debugStartedAt = Date.now()
   const debugTraceId = `canvas-${debugStartedAt}-${Math.random().toString(36).slice(2, 8)}`
-  const prompt = String(req.body?.prompt || "排版为清晰耐读的公众号长图").trim().slice(0, PROMPT_MAX_LENGTH)
+  const prompt = buildCanvasDesignBrief({
+    templateId: req.body?.templateId,
+    userPrompt: String(req.body?.prompt || "排版为清晰耐读的公众号长图").slice(0, PROMPT_MAX_LENGTH),
+    designReference: req.body?.designReference,
+  })
   const sources = parseCanvasSources(req.body?.sources)
   // #region debug-point A:request-entry
   if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "pre-fix", hypothesisId: "A", traceId: debugTraceId, location: "server/routes/canvas.ts:request-entry", msg: "[DEBUG] Canvas request entered Node route", data: { promptLength: prompt.length, sourceCount: sources.length }, ts: Date.now() }) }).catch(() => {})
@@ -460,7 +477,11 @@ router.post("/generate", async (req: AuthedRequest, res) => {
 router.post("/generate/stream", async (req: AuthedRequest, res) => {
   const debugStartedAt = Date.now()
   const debugTraceId = `canvas-stream-${debugStartedAt}-${Math.random().toString(36).slice(2, 8)}`
-  const prompt = String(req.body?.prompt || "排版为清晰耐读的公众号长图").trim().slice(0, PROMPT_MAX_LENGTH)
+  const prompt = buildCanvasDesignBrief({
+    templateId: req.body?.templateId,
+    userPrompt: String(req.body?.prompt || "排版为清晰耐读的公众号长图").slice(0, PROMPT_MAX_LENGTH),
+    designReference: req.body?.designReference,
+  })
   const sources = parseCanvasSources(req.body?.sources)
   if (sources.length === 0) {
     res.status(400).json({ error: "请先选择一篇包含正文的公众号文章" })
@@ -545,7 +566,12 @@ router.post("/generate/stream", async (req: AuthedRequest, res) => {
 
 router.post("/generate-block/stream", async (req: AuthedRequest, res) => {
   const startedAt = Date.now()
-  const prompt = String(req.body?.prompt || "排版为清晰耐读的公众号文章").trim().slice(0, PROMPT_MAX_LENGTH)
+  const templateId = normalizeCanvasDesignTemplateId(req.body?.templateId)
+  const prompt = buildCanvasDesignBrief({
+    templateId,
+    userPrompt: String(req.body?.prompt || "排版为清晰耐读的公众号文章").slice(0, PROMPT_MAX_LENGTH),
+    designReference: req.body?.designReference,
+  })
   const sources = parseCanvasSources(req.body?.sources)
   if (sources.length === 0) {
     res.status(400).json({ error: "请先选择一篇包含正文的公众号文章" })
@@ -587,6 +613,7 @@ router.post("/generate-block/stream", async (req: AuthedRequest, res) => {
       prompt,
       articleTitle,
       sources,
+      templateId,
       onRepair: () => send("progress", { message: "正在修复块排版结构..." }),
     })
     for (const attempt of generated.attempts) {

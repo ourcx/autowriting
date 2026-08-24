@@ -223,10 +223,105 @@ export function createArticleCanvas(name: string, sources: CanvasSource[]): Canv
   })
 }
 
+function overlaps(
+  left: CanvasNode,
+  right: CanvasNode,
+  gap = 12,
+): boolean {
+  return left.x < right.x + right.width + gap
+    && left.x + left.width + gap > right.x
+    && left.y < right.y + right.height + gap
+    && left.y + left.height + gap > right.y
+}
+
+function hydrateFreeformCanvas(
+  parsed: CanvasDocument,
+  candidates: Map<string, CanvasTextNode | CanvasImageNode>,
+  sources: CanvasSource[],
+  name: string,
+  decorativeNodes: CanvasNode[],
+): CanvasDocument {
+  const canvasWidth = Math.min(1280, Math.max(750, parsed.width))
+  const margin = 40
+  const contentNodes: CanvasNode[] = []
+  let fallbackY = 70
+
+  for (const source of sources) {
+    const candidate = candidates.get(source.id)
+    let node = candidate
+      && ((candidate.type === "image") === (source.kind === "image"))
+      ? candidate
+      : fallbackNode(source, fallbackY)
+    const maxWidth = canvasWidth - margin * 2
+    const x = Math.min(canvasWidth - margin - 180, Math.max(margin, node.x))
+    const width = Math.min(maxWidth, Math.max(180, Math.min(node.width, canvasWidth - x - margin)))
+
+    if (node.type === "text" && source.kind !== "image") {
+      const text = source.text || ""
+      const body = source.kind === "paragraph" || source.kind === "list"
+      const fallback = fallbackNode(source, fallbackY) as CanvasTextNode
+      const fontSize = source.kind === "title"
+        ? Math.min(60, Math.max(24, node.fontSize))
+        : source.kind === "heading"
+          ? Math.min(38, Math.max(16, node.fontSize))
+          : Math.min(body ? 28 : 32, Math.max(body ? 14 : 16, node.fontSize))
+      const padding = Math.max(0, node.padding)
+      const lineHeight = Math.max(body ? 1.45 : 1.25, node.lineHeight)
+      node = {
+        ...node,
+        sourceId: source.id,
+        x,
+        y: Math.max(margin, node.y),
+        width,
+        text,
+        variant: node.variant === "plain" ? fallback.variant : node.variant,
+        padding,
+        fontSize,
+        lineHeight,
+        height: estimateCanvasTextHeight(text, width, fontSize, lineHeight, padding),
+      }
+    } else if (node.type === "image" && source.kind === "image") {
+      node = {
+        ...node,
+        sourceId: source.id,
+        x,
+        y: Math.max(margin, node.y),
+        width,
+        height: Math.max(160, Math.min(720, node.height)),
+        src: source.src || "",
+      }
+    }
+
+    for (let pass = 0; pass <= contentNodes.length; pass += 1) {
+      const collisions = contentNodes.filter(placed => overlaps(node, placed))
+      if (collisions.length === 0) break
+      node = {
+        ...node,
+        y: Math.max(...collisions.map(placed => placed.y + placed.height + 24)),
+      }
+    }
+    contentNodes.push(node)
+    fallbackY = Math.max(fallbackY, node.y + node.height + 32)
+  }
+
+  const contentBottom = contentNodes.reduce(
+    (bottom, node) => Math.max(bottom, node.y + node.height),
+    0,
+  )
+  return parseCanvasDocument({
+    ...parsed,
+    name: name || parsed.name,
+    width: canvasWidth,
+    height: Math.max(parsed.height, contentBottom + margin),
+    nodes: [...decorativeNodes, ...contentNodes],
+  })
+}
+
 export function hydrateCanvasDocument(
   value: unknown,
   sources: CanvasSource[],
   name: string,
+  options: { layoutMode?: "article" | "freeform" } = {},
 ): CanvasDocument {
   const parsed = parseCanvasDocument(value)
   const candidates = new Map<string, CanvasTextNode | CanvasImageNode>()
@@ -237,6 +332,16 @@ export function hydrateCanvasDocument(
     if ((node.type === "text" || node.type === "image") && node.sourceId && !candidates.has(node.sourceId)) {
       candidates.set(node.sourceId, node)
     }
+  }
+
+  if (options.layoutMode === "freeform") {
+    return hydrateFreeformCanvas(
+      parsed,
+      candidates,
+      sources,
+      name,
+      decorativeNodes,
+    )
   }
 
   const contentNodes: CanvasNode[] = []

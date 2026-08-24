@@ -2,6 +2,7 @@ import type { CSSProperties, RefObject } from "react"
 import {
   ArrowDown,
   ArrowUp,
+  Columns,
   Image as ImageIcon,
   Palette,
   Quote,
@@ -10,11 +11,13 @@ import {
   Type,
 } from "lucide-react"
 import type { CanvasSource } from "../../../shared/canvasArticle"
+import { createWechatContentBlock } from "../../../shared/wechatBlockDsl"
 import type {
   WechatBlock,
   WechatBlockDocument,
   WechatContentBlock,
   WechatDecorationBlock,
+  WechatSectionBlock,
 } from "../../../shared/wechatBlockDsl"
 import "./WechatBlockEditor.css"
 
@@ -35,8 +38,102 @@ const FONT_STACKS: Record<WechatBlockDocument["font"], string> = {
 
 function blockLabel(block: WechatBlock, source?: CanvasSource): string {
   if (block.type === "decoration") return "AI SVG 装饰"
+  if (block.type === "section") return `${block.layout} · ${block.sourceIds.length} 项`
   if (source?.kind === "image") return source.alt || "文章图片"
   return source?.text?.split("\n")[0] || "内容块"
+}
+
+function sectionContentBlock(
+  source: CanvasSource,
+  section: WechatSectionBlock,
+): WechatContentBlock {
+  const fallback = createWechatContentBlock(source)
+  return {
+    ...fallback,
+    background: "transparent",
+    color: section.color,
+    accentColor: section.accentColor,
+    borderColor: "transparent",
+    borderWidth: 0,
+    radius: 0,
+    padding: source.kind === "heading" ? 8 : 0,
+    marginTop: 0,
+    marginBottom: source.kind === "title" || source.kind === "heading" ? 14 : 12,
+    fontSize: source.kind === "title"
+      ? Math.min(30, fallback.fontSize)
+      : source.kind === "heading"
+        ? Math.min(22, fallback.fontSize)
+        : fallback.fontSize,
+  }
+}
+
+function SectionContent({
+  block,
+  sources,
+}: {
+  block: WechatSectionBlock
+  sources: CanvasSource[]
+}) {
+  const renderSource = (source: CanvasSource) => (
+    <SourceContent
+      key={source.id}
+      block={sectionContentBlock(source, block)}
+      source={source}
+    />
+  )
+  const wrapperStyle: CSSProperties = {
+    margin: `${block.marginTop}px 0 ${block.marginBottom}px`,
+    padding: block.padding,
+    border: `${block.borderWidth}px solid ${block.borderColor}`,
+    borderRadius: block.radius,
+    background: block.background,
+    color: block.color,
+  }
+  if (block.layout === "stack") {
+    return <section style={wrapperStyle}>{sources.map(renderSource)}</section>
+  }
+
+  const featureSource = block.layout === "feature" ? sources[0] : null
+  const columnSources = featureSource ? sources.slice(1) : sources
+  const splitAt = Math.ceil(columnSources.length / 2)
+  const columns = [
+    columnSources.slice(0, splitAt),
+    columnSources.slice(splitAt),
+  ]
+  return (
+    <section style={wrapperStyle}>
+      {featureSource ? renderSource(featureSource) : null}
+      <table
+        role="presentation"
+        style={{
+          width: "100%",
+          tableLayout: "fixed",
+          borderCollapse: "separate",
+          borderSpacing: 0,
+        }}
+      >
+        <tbody>
+          <tr>
+            {columns.map((column, index) => (
+              <td
+                key={`${block.id}-column-${index}`}
+                style={{
+                  width: "50%",
+                  padding: index === 0 ? `0 ${block.gap}px 0 0` : `0 0 0 ${block.gap}px`,
+                  borderLeft: index === 1 && block.divider
+                    ? `1px dashed ${block.borderColor}`
+                    : "0",
+                  verticalAlign: "top",
+                }}
+              >
+                {column.map(renderSource)}
+              </td>
+            ))}
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  )
 }
 
 function contentStyle(block: WechatContentBlock): CSSProperties {
@@ -185,6 +282,13 @@ export function WechatBlockRenderer({
       {document.blocks.map(block => {
         const source = block.type === "content" ? sourceMap.get(block.sourceId) : undefined
         if (block.type === "content" && !source) return null
+        const sectionSources = block.type === "section"
+          ? block.sourceIds.flatMap(sourceId => {
+            const sectionSource = sourceMap.get(sourceId)
+            return sectionSource ? [sectionSource] : []
+          })
+          : []
+        if (block.type === "section" && sectionSources.length !== block.sourceIds.length) return null
         return (
           <div
             key={block.id}
@@ -197,7 +301,9 @@ export function WechatBlockRenderer({
           >
             {block.type === "decoration"
               ? <Decoration block={block} />
-              : <SourceContent block={block} source={source as CanvasSource} />}
+              : block.type === "section"
+                ? <SectionContent block={block} sources={sectionSources} />
+                : <SourceContent block={block} source={source as CanvasSource} />}
           </div>
         )
       })}
@@ -339,6 +445,8 @@ export default function WechatBlockEditor({
                 <span className={`wbe-block-icon wbe-block-icon--${block.type}`}>
                   {block.type === "decoration"
                     ? <Sparkles size={14} />
+                    : block.type === "section"
+                      ? <Columns size={14} />
                     : source?.kind === "image"
                       ? <ImageIcon size={14} />
                       : source?.kind === "quote"
@@ -478,6 +586,44 @@ export default function WechatBlockEditor({
                 <NumberField label="线宽" value={selectedBlock.strokeWidth} min={0} max={20} onChange={strokeWidth => updateBlock({ strokeWidth })} />
                 <NumberField label="下间距" value={selectedBlock.marginBottom} min={0} max={64} onChange={marginBottom => updateBlock({ marginBottom })} />
               </div>
+            </>
+          ) : null}
+
+          {selectedBlock?.type === "section" ? (
+            <>
+              <div className="wbe-property-heading">组合区域 · {selectedBlock.sourceIds.length} 项</div>
+              <label>
+                <span>布局</span>
+                <select
+                  value={selectedBlock.layout}
+                  onChange={event => updateBlock({ layout: event.target.value as WechatSectionBlock["layout"] })}
+                >
+                  <option value="stack">纵向组合</option>
+                  <option value="two-column">左右双栏</option>
+                  <option value="comparison">主体对比</option>
+                  <option value="feature">重点 + 双栏</option>
+                </select>
+              </label>
+              <div className="wbe-property-grid">
+                <ColorField label="文字" value={selectedBlock.color} fallback="#262626" onChange={color => updateBlock({ color })} />
+                <ColorField label="背景" value={selectedBlock.background} fallback="#ffffff" onChange={background => updateBlock({ background })} />
+                <ColorField label="强调色" value={selectedBlock.accentColor} fallback="#5263a5" onChange={accentColor => updateBlock({ accentColor })} />
+                <ColorField label="边框" value={selectedBlock.borderColor} fallback="#dee0e3" onChange={borderColor => updateBlock({ borderColor })} />
+                <NumberField label="内边距" value={selectedBlock.padding} min={0} max={48} onChange={padding => updateBlock({ padding })} />
+                <NumberField label="栏间距" value={selectedBlock.gap} min={0} max={40} onChange={gap => updateBlock({ gap })} />
+                <NumberField label="圆角" value={selectedBlock.radius} min={0} max={32} onChange={radius => updateBlock({ radius })} />
+                <NumberField label="边框" value={selectedBlock.borderWidth} min={0} max={8} onChange={borderWidth => updateBlock({ borderWidth })} />
+                <NumberField label="上间距" value={selectedBlock.marginTop} min={0} max={80} onChange={marginTop => updateBlock({ marginTop })} />
+                <NumberField label="下间距" value={selectedBlock.marginBottom} min={0} max={80} onChange={marginBottom => updateBlock({ marginBottom })} />
+              </div>
+              <label className="wbe-checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={selectedBlock.divider}
+                  onChange={event => updateBlock({ divider: event.target.checked })}
+                />
+                <span>显示双栏虚线分割</span>
+              </label>
             </>
           ) : null}
 

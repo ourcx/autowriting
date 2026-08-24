@@ -1,0 +1,97 @@
+.cdi-root {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: minmax(320px, 1fr) minmax(280px, 0.8fr);
+  gap: 10px;
+  padding: 0 16px 12px;
+  border-bottom: 1px solid var(--color-hairline);
+  background: var(--color-surface-soft);
+}
+
+.cdi-template,
+.cdi-dropzone {
+  display: flex;
+  min-width: 0;
+  height: 42px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 11px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-md);
+  background: var(--color-canvas);
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.cdi-template > span {
+  flex: 0 0 auto;
+  color: var(--color-body-strong);
+  font-weight: 700;
+}
+
+.cdi-template select {
+  min-width: 0;
+  flex: 1;
+  height: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--color-body);
+  font: inherit;
+}
+
+.cdi-dropzone {
+  border-style: dashed;
+  cursor: pointer;
+}
+
+.cdi-dropzone:hover,
+.cdi-dropzone.is-dragging {
+  border-color: var(--color-brand-teal);
+  background: #edf7f3;
+  color: var(--color-brand-teal);
+}
+
+.cdi-dropzone.has-file {
+  border-style: solid;
+  border-color: var(--color-brand-mint);
+  background: #f0f7f4;
+  color: var(--color-brand-teal);
+}
+
+.cdi-dropzone > input {
+  display: none;
+}
+
+.cdi-dropzone > span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cdi-dropzone > button {
+  display: grid;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: var(--rounded-sm);
+  background: transparent;
+  color: currentcolor;
+  cursor: pointer;
+}
+
+.cdi-dropzone > button:hover {
+  background: rgba(10, 10, 10, 0.06);
+}
+
+@media (max-width: 900px) {
+  .cdi-root {
+    grid-template-columns: 1fr;
+    padding: 0 12px 12px;
+  }
+}
