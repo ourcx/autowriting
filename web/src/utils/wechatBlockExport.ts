@@ -13,6 +13,21 @@ function stripEditorAttributes(root: HTMLElement): void {
 
 function replaceSvgDecorations(root: HTMLElement): void {
   root.querySelectorAll("svg").forEach(svg => {
+    if (svg.getAttribute("data-wechat-icon") === "true") {
+      const clone = svg.cloneNode(true) as SVGElement
+      clone.setAttribute("xmlns", "http://www.w3.org/2000/svg")
+      clone.removeAttribute("data-wechat-icon")
+      const image = document.createElement("img")
+      image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(new XMLSerializer().serializeToString(clone))}`
+      image.alt = ""
+      image.setAttribute("data-wechat-icon", "true")
+      image.setAttribute(
+        "style",
+        `display:block;width:${svg.getAttribute("width") || "24"}px;height:${svg.getAttribute("height") || "24"}px;`,
+      )
+      svg.replaceWith(image)
+      return
+    }
     const path = svg.querySelector("path")
     const stroke = path?.getAttribute("stroke") || "#dee0e3"
     const divider = document.createElement("section")
@@ -53,6 +68,12 @@ function normalizeWechatElements(root: HTMLElement): void {
     cell.style.overflowWrap = "break-word"
   })
   root.querySelectorAll("img").forEach(image => {
+    if (image.getAttribute("data-wechat-icon") === "true") {
+      image.style.maxWidth = "none"
+      image.style.objectFit = ""
+      image.removeAttribute("data-wechat-icon")
+      return
+    }
     image.style.display = "block"
     image.style.width = "100%"
     image.style.maxWidth = "100%"
@@ -70,8 +91,8 @@ function normalizeWechatElements(root: HTMLElement): void {
 
 export function buildWechatBlockHtml(source: HTMLElement): string {
   const clone = source.cloneNode(true) as HTMLElement
-  stripEditorAttributes(clone)
   replaceSvgDecorations(clone)
+  stripEditorAttributes(clone)
   normalizeWechatElements(clone)
   return clone.outerHTML
 }

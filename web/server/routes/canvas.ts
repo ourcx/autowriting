@@ -33,7 +33,7 @@ const DESIGN_PLAN_SYSTEM_PROMPT = `你是视觉设计文件分析器。输入会
 {
   "designName": "",
   "visualLanguage": "",
-  "palette": {"primary":"","secondary":"","surface":"","text":"","muted":"","border":""},
+  "palette": {"primary":"","secondary":"","accent":"","surface":"","surfaceAlt":"","text":"","muted":"","border":""},
   "typography": {"display":"","headline":"","subhead":"","body":"","caption":"","overline":"","mono":""},
   "geometry": {"radius":"","border":"","shadow":"","spacing":""},
   "components": [{"name":"","appearance":"","useWhen":""}],
@@ -90,13 +90,23 @@ const BLOCK_SYSTEM_PROMPT = `你是微信公众号 HTML 内容块排版引擎。
   "background": "#ffffff",
   "pageBackground": "#f4f1e8",
   "font": "system|serif|rounded|friendly|editorial",
+  "theme": {
+    "font":"system|serif|rounded|friendly|editorial",
+    "canvas":"#ffffff","surface":"#ffffff","surfaceAlt":"#f7f7f7",
+    "text":"#262626","muted":"#6a6a6a",
+    "primary":"#2f6f62","secondary":"#3b82f6","accent":"#e8b94a","border":"#e5e5e5",
+    "displaySize":34,"displayWeight":800,"displayLineHeight":1.25,
+    "headingSize":23,"headingWeight":700,"headingLineHeight":1.4,
+    "bodySize":17,"bodyWeight":400,"bodyLineHeight":1.8,
+    "radius":6,"sectionGap":24
+  },
   "blocks": []
 }
 
 blocks 仅允许三种：
 1. content: {"id":"","type":"content","sourceId":"source-0","variant":"plain|title|banner|card|quote|highlight|lede|overline|metric|image","background":"transparent","color":"#262626","accentColor":"#2f6f62","borderColor":"transparent","borderWidth":0,"radius":0,"padding":0,"marginTop":0,"marginBottom":22,"fontSize":17,"fontWeight":400,"fontStyle":"normal|italic","textDecoration":"none|underline","letterSpacing":0,"lineHeight":1.9,"align":"left","imageFit":"cover|contain","imageRadius":6}
 2. decoration: {"id":"","type":"decoration","anchorSourceId":"source-0","placement":"before|after","d":"M 0 20 C 60 0 120 40 180 20","viewBoxWidth":180,"viewBoxHeight":40,"width":150,"height":36,"align":"left|center|right","fill":"transparent","stroke":"#2f6f62","strokeWidth":3,"marginTop":4,"marginBottom":16}
-3. section: {"id":"","type":"section","sourceIds":["source-1","source-2"],"layout":"stack|two-column|comparison|feature|editorial","background":"#ffffff","color":"#262626","accentColor":"#5263a5","borderColor":"#dee0e3","borderWidth":1,"radius":8,"padding":20,"gap":16,"marginTop":8,"marginBottom":24,"divider":true,"accentStyle":"none|top|left|bottom|tri-color","shadow":"none|soft","leadSourceId":"source-2","overlineSourceId":"source-1","itemStyles":{"source-1":{"variant":"overline","fontSize":11,"fontWeight":700,"color":"#1f2329"},"source-2":{"variant":"lede","fontSize":20}}}
+3. section: {"id":"","type":"section","sourceIds":["source-1","source-2"],"layout":"stack|two-column|comparison|feature|editorial","preset":"plain|soft|feature|editorial|callout","background":"transparent","color":"#262626","accentColor":"#5263a5","borderColor":"#dee0e3","borderWidth":0,"radius":0,"padding":0,"gap":16,"marginTop":8,"marginBottom":24,"divider":true,"accentStyle":"none|top|left|bottom|tri-color","shadow":"none|soft","leadSourceId":"source-2","overlineSourceId":"source-1","icon":{"kind":"lucide|path","name":"book-open|quote|lightbulb|sparkles|mic|trending-up|check-circle|arrow-right|bar-chart","d":"","color":"#5263a5","size":24,"position":"top-left|top-right|inline"},"itemStyles":{"source-1":{"variant":"overline","fontSize":11,"fontWeight":700,"color":"#1f2329"},"source-2":{"variant":"lede","fontSize":20}}}
 
 规则：
 - 响应首字符必须是 {，末字符必须是 }，只输出一个完整 JSON 对象。
@@ -105,11 +115,16 @@ blocks 仅允许三种：
 - content 不得输出 text、src 或 alt；系统会从 sourceId 回填原文与图片。
 - content 和 section 必须严格保持内容源原顺序，不得交换段落；section 只能组合 2-8 个连续 sourceId。
 - 图片内容源只能使用 image 版式，其他内容源不得使用 image。
+- 先用 theme 定义一次全局颜色、字体和几何规则；block 未填写的样式会继承 theme，避免重复输出大量属性。
+- theme 必须忠实复制设计分析结果中的 palette、typography、radius、spacing 和 shadow 语义；禁止回退到默认绿灰、奶油色或通用 Markdown 风格。
 - lede 用于导语或首段，overline 用于短眉题，metric 仅用于原文中以数字为主的短内容，quote 用于 pull quote；不得将长正文误设为 overline 或 metric。
 - 这是公众号长文，不是海报：保持连续纵向阅读、清晰层级、17-18px 正文、1.7-2.0 行高和克制留白。
 - 必须使用 2-8 个 section 形成明显区别于 Markdown 的组合布局。短段落、对比主体或图片与说明优先使用 two-column/comparison/feature，长正文使用 stack。
 - 卡片、标题条、引用、强调色需要围绕文章主题形成统一视觉语言，不要每段都做成独立卡片。
 - 根据设计文件选择 section 的 layout、accentStyle、shadow、leadSourceId、overlineSourceId 与 itemStyles。杂志系统优先 editorial + top/left accent；学习系统可使用 feature + tri-color；平面系统必须 shadow=none。
+- 默认 borderWidth=0，以留白、背景层级和强调边组织内容；只有设计文件明确要求描边时才增加边框。不要把每个 section 都画成有边框的卡片。
+- 避免相邻重复强调：标题已有下划线或强调边时，第一个 section 不再重复同色顶部边。除非设计明确要求，带完整边框的 section 不得超过总数的四分之一。
+- 图标优先使用 lucide 白名单；没有合适图标时才用 AI 生成的安全 path。图标必须服务于语义，不得每个 section 重复同一图标。
 - 可以生成 0-8 个局部 decoration。设计文件禁止装饰、纹理或渐变时必须输出 0 个 decoration；否则装饰必须由你根据主题原创为 path，不得依赖预设图标名。
 - decoration 必须通过 anchorSourceId 和 placement 锚定到正文附近，不得遮挡正文。
 - path.d 只能使用标准 SVG Path 命令和数字，坐标必须在 viewBox 范围内。

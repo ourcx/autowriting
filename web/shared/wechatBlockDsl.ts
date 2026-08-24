@@ -17,6 +17,57 @@ export type WechatBlockAlign = "left" | "center" | "right"
 export type WechatBlockFont = "system" | "serif" | "rounded" | "friendly"
   | "editorial"
 
+export interface WechatBlockTheme {
+  font: WechatBlockFont
+  canvas: string
+  surface: string
+  surfaceAlt: string
+  text: string
+  muted: string
+  primary: string
+  secondary: string
+  accent: string
+  border: string
+  displaySize: number
+  displayWeight: number
+  displayLineHeight: number
+  headingSize: number
+  headingWeight: number
+  headingLineHeight: number
+  bodySize: number
+  bodyWeight: number
+  bodyLineHeight: number
+  radius: number
+  sectionGap: number
+}
+
+export type WechatSectionPreset =
+  | "plain"
+  | "soft"
+  | "feature"
+  | "editorial"
+  | "callout"
+
+export type WechatIconName =
+  | "book-open"
+  | "quote"
+  | "lightbulb"
+  | "sparkles"
+  | "mic"
+  | "trending-up"
+  | "check-circle"
+  | "arrow-right"
+  | "bar-chart"
+
+export interface WechatSectionIcon {
+  kind: "lucide" | "path"
+  name?: WechatIconName
+  d?: string
+  color: string
+  size: number
+  position: "top-left" | "top-right" | "inline"
+}
+
 export interface WechatContentBlock {
   id: string
   type: "content"
@@ -83,6 +134,7 @@ export interface WechatSectionBlock {
   type: "section"
   sourceIds: string[]
   layout: WechatSectionLayout
+  preset: WechatSectionPreset
   background: string
   color: string
   accentColor: string
@@ -98,6 +150,7 @@ export interface WechatSectionBlock {
   shadow: "none" | "soft"
   leadSourceId?: string
   overlineSourceId?: string
+  icon?: WechatSectionIcon
   itemStyles: Record<string, WechatTextStyleOverride>
 }
 
@@ -110,7 +163,32 @@ export interface WechatBlockDocument {
   background: string
   pageBackground: string
   font: WechatBlockFont
+  theme: WechatBlockTheme
   blocks: WechatBlock[]
+}
+
+export const DEFAULT_WECHAT_BLOCK_THEME: WechatBlockTheme = {
+  font: "system",
+  canvas: "#ffffff",
+  surface: "#ffffff",
+  surfaceAlt: "#f7f7f7",
+  text: "#262626",
+  muted: "#6a6a6a",
+  primary: "#2f6f62",
+  secondary: "#3b82f6",
+  accent: "#e8b94a",
+  border: "#e5e5e5",
+  displaySize: 34,
+  displayWeight: 800,
+  displayLineHeight: 1.25,
+  headingSize: 23,
+  headingWeight: 700,
+  headingLineHeight: 1.4,
+  bodySize: 17,
+  bodyWeight: 400,
+  bodyLineHeight: 1.8,
+  radius: 6,
+  sectionGap: 24,
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -134,6 +212,41 @@ function colorIn(value: unknown, fallback: string): string {
   return /^(#[0-9a-f]{3,8}|rgba?\([0-9.,\s%]+\)|transparent)$/i.test(color) ? color : fallback
 }
 
+function fontIn(value: unknown, fallback: WechatBlockFont): WechatBlockFont {
+  return ["system", "serif", "rounded", "friendly", "editorial"].includes(String(value))
+    ? value as WechatBlockFont
+    : fallback
+}
+
+function parseTheme(value: unknown): WechatBlockTheme {
+  const record = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+  return {
+    font: fontIn(record.font, DEFAULT_WECHAT_BLOCK_THEME.font),
+    canvas: colorIn(record.canvas, DEFAULT_WECHAT_BLOCK_THEME.canvas),
+    surface: colorIn(record.surface, DEFAULT_WECHAT_BLOCK_THEME.surface),
+    surfaceAlt: colorIn(record.surfaceAlt, DEFAULT_WECHAT_BLOCK_THEME.surfaceAlt),
+    text: colorIn(record.text, DEFAULT_WECHAT_BLOCK_THEME.text),
+    muted: colorIn(record.muted, DEFAULT_WECHAT_BLOCK_THEME.muted),
+    primary: colorIn(record.primary, DEFAULT_WECHAT_BLOCK_THEME.primary),
+    secondary: colorIn(record.secondary, DEFAULT_WECHAT_BLOCK_THEME.secondary),
+    accent: colorIn(record.accent, DEFAULT_WECHAT_BLOCK_THEME.accent),
+    border: colorIn(record.border, DEFAULT_WECHAT_BLOCK_THEME.border),
+    displaySize: numberIn(record.displaySize, DEFAULT_WECHAT_BLOCK_THEME.displaySize, 24, 64),
+    displayWeight: numberIn(record.displayWeight, DEFAULT_WECHAT_BLOCK_THEME.displayWeight, 300, 900),
+    displayLineHeight: numberIn(record.displayLineHeight, DEFAULT_WECHAT_BLOCK_THEME.displayLineHeight, 1, 2),
+    headingSize: numberIn(record.headingSize, DEFAULT_WECHAT_BLOCK_THEME.headingSize, 16, 42),
+    headingWeight: numberIn(record.headingWeight, DEFAULT_WECHAT_BLOCK_THEME.headingWeight, 300, 900),
+    headingLineHeight: numberIn(record.headingLineHeight, DEFAULT_WECHAT_BLOCK_THEME.headingLineHeight, 1, 2.2),
+    bodySize: numberIn(record.bodySize, DEFAULT_WECHAT_BLOCK_THEME.bodySize, 12, 24),
+    bodyWeight: numberIn(record.bodyWeight, DEFAULT_WECHAT_BLOCK_THEME.bodyWeight, 300, 900),
+    bodyLineHeight: numberIn(record.bodyLineHeight, DEFAULT_WECHAT_BLOCK_THEME.bodyLineHeight, 1.2, 2.4),
+    radius: numberIn(record.radius, DEFAULT_WECHAT_BLOCK_THEME.radius, 0, 32),
+    sectionGap: numberIn(record.sectionGap, DEFAULT_WECHAT_BLOCK_THEME.sectionGap, 8, 96),
+  }
+}
+
 function idIn(value: unknown, fallback: string): string {
   return textIn(value, fallback, 64).replace(/[^a-zA-Z0-9_-]/g, "-")
 }
@@ -144,33 +257,73 @@ function pathIn(value: unknown): string {
   return /^[MmLlHhVvCcSsQqTtAaZzEe0-9.,+\-\s]+$/.test(path) ? path : ""
 }
 
-function parseContentBlock(record: Record<string, unknown>, index: number): WechatContentBlock {
+function parseContentBlock(
+  record: Record<string, unknown>,
+  index: number,
+  theme: WechatBlockTheme,
+): WechatContentBlock {
   const variants: WechatBlockVariant[] = [
     "plain", "title", "banner", "card", "quote", "highlight", "lede", "overline", "metric", "image",
   ]
   const aligns: WechatBlockAlign[] = ["left", "center", "right"]
+  const variant = variants.includes(record.variant as WechatBlockVariant)
+    ? record.variant as WechatBlockVariant
+    : "plain"
+  const display = variant === "title" || variant === "metric"
+  const heading = variant === "banner"
+  const overline = variant === "overline"
+  const lede = variant === "lede" || variant === "quote"
   return {
     id: idIn(record.id, `block-${index + 1}`),
     type: "content",
     sourceId: idIn(record.sourceId, ""),
-    variant: variants.includes(record.variant as WechatBlockVariant)
-      ? record.variant as WechatBlockVariant
-      : "plain",
+    variant,
     background: colorIn(record.background, "transparent"),
-    color: colorIn(record.color, "#262626"),
-    accentColor: colorIn(record.accentColor, "#2f6f62"),
+    color: colorIn(record.color, theme.text),
+    accentColor: colorIn(record.accentColor, theme.accent),
     borderColor: colorIn(record.borderColor, "transparent"),
     borderWidth: numberIn(record.borderWidth, 0, 0, 8),
     radius: numberIn(record.radius, 0, 0, 32),
     padding: numberIn(record.padding, 0, 0, 48),
     marginTop: numberIn(record.marginTop, 0, 0, 80),
     marginBottom: numberIn(record.marginBottom, 20, 0, 80),
-    fontSize: numberIn(record.fontSize, 17, 12, 48),
-    fontWeight: numberIn(record.fontWeight, 400, 300, 900),
+    fontSize: numberIn(
+      record.fontSize,
+      display
+        ? theme.displaySize
+        : heading
+          ? theme.headingSize
+          : overline
+            ? Math.min(12, theme.bodySize)
+            : lede
+              ? Math.min(24, theme.bodySize + 3)
+              : theme.bodySize,
+      10,
+      64,
+    ),
+    fontWeight: numberIn(
+      record.fontWeight,
+      display
+        ? theme.displayWeight
+        : heading || overline
+          ? theme.headingWeight
+          : theme.bodyWeight,
+      300,
+      900,
+    ),
     fontStyle: record.fontStyle === "italic" ? "italic" : "normal",
     textDecoration: record.textDecoration === "underline" ? "underline" : "none",
     letterSpacing: numberIn(record.letterSpacing, 0, 0, 8),
-    lineHeight: numberIn(record.lineHeight, 1.8, 1, 2.6),
+    lineHeight: numberIn(
+      record.lineHeight,
+      display
+        ? theme.displayLineHeight
+        : heading
+          ? theme.headingLineHeight
+          : theme.bodyLineHeight,
+      1,
+      2.6,
+    ),
     align: aligns.includes(record.align as WechatBlockAlign)
       ? record.align as WechatBlockAlign
       : "left",
@@ -207,15 +360,65 @@ function parseDecorationBlock(
   }
 }
 
+function parseSectionIcon(
+  value: unknown,
+  theme: WechatBlockTheme,
+): WechatSectionIcon | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
+  const record = value as Record<string, unknown>
+  const names: WechatIconName[] = [
+    "book-open",
+    "quote",
+    "lightbulb",
+    "sparkles",
+    "mic",
+    "trending-up",
+    "check-circle",
+    "arrow-right",
+    "bar-chart",
+  ]
+  const name = names.includes(record.name as WechatIconName)
+    ? record.name as WechatIconName
+    : undefined
+  const d = pathIn(record.d)
+  const kind = record.kind === "path" && d
+    ? "path"
+    : name
+      ? "lucide"
+      : null
+  if (!kind) return undefined
+  return {
+    kind,
+    name: kind === "lucide" ? name : undefined,
+    d: kind === "path" ? d : undefined,
+    color: colorIn(record.color, theme.accent),
+    size: numberIn(record.size, 24, 14, 64),
+    position: ["top-left", "top-right", "inline"].includes(String(record.position))
+      ? record.position as WechatSectionIcon["position"]
+      : "top-left",
+  }
+}
+
 function parseSectionBlock(
   record: Record<string, unknown>,
   index: number,
+  theme: WechatBlockTheme,
 ): WechatSectionBlock | null {
   const sourceIds = Array.isArray(record.sourceIds)
     ? [...new Set(record.sourceIds.map(value => idIn(value, "")).filter(Boolean))].slice(0, 8)
     : []
   if (sourceIds.length < 2) return null
   const layouts: WechatSectionLayout[] = ["stack", "two-column", "comparison", "feature", "editorial"]
+  const presets: WechatSectionPreset[] = ["plain", "soft", "feature", "editorial", "callout"]
+  const preset = presets.includes(record.preset as WechatSectionPreset)
+    ? record.preset as WechatSectionPreset
+    : "plain"
+  const framed = preset !== "plain"
+  const defaultAccent: WechatSectionAccent = preset === "editorial" || preset === "feature"
+    ? "top"
+    : preset === "callout"
+      ? "left"
+      : "none"
   const rawItemStyles = record.itemStyles && typeof record.itemStyles === "object" && !Array.isArray(record.itemStyles)
     ? record.itemStyles as Record<string, unknown>
     : {}
@@ -252,40 +455,43 @@ function parseSectionBlock(
     layout: layouts.includes(record.layout as WechatSectionLayout)
       ? record.layout as WechatSectionLayout
       : "stack",
-    background: colorIn(record.background, "#ffffff"),
-    color: colorIn(record.color, "#262626"),
-    accentColor: colorIn(record.accentColor, "#5263a5"),
-    borderColor: colorIn(record.borderColor, "#dee0e3"),
-    borderWidth: numberIn(record.borderWidth, 1, 0, 8),
-    radius: numberIn(record.radius, 8, 0, 32),
-    padding: numberIn(record.padding, 20, 0, 48),
+    preset,
+    background: colorIn(record.background, framed ? theme.surface : "transparent"),
+    color: colorIn(record.color, theme.text),
+    accentColor: colorIn(record.accentColor, theme.accent),
+    borderColor: colorIn(record.borderColor, theme.border),
+    borderWidth: numberIn(record.borderWidth, 0, 0, 8),
+    radius: numberIn(record.radius, theme.radius, 0, 32),
+    padding: numberIn(record.padding, framed ? 24 : 0, 0, 48),
     gap: numberIn(record.gap, 16, 0, 40),
     marginTop: numberIn(record.marginTop, 8, 0, 80),
-    marginBottom: numberIn(record.marginBottom, 24, 0, 80),
+    marginBottom: numberIn(record.marginBottom, theme.sectionGap, 0, 96),
     divider: record.divider !== false,
     accentStyle: ["none", "top", "left", "bottom", "tri-color"].includes(String(record.accentStyle))
       ? record.accentStyle as WechatSectionAccent
-      : "none",
+      : defaultAccent,
     shadow: record.shadow === "soft" ? "soft" : "none",
     leadSourceId: sourceIds.includes(String(record.leadSourceId)) ? String(record.leadSourceId) : undefined,
     overlineSourceId: sourceIds.includes(String(record.overlineSourceId)) ? String(record.overlineSourceId) : undefined,
+    icon: parseSectionIcon(record.icon, theme),
     itemStyles,
   }
 }
 
 export function parseWechatBlockDocument(value: unknown): WechatBlockDocument {
   const record = asRecord(value)
+  const theme = parseTheme(record.theme)
   const rawBlocks = Array.isArray(record.blocks) ? record.blocks.slice(0, 140) : []
   const blocks = rawBlocks.flatMap((item, index): WechatBlock[] => {
     try {
       const block = asRecord(item)
-      if (block.type === "content") return [parseContentBlock(block, index)]
+      if (block.type === "content") return [parseContentBlock(block, index, theme)]
       if (block.type === "decoration") {
         const decoration = parseDecorationBlock(block, index)
         return decoration ? [decoration] : []
       }
       if (block.type === "section") {
-        const section = parseSectionBlock(block, index)
+        const section = parseSectionBlock(block, index, theme)
         return section ? [section] : []
       }
       return []
@@ -298,11 +504,10 @@ export function parseWechatBlockDocument(value: unknown): WechatBlockDocument {
     version: 1,
     name: textIn(record.name, "公众号块排版", 80),
     width: 677,
-    background: colorIn(record.background, "#ffffff"),
-    pageBackground: colorIn(record.pageBackground, "#f4f1e8"),
-    font: ["system", "serif", "rounded", "friendly", "editorial"].includes(String(record.font))
-      ? record.font as WechatBlockFont
-      : "system",
+    background: colorIn(record.background, theme.canvas),
+    pageBackground: colorIn(record.pageBackground, theme.canvas),
+    font: fontIn(record.font, theme.font),
+    theme,
     blocks,
   }
 }
@@ -339,12 +544,26 @@ function fallbackStyle(kind: CanvasSourceKind): Omit<WechatContentBlock, "id" | 
   return { ...common, variant: "plain", background: "transparent", color: "#2c2c2c", padding: 0, marginBottom: 22, fontSize: 17, fontWeight: 400, lineHeight: 1.9 }
 }
 
-export function createWechatContentBlock(source: CanvasSource): WechatContentBlock {
+export function createWechatContentBlock(
+  source: CanvasSource,
+  theme: WechatBlockTheme = DEFAULT_WECHAT_BLOCK_THEME,
+): WechatContentBlock {
+  const fallback = fallbackStyle(source.kind)
   return {
     id: `block-${source.id}`,
     type: "content",
     sourceId: source.id,
-    ...fallbackStyle(source.kind),
+    ...fallback,
+    color: theme.text,
+    accentColor: theme.accent,
+    fontSize: source.kind === "title"
+      ? theme.displaySize
+      : source.kind === "heading"
+        ? theme.headingSize
+        : theme.bodySize,
+    lineHeight: source.kind === "title" || source.kind === "heading"
+      ? fallback.lineHeight
+      : theme.bodyLineHeight,
   }
 }
 
@@ -359,7 +578,8 @@ export function createWechatBlockDocument(
     background: "#ffffff",
     pageBackground: "#f4f1e8",
     font: "system",
-    blocks: sources.map(createWechatContentBlock),
+    theme: DEFAULT_WECHAT_BLOCK_THEME,
+    blocks: sources.map(source => createWechatContentBlock(source)),
   }
 }
 
@@ -386,11 +606,12 @@ function createTemplateSection(
       type: "section",
       sourceIds,
       layout: "comparison",
-      background: "#ffffff",
+      preset: "soft",
+      background: "#f7f7f7",
       color: "#1f2329",
       accentColor: "#5263a5",
       borderColor: "#dee0e3",
-      borderWidth: 1,
+      borderWidth: 0,
       radius: 8,
       padding: 20,
       gap: 16,
@@ -408,11 +629,12 @@ function createTemplateSection(
       type: "section",
       sourceIds,
       layout: "two-column",
+      preset: "soft",
       background: "#fff8ec",
       color: "#2d2b27",
       accentColor: "#d9855b",
       borderColor: "#ead8bd",
-      borderWidth: 1,
+      borderWidth: 0,
       radius: 8,
       padding: 20,
       gap: 14,
@@ -429,11 +651,12 @@ function createTemplateSection(
     type: "section",
     sourceIds,
     layout: "feature",
-    background: "#ffffff",
+    preset: "plain",
+    background: "transparent",
     color: "#262626",
     accentColor: "#2f6f62",
     borderColor: "#e3e5e7",
-    borderWidth: 1,
+    borderWidth: 0,
     radius: 6,
     padding: 20,
     gap: 16,
@@ -552,7 +775,18 @@ export function hydrateWechatBlockDocument(
     }
 
     const candidate = contentCandidates.get(source.id)
-    const fallback = createWechatContentBlock(source)
+    const fallback = createWechatContentBlock(source, parsed.theme)
+    const semanticVariant = candidate?.variant === "plain"
+      ? source.kind === "title"
+        ? "title"
+        : source.kind === "heading"
+          ? "banner"
+          : source.kind === "quote"
+            ? "quote"
+            : source.kind === "list"
+              ? "card"
+              : "plain"
+      : candidate?.variant
     blocks.push(candidate ? {
       ...candidate,
       id: `block-${source.id}`,
@@ -561,10 +795,12 @@ export function hydrateWechatBlockDocument(
         ? "image"
         : candidate.variant === "image"
           ? fallback.variant
-          : candidate.variant,
+          : semanticVariant || fallback.variant,
       fontSize: source.kind === "title"
-        ? Math.max(28, candidate.fontSize)
-        : Math.min(28, candidate.fontSize),
+        ? Math.max(parsed.theme.displaySize, candidate.fontSize)
+        : source.kind === "heading" && candidate.variant === "plain"
+          ? parsed.theme.headingSize
+          : Math.min(28, candidate.fontSize),
     } : fallback)
 
     blocks.push(...decorations.filter(block => (

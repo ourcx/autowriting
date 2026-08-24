@@ -1,12 +1,19 @@
 import type { CSSProperties, RefObject } from "react"
 import {
   ArrowDown,
+  ArrowRight,
   ArrowUp,
+  BarChart3,
+  BookOpen,
+  CheckCircle2,
   Columns,
   Image as ImageIcon,
+  Lightbulb,
+  Mic,
   Palette,
   Quote,
   Sparkles,
+  TrendingUp,
   Trash2,
   Type,
 } from "lucide-react"
@@ -15,9 +22,12 @@ import { createWechatContentBlock } from "../../../shared/wechatBlockDsl"
 import type {
   WechatBlock,
   WechatBlockDocument,
+  WechatBlockTheme,
   WechatContentBlock,
   WechatDecorationBlock,
+  WechatIconName,
   WechatSectionBlock,
+  WechatSectionIcon,
   WechatTextStyleOverride,
 } from "../../../shared/wechatBlockDsl"
 import "./WechatBlockEditor.css"
@@ -41,6 +51,44 @@ const FONT_STACKS: Record<WechatBlockDocument["font"], string> = {
 
 const EDITORIAL_DISPLAY_FONT = "'Archivo Black', Impact, 'Arial Black', 'PingFang SC', sans-serif"
 
+function SectionIcon({ icon }: { icon: WechatSectionIcon }) {
+  const props = {
+    size: icon.size,
+    color: icon.color,
+    strokeWidth: 2,
+    "aria-hidden": true,
+  }
+  if (icon.kind === "path" && icon.d) {
+    return (
+      <svg
+        data-wechat-icon="true"
+        width={icon.size}
+        height={icon.size}
+        viewBox={`0 0 ${icon.size} ${icon.size}`}
+        aria-hidden="true"
+      >
+        <path
+          d={icon.d}
+          fill="none"
+          stroke={icon.color}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    )
+  }
+  if (icon.name === "book-open") return <BookOpen {...props} data-wechat-icon="true" />
+  if (icon.name === "quote") return <Quote {...props} data-wechat-icon="true" />
+  if (icon.name === "lightbulb") return <Lightbulb {...props} data-wechat-icon="true" />
+  if (icon.name === "mic") return <Mic {...props} data-wechat-icon="true" />
+  if (icon.name === "trending-up") return <TrendingUp {...props} data-wechat-icon="true" />
+  if (icon.name === "check-circle") return <CheckCircle2 {...props} data-wechat-icon="true" />
+  if (icon.name === "arrow-right") return <ArrowRight {...props} data-wechat-icon="true" />
+  if (icon.name === "bar-chart") return <BarChart3 {...props} data-wechat-icon="true" />
+  return <Sparkles {...props} data-wechat-icon="true" />
+}
+
 function blockLabel(block: WechatBlock, source?: CanvasSource): string {
   if (block.type === "decoration") return "AI SVG 装饰"
   if (block.type === "section") return `${block.layout} · ${block.sourceIds.length} 项`
@@ -51,8 +99,9 @@ function blockLabel(block: WechatBlock, source?: CanvasSource): string {
 function sectionContentBlock(
   source: CanvasSource,
   section: WechatSectionBlock,
+  theme: WechatBlockTheme,
 ): WechatContentBlock {
-  const fallback = createWechatContentBlock(source)
+  const fallback = createWechatContentBlock(source, theme)
   const sectionDefault: WechatContentBlock = {
     ...fallback,
     background: "transparent",
@@ -88,12 +137,14 @@ function SectionContent({
   selectedId,
   onSelect,
   fontTheme,
+  theme,
 }: {
   block: WechatSectionBlock
   sources: CanvasSource[]
   selectedId: string | null
   onSelect: (id: string) => void
   fontTheme: WechatBlockDocument["font"]
+  theme: WechatBlockTheme
 }) {
   const renderSource = (source: CanvasSource) => {
     const selectionId = `${block.id}::${source.id}`
@@ -108,7 +159,7 @@ function SectionContent({
         }}
       >
         <SourceContent
-          block={sectionContentBlock(source, block)}
+          block={sectionContentBlock(source, block, theme)}
           source={source}
           fontTheme={fontTheme}
         />
@@ -154,8 +205,20 @@ function SectionContent({
       }}
     />
   ) : null
+  const sectionIcon = block.icon ? (
+    <div
+      className="wbe-section-icon"
+      style={{
+        display: "flex",
+        justifyContent: block.icon.position === "top-right" ? "flex-end" : "flex-start",
+        marginBottom: block.icon.position === "inline" ? 8 : 14,
+      }}
+    >
+      <SectionIcon icon={block.icon} />
+    </div>
+  ) : null
   if (block.layout === "stack") {
-    return <section style={wrapperStyle}>{accentRail}{sources.map(renderSource)}</section>
+    return <section style={wrapperStyle}>{accentRail}{sectionIcon}{sources.map(renderSource)}</section>
   }
 
   const featureSource = block.layout === "feature" || block.layout === "editorial"
@@ -170,6 +233,7 @@ function SectionContent({
   return (
     <section style={wrapperStyle}>
       {accentRail}
+      {sectionIcon}
       {featureSource ? renderSource(featureSource) : null}
       <table
         role="presentation"
@@ -397,6 +461,7 @@ export function WechatBlockRenderer({
                     selectedId={selectedId}
                     onSelect={onSelect}
                     fontTheme={document.font}
+                    theme={document.theme}
                   />
                 )
                 : (
@@ -493,7 +558,7 @@ export default function WechatBlockEditor({
     ? sourceMap.get(selectedSectionSourceId) ?? null
     : null
   const selectedSectionText = selectedSection && selectedSectionSource
-    ? sectionContentBlock(selectedSectionSource, selectedSection)
+    ? sectionContentBlock(selectedSectionSource, selectedSection, document.theme)
     : null
 
   const updateDocument = (patch: Partial<WechatBlockDocument>) => {
@@ -783,6 +848,21 @@ export default function WechatBlockEditor({
               </label>
               <div className="wbe-property-grid">
                 <label>
+                  <span>视觉预设</span>
+                  <select
+                    value={selectedBlock.preset}
+                    onChange={event => updateBlock({
+                      preset: event.target.value as WechatSectionBlock["preset"],
+                    })}
+                  >
+                    <option value="plain">无框留白</option>
+                    <option value="soft">柔和底色</option>
+                    <option value="feature">重点区域</option>
+                    <option value="editorial">杂志卡片</option>
+                    <option value="callout">提示区域</option>
+                  </select>
+                </label>
+                <label>
                   <span>强调边</span>
                   <select
                     value={selectedBlock.accentStyle}
@@ -810,6 +890,56 @@ export default function WechatBlockEditor({
                   </select>
                 </label>
               </div>
+              <label>
+                <span>语义图标</span>
+                <select
+                  value={selectedBlock.icon?.kind === "lucide" ? selectedBlock.icon.name : "none"}
+                  onChange={event => {
+                    const name = event.target.value
+                    updateBlock({
+                      icon: name === "none" ? undefined : {
+                        kind: "lucide",
+                        name: name as WechatIconName,
+                        color: selectedBlock.icon?.color || selectedBlock.accentColor,
+                        size: selectedBlock.icon?.size || 24,
+                        position: selectedBlock.icon?.position || "top-left",
+                      },
+                    })
+                  }}
+                >
+                  <option value="none">无图标</option>
+                  <option value="book-open">书本</option>
+                  <option value="quote">引用</option>
+                  <option value="lightbulb">灵感</option>
+                  <option value="sparkles">亮点</option>
+                  <option value="mic">采访</option>
+                  <option value="trending-up">趋势</option>
+                  <option value="check-circle">完成</option>
+                  <option value="arrow-right">下一步</option>
+                  <option value="bar-chart">数据</option>
+                </select>
+              </label>
+              {selectedBlock.icon ? (
+                <div className="wbe-property-grid">
+                  <ColorField
+                    label="图标颜色"
+                    value={selectedBlock.icon.color}
+                    fallback={selectedBlock.accentColor}
+                    onChange={color => updateBlock({
+                      icon: selectedBlock.icon ? { ...selectedBlock.icon, color } : undefined,
+                    })}
+                  />
+                  <NumberField
+                    label="图标大小"
+                    value={selectedBlock.icon.size}
+                    min={14}
+                    max={64}
+                    onChange={size => updateBlock({
+                      icon: selectedBlock.icon ? { ...selectedBlock.icon, size } : undefined,
+                    })}
+                  />
+                </div>
+              ) : null}
               <div className="wbe-property-grid">
                 <ColorField label="文字" value={selectedBlock.color} fallback="#262626" onChange={color => updateBlock({ color })} />
                 <ColorField label="背景" value={selectedBlock.background} fallback="#ffffff" onChange={background => updateBlock({ background })} />

@@ -54,7 +54,7 @@ HTML Block 支持：
 
 `section.itemStyles` 按 `sourceId` 保存内部文字的独立样式，保证组合布局中的文字仍可单独选择和修改。
 
-扩展视觉能力包括 `editorial` 布局、`lede` 导语、`overline` 眉题、`metric` 数据强调、顶部/左侧/底部强调边、三色轨道和可选阴影。上传 Design 文件时，若 AI 没有使用这些结构形成明显区别于 Markdown 的结果，服务端会重试而不是静默回退为普通正文。
+扩展视觉能力包括文档级 `theme`、`editorial` 布局、`lede` 导语、`overline` 眉题、`metric` 数据强调、顶部/左侧/底部强调边、三色轨道、可选阴影、Lucide 图标白名单和 AI 安全 Path 图标。边框默认关闭，由 Design 文件明确要求时再启用。若 AI 没有使用这些结构形成明显区别于 Markdown 的结果，服务端会重试而不是静默回退为普通正文。
 
 自由画板保留 SVG Scene Graph。服务端会对 AI 坐标执行：
 
