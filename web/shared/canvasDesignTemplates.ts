@@ -18,6 +18,7 @@ export interface CanvasDesignTokens {
   tertiary: string
   surface: string
   surfaceSoft: string
+  accentSoft: string
   text: string
   mutedText: string
   border: string
@@ -200,6 +201,12 @@ function pixelToken(markdown: string, label: string, fallback: number): number {
   return Number.isFinite(value) ? value : fallback
 }
 
+function cardBorderToken(markdown: string, fallback: string): string {
+  const cardsSection = markdown.match(/###\s+Cards([\s\S]*?)(?=\n###|\n---|$)/i)?.[1] || ""
+  const border = cardsSection.match(/1px\s+(#[0-9a-f]{6})\s+border/i)?.[1]
+  return border?.toLowerCase() || fallback
+}
+
 export function parseCanvasDesignTokens(value: unknown): CanvasDesignTokens | null {
   const markdown = typeof value === "string" ? value.slice(0, 12000) : ""
   if (!markdown.trim()) return null
@@ -218,10 +225,11 @@ export function parseCanvasDesignTokens(value: unknown): CanvasDesignTokens | nu
     secondary: colorToken(markdown, ["Secondary", "辅助色"], "#3b82f6"),
     tertiary: colorToken(markdown, ["Tertiary", "Success", "成功"], "#22c55e"),
     surface: colorToken(markdown, ["Surface Base", "画布", "背景"], "#ffffff"),
-    surfaceSoft: colorToken(markdown, ["Selected", "In Progress"], "#fff7ed"),
-    text: colorToken(markdown, ["大标题", "Headline", "Text Primary"], "#1f2329"),
-    mutedText: colorToken(markdown, ["指标名称", "Muted", "Secondary Text"], "#646a73"),
-    border: colorToken(markdown, ["Default", "Border", "细描边"], "#e5e7eb"),
+    surfaceSoft: "#f9fafb",
+    accentSoft: colorToken(markdown, ["Selected", "In Progress"], "#fff7ed"),
+    text: colorToken(markdown, ["大标题", "Headline", "Text Primary"], "#111827"),
+    mutedText: colorToken(markdown, ["指标名称", "Muted", "Secondary Text"], "#4b5563"),
+    border: cardBorderToken(markdown, "#e5e7eb"),
     h1Size: h1.size,
     h1Weight: h1.weight,
     h1LineHeight: h1.lineHeight,

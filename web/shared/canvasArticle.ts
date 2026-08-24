@@ -347,7 +347,7 @@ function hydrateFreeformCanvas(
     name: name || parsed.name,
     width: canvasWidth,
     height: Math.max(parsed.height, contentBottom + margin),
-    background: designTokens?.surfaceSoft || parsed.background,
+    background: designTokens?.surface || parsed.background,
     nodes: [
       ...decorativeNodes.map((node, index): CanvasNode => {
         if (!designTokens) return node

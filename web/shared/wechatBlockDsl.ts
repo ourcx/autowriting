@@ -490,7 +490,10 @@ function applyDesignTokens(
         const title = source?.kind === "title"
         return [sourceId, {
           ...(block.itemStyles[sourceId] || {}),
-          background: heading ? tokens.surfaceSoft : "transparent",
+          variant: title ? "title" : heading ? "banner" : source?.kind === "quote" ? "quote" : "plain",
+          background: source?.kind === "quote" || source?.kind === "list"
+            ? tokens.accentSoft
+            : "transparent",
           color: tokens.text,
           accentColor: tokens.primary,
           fontSize: title ? tokens.h1Size : heading ? tokens.h2Size : tokens.bodySize,
@@ -517,13 +520,26 @@ function applyDesignTokens(
     const emphasized = source?.kind === "quote" || source?.kind === "list"
     return {
       ...block,
-      background: heading || emphasized ? tokens.surfaceSoft : "transparent",
+      variant: title
+        ? "title"
+        : heading
+          ? "banner"
+          : source?.kind === "quote"
+            ? "quote"
+            : source?.kind === "list"
+              ? "card"
+              : "plain",
+      background: emphasized ? tokens.accentSoft : "transparent",
       color: tokens.text,
       accentColor: tokens.primary,
       borderColor: emphasized ? tokens.border : block.borderColor,
       borderWidth: emphasized ? 1 : block.borderWidth,
-      radius: heading || emphasized ? tokens.cardRadius : block.radius,
-      padding: heading || emphasized ? Math.min(tokens.cardPadding, 32) : block.padding,
+      radius: emphasized ? tokens.cardRadius : block.radius,
+      padding: emphasized
+        ? Math.min(tokens.cardPadding, 32)
+        : heading
+          ? 8
+          : block.padding,
       marginBottom: title ? tokens.sectionGap : Math.min(tokens.sectionGap, 32),
       fontSize: title ? tokens.h1Size : heading ? tokens.h2Size : tokens.bodySize,
       fontWeight: title ? tokens.h1Weight : heading ? tokens.h2Weight : tokens.bodyWeight,
@@ -622,7 +638,7 @@ export function hydrateWechatBlockDocument(
     ...parsed,
     name: name || parsed.name,
     background: options.designTokens?.surface || parsed.background,
-    pageBackground: options.designTokens?.surfaceSoft || parsed.pageBackground,
+    pageBackground: options.designTokens?.surface || parsed.pageBackground,
     font: options.designTokens?.friendlyFont ? "friendly" : parsed.font,
     blocks: options.designTokens
       ? applyDesignTokens(templatedBlocks, sources, options.designTokens)

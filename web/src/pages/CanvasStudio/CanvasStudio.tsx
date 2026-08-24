@@ -54,6 +54,7 @@ import {
 import {
   createArticleCanvas,
   extractCanvasSources,
+  hydrateCanvasDocument,
 } from "../../../shared/canvasArticle"
 import type { CanvasSource } from "../../../shared/canvasArticle"
 import {
@@ -64,6 +65,7 @@ import {
 import type { WechatBlockDocument } from "../../../shared/wechatBlockDsl"
 import {
   DEFAULT_CANVAS_DESIGN_TEMPLATE_ID,
+  parseCanvasDesignTokens,
   type CanvasDesignTemplateId,
 } from "../../../shared/canvasDesignTemplates"
 import "./CanvasStudio.css"
@@ -258,7 +260,7 @@ export default function CanvasStudio() {
         setDocument(nextDocument)
         setBlockDocument(nextBlockDocument)
         setSelectedId(nextDocument.nodes[nextDocument.nodes.length - 1]?.id ?? null)
-        setSelectedBlockId(nextBlockDocument.blocks[0]?.id ?? null)
+        setSelectedBlockId(null)
       } catch {
         if (!cancelled) toast.error("公众号文章加载失败")
       } finally {
@@ -359,7 +361,7 @@ export default function CanvasStudio() {
           },
         )
         setBlockDocument(nextDocument)
-        setSelectedBlockId(nextDocument.blocks[0]?.id ?? null)
+        setSelectedBlockId(null)
         toast.success("AI 块排版已生成")
         return
       }
@@ -714,7 +716,31 @@ export default function CanvasStudio() {
         onDesignReferenceChange={(content, fileName) => {
           setDesignReference(content)
           setDesignFileName(fileName)
-          if (content) setDesignTemplateId("design-reference")
+          if (content) {
+            setDesignTemplateId("design-reference")
+            const designTokens = parseCanvasDesignTokens(content)
+            if (designTokens && sources.length > 0) {
+              setSelectedBlockId(null)
+              setBlockDocument(current => hydrateWechatBlockDocument(
+                current,
+                sources,
+                articleData.title || "公众号块排版",
+                {
+                  templateId: "design-reference",
+                  designTokens,
+                },
+              ))
+              setDocument(current => hydrateCanvasDocument(
+                current,
+                sources,
+                articleData.title || "公众号自由画板",
+                {
+                  layoutMode: "freeform",
+                  designTokens,
+                },
+              ))
+            }
+          }
         }}
         onError={message => toast.error(message)}
       />

@@ -78,11 +78,13 @@ function SectionContent({
   sources,
   selectedId,
   onSelect,
+  learningTheme,
 }: {
   block: WechatSectionBlock
   sources: CanvasSource[]
   selectedId: string | null
   onSelect: (id: string) => void
+  learningTheme: boolean
 }) {
   const renderSource = (source: CanvasSource) => {
     const selectionId = `${block.id}::${source.id}`
@@ -110,9 +112,27 @@ function SectionContent({
     borderRadius: block.radius,
     background: block.background,
     color: block.color,
+    boxShadow: learningTheme ? "0 4px 6px -1px rgba(0, 0, 0, 0.1)" : undefined,
+    overflow: "hidden",
   }
+  const learningRail = learningTheme ? (
+    <div
+      aria-hidden="true"
+      className="wbe-learning-rail"
+      style={{
+        display: "flex",
+        height: 5,
+        margin: `${-block.padding}px ${-block.padding}px ${Math.max(16, block.gap)}px`,
+        lineHeight: 0,
+      }}
+    >
+      <span style={{ flex: 2, background: block.accentColor }} />
+      <span style={{ flex: 1, background: "#3b82f6" }} />
+      <span style={{ flex: 1, background: "#22c55e" }} />
+    </div>
+  ) : null
   if (block.layout === "stack") {
-    return <section style={wrapperStyle}>{sources.map(renderSource)}</section>
+    return <section style={wrapperStyle}>{learningRail}{sources.map(renderSource)}</section>
   }
 
   const featureSource = block.layout === "feature" ? sources[0] : null
@@ -124,6 +144,7 @@ function SectionContent({
   ]
   return (
     <section style={wrapperStyle}>
+      {learningRail}
       {featureSource ? renderSource(featureSource) : null}
       <table
         role="presentation"
@@ -333,6 +354,7 @@ export function WechatBlockRenderer({
                     sources={sectionSources}
                     selectedId={selectedId}
                     onSelect={onSelect}
+                    learningTheme={document.font === "friendly"}
                   />
                 )
                 : <SourceContent block={block} source={source as CanvasSource} />}
