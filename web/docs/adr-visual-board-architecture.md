@@ -42,7 +42,7 @@ ArticleData
 
 用户提示词与上传的 `.txt`、`.md`、`.json`、`.svg`、`.xml`、`.drawio` 文件均标记为不可信参考。服务端只提取视觉与布局信息，并限制长度；文件内容不能覆盖系统约束。
 
-Design System Markdown 中可识别的颜色、字体层级、间距和圆角会先解析为 `CanvasDesignTokens`，再由服务端覆盖到最终 DSL。模型负责理解结构，代码负责执行 Token。
+Design 文件格式不固定，代码不维护格式专用解析器。生成流程先将原始文件直接交给 AI 形成设计计划，再把设计计划、原始文件和文章内容源一并交给布局模型。代码只负责验证安全 DSL、内容完整性和最低设计丰富度。
 
 ### 布局层
 
@@ -53,6 +53,8 @@ HTML Block 支持：
 - `decoration`：锚定到内容源前后的安全 SVG Path。
 
 `section.itemStyles` 按 `sourceId` 保存内部文字的独立样式，保证组合布局中的文字仍可单独选择和修改。
+
+扩展视觉能力包括 `editorial` 布局、`lede` 导语、`overline` 眉题、`metric` 数据强调、顶部/左侧/底部强调边、三色轨道和可选阴影。上传 Design 文件时，若 AI 没有使用这些结构形成明显区别于 Markdown 的结果，服务端会重试而不是静默回退为普通正文。
 
 自由画板保留 SVG Scene Graph。服务端会对 AI 坐标执行：
 

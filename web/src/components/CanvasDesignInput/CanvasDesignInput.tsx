@@ -102,7 +102,7 @@ export default function CanvasDesignInput({
           }}
         />
         {fileName ? <FileCheck2 size={15} /> : <FileUp size={15} />}
-        <span>{fileName || "拖入 design 文件作为视觉参考"}</span>
+        <span>{fileName ? `${fileName} · AI 将直接读取原文` : "拖入 design 文件作为视觉参考"}</span>
         {fileName ? (
           <button
             type="button"

@@ -54,7 +54,6 @@ import {
 import {
   createArticleCanvas,
   extractCanvasSources,
-  hydrateCanvasDocument,
 } from "../../../shared/canvasArticle"
 import type { CanvasSource } from "../../../shared/canvasArticle"
 import {
@@ -65,7 +64,6 @@ import {
 import type { WechatBlockDocument } from "../../../shared/wechatBlockDsl"
 import {
   DEFAULT_CANVAS_DESIGN_TEMPLATE_ID,
-  parseCanvasDesignTokens,
   type CanvasDesignTemplateId,
 } from "../../../shared/canvasDesignTemplates"
 import "./CanvasStudio.css"
@@ -718,28 +716,6 @@ export default function CanvasStudio() {
           setDesignFileName(fileName)
           if (content) {
             setDesignTemplateId("design-reference")
-            const designTokens = parseCanvasDesignTokens(content)
-            if (designTokens && sources.length > 0) {
-              setSelectedBlockId(null)
-              setBlockDocument(current => hydrateWechatBlockDocument(
-                current,
-                sources,
-                articleData.title || "公众号块排版",
-                {
-                  templateId: "design-reference",
-                  designTokens,
-                },
-              ))
-              setDocument(current => hydrateCanvasDocument(
-                current,
-                sources,
-                articleData.title || "公众号自由画板",
-                {
-                  layoutMode: "freeform",
-                  designTokens,
-                },
-              ))
-            }
           }
         }}
         onError={message => toast.error(message)}

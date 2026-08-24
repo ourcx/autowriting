@@ -1,8 +1,5 @@
 import type { CanvasSource, CanvasSourceKind } from "./canvasArticle.ts"
-import type {
-  CanvasDesignTemplateId,
-  CanvasDesignTokens,
-} from "./canvasDesignTemplates.ts"
+import type { CanvasDesignTemplateId } from "./canvasDesignTemplates.ts"
 
 export type WechatBlockVariant =
   | "plain"
@@ -11,10 +8,14 @@ export type WechatBlockVariant =
   | "card"
   | "quote"
   | "highlight"
+  | "lede"
+  | "overline"
+  | "metric"
   | "image"
 
 export type WechatBlockAlign = "left" | "center" | "right"
 export type WechatBlockFont = "system" | "serif" | "rounded" | "friendly"
+  | "editorial"
 
 export interface WechatContentBlock {
   id: string
@@ -60,6 +61,8 @@ export interface WechatDecorationBlock {
 }
 
 export type WechatSectionLayout = "stack" | "two-column" | "comparison" | "feature"
+  | "editorial"
+export type WechatSectionAccent = "none" | "top" | "left" | "bottom" | "tri-color"
 
 export interface WechatTextStyleOverride {
   variant?: Exclude<WechatBlockVariant, "image">
@@ -91,6 +94,10 @@ export interface WechatSectionBlock {
   marginTop: number
   marginBottom: number
   divider: boolean
+  accentStyle: WechatSectionAccent
+  shadow: "none" | "soft"
+  leadSourceId?: string
+  overlineSourceId?: string
   itemStyles: Record<string, WechatTextStyleOverride>
 }
 
@@ -138,7 +145,9 @@ function pathIn(value: unknown): string {
 }
 
 function parseContentBlock(record: Record<string, unknown>, index: number): WechatContentBlock {
-  const variants: WechatBlockVariant[] = ["plain", "title", "banner", "card", "quote", "highlight", "image"]
+  const variants: WechatBlockVariant[] = [
+    "plain", "title", "banner", "card", "quote", "highlight", "lede", "overline", "metric", "image",
+  ]
   const aligns: WechatBlockAlign[] = ["left", "center", "right"]
   return {
     id: idIn(record.id, `block-${index + 1}`),
@@ -206,7 +215,7 @@ function parseSectionBlock(
     ? [...new Set(record.sourceIds.map(value => idIn(value, "")).filter(Boolean))].slice(0, 8)
     : []
   if (sourceIds.length < 2) return null
-  const layouts: WechatSectionLayout[] = ["stack", "two-column", "comparison", "feature"]
+  const layouts: WechatSectionLayout[] = ["stack", "two-column", "comparison", "feature", "editorial"]
   const rawItemStyles = record.itemStyles && typeof record.itemStyles === "object" && !Array.isArray(record.itemStyles)
     ? record.itemStyles as Record<string, unknown>
     : {}
@@ -214,7 +223,9 @@ function parseSectionBlock(
     const rawStyle = rawItemStyles[sourceId]
     if (!rawStyle || typeof rawStyle !== "object" || Array.isArray(rawStyle)) return []
     const style = rawStyle as Record<string, unknown>
-    const variants: Array<Exclude<WechatBlockVariant, "image">> = ["plain", "title", "banner", "card", "quote", "highlight"]
+    const variants: Array<Exclude<WechatBlockVariant, "image">> = [
+      "plain", "title", "banner", "card", "quote", "highlight", "lede", "overline", "metric",
+    ]
     const aligns: WechatBlockAlign[] = ["left", "center", "right"]
     return [[sourceId, {
       variant: variants.includes(style.variant as Exclude<WechatBlockVariant, "image">)
@@ -252,6 +263,12 @@ function parseSectionBlock(
     marginTop: numberIn(record.marginTop, 8, 0, 80),
     marginBottom: numberIn(record.marginBottom, 24, 0, 80),
     divider: record.divider !== false,
+    accentStyle: ["none", "top", "left", "bottom", "tri-color"].includes(String(record.accentStyle))
+      ? record.accentStyle as WechatSectionAccent
+      : "none",
+    shadow: record.shadow === "soft" ? "soft" : "none",
+    leadSourceId: sourceIds.includes(String(record.leadSourceId)) ? String(record.leadSourceId) : undefined,
+    overlineSourceId: sourceIds.includes(String(record.overlineSourceId)) ? String(record.overlineSourceId) : undefined,
     itemStyles,
   }
 }
@@ -283,7 +300,7 @@ export function parseWechatBlockDocument(value: unknown): WechatBlockDocument {
     width: 677,
     background: colorIn(record.background, "#ffffff"),
     pageBackground: colorIn(record.pageBackground, "#f4f1e8"),
-    font: ["system", "serif", "rounded", "friendly"].includes(String(record.font))
+    font: ["system", "serif", "rounded", "friendly", "editorial"].includes(String(record.font))
       ? record.font as WechatBlockFont
       : "system",
     blocks,
@@ -380,6 +397,8 @@ function createTemplateSection(
       marginTop: 8,
       marginBottom: 24,
       divider: true,
+      accentStyle: "none",
+      shadow: "none",
       itemStyles: {},
     }
   }
@@ -400,6 +419,8 @@ function createTemplateSection(
       marginTop: 8,
       marginBottom: 24,
       divider: false,
+      accentStyle: "none",
+      shadow: "none",
       itemStyles: {},
     }
   }
@@ -419,6 +440,8 @@ function createTemplateSection(
     marginTop: 8,
     marginBottom: 24,
     divider: false,
+    accentStyle: "none",
+    shadow: "none",
     itemStyles: {},
   }
 }
@@ -469,93 +492,11 @@ function applyTemplateSections(
   return result
 }
 
-function applyDesignTokens(
-  blocks: WechatBlock[],
-  sources: CanvasSource[],
-  tokens: CanvasDesignTokens,
-): WechatBlock[] {
-  const sourceMap = new Map(sources.map(source => [source.id, source]))
-  return blocks.map(block => {
-    if (block.type === "decoration") {
-      return {
-        ...block,
-        fill: block.fill === "transparent" ? "transparent" : tokens.secondary,
-        stroke: tokens.primary,
-      }
-    }
-    if (block.type === "section") {
-      const itemStyles = Object.fromEntries(block.sourceIds.map(sourceId => {
-        const source = sourceMap.get(sourceId)
-        const heading = source?.kind === "heading"
-        const title = source?.kind === "title"
-        return [sourceId, {
-          ...(block.itemStyles[sourceId] || {}),
-          variant: title ? "title" : heading ? "banner" : source?.kind === "quote" ? "quote" : "plain",
-          background: source?.kind === "quote" || source?.kind === "list"
-            ? tokens.accentSoft
-            : "transparent",
-          color: tokens.text,
-          accentColor: tokens.primary,
-          fontSize: title ? tokens.h1Size : heading ? tokens.h2Size : tokens.bodySize,
-          fontWeight: title ? tokens.h1Weight : heading ? tokens.h2Weight : tokens.bodyWeight,
-          lineHeight: title ? tokens.h1LineHeight : heading ? tokens.h2LineHeight : tokens.bodyLineHeight,
-        } satisfies WechatTextStyleOverride]
-      }))
-      return {
-        ...block,
-        background: tokens.surface,
-        color: tokens.text,
-        accentColor: tokens.primary,
-        borderColor: tokens.border,
-        radius: tokens.cardRadius,
-        padding: tokens.cardPadding,
-        gap: Math.min(24, Math.max(8, Math.round(tokens.cardPadding / 1.5))),
-        marginBottom: tokens.sectionGap,
-        itemStyles,
-      }
-    }
-    const source = sourceMap.get(block.sourceId)
-    const heading = source?.kind === "heading"
-    const title = source?.kind === "title"
-    const emphasized = source?.kind === "quote" || source?.kind === "list"
-    return {
-      ...block,
-      variant: title
-        ? "title"
-        : heading
-          ? "banner"
-          : source?.kind === "quote"
-            ? "quote"
-            : source?.kind === "list"
-              ? "card"
-              : "plain",
-      background: emphasized ? tokens.accentSoft : "transparent",
-      color: tokens.text,
-      accentColor: tokens.primary,
-      borderColor: emphasized ? tokens.border : block.borderColor,
-      borderWidth: emphasized ? 1 : block.borderWidth,
-      radius: emphasized ? tokens.cardRadius : block.radius,
-      padding: emphasized
-        ? Math.min(tokens.cardPadding, 32)
-        : heading
-          ? 8
-          : block.padding,
-      marginBottom: title ? tokens.sectionGap : Math.min(tokens.sectionGap, 32),
-      fontSize: title ? tokens.h1Size : heading ? tokens.h2Size : tokens.bodySize,
-      fontWeight: title ? tokens.h1Weight : heading ? tokens.h2Weight : tokens.bodyWeight,
-      lineHeight: title ? tokens.h1LineHeight : heading ? tokens.h2LineHeight : tokens.bodyLineHeight,
-    }
-  })
-}
-
 export function hydrateWechatBlockDocument(
   value: unknown,
   sources: CanvasSource[],
   name: string,
-  options: {
-    templateId?: CanvasDesignTemplateId
-    designTokens?: CanvasDesignTokens | null
-  } = {},
+  options: { templateId?: CanvasDesignTemplateId } = {},
 ): WechatBlockDocument {
   const parsed = parseWechatBlockDocument(value)
   const sourceIds = new Set(sources.map(source => source.id))
@@ -637,11 +578,6 @@ export function hydrateWechatBlockDocument(
   return {
     ...parsed,
     name: name || parsed.name,
-    background: options.designTokens?.surface || parsed.background,
-    pageBackground: options.designTokens?.surface || parsed.pageBackground,
-    font: options.designTokens?.friendlyFont ? "friendly" : parsed.font,
-    blocks: options.designTokens
-      ? applyDesignTokens(templatedBlocks, sources, options.designTokens)
-      : templatedBlocks,
+    blocks: templatedBlocks,
   }
 }

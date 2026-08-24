@@ -36,7 +36,10 @@ const FONT_STACKS: Record<WechatBlockDocument["font"], string> = {
   serif: "'Songti SC', SimSun, serif",
   rounded: "'PingFang SC', 'Microsoft YaHei', sans-serif",
   friendly: "Fredoka, Poppins, -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif",
+  editorial: "'Work Sans', -apple-system, 'Segoe UI', Helvetica, 'PingFang SC', sans-serif",
 }
+
+const EDITORIAL_DISPLAY_FONT = "'Archivo Black', Impact, 'Arial Black', 'PingFang SC', sans-serif"
 
 function blockLabel(block: WechatBlock, source?: CanvasSource): string {
   if (block.type === "decoration") return "AI SVG 装饰"
@@ -67,8 +70,14 @@ function sectionContentBlock(
         ? Math.min(22, fallback.fontSize)
         : fallback.fontSize,
   }
+  const roleOverride: WechatTextStyleOverride = source.id === section.leadSourceId
+    ? { variant: "lede" }
+    : source.id === section.overlineSourceId
+      ? { variant: "overline" }
+      : {}
   return {
     ...sectionDefault,
+    ...roleOverride,
     ...(section.itemStyles[source.id] || {}),
   }
 }
@@ -78,13 +87,13 @@ function SectionContent({
   sources,
   selectedId,
   onSelect,
-  learningTheme,
+  fontTheme,
 }: {
   block: WechatSectionBlock
   sources: CanvasSource[]
   selectedId: string | null
   onSelect: (id: string) => void
-  learningTheme: boolean
+  fontTheme: WechatBlockDocument["font"]
 }) {
   const renderSource = (source: CanvasSource) => {
     const selectionId = `${block.id}::${source.id}`
@@ -101,6 +110,7 @@ function SectionContent({
         <SourceContent
           block={sectionContentBlock(source, block)}
           source={source}
+          fontTheme={fontTheme}
         />
       </div>
     )
@@ -112,10 +122,12 @@ function SectionContent({
     borderRadius: block.radius,
     background: block.background,
     color: block.color,
-    boxShadow: learningTheme ? "0 4px 6px -1px rgba(0, 0, 0, 0.1)" : undefined,
+    boxShadow: block.shadow === "soft" ? "0 4px 6px -1px rgba(0, 0, 0, 0.1)" : undefined,
     overflow: "hidden",
   }
-  const learningRail = learningTheme ? (
+  if (block.accentStyle === "left") wrapperStyle.borderLeft = `4px solid ${block.accentColor}`
+  if (block.accentStyle === "bottom") wrapperStyle.borderBottom = `4px solid ${block.accentColor}`
+  const accentRail = block.accentStyle === "tri-color" ? (
     <div
       aria-hidden="true"
       className="wbe-learning-rail"
@@ -130,12 +142,25 @@ function SectionContent({
       <span style={{ flex: 1, background: "#3b82f6" }} />
       <span style={{ flex: 1, background: "#22c55e" }} />
     </div>
+  ) : block.accentStyle === "top" ? (
+    <div
+      aria-hidden="true"
+      className="wbe-editorial-rail"
+      style={{
+        height: 4,
+        margin: `${-block.padding}px ${-block.padding}px ${Math.max(16, block.gap)}px`,
+        background: block.accentColor,
+        lineHeight: 0,
+      }}
+    />
   ) : null
   if (block.layout === "stack") {
-    return <section style={wrapperStyle}>{learningRail}{sources.map(renderSource)}</section>
+    return <section style={wrapperStyle}>{accentRail}{sources.map(renderSource)}</section>
   }
 
-  const featureSource = block.layout === "feature" ? sources[0] : null
+  const featureSource = block.layout === "feature" || block.layout === "editorial"
+    ? sources[0]
+    : null
   const columnSources = featureSource ? sources.slice(1) : sources
   const splitAt = Math.ceil(columnSources.length / 2)
   const columns = [
@@ -144,7 +169,7 @@ function SectionContent({
   ]
   return (
     <section style={wrapperStyle}>
-      {learningRail}
+      {accentRail}
       {featureSource ? renderSource(featureSource) : null}
       <table
         role="presentation"
@@ -208,9 +233,11 @@ function contentStyle(block: WechatContentBlock): CSSProperties {
 function SourceContent({
   block,
   source,
+  fontTheme,
 }: {
   block: WechatContentBlock
   source: CanvasSource
+  fontTheme: WechatBlockDocument["font"]
 }) {
   if (source.kind === "image") {
     return (
@@ -237,7 +264,22 @@ function SourceContent({
   }
 
   const text = source.text || ""
-  const style = contentStyle(block)
+  const style: CSSProperties = {
+    ...contentStyle(block),
+    fontFamily: fontTheme === "editorial"
+      && (source.kind === "title" || source.kind === "heading" || ["title", "banner", "metric"].includes(block.variant))
+      ? EDITORIAL_DISPLAY_FONT
+      : undefined,
+    textTransform: block.variant === "overline" ? "uppercase" : undefined,
+    fontVariantNumeric: block.variant === "metric" ? "tabular-nums" : undefined,
+  }
+  if (fontTheme === "editorial" && (source.kind === "title" || block.variant === "title")) {
+    style.paddingBottom = Math.max(14, block.padding)
+    style.borderBottom = `3px solid ${block.accentColor}`
+  }
+  if (fontTheme === "editorial" && block.variant === "quote") {
+    style.borderLeft = `4px solid ${block.accentColor}`
+  }
   if (source.kind === "title") return <h1 style={style}>{text}</h1>
   if (source.kind === "heading") {
     return (
@@ -354,10 +396,16 @@ export function WechatBlockRenderer({
                     sources={sectionSources}
                     selectedId={selectedId}
                     onSelect={onSelect}
-                    learningTheme={document.font === "friendly"}
+                    fontTheme={document.font}
                   />
                 )
-                : <SourceContent block={block} source={source as CanvasSource} />}
+                : (
+                  <SourceContent
+                    block={block}
+                    source={source as CanvasSource}
+                    fontTheme={document.font}
+                  />
+                )}
           </div>
         )
       })}
@@ -618,6 +666,7 @@ export default function WechatBlockEditor({
               <option value="serif">宋体</option>
               <option value="rounded">圆润黑体</option>
               <option value="friendly">设计文件字体</option>
+              <option value="editorial">杂志编辑字体</option>
             </select>
           </label>
           <div className="wbe-property-grid">
@@ -641,6 +690,9 @@ export default function WechatBlockEditor({
                   <option value="card">内容卡片</option>
                   <option value="quote">引用面板</option>
                   <option value="highlight">文字高亮</option>
+                  <option value="lede">杂志导语</option>
+                  <option value="overline">眉题</option>
+                  <option value="metric">数据强调</option>
                   <option value="image">图片</option>
                 </select>
               </label>
@@ -726,8 +778,38 @@ export default function WechatBlockEditor({
                   <option value="two-column">左右双栏</option>
                   <option value="comparison">主体对比</option>
                   <option value="feature">重点 + 双栏</option>
+                  <option value="editorial">杂志编排</option>
                 </select>
               </label>
+              <div className="wbe-property-grid">
+                <label>
+                  <span>强调边</span>
+                  <select
+                    value={selectedBlock.accentStyle}
+                    onChange={event => updateBlock({
+                      accentStyle: event.target.value as WechatSectionBlock["accentStyle"],
+                    })}
+                  >
+                    <option value="none">无</option>
+                    <option value="top">顶部</option>
+                    <option value="left">左侧</option>
+                    <option value="bottom">底部</option>
+                    <option value="tri-color">三色轨道</option>
+                  </select>
+                </label>
+                <label>
+                  <span>阴影</span>
+                  <select
+                    value={selectedBlock.shadow}
+                    onChange={event => updateBlock({
+                      shadow: event.target.value as WechatSectionBlock["shadow"],
+                    })}
+                  >
+                    <option value="none">无阴影</option>
+                    <option value="soft">柔和阴影</option>
+                  </select>
+                </label>
+              </div>
               <div className="wbe-property-grid">
                 <ColorField label="文字" value={selectedBlock.color} fallback="#262626" onChange={color => updateBlock({ color })} />
                 <ColorField label="背景" value={selectedBlock.background} fallback="#ffffff" onChange={background => updateBlock({ background })} />
@@ -774,6 +856,9 @@ export default function WechatBlockEditor({
                       <option value="card">内容卡片</option>
                       <option value="quote">引用面板</option>
                       <option value="highlight">文字高亮</option>
+                      <option value="lede">杂志导语</option>
+                      <option value="overline">眉题</option>
+                      <option value="metric">数据强调</option>
                     </select>
                   </label>
                   <div className="wbe-property-grid">
