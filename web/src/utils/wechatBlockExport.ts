@@ -1,8 +1,9 @@
 const WECHAT_CONTENT_WIDTH = 677
-const WECHAT_SIDE_SPACE = 24
+const DEFAULT_WECHAT_SIDE_SPACE = 8
 
 function stripEditorAttributes(root: HTMLElement): void {
   root.removeAttribute("class")
+  root.removeAttribute("data-wechat-side-padding")
   root.querySelectorAll("*").forEach(node => {
     node.removeAttribute("class")
     node.removeAttribute("data-block-id")
@@ -43,6 +44,10 @@ function replaceSvgDecorations(root: HTMLElement): void {
 }
 
 function normalizeWechatElements(root: HTMLElement): void {
+  const requestedSideSpace = Number(root.getAttribute("data-wechat-side-padding"))
+  const sideSpace = Number.isFinite(requestedSideSpace)
+    ? Math.min(48, Math.max(0, requestedSideSpace))
+    : DEFAULT_WECHAT_SIDE_SPACE
   root.style.width = "100%"
   root.style.maxWidth = "100%"
   root.style.margin = "0"
@@ -57,9 +62,9 @@ function normalizeWechatElements(root: HTMLElement): void {
       child.removeAttribute("data-wechat-material-wrapper")
       return
     }
-    child.style.marginLeft = `${WECHAT_SIDE_SPACE}px`
-    child.style.marginRight = `${WECHAT_SIDE_SPACE}px`
-    child.style.maxWidth = `calc(100% - ${WECHAT_SIDE_SPACE * 2}px)`
+    child.style.marginLeft = `${sideSpace}px`
+    child.style.marginRight = `${sideSpace}px`
+    child.style.maxWidth = `calc(100% - ${sideSpace * 2}px)`
   })
 
   root.querySelectorAll("table").forEach(table => {
@@ -70,7 +75,7 @@ function normalizeWechatElements(root: HTMLElement): void {
     table.style.borderSpacing = "0"
   })
   root.querySelectorAll("td").forEach(cell => {
-    cell.style.width = "50%"
+    if (!cell.style.width) cell.style.width = "50%"
     cell.style.verticalAlign = "top"
     cell.style.wordBreak = "break-word"
     cell.style.overflowWrap = "break-word"

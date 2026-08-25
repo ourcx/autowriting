@@ -94,6 +94,7 @@ const BLOCK_SYSTEM_PROMPT = `你是微信公众号 HTML 内容块排版引擎。
   "version": 1,
   "name": "排版名称",
   "width": 677,
+  "sidePadding": 8,
   "background": "#ffffff",
   "pageBackground": "#f4f1e8",
   "font": "system|serif|rounded|friendly|editorial",
@@ -106,7 +107,7 @@ const BLOCK_SYSTEM_PROMPT = `你是微信公众号 HTML 内容块排版引擎。
     "headingSize":23,"headingWeight":700,"headingLineHeight":1.4,
     "bodySize":17,"bodyWeight":400,"bodyLineHeight":1.8,
     "radius":6,"sectionGap":24,
-    "canvasStyle":{"kind":"none|solid|linear|stripes|dots|grid|ruled-paper","colors":["#ffffff","#f7f7f7"],"patternColor":"rgba(47,111,98,0.12)","angle":135,"size":20,"opacity":0.12}
+    "canvasStyle":{"kind":"none|solid|linear|stripes|dots|grid|ruled-paper|generated","colors":["#ffffff","#f7f7f7"],"patternColor":"rgba(47,111,98,0.12)","angle":135,"size":20,"opacity":0.12,"prompt":"","imageSize":"landscape_16_9","fit":"cover|contain|tile","overlayColor":"#ffffff","overlayOpacity":0.12}
   },
   "blocks": []
 }
@@ -115,7 +116,7 @@ blocks 仅允许四种：
 1. content: {"id":"","type":"content","sourceId":"source-0","variant":"plain|title|banner|card|quote|highlight|lede|overline|metric|image","background":"transparent","color":"#262626","accentColor":"#2f6f62","borderColor":"transparent","borderWidth":0,"radius":0,"padding":0,"marginTop":0,"marginBottom":22,"fontSize":17,"fontWeight":400,"fontStyle":"normal|italic","textDecoration":"none|underline","letterSpacing":0,"lineHeight":1.9,"align":"left","imageFit":"cover|contain","imageRadius":6}
 2. decoration: {"id":"","type":"decoration","anchorSourceId":"source-0","placement":"before|after","d":"M 0 20 C 60 0 120 40 180 20","viewBoxWidth":180,"viewBoxHeight":40,"width":150,"height":36,"align":"left|center|right","fill":"transparent","stroke":"#2f6f62","strokeWidth":3,"marginTop":4,"marginBottom":16}
 3. asset: {"id":"","type":"asset","anchorSourceId":"source-2","placement":"before|after","prompt":"具体、可生成的英文图片描述","imageSize":"square_hd|square|portrait_4_3|portrait_16_9|landscape_4_3|landscape_16_9","width":320,"radius":0,"align":"left|center|right","marginTop":12,"marginBottom":24}
-4. section: {"id":"","type":"section","sourceIds":["source-1","source-2"],"layout":"stack|two-column|comparison|feature|editorial","preset":"plain|soft|feature|editorial|callout","background":"transparent","surfaceStyle":{"kind":"none|solid|linear|stripes|dots|grid|ruled-paper","colors":["#ffffff","#f7f7f7"],"patternColor":"rgba(82,99,165,0.12)","angle":135,"size":20,"opacity":0.12},"color":"#262626","accentColor":"#5263a5","borderColor":"#dee0e3","borderWidth":0,"radius":0,"padding":0,"gap":16,"marginTop":8,"marginBottom":24,"divider":true,"accentStyle":"none|top|left|bottom|tri-color","shadow":"none|soft","leadSourceId":"source-2","overlineSourceId":"source-1","icon":{"kind":"lucide|path","name":"book-open|quote|lightbulb|sparkles|mic|trending-up|check-circle|arrow-right|bar-chart","d":"","color":"#5263a5","size":24,"position":"top-left|top-right|inline"},"itemStyles":{"source-1":{"variant":"overline","fontSize":11,"fontWeight":700,"color":"#1f2329"},"source-2":{"variant":"lede","fontSize":20}}}
+4. section: {"id":"","type":"section","sourceIds":["source-1","source-2"],"layout":"stack|two-column|comparison|feature|editorial","columnRatio":"1:1|1:2|2:1","preset":"plain|soft|feature|editorial|callout","background":"transparent","surfaceStyle":{"kind":"none|solid|linear|stripes|dots|grid|ruled-paper|generated","colors":["#ffffff","#f7f7f7"],"patternColor":"rgba(82,99,165,0.12)","angle":135,"size":20,"opacity":0.12,"prompt":"","imageSize":"landscape_16_9","fit":"cover|contain|tile","overlayColor":"#ffffff","overlayOpacity":0.12},"color":"#262626","accentColor":"#5263a5","borderColor":"#dee0e3","borderWidth":0,"radius":0,"padding":0,"gap":16,"marginTop":8,"marginBottom":24,"divider":true,"accentStyle":"none|top|left|bottom|tri-color","shadow":"none|soft","leadSourceId":"source-2","overlineSourceId":"source-1","icon":{"kind":"lucide|path","name":"book-open|quote|lightbulb|sparkles|mic|trending-up|check-circle|arrow-right|bar-chart","d":"","color":"#5263a5","size":24,"position":"top-left|top-right|inline"},"itemStyles":{"source-1":{"variant":"overline","fontSize":11,"fontWeight":700,"color":"#1f2329"},"source-2":{"variant":"lede","fontSize":20}}}
 
 规则：
 - 响应首字符必须是 {，末字符必须是 }，只输出一个完整 JSON 对象。
@@ -129,13 +130,15 @@ blocks 仅允许四种：
 - theme 必须忠实复制设计分析结果中的 palette、typography、radius、spacing 和 shadow 语义；禁止回退到默认绿灰、奶油色或通用 Markdown 风格。
 - lede 用于导语或首段，overline 用于短眉题，metric 仅用于原文中以数字为主的短内容，quote 用于 pull quote；不得将长正文误设为 overline 或 metric。
 - 这是公众号长文，不是海报：保持连续纵向阅读、清晰层级、17-18px 正文、1.7-2.0 行高和克制留白。
+- sidePadding 默认输出 8，允许 0-48；除非设计文件明确要求，不得擅自扩大到传统 Markdown 的 24-40px 大留白。
 - 必须使用 2-8 个 section 形成明显区别于 Markdown 的组合布局。短段落、对比主体或图片与说明优先使用 two-column/comparison/feature，长正文使用 stack。
 - 卡片、标题条、引用、强调色需要围绕文章主题形成统一视觉语言，不要每段都做成独立卡片。
 - 根据设计文件选择 section 的 layout、accentStyle、shadow、leadSourceId、overlineSourceId 与 itemStyles。杂志系统优先 editorial + top/left accent；学习系统可使用 feature + tri-color；平面系统必须 shadow=none。
 - 默认 borderWidth=0，以留白、背景层级和强调边组织内容；只有设计文件明确要求描边时才增加边框。不要把每个 section 都画成有边框的卡片。
 - 避免相邻重复强调：标题已有下划线或强调边时，第一个 section 不再重复同色顶部边。除非设计明确要求，带完整边框的 section 不得超过总数的四分之一。
 - 图标优先使用 lucide 白名单；没有合适图标时才用 AI 生成的安全 path。图标必须服务于语义，不得每个 section 重复同一图标。
-- 使用 canvasStyle 和 section.surfaceStyle 建立背景层级。长文背景可以使用极浅的 dots、grid 或 ruled-paper；重点 section 可使用 linear、stripes 或独立底色。纹理必须低对比，不能影响正文可读性，禁止所有区域使用同一种背景。
+- 使用 canvasStyle 和 section.surfaceStyle 建立背景层级。长文背景可以使用极浅的 dots、grid、ruled-paper 或 generated；重点 section 可使用 linear、stripes、generated 或独立底色。generated 必须提供英文图片提示词、遮罩色和适配方式。纹理与生成背景必须保持正文可读性，禁止所有区域使用同一种背景。
+- 双栏可使用 columnRatio=1:2 或 2:1 制造不对称版式，避免所有内容机械地 1:1 对半排列。
 - asset 用于真正有信息或氛围价值的题图、章节插图和宽幅分隔素材。prompt 必须使用英文 SDXL 风格描述，包含具体主体、构图、媒介、光线和配色，并明确 no text、no logo、no watermark。不得输出 URL，程序会固定调用图片生成服务。
 - 可以生成 0-8 个局部 decoration。设计文件禁止装饰、纹理或渐变时必须输出 0 个 decoration；否则装饰必须由你根据主题原创为 path，不得依赖预设图标名。
 - decoration 必须通过 anchorSourceId 和 placement 锚定到正文附近，不得遮挡正文。
@@ -149,7 +152,9 @@ A. 杂志留白：
 B. 研究手册：
 {"theme":{"canvasStyle":{"kind":"grid","colors":["#fffdf8"],"patternColor":"rgba(59,130,246,0.10)","size":24}},"blocks":[{"type":"section","sourceIds":["source-1","source-2"],"layout":"feature","preset":"soft","surfaceStyle":{"kind":"dots","colors":["#ffffff"],"patternColor":"rgba(249,115,22,0.12)","size":18},"icon":{"kind":"lucide","name":"lightbulb","size":24}}]}
 C. 视觉故事：
-{"blocks":[{"type":"asset","anchorSourceId":"source-1","placement":"after","prompt":"Editorial paper collage about the article subject, layered cut paper composition, soft daylight, restrained brand palette, high detail, no text, no logo, no watermark","imageSize":"landscape_16_9","width":597},{"type":"section","sourceIds":["source-2","source-3","source-4"],"layout":"two-column","preset":"plain","surfaceStyle":{"kind":"linear","colors":["#ffffff","#f5f7ff"],"angle":135}}]}`
+{"blocks":[{"type":"asset","anchorSourceId":"source-1","placement":"after","prompt":"Editorial paper collage about the article subject, layered cut paper composition, soft daylight, restrained brand palette, high detail, no text, no logo, no watermark","imageSize":"landscape_16_9","width":597},{"type":"section","sourceIds":["source-2","source-3","source-4"],"layout":"two-column","columnRatio":"2:1","preset":"plain","surfaceStyle":{"kind":"linear","colors":["#ffffff","#f5f7ff"],"angle":135}}]}
+D. 生成背景：
+{"sidePadding":8,"theme":{"canvasStyle":{"kind":"generated","colors":["#ffffff"],"prompt":"Subtle editorial paper texture inspired by the article subject, quiet center, sparse details near edges, soft natural light, restrained palette, no text, no logo, no watermark","imageSize":"portrait_16_9","fit":"cover","overlayColor":"#ffffff","overlayOpacity":0.72}}}`
 
 interface CanvasCompletionData {
   choices?: Array<{

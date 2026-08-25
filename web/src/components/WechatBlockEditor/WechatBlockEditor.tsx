@@ -73,6 +73,26 @@ function surfaceCss(
   const primary = surface.colors[0] || fallback
   const secondary = surface.colors[1] || primary
   const pattern = colorWithOpacity(surface.patternColor, surface.opacity)
+  if (surface.kind === "generated") {
+    if (!surface.prompt.trim()) return { background: primary }
+    const overlay = colorWithOpacity(surface.overlayColor, surface.overlayOpacity)
+    const imageUrl = generatedImageUrl(
+      surface.prompt,
+      surface.imageSize,
+      surface.fit === "tile"
+        ? "Seamless repeatable editorial background texture."
+        : "Editorial background with a calm center area reserved for readable article text.",
+    )
+    return {
+      backgroundColor: primary,
+      backgroundImage: `linear-gradient(${overlay}, ${overlay}), url("${imageUrl}")`,
+      backgroundSize: surface.fit === "tile"
+        ? `${surface.size * 8}px auto`
+        : surface.fit,
+      backgroundRepeat: surface.fit === "tile" ? "repeat" : "no-repeat",
+      backgroundPosition: "center",
+    }
+  }
   if (surface.kind === "solid") return { background: primary }
   if (surface.kind === "linear") {
     return {
@@ -108,13 +128,25 @@ function surfaceCss(
   }
 }
 
+function generatedImageUrl(
+  prompt: string,
+  imageSize: WechatAssetBlock["imageSize"],
+  purpose: string,
+): string {
+  const normalizedPrompt = [
+    prompt,
+    purpose,
+    "No embedded text, no logo, no watermark.",
+  ].join(" ")
+  return `${GENERATED_IMAGE_ENDPOINT}?prompt=${encodeURIComponent(normalizedPrompt)}&image_size=${imageSize}`
+}
+
 function generatedAssetUrl(block: WechatAssetBlock): string {
   const prompt = [
     block.prompt,
-    "No embedded text, no logo, no watermark.",
     "Clean web editorial asset suitable for a WeChat article.",
   ].join(" ")
-  return `${GENERATED_IMAGE_ENDPOINT}?prompt=${encodeURIComponent(prompt)}&image_size=${block.imageSize}`
+  return generatedImageUrl(prompt, block.imageSize, "Concrete editorial illustration with a clear composition.")
 }
 
 function generatedAssetRatio(block: WechatAssetBlock): string {
@@ -305,6 +337,11 @@ function SectionContent({
     columnSources.slice(0, splitAt),
     columnSources.slice(splitAt),
   ]
+  const columnWidths = block.columnRatio === "1:2"
+    ? ["33.333%", "66.667%"]
+    : block.columnRatio === "2:1"
+      ? ["66.667%", "33.333%"]
+      : ["50%", "50%"]
   return (
     <section style={wrapperStyle}>
       {accentRail}
@@ -325,7 +362,7 @@ function SectionContent({
               <td
                 key={`${block.id}-column-${index}`}
                 style={{
-                  width: "50%",
+                  width: columnWidths[index],
                   padding: index === 0 ? `0 ${block.gap}px 0 0` : `0 0 0 ${block.gap}px`,
                   borderLeft: index === 1 && block.divider
                     ? `1px dashed ${block.borderColor}`
@@ -527,10 +564,11 @@ export function WechatBlockRenderer({
     <section
       ref={contentRef}
       className="wbe-document"
+      data-wechat-side-padding={document.sidePadding}
       style={{
         width: document.width,
         maxWidth: "100%",
-        padding: "42px 40px 56px",
+        padding: `42px ${document.sidePadding}px 56px`,
         ...surfaceCss(document.theme.canvasStyle, document.background),
         fontFamily: FONT_STACKS[document.font],
       }}
@@ -665,6 +703,11 @@ function SurfaceFields({
     angle: 135,
     size: 20,
     opacity: 0.12,
+    prompt: "",
+    imageSize: "landscape_16_9",
+    fit: "cover",
+    overlayColor: "#ffffff",
+    overlayOpacity: 0.12,
   }
   const updateColor = (index: number, color: string) => {
     const colors = [...surface.colors]
@@ -689,8 +732,68 @@ function SurfaceFields({
           <option value="dots">点阵</option>
           <option value="grid">网格</option>
           <option value="ruled-paper">横线稿纸</option>
+          <option value="generated">AI 生成背景</option>
         </select>
       </label>
+      {surface.kind === "generated" ? (
+        <>
+          <label>
+            <span>背景生成提示词</span>
+            <textarea
+              rows={6}
+              value={surface.prompt}
+              onChange={event => onChange({ ...surface, prompt: event.target.value })}
+            />
+          </label>
+          <div className="wbe-property-grid">
+            <label>
+              <span>图片比例</span>
+              <select
+                value={surface.imageSize}
+                onChange={event => onChange({
+                  ...surface,
+                  imageSize: event.target.value as WechatSurfaceStyle["imageSize"],
+                })}
+              >
+                <option value="landscape_16_9">横图 16:9</option>
+                <option value="landscape_4_3">横图 4:3</option>
+                <option value="square_hd">高清方图</option>
+                <option value="square">方图</option>
+                <option value="portrait_4_3">竖图 4:3</option>
+                <option value="portrait_16_9">竖图 16:9</option>
+              </select>
+            </label>
+            <label>
+              <span>铺设方式</span>
+              <select
+                value={surface.fit}
+                onChange={event => onChange({
+                  ...surface,
+                  fit: event.target.value as WechatSurfaceStyle["fit"],
+                })}
+              >
+                <option value="cover">覆盖</option>
+                <option value="contain">完整显示</option>
+                <option value="tile">平铺纹理</option>
+              </select>
+            </label>
+            <ColorField
+              label="遮罩颜色"
+              value={surface.overlayColor}
+              fallback="#ffffff"
+              onChange={overlayColor => onChange({ ...surface, overlayColor })}
+            />
+            <NumberField
+              label="遮罩透明度"
+              value={surface.overlayOpacity}
+              min={0}
+              max={0.8}
+              step={0.05}
+              onChange={overlayOpacity => onChange({ ...surface, overlayOpacity })}
+            />
+          </div>
+        </>
+      ) : null}
       {surface.kind !== "none" ? (
         <div className="wbe-property-grid">
           <ColorField
@@ -715,7 +818,7 @@ function SurfaceFields({
               onChange={patternColor => onChange({ ...surface, patternColor })}
             />
           ) : null}
-          {surface.kind !== "solid" ? (
+          {surface.kind !== "solid" && surface.kind !== "generated" ? (
             <>
               <NumberField
                 label="纹理尺寸"
@@ -958,6 +1061,13 @@ export default function WechatBlockEditor({
           <div className="wbe-property-grid">
             <ColorField label="正文背景" value={document.background} fallback="#ffffff" onChange={background => updateDocument({ background })} />
             <ColorField label="工作区背景" value={document.pageBackground} fallback="#f4f1e8" onChange={pageBackground => updateDocument({ pageBackground })} />
+            <NumberField
+              label="两侧留白"
+              value={document.sidePadding}
+              min={0}
+              max={48}
+              onChange={sidePadding => updateDocument({ sidePadding })}
+            />
           </div>
           <SurfaceFields
             value={document.theme.canvasStyle}
@@ -1123,6 +1233,21 @@ export default function WechatBlockEditor({
                   <option value="editorial">杂志编排</option>
                 </select>
               </label>
+              {selectedBlock.layout !== "stack" ? (
+                <label>
+                  <span>双栏比例</span>
+                  <select
+                    value={selectedBlock.columnRatio}
+                    onChange={event => updateBlock({
+                      columnRatio: event.target.value as WechatSectionBlock["columnRatio"],
+                    })}
+                  >
+                    <option value="1:1">1 : 1</option>
+                    <option value="1:2">1 : 2</option>
+                    <option value="2:1">2 : 1</option>
+                  </select>
+                </label>
+              ) : null}
               <div className="wbe-property-grid">
                 <label>
                   <span>视觉预设</span>

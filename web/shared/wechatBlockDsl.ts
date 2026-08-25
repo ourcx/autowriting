@@ -25,6 +25,7 @@ export type WechatSurfaceKind =
   | "dots"
   | "grid"
   | "ruled-paper"
+  | "generated"
 
 export interface WechatSurfaceStyle {
   kind: WechatSurfaceKind
@@ -33,6 +34,11 @@ export interface WechatSurfaceStyle {
   angle: number
   size: number
   opacity: number
+  prompt: string
+  imageSize: WechatGeneratedImageSize
+  fit: "cover" | "contain" | "tile"
+  overlayColor: string
+  overlayOpacity: number
 }
 
 export interface WechatBlockTheme {
@@ -175,6 +181,7 @@ export interface WechatSectionBlock {
   type: "section"
   sourceIds: string[]
   layout: WechatSectionLayout
+  columnRatio: "1:1" | "1:2" | "2:1"
   preset: WechatSectionPreset
   background: string
   color: string
@@ -206,6 +213,7 @@ export interface WechatBlockDocument {
   version: 1
   name: string
   width: 677
+  sidePadding: number
   background: string
   pageBackground: string
   font: WechatBlockFont
@@ -242,6 +250,11 @@ export const DEFAULT_WECHAT_BLOCK_THEME: WechatBlockTheme = {
     angle: 135,
     size: 20,
     opacity: 0.12,
+    prompt: "",
+    imageSize: "landscape_16_9",
+    fit: "cover",
+    overlayColor: "#ffffff",
+    overlayOpacity: 0.12,
   },
 }
 
@@ -254,6 +267,31 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function textIn(value: unknown, fallback: string, maxLength: number): string {
   return (typeof value === "string" ? value : fallback).slice(0, maxLength)
+}
+
+function promptIn(value: unknown): string {
+  return textIn(value, "", 600)
+    .split("")
+    .map(character => {
+      const code = character.charCodeAt(0)
+      return code >= 32 && code !== 127 ? character : " "
+    })
+    .join("")
+    .trim()
+}
+
+function imageSizeIn(value: unknown): WechatGeneratedImageSize {
+  const sizes: WechatGeneratedImageSize[] = [
+    "square_hd",
+    "square",
+    "portrait_4_3",
+    "portrait_16_9",
+    "landscape_4_3",
+    "landscape_16_9",
+  ]
+  return sizes.includes(value as WechatGeneratedImageSize)
+    ? value as WechatGeneratedImageSize
+    : "landscape_16_9"
 }
 
 function numberIn(value: unknown, fallback: number, min: number, max: number): number {
@@ -281,6 +319,7 @@ function parseSurfaceStyle(
     "dots",
     "grid",
     "ruled-paper",
+    "generated",
   ]
   const colors = Array.isArray(record.colors)
     ? record.colors
@@ -288,15 +327,24 @@ function parseSurfaceStyle(
       .map(color => colorIn(color, ""))
       .filter(Boolean)
     : []
-  return {
-    kind: kinds.includes(record.kind as WechatSurfaceKind)
+  const prompt = promptIn(record.prompt)
+  const requestedKind = kinds.includes(record.kind as WechatSurfaceKind)
       ? record.kind as WechatSurfaceKind
-      : "none",
+      : "none"
+  return {
+    kind: requestedKind === "generated" && !prompt ? "none" : requestedKind,
     colors: colors.length > 0 ? colors : [fallbackColor],
     patternColor: colorIn(record.patternColor, "rgba(47,111,98,0.12)"),
     angle: numberIn(record.angle, 135, 0, 360),
     size: numberIn(record.size, 20, 6, 80),
     opacity: numberIn(record.opacity, 0.12, 0.02, 0.5),
+    prompt,
+    imageSize: imageSizeIn(record.imageSize),
+    fit: ["cover", "contain", "tile"].includes(String(record.fit))
+      ? record.fit as WechatSurfaceStyle["fit"]
+      : "cover",
+    overlayColor: colorIn(record.overlayColor, "#ffffff"),
+    overlayOpacity: numberIn(record.overlayOpacity, 0.12, 0, 0.8),
   }
 }
 
@@ -456,23 +504,8 @@ function parseAssetBlock(
   record: Record<string, unknown>,
   index: number,
 ): WechatAssetBlock | null {
-  const prompt = textIn(record.prompt, "", 600)
-    .split("")
-    .map(character => {
-      const code = character.charCodeAt(0)
-      return code >= 32 && code !== 127 ? character : " "
-    })
-    .join("")
-    .trim()
+  const prompt = promptIn(record.prompt)
   if (!prompt) return null
-  const sizes: WechatGeneratedImageSize[] = [
-    "square_hd",
-    "square",
-    "portrait_4_3",
-    "portrait_16_9",
-    "landscape_4_3",
-    "landscape_16_9",
-  ]
   const aligns: WechatBlockAlign[] = ["left", "center", "right"]
   return {
     id: idIn(record.id, `asset-${index + 1}`),
@@ -480,9 +513,7 @@ function parseAssetBlock(
     anchorSourceId: idIn(record.anchorSourceId, ""),
     placement: record.placement === "before" ? "before" : "after",
     prompt,
-    imageSize: sizes.includes(record.imageSize as WechatGeneratedImageSize)
-      ? record.imageSize as WechatGeneratedImageSize
-      : "landscape_16_9",
+    imageSize: imageSizeIn(record.imageSize),
     width: numberIn(record.width, 320, 80, 677),
     radius: numberIn(record.radius, 0, 0, 32),
     align: aligns.includes(record.align as WechatBlockAlign)
@@ -588,6 +619,9 @@ function parseSectionBlock(
     layout: layouts.includes(record.layout as WechatSectionLayout)
       ? record.layout as WechatSectionLayout
       : "stack",
+    columnRatio: ["1:1", "1:2", "2:1"].includes(String(record.columnRatio))
+      ? record.columnRatio as WechatSectionBlock["columnRatio"]
+      : "1:1",
     preset,
     background: colorIn(record.background, framed ? theme.surface : "transparent"),
     color: colorIn(record.color, theme.text),
@@ -644,6 +678,7 @@ export function parseWechatBlockDocument(value: unknown): WechatBlockDocument {
     version: 1,
     name: textIn(record.name, "公众号块排版", 80),
     width: 677,
+    sidePadding: numberIn(record.sidePadding, 8, 0, 48),
     background: colorIn(record.background, theme.canvas),
     pageBackground: colorIn(record.pageBackground, theme.canvas),
     font: fontIn(record.font, theme.font),
@@ -715,6 +750,7 @@ export function createWechatBlockDocument(
     version: 1,
     name: name || "公众号块排版",
     width: 677,
+    sidePadding: 8,
     background: "#ffffff",
     pageBackground: "#f4f1e8",
     font: "system",
@@ -746,6 +782,7 @@ function createTemplateSection(
       type: "section",
       sourceIds,
       layout: "comparison",
+      columnRatio: "1:1",
       preset: "soft",
       background: "#f7f7f7",
       color: "#1f2329",
@@ -769,6 +806,7 @@ function createTemplateSection(
       type: "section",
       sourceIds,
       layout: "two-column",
+      columnRatio: "1:1",
       preset: "soft",
       background: "#fff8ec",
       color: "#2d2b27",
@@ -791,6 +829,7 @@ function createTemplateSection(
     type: "section",
     sourceIds,
     layout: "feature",
+    columnRatio: "1:1",
     preset: "plain",
     background: "transparent",
     color: "#262626",

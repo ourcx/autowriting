@@ -175,7 +175,7 @@ function decodeDataUrl(dataUrl) {
 }
 
 function normalizeImageSourceUrl(req, rawUrl) {
-  const url = String(rawUrl || '').trim()
+  const url = String(rawUrl || '').replace(/&amp;/g, '&').trim()
   if (!url) throw new Error('图片地址为空')
   if (url.startsWith('data:')) return url
   if (url.startsWith('//')) {
@@ -285,10 +285,16 @@ async function uploadBufferToWechatContentImage(token, buf, filename, contentTyp
 }
 
 async function rewriteWechatContentImages(req, token, html) {
-  if (typeof html !== 'string' || !html.includes('<img')) return { html, rewritten: 0, failed: [] }
+  if (typeof html !== 'string') return { html, rewritten: 0, failed: [] }
 
   const matches = [...html.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)]
-  const uniqueUrls = [...new Set(matches.map(match => match[1]).filter(Boolean))]
+  const generatedBackgroundMatches = html.match(
+    /https:\/\/copilot-cn\.bytedance\.net\/api\/ide\/v1\/text_to_image\?prompt=[^&"'()\s<>]+(?:&amp;|&)image_size=(?:square_hd|square|portrait_4_3|portrait_16_9|landscape_4_3|landscape_16_9)/gi,
+  ) || []
+  const uniqueUrls = [...new Set([
+    ...matches.map(match => match[1]),
+    ...generatedBackgroundMatches,
+  ].filter(Boolean))]
   if (uniqueUrls.length === 0) return { html, rewritten: 0, failed: [] }
 
   let nextHtml = html
