@@ -51,10 +51,11 @@
 
 块排版使用 `shared/wechatBlockDsl.ts` 定义的安全 DSL：
 
-- `content`：通过 `sourceId` 引用标题、章节、正文、引用、列表或图片，只保存版式和内联样式。
-- `section`：组合 2-8 个连续内容源，支持纵向、左右双栏、主体对比、重点加双栏、时间线和步骤流；双栏可通过 `columnRatio` 选择 `1:1`、`1:2` 或 `2:1`。
+- `content`：通过 `sourceId` 引用标题、章节、正文、引用、列表或图片，只保存版式和内联样式；支持首行缩进和单次首字下沉。
+- `section`：组合 2-8 个连续内容源，支持纵向、左右双栏、主体对比、重点加双栏、时间线、步骤流、媒体文字分栏和 2/3 列网格；双栏可通过 `columnRatio` 选择 `1:1`、`1:2` 或 `2:1`。
 - `decoration`：通过 `anchorSourceId` 锚定在正文前后，仅允许经过校验的 SVG Path。
 - `asset`：由 AI 提供图片生成提示词，程序固定调用图片生成服务，不接受任意远程 URL。
+- `divider`：锚定在内容源前后，支持实线、虚线、点线、双线和主题双色渐变。
 - 文档宽度固定为微信正文预览宽度 677px，高度由 HTML 内容自然增长；`sidePadding` 默认 8px，可在 0-48px 内调整，并同步到复制结果。
 - AI 不能返回正文、图片地址、任意 HTML 或 CSS；服务端会按文章原顺序强制回填全部内容。
 - 每篇文章的块排版单独保存在浏览器本地，不覆盖 SVG 画布数据。
@@ -79,6 +80,13 @@ Section 可引用内置 Lucide 图标白名单，也可使用 AI 生成并通过
 带背景或完整边框的 content、section 和 `itemStyles` 会自动保证至少 12px 内边距，避免文字贴边。左右留白通过外层无边框表格单元格输出，避免微信编辑器清洗根节点 padding 或普通 div margin 后失效。
 
 正常长度文章的 AI 结果必须包含至少两个组合区域和两个背景层级，并主动组合布局、背景、强调边/图标、特殊文字角色、素材或装饰等能力；不满足最低丰富度时服务端会携带原始设计上下文重试。
+
+## 非 Markdown 编辑器参考
+
+- [`tiptap-appmsg-editor`](https://github.com/KID-1912/tiptap-appmsg-editor)：借鉴其 `section / p / span / img` 内容约束、样式组件插入、分隔线、首行缩进和富文本节点设计。
+- [`OpenSVG`](https://github.com/cailven/opensvg)：借鉴其组件注册表、组件树、属性面板、移动端预览和项目序列化思路。
+- 不引入 OpenSVG 的任意 HTML、零高覆盖、点击切换或伸展动画。这些结构难以保证正文完整、无障碍和微信清洗后的稳定性。
+- 不直接引入 Tiptap 作为第二套正文状态源。文章正文仍由 `CanvasSource` 唯一管理，DSL 只保存可验证的视觉组件和 `sourceId` 映射。
 
 Markdown 预览继续使用原有 `renderWechatMarkdown()` 和主题 CSS，不读取块排版数据，两种流程互不影响。
 

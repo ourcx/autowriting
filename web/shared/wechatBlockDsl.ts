@@ -11,6 +11,7 @@ export type WechatBlockVariant =
   | "lede"
   | "overline"
   | "metric"
+  | "dropcap"
   | "image"
 
 export type WechatBlockAlign = "left" | "center" | "right"
@@ -113,6 +114,7 @@ export interface WechatContentBlock {
   textDecoration: "none" | "underline"
   letterSpacing: number
   lineHeight: number
+  textIndent: number
   align: WechatBlockAlign
   imageFit: "cover" | "contain"
   imageRadius: number
@@ -158,8 +160,23 @@ export interface WechatAssetBlock {
   marginBottom: number
 }
 
+export interface WechatDividerBlock {
+  id: string
+  type: "divider"
+  anchorSourceId: string
+  placement: "before" | "after"
+  style: "solid" | "dashed" | "dotted" | "double" | "gradient"
+  color: string
+  secondaryColor: string
+  width: number
+  thickness: number
+  align: WechatBlockAlign
+  marginTop: number
+  marginBottom: number
+}
+
 export type WechatSectionLayout = "stack" | "two-column" | "comparison" | "feature"
-  | "editorial" | "timeline" | "steps"
+  | "editorial" | "timeline" | "steps" | "media-text" | "grid"
 export type WechatSectionAccent = "none" | "top" | "left" | "bottom" | "tri-color"
 
 export interface WechatTextStyleOverride {
@@ -179,6 +196,7 @@ export interface WechatTextStyleOverride {
   textDecoration?: "none" | "underline"
   letterSpacing?: number
   lineHeight?: number
+  textIndent?: number
   align?: WechatBlockAlign
 }
 
@@ -188,6 +206,8 @@ export interface WechatSectionBlock {
   sourceIds: string[]
   layout: WechatSectionLayout
   columnRatio: "1:1" | "1:2" | "2:1"
+  mediaPosition: "left" | "right"
+  columns: 2 | 3
   preset: WechatSectionPreset
   background: string
   color: string
@@ -213,6 +233,7 @@ export type WechatBlock =
   | WechatContentBlock
   | WechatDecorationBlock
   | WechatAssetBlock
+  | WechatDividerBlock
   | WechatSectionBlock
 
 export interface WechatBlockDocument {
@@ -415,7 +436,7 @@ function parseContentBlock(
   theme: WechatBlockTheme,
 ): WechatContentBlock {
   const variants: WechatBlockVariant[] = [
-    "plain", "title", "banner", "card", "quote", "highlight", "lede", "overline", "metric", "image",
+    "plain", "title", "banner", "card", "quote", "highlight", "lede", "overline", "metric", "dropcap", "image",
   ]
   const aligns: WechatBlockAlign[] = ["left", "center", "right"]
   const variant = variants.includes(record.variant as WechatBlockVariant)
@@ -482,6 +503,7 @@ function parseContentBlock(
       1,
       2.6,
     ),
+    textIndent: numberIn(record.textIndent, 0, 0, 64),
     align: aligns.includes(record.align as WechatBlockAlign)
       ? record.align as WechatBlockAlign
       : "left",
@@ -542,6 +564,37 @@ function parseAssetBlock(
   }
 }
 
+function parseDividerBlock(
+  record: Record<string, unknown>,
+  index: number,
+  theme: WechatBlockTheme,
+): WechatDividerBlock | null {
+  const anchorSourceId = idIn(record.anchorSourceId, "")
+  if (!anchorSourceId) return null
+  const styles: WechatDividerBlock["style"][] = [
+    "solid", "dashed", "dotted", "double", "gradient",
+  ]
+  const aligns: WechatBlockAlign[] = ["left", "center", "right"]
+  return {
+    id: idIn(record.id, `divider-${index + 1}`),
+    type: "divider",
+    anchorSourceId,
+    placement: record.placement === "before" ? "before" : "after",
+    style: styles.includes(record.style as WechatDividerBlock["style"])
+      ? record.style as WechatDividerBlock["style"]
+      : "solid",
+    color: colorIn(record.color, theme.accent),
+    secondaryColor: colorIn(record.secondaryColor, theme.secondary),
+    width: numberIn(record.width, 120, 24, 677),
+    thickness: numberIn(record.thickness, 2, 1, 8),
+    align: aligns.includes(record.align as WechatBlockAlign)
+      ? record.align as WechatBlockAlign
+      : "center",
+    marginTop: numberIn(record.marginTop, 16, 0, 80),
+    marginBottom: numberIn(record.marginBottom, 20, 0, 80),
+  }
+}
+
 function parseSectionIcon(
   value: unknown,
   theme: WechatBlockTheme,
@@ -592,6 +645,7 @@ function parseSectionBlock(
   if (sourceIds.length < 2) return null
   const layouts: WechatSectionLayout[] = [
     "stack", "two-column", "comparison", "feature", "editorial", "timeline", "steps",
+    "media-text", "grid",
   ]
   const presets: WechatSectionPreset[] = ["plain", "soft", "feature", "editorial", "callout"]
   const preset = presets.includes(record.preset as WechatSectionPreset)
@@ -611,7 +665,7 @@ function parseSectionBlock(
     if (!rawStyle || typeof rawStyle !== "object" || Array.isArray(rawStyle)) return []
     const style = rawStyle as Record<string, unknown>
     const variants: Array<Exclude<WechatBlockVariant, "image">> = [
-      "plain", "title", "banner", "card", "quote", "highlight", "lede", "overline", "metric",
+      "plain", "title", "banner", "card", "quote", "highlight", "lede", "overline", "metric", "dropcap",
     ]
     const aligns: WechatBlockAlign[] = ["left", "center", "right"]
     const background = style.background === undefined
@@ -645,6 +699,7 @@ function parseSectionBlock(
       textDecoration: style.textDecoration === "underline" ? "underline" : undefined,
       letterSpacing: style.letterSpacing === undefined ? undefined : numberIn(style.letterSpacing, 0, 0, 8),
       lineHeight: style.lineHeight === undefined ? undefined : numberIn(style.lineHeight, 1.8, 1, 2.6),
+      textIndent: style.textIndent === undefined ? undefined : numberIn(style.textIndent, 0, 0, 64),
       align: aligns.includes(style.align as WechatBlockAlign)
         ? style.align as WechatBlockAlign
         : undefined,
@@ -672,6 +727,8 @@ function parseSectionBlock(
     columnRatio: ["1:1", "1:2", "2:1"].includes(String(record.columnRatio))
       ? record.columnRatio as WechatSectionBlock["columnRatio"]
       : "1:1",
+    mediaPosition: record.mediaPosition === "right" ? "right" : "left",
+    columns: record.columns === 3 ? 3 : 2,
     preset,
     background,
     color: colorIn(record.color, theme.text),
@@ -712,6 +769,10 @@ export function parseWechatBlockDocument(value: unknown): WechatBlockDocument {
         const asset = parseAssetBlock(block, index)
         return asset ? [asset] : []
       }
+      if (block.type === "divider") {
+        const divider = parseDividerBlock(block, index, theme)
+        return divider ? [divider] : []
+      }
       if (block.type === "section") {
         const section = parseSectionBlock(block, index, theme)
         return section ? [section] : []
@@ -748,6 +809,7 @@ function fallbackStyle(kind: CanvasSourceKind): Omit<WechatContentBlock, "id" | 
     fontStyle: "normal" as const,
     textDecoration: "none" as const,
     letterSpacing: 0,
+    textIndent: 0,
   }
   if (kind === "title") {
     return { ...common, variant: "title", background: "transparent", color: "#171717", padding: 0, marginBottom: 34, fontSize: 34, fontWeight: 800, lineHeight: 1.35 }
@@ -831,6 +893,8 @@ function createTemplateSection(
       sourceIds,
       layout: "comparison",
       columnRatio: "1:1",
+      mediaPosition: "left",
+      columns: 2,
       preset: "soft",
       background: "#f7f7f7",
       color: "#1f2329",
@@ -855,6 +919,8 @@ function createTemplateSection(
       sourceIds,
       layout: "two-column",
       columnRatio: "1:1",
+      mediaPosition: "left",
+      columns: 2,
       preset: "soft",
       background: "#fff8ec",
       color: "#2d2b27",
@@ -878,6 +944,8 @@ function createTemplateSection(
     sourceIds,
     layout: "feature",
     columnRatio: "1:1",
+    mediaPosition: "left",
+    columns: 2,
     preset: "plain",
     background: "transparent",
     color: "#262626",
@@ -954,15 +1022,15 @@ export function hydrateWechatBlockDocument(
   const contentCandidates = new Map<string, WechatContentBlock>()
   const sectionCandidates = new Map<string, WechatSectionBlock>()
   const anchoredMaterials = parsed.blocks
-    .filter((block): block is WechatDecorationBlock | WechatAssetBlock => (
-      (block.type === "decoration" || block.type === "asset")
+    .filter((block): block is WechatDecorationBlock | WechatAssetBlock | WechatDividerBlock => (
+      (block.type === "decoration" || block.type === "asset" || block.type === "divider")
       && sourceIds.has(block.anchorSourceId)
     ))
     .filter((block, index, blocks) => (
       blocks
         .slice(0, index)
         .filter(candidate => candidate.type === block.type)
-        .length < (block.type === "asset" ? 4 : 8)
+        .length < (block.type === "asset" ? 4 : block.type === "divider" ? 10 : 8)
     ))
     .map((block, index) => ({
       ...block,

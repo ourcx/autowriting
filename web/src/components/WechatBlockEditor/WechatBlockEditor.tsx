@@ -26,6 +26,7 @@ import type {
   WechatAssetBlock,
   WechatContentBlock,
   WechatDecorationBlock,
+  WechatDividerBlock,
   WechatIconName,
   WechatSectionBlock,
   WechatSectionIcon,
@@ -204,9 +205,16 @@ function SectionIcon({ icon }: { icon: WechatSectionIcon }) {
 function blockLabel(block: WechatBlock, source?: CanvasSource): string {
   if (block.type === "decoration") return "AI SVG 装饰"
   if (block.type === "asset") return "AI 图片素材"
+  if (block.type === "divider") return "分隔线"
   if (block.type === "section") return `${block.layout} · ${block.sourceIds.length} 项`
   if (source?.kind === "image") return source.alt || "文章图片"
   return source?.text?.split("\n")[0] || "内容块"
+}
+
+function isAuxiliaryBlock(
+  block: WechatBlock,
+): block is WechatDecorationBlock | WechatAssetBlock | WechatDividerBlock {
+  return block.type === "decoration" || block.type === "asset" || block.type === "divider"
 }
 
 function sectionContentBlock(
@@ -396,6 +404,113 @@ function SectionContent({
     )
   }
 
+  if (block.layout === "media-text") {
+    const mediaSource = sources[0]
+    const detailSources = sources.slice(1)
+    const mediaWidth = block.columnRatio === "1:2"
+      ? "33.333%"
+      : block.columnRatio === "2:1"
+        ? "66.667%"
+        : "50%"
+    const detailWidth = block.columnRatio === "1:2"
+      ? "66.667%"
+      : block.columnRatio === "2:1"
+        ? "33.333%"
+        : "50%"
+    return (
+      <section style={wrapperStyle}>
+        {accentRail}
+        {sectionIcon}
+        <table
+          role="presentation"
+          style={{
+            width: "100%",
+            tableLayout: "fixed",
+            borderCollapse: "separate",
+            borderSpacing: 0,
+            direction: block.mediaPosition === "right" ? "rtl" : "ltr",
+          }}
+        >
+          <tbody>
+            <tr>
+              <td
+                style={{
+                  width: mediaWidth,
+                  padding: block.mediaPosition === "right" ? `0 0 0 ${block.gap}px` : `0 ${block.gap}px 0 0`,
+                  verticalAlign: "top",
+                  direction: "ltr",
+                }}
+              >
+                {mediaSource ? renderSource(mediaSource) : null}
+              </td>
+              <td
+                style={{
+                  width: detailWidth,
+                  padding: block.mediaPosition === "right" ? `0 ${block.gap}px 0 0` : `0 0 0 ${block.gap}px`,
+                  borderLeft: block.divider && block.mediaPosition === "left"
+                    ? `1px dashed ${block.borderColor}`
+                    : "0",
+                  borderRight: block.divider && block.mediaPosition === "right"
+                    ? `1px dashed ${block.borderColor}`
+                    : "0",
+                  verticalAlign: "top",
+                  direction: "ltr",
+                }}
+              >
+                {detailSources.map(renderSource)}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    )
+  }
+
+  if (block.layout === "grid") {
+    const rows = Array.from(
+      { length: Math.ceil(sources.length / block.columns) },
+      (_, rowIndex) => sources.slice(rowIndex * block.columns, (rowIndex + 1) * block.columns),
+    )
+    return (
+      <section style={wrapperStyle}>
+        {accentRail}
+        {sectionIcon}
+        <table
+          role="presentation"
+          style={{
+            width: "100%",
+            tableLayout: "fixed",
+            borderCollapse: "separate",
+            borderSpacing: 0,
+          }}
+        >
+          <tbody>
+            {rows.map((row, rowIndex) => (
+              <tr key={`${block.id}-row-${rowIndex}`}>
+                {Array.from({ length: block.columns }, (_, columnIndex) => {
+                  const source = row[columnIndex]
+                  return (
+                    <td
+                      key={`${block.id}-cell-${rowIndex}-${columnIndex}`}
+                      style={{
+                        width: `${100 / block.columns}%`,
+                        paddingRight: columnIndex < block.columns - 1 ? block.gap : 0,
+                        paddingBottom: rowIndex < rows.length - 1 ? block.gap : 0,
+                        verticalAlign: "top",
+                      }}
+                    >
+                      {source ? renderSource(source) : null}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+    )
+  }
+
   const featureSource = block.layout === "feature" || block.layout === "editorial"
     ? sources[0]
     : null
@@ -462,6 +577,7 @@ function contentStyle(block: WechatContentBlock): CSSProperties {
     textDecoration: block.textDecoration,
     letterSpacing: block.letterSpacing,
     lineHeight: block.lineHeight,
+    textIndent: block.textIndent,
     textAlign: block.align,
     overflowWrap: "break-word",
   }
@@ -547,6 +663,25 @@ function SourceContent({
       </section>
     )
   }
+  if (block.variant === "dropcap" && text.length > 0) {
+    return (
+      <p style={{ ...style, textIndent: 0, whiteSpace: "pre-wrap" }}>
+        <span
+          style={{
+            float: "left",
+            margin: "0.08em 0.16em 0 0",
+            color: block.accentColor,
+            fontSize: "3.2em",
+            fontWeight: 800,
+            lineHeight: 0.82,
+          }}
+        >
+          {text.slice(0, 1)}
+        </span>
+        {text.slice(1)}
+      </p>
+    )
+  }
   return <p style={{ ...style, whiteSpace: "pre-wrap" }}>{text}</p>
 }
 
@@ -617,6 +752,28 @@ function GeneratedAsset({ block }: { block: WechatAssetBlock }) {
   )
 }
 
+function Divider({ block }: { block: WechatDividerBlock }) {
+  const marginLeft = block.align === "right" || block.align === "center" ? "auto" : 0
+  const marginRight = block.align === "left" || block.align === "center" ? "auto" : 0
+  const style: CSSProperties = {
+    width: block.width,
+    maxWidth: "100%",
+    height: block.style === "double" ? block.thickness * 3 : block.thickness,
+    marginTop: block.marginTop,
+    marginBottom: block.marginBottom,
+    marginLeft,
+    marginRight,
+    lineHeight: 0,
+  }
+  if (block.style === "gradient") {
+    style.background = `linear-gradient(90deg, transparent, ${block.color}, ${block.secondaryColor}, transparent)`
+  } else {
+    style.borderTop = `${block.thickness}px ${block.style} ${block.color}`
+    if (block.style === "double") style.borderBottom = `${block.thickness}px double ${block.secondaryColor}`
+  }
+  return <section style={style} aria-hidden="true" />
+}
+
 export function WechatBlockRenderer({
   document,
   sources,
@@ -668,6 +825,8 @@ export function WechatBlockRenderer({
               ? <Decoration block={block} />
               : block.type === "asset"
                 ? <GeneratedAsset block={block} />
+                : block.type === "divider"
+                  ? <Divider block={block} />
                 : block.type === "section"
                 ? (
                   <SectionContent
@@ -991,7 +1150,7 @@ export default function WechatBlockEditor({
     })
   }
   const moveAuxiliary = (direction: -1 | 1) => {
-    if (!selectedBlock || (selectedBlock.type !== "decoration" && selectedBlock.type !== "asset")) return
+    if (!selectedBlock || !isAuxiliaryBlock(selectedBlock)) return
     const index = document.blocks.findIndex(block => block.id === selectedBlock.id)
     const target = index + direction
     if (target < 0 || target >= document.blocks.length) return
@@ -1022,7 +1181,7 @@ export default function WechatBlockEditor({
     onChange({ ...document, blocks })
   }
   const deleteAuxiliary = () => {
-    if (!selectedBlock || (selectedBlock.type !== "decoration" && selectedBlock.type !== "asset")) return
+    if (!selectedBlock || !isAuxiliaryBlock(selectedBlock)) return
     onChange({
       ...document,
       blocks: document.blocks.filter(block => block.id !== selectedBlock.id),
@@ -1051,13 +1210,15 @@ export default function WechatBlockEditor({
                       ? <Sparkles size={14} />
                       : block.type === "asset"
                         ? <ImageIcon size={14} />
-                      : block.type === "section"
-                        ? <Columns size={14} />
-                        : source?.kind === "image"
-                          ? <ImageIcon size={14} />
-                          : source?.kind === "quote"
-                            ? <Quote size={14} />
-                            : <Type size={14} />}
+                        : block.type === "divider"
+                          ? <ArrowRight size={14} />
+                          : block.type === "section"
+                            ? <Columns size={14} />
+                            : source?.kind === "image"
+                              ? <ImageIcon size={14} />
+                              : source?.kind === "quote"
+                                ? <Quote size={14} />
+                                : <Type size={14} />}
                   </span>
                   <span>{blockLabel(block, source)}</span>
                 </button>
@@ -1086,21 +1247,21 @@ export default function WechatBlockEditor({
         <div className="wbe-outline-actions">
           <button
             title="上移装饰或素材"
-            disabled={selectedBlock?.type !== "decoration" && selectedBlock?.type !== "asset"}
+            disabled={!selectedBlock || !isAuxiliaryBlock(selectedBlock)}
             onClick={() => moveAuxiliary(-1)}
           >
             <ArrowUp size={15} />
           </button>
           <button
             title="下移装饰或素材"
-            disabled={selectedBlock?.type !== "decoration" && selectedBlock?.type !== "asset"}
+            disabled={!selectedBlock || !isAuxiliaryBlock(selectedBlock)}
             onClick={() => moveAuxiliary(1)}
           >
             <ArrowDown size={15} />
           </button>
           <button
             title="删除装饰或素材"
-            disabled={selectedBlock?.type !== "decoration" && selectedBlock?.type !== "asset"}
+            disabled={!selectedBlock || !isAuxiliaryBlock(selectedBlock)}
             onClick={deleteAuxiliary}
           >
             <Trash2 size={15} />
@@ -1185,6 +1346,7 @@ export default function WechatBlockEditor({
                   <option value="lede">杂志导语</option>
                   <option value="overline">眉题</option>
                   <option value="metric">数据强调</option>
+                  <option value="dropcap">首字下沉</option>
                   <option value="image">图片</option>
                 </select>
               </label>
@@ -1199,6 +1361,7 @@ export default function WechatBlockEditor({
                 <NumberField label="字重" value={selectedBlock.fontWeight} min={300} max={900} step={100} onChange={fontWeight => updateBlock({ fontWeight })} />
                 <NumberField label="字距" value={selectedBlock.letterSpacing} min={0} max={8} step={0.5} onChange={letterSpacing => updateBlock({ letterSpacing })} />
                 <NumberField label="行高" value={selectedBlock.lineHeight} min={1} max={2.6} step={0.1} onChange={lineHeight => updateBlock({ lineHeight })} />
+                <NumberField label="首行缩进" value={selectedBlock.textIndent} min={0} max={64} onChange={textIndent => updateBlock({ textIndent })} />
                 <NumberField label="内边距" value={selectedBlock.padding} min={0} max={48} onChange={padding => updateBlock({ padding })} />
                 <NumberField label="圆角" value={selectedBlock.radius} min={0} max={32} onChange={radius => updateBlock({ radius })} />
                 <NumberField label="边框" value={selectedBlock.borderWidth} min={0} max={8} onChange={borderWidth => updateBlock({ borderWidth })} />
@@ -1306,6 +1469,48 @@ export default function WechatBlockEditor({
             </>
           ) : null}
 
+          {selectedBlock?.type === "divider" ? (
+            <>
+              <div className="wbe-property-heading">分隔线组件</div>
+              <label>
+                <span>线型</span>
+                <select
+                  value={selectedBlock.style}
+                  onChange={event => updateBlock({
+                    style: event.target.value as WechatDividerBlock["style"],
+                  })}
+                >
+                  <option value="solid">实线</option>
+                  <option value="dashed">虚线</option>
+                  <option value="dotted">点线</option>
+                  <option value="double">双线</option>
+                  <option value="gradient">渐变线</option>
+                </select>
+              </label>
+              <div className="wbe-property-grid">
+                <ColorField label="主色" value={selectedBlock.color} fallback="#5263a5" onChange={color => updateBlock({ color })} />
+                <ColorField label="辅色" value={selectedBlock.secondaryColor} fallback="#e8b94a" onChange={secondaryColor => updateBlock({ secondaryColor })} />
+                <NumberField label="宽度" value={selectedBlock.width} min={24} max={677} onChange={width => updateBlock({ width })} />
+                <NumberField label="线宽" value={selectedBlock.thickness} min={1} max={8} onChange={thickness => updateBlock({ thickness })} />
+                <NumberField label="上间距" value={selectedBlock.marginTop} min={0} max={80} onChange={marginTop => updateBlock({ marginTop })} />
+                <NumberField label="下间距" value={selectedBlock.marginBottom} min={0} max={80} onChange={marginBottom => updateBlock({ marginBottom })} />
+              </div>
+              <label>
+                <span>对齐</span>
+                <select
+                  value={selectedBlock.align}
+                  onChange={event => updateBlock({
+                    align: event.target.value as WechatDividerBlock["align"],
+                  })}
+                >
+                  <option value="left">左对齐</option>
+                  <option value="center">居中</option>
+                  <option value="right">右对齐</option>
+                </select>
+              </label>
+            </>
+          ) : null}
+
           {selectedBlock?.type === "section" ? (
             <>
               <div className="wbe-property-heading">组合区域 · {selectedBlock.sourceIds.length} 项</div>
@@ -1322,9 +1527,11 @@ export default function WechatBlockEditor({
                   <option value="editorial">杂志编排</option>
                   <option value="timeline">时间线</option>
                   <option value="steps">步骤流</option>
+                  <option value="media-text">媒体 + 文字</option>
+                  <option value="grid">内容网格</option>
                 </select>
               </label>
-              {["two-column", "comparison", "feature", "editorial"].includes(selectedBlock.layout) ? (
+              {["two-column", "comparison", "feature", "editorial", "media-text"].includes(selectedBlock.layout) ? (
                 <label>
                   <span>双栏比例</span>
                   <select
@@ -1336,6 +1543,34 @@ export default function WechatBlockEditor({
                     <option value="1:1">1 : 1</option>
                     <option value="1:2">1 : 2</option>
                     <option value="2:1">2 : 1</option>
+                  </select>
+                </label>
+              ) : null}
+              {selectedBlock.layout === "media-text" ? (
+                <label>
+                  <span>媒体位置</span>
+                  <select
+                    value={selectedBlock.mediaPosition}
+                    onChange={event => updateBlock({
+                      mediaPosition: event.target.value as WechatSectionBlock["mediaPosition"],
+                    })}
+                  >
+                    <option value="left">左侧</option>
+                    <option value="right">右侧</option>
+                  </select>
+                </label>
+              ) : null}
+              {selectedBlock.layout === "grid" ? (
+                <label>
+                  <span>网格列数</span>
+                  <select
+                    value={selectedBlock.columns}
+                    onChange={event => updateBlock({
+                      columns: Number(event.target.value) as WechatSectionBlock["columns"],
+                    })}
+                  >
+                    <option value={2}>两列</option>
+                    <option value={3}>三列</option>
                   </select>
                 </label>
               ) : null}
@@ -1487,6 +1722,7 @@ export default function WechatBlockEditor({
                       <option value="lede">杂志导语</option>
                       <option value="overline">眉题</option>
                       <option value="metric">数据强调</option>
+                      <option value="dropcap">首字下沉</option>
                     </select>
                   </label>
                   <div className="wbe-property-grid">
@@ -1498,6 +1734,7 @@ export default function WechatBlockEditor({
                     <NumberField label="字重" value={selectedSectionText.fontWeight} min={300} max={900} step={100} onChange={fontWeight => updateSectionItemStyle({ fontWeight })} />
                     <NumberField label="字距" value={selectedSectionText.letterSpacing} min={0} max={8} step={0.5} onChange={letterSpacing => updateSectionItemStyle({ letterSpacing })} />
                     <NumberField label="行高" value={selectedSectionText.lineHeight} min={1} max={2.6} step={0.1} onChange={lineHeight => updateSectionItemStyle({ lineHeight })} />
+                    <NumberField label="首行缩进" value={selectedSectionText.textIndent} min={0} max={64} onChange={textIndent => updateSectionItemStyle({ textIndent })} />
                     <NumberField label="内边距" value={selectedSectionText.padding} min={0} max={48} onChange={padding => updateSectionItemStyle({ padding })} />
                     <NumberField label="圆角" value={selectedSectionText.radius} min={0} max={32} onChange={radius => updateSectionItemStyle({ radius })} />
                     <NumberField label="边框" value={selectedSectionText.borderWidth} min={0} max={8} onChange={borderWidth => updateSectionItemStyle({ borderWidth })} />

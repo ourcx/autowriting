@@ -16,7 +16,7 @@ const WECHAT_INLINE_PROPERTIES = [
   "border-radius", "box-shadow", "box-sizing",
   "display", "vertical-align", "white-space", "word-break", "overflow-wrap",
   "justify-content", "align-items", "flex-direction", "gap",
-  "object-fit", "aspect-ratio",
+  "object-fit", "aspect-ratio", "float", "clear", "direction",
 ] as const
 
 const DEFAULT_WECHAT_STYLE_VALUES = new Set([

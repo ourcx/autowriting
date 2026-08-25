@@ -40,7 +40,7 @@ const DESIGN_PLAN_SYSTEM_PROMPT = `你是视觉设计文件分析器。输入会
   "components": [{"name":"","appearance":"","useWhen":""}],
   "materialIdeas": [{"anchorRole":"","purpose":"","imagePrompt":""}],
   "layoutRules": [""],
-  "contentRoles": [{"role":"","recommendedVariant":"plain|title|banner|card|quote|highlight|lede|overline|metric","rule":""}],
+  "contentRoles": [{"role":"","recommendedVariant":"plain|title|banner|card|quote|highlight|lede|overline|metric|dropcap","rule":""}],
   "forbidden": [""],
   "wechatAdaptation": [""]
 }
@@ -112,11 +112,12 @@ const BLOCK_SYSTEM_PROMPT = `你是微信公众号 HTML 内容块排版引擎。
   "blocks": []
 }
 
-blocks 仅允许四种：
-1. content: {"id":"","type":"content","sourceId":"source-0","variant":"plain|title|banner|card|quote|highlight|lede|overline|metric|image","background":"transparent","color":"#262626","accentColor":"#2f6f62","borderColor":"transparent","borderWidth":0,"radius":0,"padding":0,"marginTop":0,"marginBottom":22,"fontSize":17,"fontWeight":400,"fontStyle":"normal|italic","textDecoration":"none|underline","letterSpacing":0,"lineHeight":1.9,"align":"left","imageFit":"cover|contain","imageRadius":6}
+blocks 仅允许五种：
+1. content: {"id":"","type":"content","sourceId":"source-0","variant":"plain|title|banner|card|quote|highlight|lede|overline|metric|dropcap|image","background":"transparent","color":"#262626","accentColor":"#2f6f62","borderColor":"transparent","borderWidth":0,"radius":0,"padding":0,"marginTop":0,"marginBottom":22,"fontSize":17,"fontWeight":400,"fontStyle":"normal|italic","textDecoration":"none|underline","letterSpacing":0,"lineHeight":1.9,"textIndent":0,"align":"left","imageFit":"cover|contain","imageRadius":6}
 2. decoration: {"id":"","type":"decoration","anchorSourceId":"source-0","placement":"before|after","d":"M 0 20 C 60 0 120 40 180 20","viewBoxWidth":180,"viewBoxHeight":40,"width":150,"height":36,"align":"left|center|right","fill":"transparent","stroke":"#2f6f62","strokeWidth":3,"marginTop":4,"marginBottom":16}
 3. asset: {"id":"","type":"asset","anchorSourceId":"source-2","placement":"before|after","prompt":"具体、可生成的英文图片描述","imageSize":"square_hd|square|portrait_4_3|portrait_16_9|landscape_4_3|landscape_16_9","width":320,"radius":0,"align":"left|center|right","marginTop":12,"marginBottom":24}
-4. section: {"id":"","type":"section","sourceIds":["source-1","source-2"],"layout":"stack|two-column|comparison|feature|editorial|timeline|steps","columnRatio":"1:1|1:2|2:1","preset":"plain|soft|feature|editorial|callout","background":"transparent","surfaceStyle":{"kind":"none|solid|linear|stripes|dots|grid|ruled-paper|generated","colors":["#ffffff","#f7f7f7"],"patternColor":"rgba(82,99,165,0.12)","angle":135,"size":20,"opacity":0.12,"prompt":"","imageSize":"landscape_16_9","fit":"cover|contain|tile","overlayColor":"#ffffff","overlayOpacity":0.12},"color":"#262626","accentColor":"#5263a5","borderColor":"#dee0e3","borderWidth":0,"radius":0,"padding":16,"gap":16,"marginTop":8,"marginBottom":24,"divider":true,"accentStyle":"none|top|left|bottom|tri-color","shadow":"none|soft","leadSourceId":"source-2","overlineSourceId":"source-1","icon":{"kind":"lucide|path","name":"book-open|quote|lightbulb|sparkles|mic|trending-up|check-circle|arrow-right|bar-chart","d":"","color":"#5263a5","size":24,"position":"top-left|top-right|inline"},"itemStyles":{"source-1":{"variant":"overline","fontSize":11,"fontWeight":700,"color":"#1f2329"},"source-2":{"variant":"lede","fontSize":20,"background":"#f7f7f7","borderColor":"#dee0e3","borderWidth":0,"radius":6,"padding":14,"marginTop":0,"marginBottom":12}}}
+4. divider: {"id":"","type":"divider","anchorSourceId":"source-2","placement":"before|after","style":"solid|dashed|dotted|double|gradient","color":"#5263a5","secondaryColor":"#e8b94a","width":120,"thickness":2,"align":"left|center|right","marginTop":16,"marginBottom":20}
+5. section: {"id":"","type":"section","sourceIds":["source-1","source-2"],"layout":"stack|two-column|comparison|feature|editorial|timeline|steps|media-text|grid","columnRatio":"1:1|1:2|2:1","mediaPosition":"left|right","columns":2,"preset":"plain|soft|feature|editorial|callout","background":"transparent","surfaceStyle":{"kind":"none|solid|linear|stripes|dots|grid|ruled-paper|generated","colors":["#ffffff","#f7f7f7"],"patternColor":"rgba(82,99,165,0.12)","angle":135,"size":20,"opacity":0.12,"prompt":"","imageSize":"landscape_16_9","fit":"cover|contain|tile","overlayColor":"#ffffff","overlayOpacity":0.12},"color":"#262626","accentColor":"#5263a5","borderColor":"#dee0e3","borderWidth":0,"radius":0,"padding":16,"gap":16,"marginTop":8,"marginBottom":24,"divider":true,"accentStyle":"none|top|left|bottom|tri-color","shadow":"none|soft","leadSourceId":"source-2","overlineSourceId":"source-1","icon":{"kind":"lucide|path","name":"book-open|quote|lightbulb|sparkles|mic|trending-up|check-circle|arrow-right|bar-chart","d":"","color":"#5263a5","size":24,"position":"top-left|top-right|inline"},"itemStyles":{"source-1":{"variant":"overline","fontSize":11,"fontWeight":700,"color":"#1f2329"},"source-2":{"variant":"lede","fontSize":20,"background":"#f7f7f7","borderColor":"#dee0e3","borderWidth":0,"radius":6,"padding":14,"marginTop":0,"marginBottom":12,"textIndent":0}}}
 
 规则：
 - 响应首字符必须是 {，末字符必须是 }，只输出一个完整 JSON 对象。
@@ -124,7 +125,7 @@ blocks 仅允许四种：
 - 每个内容源必须且只能出现一次：可以由 content.sourceId 单独引用，或由一个 section.sourceIds 组合引用，但不能同时出现。
 - content 不得输出 text、src 或 alt；系统会从 sourceId 回填原文与图片。
 - content 和 section 必须严格保持内容源原顺序，不得交换段落；section 只能组合 2-8 个连续 sourceId。
-- asset 和 decoration 不占用内容源，只能锚定已有 sourceId；最多生成 4 个 asset 和 8 个 decoration。
+- asset、decoration 和 divider 不占用内容源，只能锚定已有 sourceId；最多生成 4 个 asset、8 个 decoration 和 10 个 divider。
 - 图片内容源只能使用 image 版式，其他内容源不得使用 image。
 - 先用 theme 定义一次全局颜色、字体和几何规则；block 未填写的样式会继承 theme，避免重复输出大量属性。
 - theme 必须忠实复制设计分析结果中的 palette、typography、radius、spacing 和 shadow 语义；禁止回退到默认绿灰、奶油色或通用 Markdown 风格。
@@ -138,6 +139,8 @@ blocks 仅允许四种：
 - 卡片、标题条、引用、强调色需要围绕文章主题形成统一视觉语言，不要每段都做成独立卡片。
 - 根据设计文件选择 section 的 layout、accentStyle、shadow、leadSourceId、overlineSourceId 与 itemStyles。杂志系统优先 editorial + top/left accent；学习系统可使用 feature + tri-color；平面系统必须 shadow=none。
 - 有时间演进、事件顺序或阶段推进时使用 timeline；有方法、清单或操作流程时使用 steps。两者的序号和节点由程序生成，不得改写正文。
+- 图片与说明并列时使用 media-text，并用 mediaPosition 控制图片侧；多个短信息、指标或图片可使用 grid，columns 只能为 2 或 3，长正文不得塞入三列。
+- 可为正文设置 textIndent；dropcap 仅用于一篇文章的首个导语或章节首段，不得连续使用。divider 用于章节转场，优先使用主题色和克制宽度，不得每段都插入。
 - 默认 borderWidth=0，以留白、背景层级和强调边组织内容；只有设计文件明确要求描边时才增加边框。不要把每个 section 都画成有边框的卡片。
 - 避免相邻重复强调：标题已有下划线或强调边时，第一个 section 不再重复同色顶部边。除非设计明确要求，带完整边框的 section 不得超过总数的四分之一。
 - 图标优先使用 lucide 白名单；没有合适图标时才用 AI 生成的安全 path。图标必须服务于语义，不得每个 section 重复同一图标。
@@ -158,7 +161,9 @@ B. 研究手册：
 C. 视觉故事：
 {"blocks":[{"type":"asset","anchorSourceId":"source-1","placement":"after","prompt":"Editorial paper collage about the article subject, layered cut paper composition, soft daylight, restrained brand palette, high detail, no text, no logo, no watermark","imageSize":"landscape_16_9","width":597},{"type":"section","sourceIds":["source-2","source-3","source-4"],"layout":"two-column","columnRatio":"2:1","preset":"plain","surfaceStyle":{"kind":"linear","colors":["#ffffff","#f5f7ff"],"angle":135}}]}
 D. 生成背景：
-{"sidePadding":8,"theme":{"canvasStyle":{"kind":"generated","colors":["#ffffff"],"prompt":"Subtle editorial paper texture inspired by the article subject, quiet center, sparse details near edges, soft natural light, restrained palette, no text, no logo, no watermark","imageSize":"portrait_16_9","fit":"cover","overlayColor":"#ffffff","overlayOpacity":0.72}}}`
+{"sidePadding":8,"theme":{"canvasStyle":{"kind":"generated","colors":["#ffffff"],"prompt":"Subtle editorial paper texture inspired by the article subject, quiet center, sparse details near edges, soft natural light, restrained palette, no text, no logo, no watermark","imageSize":"portrait_16_9","fit":"cover","overlayColor":"#ffffff","overlayOpacity":0.72}}}
+E. 组件化图文：
+{"blocks":[{"type":"section","sourceIds":["source-1","source-2","source-3"],"layout":"media-text","columnRatio":"1:2","mediaPosition":"left","preset":"soft"},{"type":"divider","anchorSourceId":"source-3","placement":"after","style":"gradient","color":"#5263a5","secondaryColor":"#e8b94a","width":180,"thickness":2},{"type":"section","sourceIds":["source-4","source-5","source-6","source-7"],"layout":"grid","columns":2,"preset":"plain"}]}`
 
 interface CanvasCompletionData {
   choices?: Array<{
@@ -280,7 +285,7 @@ function assertDesignRichness(
   if (sourceCount < 2) return
   const sections = document.blocks.filter(block => block.type === "section")
   const hasVisualMaterial = document.blocks.some(block => (
-    block.type === "asset" || block.type === "decoration"
+    block.type === "asset" || block.type === "decoration" || block.type === "divider"
   ))
   const hasCanvasTreatment = document.theme.canvasStyle.kind !== "none"
   const surfacedSections = sections.filter(section => (
