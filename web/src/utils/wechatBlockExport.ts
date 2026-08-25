@@ -117,6 +117,7 @@ function wrapWithWechatGutter(root: HTMLElement, sideSpace: number): void {
 
 function replaceSvgDecorations(root: HTMLElement): void {
   root.querySelectorAll("svg").forEach(svg => {
+    if (svg.closest("[data-wechat-interactive]")) return
     if (svg.getAttribute("data-wechat-icon") === "true") {
       const clone = svg.cloneNode(true) as SVGElement
       clone.setAttribute("xmlns", "http://www.w3.org/2000/svg")

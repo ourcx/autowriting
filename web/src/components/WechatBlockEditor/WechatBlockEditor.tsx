@@ -1,4 +1,4 @@
-import type { CSSProperties, RefObject } from "react"
+import type { CSSProperties, ReactNode, RefObject } from "react"
 import {
   ArrowDown,
   ArrowRight,
@@ -28,8 +28,10 @@ import type {
   WechatDecorationBlock,
   WechatDividerBlock,
   WechatIconName,
+  WechatInlineMark,
   WechatSectionBlock,
   WechatSectionIcon,
+  WechatSwitcherBlock,
   WechatSurfaceKind,
   WechatSurfaceStyle,
   WechatTextStyleOverride,
@@ -157,11 +159,23 @@ function generatedAssetUrl(block: WechatAssetBlock): string {
 }
 
 function generatedAssetRatio(block: WechatAssetBlock): string {
-  if (block.imageSize === "landscape_16_9") return "16 / 9"
-  if (block.imageSize === "landscape_4_3") return "4 / 3"
-  if (block.imageSize === "portrait_16_9") return "9 / 16"
-  if (block.imageSize === "portrait_4_3") return "3 / 4"
+  return generatedImageRatio(block.imageSize)
+}
+
+function generatedImageRatio(imageSize: WechatAssetBlock["imageSize"]): string {
+  if (imageSize === "landscape_16_9") return "16 / 9"
+  if (imageSize === "landscape_4_3") return "4 / 3"
+  if (imageSize === "portrait_16_9") return "9 / 16"
+  if (imageSize === "portrait_4_3") return "3 / 4"
   return "1 / 1"
+}
+
+function generatedImageViewBox(imageSize: WechatAssetBlock["imageSize"]): [number, number] {
+  if (imageSize === "landscape_16_9") return [1600, 900]
+  if (imageSize === "landscape_4_3") return [1200, 900]
+  if (imageSize === "portrait_16_9") return [900, 1600]
+  if (imageSize === "portrait_4_3") return [900, 1200]
+  return [1000, 1000]
 }
 
 function SectionIcon({ icon }: { icon: WechatSectionIcon }) {
@@ -206,6 +220,7 @@ function blockLabel(block: WechatBlock, source?: CanvasSource): string {
   if (block.type === "decoration") return "AI SVG 装饰"
   if (block.type === "asset") return "AI 图片素材"
   if (block.type === "divider") return "分隔线"
+  if (block.type === "switcher") return "点击切换素材"
   if (block.type === "section") return `${block.layout} · ${block.sourceIds.length} 项`
   if (source?.kind === "image") return source.alt || "文章图片"
   return source?.text?.split("\n")[0] || "内容块"
@@ -213,8 +228,62 @@ function blockLabel(block: WechatBlock, source?: CanvasSource): string {
 
 function isAuxiliaryBlock(
   block: WechatBlock,
-): block is WechatDecorationBlock | WechatAssetBlock | WechatDividerBlock {
-  return block.type === "decoration" || block.type === "asset" || block.type === "divider"
+): block is WechatDecorationBlock | WechatAssetBlock | WechatDividerBlock | WechatSwitcherBlock {
+  return block.type === "decoration"
+    || block.type === "asset"
+    || block.type === "divider"
+    || block.type === "switcher"
+}
+
+function occurrenceIndex(text: string, match: string, occurrence: number): number {
+  let from = 0
+  let index = -1
+  for (let count = 0; count < occurrence; count += 1) {
+    index = text.indexOf(match, from)
+    if (index < 0) return -1
+    from = index + match.length
+  }
+  return index
+}
+
+function renderMarkedText(
+  text: string,
+  marks: WechatInlineMark[],
+  keyPrefix: string,
+): ReactNode[] {
+  const candidates = marks.flatMap(mark => {
+    const start = occurrenceIndex(text, mark.match, mark.occurrence)
+    return start < 0 ? [] : [{ start, end: start + mark.match.length, mark }]
+  }).sort((left, right) => left.start - right.start)
+  const ranges = candidates.reduce<typeof candidates>((accepted, range) => {
+    const previous = accepted[accepted.length - 1]
+    if (!previous || range.start >= previous.end) accepted.push(range)
+    return accepted
+  }, [])
+  if (ranges.length === 0) return [text]
+
+  const nodes: ReactNode[] = []
+  let cursor = 0
+  ranges.forEach((range, index) => {
+    if (range.start > cursor) nodes.push(text.slice(cursor, range.start))
+    nodes.push(
+      <span
+        key={`${keyPrefix}-mark-${index}`}
+        style={{
+          color: range.mark.color === "transparent" ? undefined : range.mark.color,
+          background: range.mark.background === "transparent" ? undefined : range.mark.background,
+          fontWeight: range.mark.fontWeight,
+          textDecoration: range.mark.textDecoration,
+          padding: range.mark.background === "transparent" ? undefined : "0 0.12em",
+        }}
+      >
+        {text.slice(range.start, range.end)}
+      </span>,
+    )
+    cursor = range.end
+  })
+  if (cursor < text.length) nodes.push(text.slice(cursor))
+  return nodes
 }
 
 function sectionContentBlock(
@@ -624,6 +693,7 @@ function SourceContent({
   }
 
   const text = source.text || ""
+  const markedText = renderMarkedText(text, block.marks, block.id)
   const style: CSSProperties = {
     ...contentStyle(block),
     fontFamily: fontTheme === "editorial"
@@ -640,24 +710,24 @@ function SourceContent({
   if (fontTheme === "editorial" && block.variant === "quote") {
     style.borderLeft = `4px solid ${block.accentColor}`
   }
-  if (source.kind === "title") return <h1 style={style}>{text}</h1>
+  if (source.kind === "title") return <h1 style={style}>{markedText}</h1>
   if (source.kind === "heading") {
     return (
       <h2 style={style}>
         {block.variant === "banner" ? (
           <span style={{ display: "inline-block", width: 5, height: "1.15em", marginRight: 10, verticalAlign: "-0.15em", background: block.accentColor }} />
         ) : null}
-        {text}
+        {markedText}
       </h2>
     )
   }
-  if (source.kind === "quote") return <blockquote style={style}>{text}</blockquote>
+  if (source.kind === "quote") return <blockquote style={style}>{markedText}</blockquote>
   if (source.kind === "list") {
     return (
       <section style={style}>
         {text.split("\n").map((item, index) => (
           <p key={`${block.id}-${index}`} style={{ margin: index === 0 ? 0 : "8px 0 0" }}>
-            {item}
+            {renderMarkedText(item, block.marks, `${block.id}-${index}`)}
           </p>
         ))}
       </section>
@@ -678,11 +748,11 @@ function SourceContent({
         >
           {text.slice(0, 1)}
         </span>
-        {text.slice(1)}
+        {renderMarkedText(text.slice(1), block.marks, `${block.id}-dropcap`)}
       </p>
     )
   }
-  return <p style={{ ...style, whiteSpace: "pre-wrap" }}>{text}</p>
+  return <p style={{ ...style, whiteSpace: "pre-wrap" }}>{markedText}</p>
 }
 
 function Decoration({ block }: { block: WechatDecorationBlock }) {
@@ -748,6 +818,77 @@ function GeneratedAsset({ block }: { block: WechatAssetBlock }) {
           borderRadius: block.radius,
         }}
       />
+    </figure>
+  )
+}
+
+function Switcher({ block }: { block: WechatSwitcherBlock }) {
+  const marginLeft = block.align === "right" || block.align === "center" ? "auto" : 0
+  const marginRight = block.align === "left" || block.align === "center" ? "auto" : 0
+  const [viewBoxWidth, viewBoxHeight] = generatedImageViewBox(block.imageSize)
+  const beforeUrl = generatedImageUrl(
+    block.beforePrompt,
+    block.imageSize,
+    "First state of a two-state interactive editorial image.",
+  )
+  const afterUrl = generatedImageUrl(
+    block.afterPrompt,
+    block.imageSize,
+    "Second state of the same composition, clearly changed but visually consistent.",
+  )
+  return (
+    <figure
+      style={{
+        width: block.width,
+        maxWidth: "100%",
+        aspectRatio: generatedImageRatio(block.imageSize),
+        marginTop: block.marginTop,
+        marginBottom: block.marginBottom,
+        marginLeft,
+        marginRight,
+        overflow: "hidden",
+        borderRadius: block.radius,
+        lineHeight: 0,
+      }}
+    >
+      <svg
+        data-wechat-interactive="switcher"
+        viewBox={`0 0 ${viewBoxWidth} ${viewBoxHeight}`}
+        width="100%"
+        xmlns="http://www.w3.org/2000/svg"
+        style={{
+          display: "block",
+          width: "100%",
+          backgroundImage: `url("${beforeUrl}")`,
+          backgroundSize: "100% 100%",
+          backgroundRepeat: "no-repeat",
+        }}
+      >
+        <svg
+          data-wechat-interactive="switcher-state"
+          viewBox={`0 0 ${viewBoxWidth} ${viewBoxHeight}`}
+          width="100%"
+          height="100%"
+          opacity="0"
+          style={{
+            backgroundImage: `url("${afterUrl}")`,
+            backgroundSize: "100% 100%",
+            backgroundRepeat: "no-repeat",
+            pointerEvents: "all",
+          }}
+        >
+          <rect width="100%" height="100%" fill="transparent" style={{ pointerEvents: "all" }} />
+          <animate
+            attributeName="opacity"
+            values="0;1;1"
+            begin="click"
+            dur="1000s"
+            fill="freeze"
+            keyTimes="0;0.000001;1"
+            calcMode="discrete"
+          />
+        </svg>
+      </svg>
     </figure>
   )
 }
@@ -825,6 +966,8 @@ export function WechatBlockRenderer({
               ? <Decoration block={block} />
               : block.type === "asset"
                 ? <GeneratedAsset block={block} />
+                : block.type === "switcher"
+                  ? <Switcher block={block} />
                 : block.type === "divider"
                   ? <Divider block={block} />
                 : block.type === "section"
@@ -1208,7 +1351,7 @@ export default function WechatBlockEditor({
                   <span className={`wbe-block-icon wbe-block-icon--${block.type}`}>
                     {block.type === "decoration"
                       ? <Sparkles size={14} />
-                      : block.type === "asset"
+                      : block.type === "asset" || block.type === "switcher"
                         ? <ImageIcon size={14} />
                         : block.type === "divider"
                           ? <ArrowRight size={14} />
@@ -1459,6 +1602,63 @@ export default function WechatBlockEditor({
                   value={selectedBlock.align}
                   onChange={event => updateBlock({
                     align: event.target.value as WechatAssetBlock["align"],
+                  })}
+                >
+                  <option value="left">左对齐</option>
+                  <option value="center">居中</option>
+                  <option value="right">右对齐</option>
+                </select>
+              </label>
+            </>
+          ) : null}
+
+          {selectedBlock?.type === "switcher" ? (
+            <>
+              <div className="wbe-property-heading">点击切换素材</div>
+              <label>
+                <span>切换前图片提示词</span>
+                <textarea
+                  value={selectedBlock.beforePrompt}
+                  rows={5}
+                  onChange={event => updateBlock({ beforePrompt: event.target.value })}
+                />
+              </label>
+              <label>
+                <span>切换后图片提示词</span>
+                <textarea
+                  value={selectedBlock.afterPrompt}
+                  rows={5}
+                  onChange={event => updateBlock({ afterPrompt: event.target.value })}
+                />
+              </label>
+              <label>
+                <span>图片比例</span>
+                <select
+                  value={selectedBlock.imageSize}
+                  onChange={event => updateBlock({
+                    imageSize: event.target.value as WechatSwitcherBlock["imageSize"],
+                  })}
+                >
+                  <option value="landscape_16_9">横图 16:9</option>
+                  <option value="landscape_4_3">横图 4:3</option>
+                  <option value="square_hd">高清方图</option>
+                  <option value="square">方图</option>
+                  <option value="portrait_4_3">竖图 4:3</option>
+                  <option value="portrait_16_9">竖图 16:9</option>
+                </select>
+              </label>
+              <div className="wbe-property-grid">
+                <NumberField label="宽度" value={selectedBlock.width} min={120} max={677} onChange={width => updateBlock({ width })} />
+                <NumberField label="圆角" value={selectedBlock.radius} min={0} max={32} onChange={radius => updateBlock({ radius })} />
+                <NumberField label="上间距" value={selectedBlock.marginTop} min={0} max={80} onChange={marginTop => updateBlock({ marginTop })} />
+                <NumberField label="下间距" value={selectedBlock.marginBottom} min={0} max={80} onChange={marginBottom => updateBlock({ marginBottom })} />
+              </div>
+              <label>
+                <span>对齐</span>
+                <select
+                  value={selectedBlock.align}
+                  onChange={event => updateBlock({
+                    align: event.target.value as WechatSwitcherBlock["align"],
                   })}
                 >
                   <option value="left">左对齐</option>
