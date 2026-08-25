@@ -27,6 +27,7 @@ const router = Router()
 router.use(authMiddleware)
 
 const PROMPT_MAX_LENGTH = 3000
+const CANVAS_LLM_TIMEOUT_MS = 300000
 const DESIGN_PLAN_SYSTEM_PROMPT = `你是视觉设计文件分析器。输入会包含原始 Design System、设计说明、SVG、XML、JSON 或 Markdown，以及系统模板。
 
 只输出 JSON：
@@ -186,6 +187,26 @@ interface CanvasCompletionData {
   }
 }
 
+type BlockDslFailureCode =
+  | "empty-response"
+  | "truncated"
+  | "incomplete-json"
+  | "invalid-json"
+  | "empty-blocks"
+  | "invalid-blocks"
+  | "insufficient-design"
+  | "repair-failed"
+
+class BlockDslError extends Error {
+  readonly code: BlockDslFailureCode
+
+  constructor(code: BlockDslFailureCode, message: string, cause?: unknown) {
+    super(message, cause === undefined ? undefined : { cause })
+    this.name = "BlockDslError"
+    this.code = code
+  }
+}
+
 function textFromContent(content: unknown): string {
   if (typeof content === "string") return content
   if (!Array.isArray(content)) return ""
@@ -264,12 +285,25 @@ function parseCanvasFromCompletion(data: CanvasCompletionData): CanvasDocument {
 }
 
 function parseBlockFromCompletion(data: CanvasCompletionData): WechatBlockDocument {
-  for (const candidate of completionCandidates(data)) {
+  const candidates = completionCandidates(data)
+  let hasJsonObject = false
+  let hasBlocksArray = false
+  let hasDeclaredBlocks = false
+
+  for (const candidate of candidates) {
     for (const value of balancedJsonObjects(candidate)) {
+      hasJsonObject = true
       const record = value && typeof value === "object" && !Array.isArray(value)
         ? value as Record<string, unknown>
         : {}
       for (const documentValue of [record.document, record.blocksDocument, value]) {
+        const documentRecord = documentValue && typeof documentValue === "object" && !Array.isArray(documentValue)
+          ? documentValue as Record<string, unknown>
+          : {}
+        if (Array.isArray(documentRecord.blocks)) {
+          hasBlocksArray = true
+          if (documentRecord.blocks.length > 0) hasDeclaredBlocks = true
+        }
         try {
           const parsed = parseWechatBlockDocument(documentValue)
           if (parsed.blocks.length > 0) return parsed
@@ -279,7 +313,26 @@ function parseBlockFromCompletion(data: CanvasCompletionData): WechatBlockDocume
       }
     }
   }
-  throw new Error("AI 未返回可解析的公众号块 DSL")
+
+  if (data.choices?.[0]?.finish_reason === "length") {
+    throw new BlockDslError("truncated", "返回的排版 JSON 因输出长度限制被截断")
+  }
+  if (candidates.length === 0) {
+    throw new BlockDslError("empty-response", "没有返回任何排版内容")
+  }
+  if (!hasJsonObject) {
+    const looksIncomplete = candidates.some(candidate => (
+      candidate.includes("{") && !candidate.trimEnd().endsWith("}")
+    ))
+    throw new BlockDslError(
+      looksIncomplete ? "incomplete-json" : "invalid-json",
+      looksIncomplete ? "返回的排版 JSON 不完整" : "返回的内容不是有效 JSON",
+    )
+  }
+  if (!hasBlocksArray || !hasDeclaredBlocks) {
+    throw new BlockDslError("empty-blocks", "返回了 JSON，但其中没有可用的 blocks")
+  }
+  throw new BlockDslError("invalid-blocks", "返回的 blocks 不符合公众号块 DSL 结构")
 }
 
 function assertDesignRichness(
@@ -327,8 +380,66 @@ function assertDesignRichness(
     || techniques.size < minimumTechniques
     || (sourceCount >= 5 && surfaceLayers < 2)
   ) {
-    throw new Error("AI 未充分使用设计文件与组合布局能力")
+    throw new BlockDslError(
+      "insufficient-design",
+      "排版结构过于简单，未满足组合布局和背景层级要求",
+    )
   }
+}
+
+function blockFailureMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "排版结构校验失败"
+}
+
+function blockRepairSuggestion(errors: unknown[]): string {
+  const codes = new Set(errors.flatMap(error => (
+    error instanceof BlockDslError ? [error.code] : []
+  )))
+  if (
+    codes.has("truncated")
+    || codes.has("incomplete-json")
+  ) {
+    return "请重试；若持续失败，请缩短 Design 文件或切换支持更大输出长度的模型。"
+  }
+  if (codes.has("empty-response")) {
+    return "请重试或切换文章模型。"
+  }
+  if (codes.has("insufficient-design")) {
+    return "请重试，或调整设计要求后切换能力更强的文章模型。"
+  }
+  return "请重试；若持续失败，请切换文章模型。"
+}
+
+function describeUpstreamCanvasError(error: unknown, fallback: string): string {
+  const details = error && typeof error === "object"
+    ? error as { code?: unknown; message?: unknown; response?: { status?: unknown } }
+    : {}
+  const status = typeof details.response?.status === "number"
+    ? details.response.status
+    : undefined
+  if (status === 401) return "文章模型 API Key 无效或已过期，请前往「AI 配置」重新填写。"
+  if (status === 402) return "文章模型账户余额或套餐额度不足，请充值、更新套餐或切换模型服务。"
+  if (status === 403) return "当前 API Key 没有该文章模型的访问权限，请检查模型权限或切换模型。"
+  if (status === 429) return "文章模型请求过于频繁或配额已用尽，请稍后重试或检查账户配额。"
+  if (status === 400 || status === 422) {
+    return "文章模型拒绝了生成参数，请检查模型配置或切换兼容 OpenAI Chat Completions 的模型。"
+  }
+  if (status && status >= 500) return "文章模型服务暂时不可用，请稍后重试或切换模型服务。"
+
+  const code = typeof details.code === "string" ? details.code : ""
+  const message = typeof details.message === "string" ? details.message : ""
+  if (code === "ECONNABORTED" || code === "ETIMEDOUT" || /timeout/i.test(message)) {
+    return "文章模型等待 5 分钟后仍未完成，请重试；若持续超时，请减少 Design 文件长度或切换模型。"
+  }
+  if (
+    code === "ECONNREFUSED"
+    || code === "ENOTFOUND"
+    || code === "ECONNRESET"
+    || (!status && /network|socket hang up/i.test(message))
+  ) {
+    return "无法连接文章模型服务，请检查 API 地址和网络后重试。"
+  }
+  return error instanceof BlockDslError ? error.message : fallback
 }
 
 function completionShape(data: CanvasCompletionData) {
@@ -353,12 +464,18 @@ async function callStructuredCanvas(
     const response = await callLLMWithRetry(url, {
       ...body,
       response_format: { type: "json_object" },
-    }, headers, maxRetries)
+    }, headers, maxRetries, CANVAS_LLM_TIMEOUT_MS)
     return response.data as CanvasCompletionData
   } catch (error: unknown) {
     const status = (error as { response?: { status?: number } }).response?.status
     if (status !== 400 && status !== 422) throw error
-    const response = await callLLMWithRetry(url, body, headers, maxRetries)
+    const response = await callLLMWithRetry(
+      url,
+      body,
+      headers,
+      maxRetries,
+      CANVAS_LLM_TIMEOUT_MS,
+    )
     return response.data as CanvasCompletionData
   }
 }
@@ -549,7 +666,7 @@ async function generateBlockWithRepair(input: {
       ),
       attempts: [...(analysis.completion ? [analysis.completion] : []), first],
     }
-  } catch {
+  } catch (firstError: unknown) {
     input.onRepair?.()
     const malformed = completionCandidates(first).join("\n").slice(0, 20000)
     const repair = await callStructuredCanvas(input.url, {
@@ -580,16 +697,26 @@ ${sourceManifest}`,
       max_tokens: 8000,
       stream: false,
     }, input.headers, 2)
-    const repairedDocument = parseBlockFromCompletion(repair)
-    assertDesignRichness(repairedDocument, input.sources.length, input.hasDesignReference)
-    return {
-      document: hydrateWechatBlockDocument(
-        repairedDocument,
-        input.sources,
-        input.articleTitle,
-        { templateId: input.templateId },
-      ),
-      attempts: [...(analysis.completion ? [analysis.completion] : []), first, repair],
+    try {
+      const repairedDocument = parseBlockFromCompletion(repair)
+      assertDesignRichness(repairedDocument, input.sources.length, input.hasDesignReference)
+      return {
+        document: hydrateWechatBlockDocument(
+          repairedDocument,
+          input.sources,
+          input.articleTitle,
+          { templateId: input.templateId },
+        ),
+        attempts: [...(analysis.completion ? [analysis.completion] : []), first, repair],
+      }
+    } catch (repairError: unknown) {
+      throw new BlockDslError(
+        "repair-failed",
+        `AI 自动修复排版后仍未通过校验：首轮${blockFailureMessage(firstError)}；`
+        + `修复轮${blockFailureMessage(repairError)}。`
+        + blockRepairSuggestion([firstError, repairError]),
+        repairError,
+      )
     }
   }
 }
@@ -832,10 +959,11 @@ router.post("/generate-block/stream", async (req: AuthedRequest, res) => {
     send("result", { document: generated.document })
     send("done", {})
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "AI 生成块排版失败"
+    const message = describeUpstreamCanvasError(error, "AI 生成块排版失败，请重试或切换文章模型。")
     send("error", { message })
     logger.error("CANVAS", "AI 流式生成块排版失败", {
-      error: message,
+      error: error instanceof Error ? error.message : message,
+      userMessage: message,
       userId: req.user?.id,
     })
   } finally {

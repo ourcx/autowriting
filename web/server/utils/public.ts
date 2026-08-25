@@ -65,11 +65,12 @@ export async function callLLMWithRetry(
   body: Record<string, unknown>,
   headers: Record<string, string>,
   maxRetries = 3,
+  timeoutMs = 90000,
 ): Promise<{ data: { choices: Array<{ message: { content: string } }> } }> {
   let lastErr: unknown
   for (let i = 0; i < maxRetries; i++) {
     try {
-      return await axios.post(url, body, { headers, timeout: 90000 })
+      return await axios.post(url, body, { headers, timeout: timeoutMs })
     } catch (err: unknown) {
       lastErr = err
       const axiosErr = err as { response?: { status?: number }; message?: string }
