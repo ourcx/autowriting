@@ -116,7 +116,7 @@ blocks 仅允许四种：
 1. content: {"id":"","type":"content","sourceId":"source-0","variant":"plain|title|banner|card|quote|highlight|lede|overline|metric|image","background":"transparent","color":"#262626","accentColor":"#2f6f62","borderColor":"transparent","borderWidth":0,"radius":0,"padding":0,"marginTop":0,"marginBottom":22,"fontSize":17,"fontWeight":400,"fontStyle":"normal|italic","textDecoration":"none|underline","letterSpacing":0,"lineHeight":1.9,"align":"left","imageFit":"cover|contain","imageRadius":6}
 2. decoration: {"id":"","type":"decoration","anchorSourceId":"source-0","placement":"before|after","d":"M 0 20 C 60 0 120 40 180 20","viewBoxWidth":180,"viewBoxHeight":40,"width":150,"height":36,"align":"left|center|right","fill":"transparent","stroke":"#2f6f62","strokeWidth":3,"marginTop":4,"marginBottom":16}
 3. asset: {"id":"","type":"asset","anchorSourceId":"source-2","placement":"before|after","prompt":"具体、可生成的英文图片描述","imageSize":"square_hd|square|portrait_4_3|portrait_16_9|landscape_4_3|landscape_16_9","width":320,"radius":0,"align":"left|center|right","marginTop":12,"marginBottom":24}
-4. section: {"id":"","type":"section","sourceIds":["source-1","source-2"],"layout":"stack|two-column|comparison|feature|editorial","columnRatio":"1:1|1:2|2:1","preset":"plain|soft|feature|editorial|callout","background":"transparent","surfaceStyle":{"kind":"none|solid|linear|stripes|dots|grid|ruled-paper|generated","colors":["#ffffff","#f7f7f7"],"patternColor":"rgba(82,99,165,0.12)","angle":135,"size":20,"opacity":0.12,"prompt":"","imageSize":"landscape_16_9","fit":"cover|contain|tile","overlayColor":"#ffffff","overlayOpacity":0.12},"color":"#262626","accentColor":"#5263a5","borderColor":"#dee0e3","borderWidth":0,"radius":0,"padding":0,"gap":16,"marginTop":8,"marginBottom":24,"divider":true,"accentStyle":"none|top|left|bottom|tri-color","shadow":"none|soft","leadSourceId":"source-2","overlineSourceId":"source-1","icon":{"kind":"lucide|path","name":"book-open|quote|lightbulb|sparkles|mic|trending-up|check-circle|arrow-right|bar-chart","d":"","color":"#5263a5","size":24,"position":"top-left|top-right|inline"},"itemStyles":{"source-1":{"variant":"overline","fontSize":11,"fontWeight":700,"color":"#1f2329"},"source-2":{"variant":"lede","fontSize":20}}}
+4. section: {"id":"","type":"section","sourceIds":["source-1","source-2"],"layout":"stack|two-column|comparison|feature|editorial|timeline|steps","columnRatio":"1:1|1:2|2:1","preset":"plain|soft|feature|editorial|callout","background":"transparent","surfaceStyle":{"kind":"none|solid|linear|stripes|dots|grid|ruled-paper|generated","colors":["#ffffff","#f7f7f7"],"patternColor":"rgba(82,99,165,0.12)","angle":135,"size":20,"opacity":0.12,"prompt":"","imageSize":"landscape_16_9","fit":"cover|contain|tile","overlayColor":"#ffffff","overlayOpacity":0.12},"color":"#262626","accentColor":"#5263a5","borderColor":"#dee0e3","borderWidth":0,"radius":0,"padding":16,"gap":16,"marginTop":8,"marginBottom":24,"divider":true,"accentStyle":"none|top|left|bottom|tri-color","shadow":"none|soft","leadSourceId":"source-2","overlineSourceId":"source-1","icon":{"kind":"lucide|path","name":"book-open|quote|lightbulb|sparkles|mic|trending-up|check-circle|arrow-right|bar-chart","d":"","color":"#5263a5","size":24,"position":"top-left|top-right|inline"},"itemStyles":{"source-1":{"variant":"overline","fontSize":11,"fontWeight":700,"color":"#1f2329"},"source-2":{"variant":"lede","fontSize":20,"background":"#f7f7f7","borderColor":"#dee0e3","borderWidth":0,"radius":6,"padding":14,"marginTop":0,"marginBottom":12}}}
 
 规则：
 - 响应首字符必须是 {，末字符必须是 }，只输出一个完整 JSON 对象。
@@ -132,8 +132,12 @@ blocks 仅允许四种：
 - 这是公众号长文，不是海报：保持连续纵向阅读、清晰层级、17-18px 正文、1.7-2.0 行高和克制留白。
 - sidePadding 默认输出 8，允许 0-48；除非设计文件明确要求，不得擅自扩大到传统 Markdown 的 24-40px 大留白。
 - 必须使用 2-8 个 section 形成明显区别于 Markdown 的组合布局。短段落、对比主体或图片与说明优先使用 two-column/comparison/feature，长正文使用 stack。
+- 你必须主动完成视觉设计，不要等待用户逐项指定。每篇正常长度文章至少组合使用三类能力：背景层级、非纵向布局、强调边或图标、特殊文字角色、素材或装饰；不得只输出标题加普通正文。
+- 至少两个 section 使用可见但低对比的不同背景层级，可选 solid、linear、dots、grid、ruled-paper 或 generated。背景色必须来自 theme，正文区域必须保持足够对比度。
+- 有背景或完整边框的 content、section、itemStyles 必须设置 padding>=12；禁止文字紧贴边框。纯正文才允许 padding=0。
 - 卡片、标题条、引用、强调色需要围绕文章主题形成统一视觉语言，不要每段都做成独立卡片。
 - 根据设计文件选择 section 的 layout、accentStyle、shadow、leadSourceId、overlineSourceId 与 itemStyles。杂志系统优先 editorial + top/left accent；学习系统可使用 feature + tri-color；平面系统必须 shadow=none。
+- 有时间演进、事件顺序或阶段推进时使用 timeline；有方法、清单或操作流程时使用 steps。两者的序号和节点由程序生成，不得改写正文。
 - 默认 borderWidth=0，以留白、背景层级和强调边组织内容；只有设计文件明确要求描边时才增加边框。不要把每个 section 都画成有边框的卡片。
 - 避免相邻重复强调：标题已有下划线或强调边时，第一个 section 不再重复同色顶部边。除非设计明确要求，带完整边框的 section 不得超过总数的四分之一。
 - 图标优先使用 lucide 白名单；没有合适图标时才用 AI 生成的安全 path。图标必须服务于语义，不得每个 section 重复同一图标。
@@ -270,30 +274,43 @@ function parseBlockFromCompletion(data: CanvasCompletionData): WechatBlockDocume
 
 function assertDesignRichness(
   document: WechatBlockDocument,
-  required: boolean,
+  sourceCount: number,
+  strict: boolean,
 ): void {
-  if (!required) return
+  if (sourceCount < 2) return
   const sections = document.blocks.filter(block => block.type === "section")
   const hasVisualMaterial = document.blocks.some(block => (
     block.type === "asset" || block.type === "decoration"
   ))
   const hasCanvasTreatment = document.theme.canvasStyle.kind !== "none"
-    && document.theme.canvasStyle.kind !== "solid"
-  const expressive = sections.some(section => (
-    section.layout !== "stack"
-    || section.preset !== "plain"
-    || section.accentStyle !== "none"
-    || section.shadow !== "none"
-    || Boolean(section.icon)
-    || Boolean(section.surfaceStyle && !["none", "solid"].includes(section.surfaceStyle.kind))
-    || Object.values(section.itemStyles).some(style => (
+  const surfacedSections = sections.filter(section => (
+    section.background !== "transparent"
+    || Boolean(section.surfaceStyle && section.surfaceStyle.kind !== "none")
+  ))
+  const techniques = new Set<string>()
+  if (hasVisualMaterial) techniques.add("material")
+  if (hasCanvasTreatment || surfacedSections.length > 0) techniques.add("surface")
+  if (sections.some(section => section.layout !== "stack")) techniques.add("layout")
+  if (sections.some(section => section.accentStyle !== "none" || Boolean(section.icon))) {
+    techniques.add("accent")
+  }
+  if (sections.some(section => (
+    Object.values(section.itemStyles).some(style => (
       style.variant === "lede"
       || style.variant === "overline"
       || style.variant === "metric"
       || style.variant === "quote"
     ))
-  ))
-  if (sections.length < 2 || (!expressive && !hasVisualMaterial && !hasCanvasTreatment)) {
+  ))) techniques.add("typography")
+
+  const minimumSections = sourceCount >= 5 ? 2 : 1
+  const minimumTechniques = strict ? 3 : 2
+  const surfaceLayers = surfacedSections.length + (hasCanvasTreatment ? 1 : 0)
+  if (
+    sections.length < minimumSections
+    || techniques.size < minimumTechniques
+    || (sourceCount >= 5 && surfaceLayers < 2)
+  ) {
     throw new Error("AI 未充分使用设计文件与组合布局能力")
   }
 }
@@ -506,7 +523,7 @@ async function generateBlockWithRepair(input: {
 
   try {
     const parsed = parseBlockFromCompletion(first)
-    assertDesignRichness(parsed, input.hasDesignReference)
+    assertDesignRichness(parsed, input.sources.length, input.hasDesignReference)
     return {
       document: hydrateWechatBlockDocument(
         parsed,
@@ -539,7 +556,7 @@ ${analysis.plan || "无"}
 上一轮输出：
 ${malformed || "无"}
 
-请重新输出合法且明显使用设计文件视觉语言的公众号块 DSL。必须包含至少 2 个 section，并使用匹配设计的 layout、accentStyle、shadow 与 itemStyles。内容源：
+请重新输出合法且有明确视觉设计的公众号块 DSL。正常长度文章必须包含至少 2 个 section、至少 2 个可见背景层级，并组合使用 layout、surfaceStyle、accentStyle、icon、itemStyles 或 asset 中至少三类能力。有背景或边框的区域 padding 不得小于 12。内容源：
 ${sourceManifest}`,
         },
       ],
@@ -548,7 +565,7 @@ ${sourceManifest}`,
       stream: false,
     }, input.headers, 2)
     const repairedDocument = parseBlockFromCompletion(repair)
-    assertDesignRichness(repairedDocument, input.hasDesignReference)
+    assertDesignRichness(repairedDocument, input.sources.length, input.hasDesignReference)
     return {
       document: hydrateWechatBlockDocument(
         repairedDocument,

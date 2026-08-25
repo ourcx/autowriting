@@ -65,6 +65,12 @@ function colorWithOpacity(color: string, opacity: number): string {
   return `rgba(${red}, ${green}, ${blue}, ${opacity})`
 }
 
+function hasVisibleFill(color: string): boolean {
+  if (color.toLowerCase() === "transparent") return false
+  const rgba = color.match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([0-9.]+)\s*\)$/i)
+  return !rgba || Number(rgba[1]) > 0
+}
+
 function surfaceCss(
   surface: WechatSurfaceStyle | undefined,
   fallback: string,
@@ -326,6 +332,68 @@ function SectionContent({
   ) : null
   if (block.layout === "stack") {
     return <section style={wrapperStyle}>{accentRail}{sectionIcon}{sources.map(renderSource)}</section>
+  }
+
+  if (block.layout === "timeline" || block.layout === "steps") {
+    const markerSize = block.layout === "steps" ? 30 : 12
+    return (
+      <section style={wrapperStyle}>
+        {accentRail}
+        {sectionIcon}
+        <table
+          role="presentation"
+          style={{
+            width: "100%",
+            tableLayout: "fixed",
+            borderCollapse: "collapse",
+            borderSpacing: 0,
+          }}
+        >
+          <tbody>
+            {sources.map((source, index) => (
+              <tr key={`${block.id}-${source.id}`}>
+                <td
+                  style={{
+                    width: block.layout === "steps" ? 46 : 30,
+                    padding: `3px ${block.gap}px 0 0`,
+                    borderRight: block.layout === "timeline" && index < sources.length - 1
+                      ? `2px solid ${block.borderColor}`
+                      : "0",
+                    verticalAlign: "top",
+                  }}
+                >
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      width: markerSize,
+                      height: markerSize,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderRadius: 999,
+                      background: block.accentColor,
+                      color: "#ffffff",
+                      fontSize: 13,
+                      fontWeight: 700,
+                      lineHeight: 1,
+                    }}
+                  >
+                    {block.layout === "steps" ? index + 1 : ""}
+                  </span>
+                </td>
+                <td
+                  style={{
+                    padding: index < sources.length - 1 ? `0 0 ${block.gap}px ${block.gap}px` : `0 0 0 ${block.gap}px`,
+                    verticalAlign: "top",
+                  }}
+                >
+                  {renderSource(source)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+    )
   }
 
   const featureSource = block.layout === "feature" || block.layout === "editorial"
@@ -880,23 +948,44 @@ export default function WechatBlockEditor({
     if (!selectedBlock) return
     onChange({
       ...document,
-      blocks: document.blocks.map(block => (
-        block.id === selectedBlock.id ? { ...block, ...patch } as WechatBlock : block
-      )),
+      blocks: document.blocks.map(block => {
+        if (block.id !== selectedBlock.id) return block
+        const next = { ...block, ...patch } as WechatBlock
+        if (
+          (next.type === "content" || next.type === "section")
+          && next.padding < 12
+          && (
+            next.borderWidth > 0
+            || hasVisibleFill(next.background)
+            || (next.type === "section" && Boolean(next.surfaceStyle && next.surfaceStyle.kind !== "none"))
+          )
+        ) {
+          return { ...next, padding: 12 } as WechatBlock
+        }
+        return next
+      }),
     })
   }
   const updateSectionItemStyle = (patch: WechatTextStyleOverride) => {
     if (!selectedSection || !selectedSectionSourceId) return
+    const current = selectedSection.itemStyles[selectedSectionSourceId] || {}
+    const nextStyle = { ...current, ...patch }
+    if (
+      (nextStyle.padding ?? selectedSectionText?.padding ?? 0) < 12
+      && (
+        (nextStyle.borderWidth ?? selectedSectionText?.borderWidth ?? 0) > 0
+        || hasVisibleFill(nextStyle.background ?? selectedSectionText?.background ?? "transparent")
+      )
+    ) {
+      nextStyle.padding = 12
+    }
     onChange({
       ...document,
       blocks: document.blocks.map(block => block.id === selectedSection.id && block.type === "section" ? {
         ...block,
         itemStyles: {
           ...block.itemStyles,
-          [selectedSectionSourceId]: {
-            ...(block.itemStyles[selectedSectionSourceId] || {}),
-            ...patch,
-          },
+          [selectedSectionSourceId]: nextStyle,
         },
       } : block),
     })
@@ -1231,9 +1320,11 @@ export default function WechatBlockEditor({
                   <option value="comparison">主体对比</option>
                   <option value="feature">重点 + 双栏</option>
                   <option value="editorial">杂志编排</option>
+                  <option value="timeline">时间线</option>
+                  <option value="steps">步骤流</option>
                 </select>
               </label>
-              {selectedBlock.layout !== "stack" ? (
+              {["two-column", "comparison", "feature", "editorial"].includes(selectedBlock.layout) ? (
                 <label>
                   <span>双栏比例</span>
                   <select
@@ -1402,10 +1493,16 @@ export default function WechatBlockEditor({
                     <ColorField label="文字" value={selectedSectionText.color} fallback="#262626" onChange={color => updateSectionItemStyle({ color })} />
                     <ColorField label="背景" value={selectedSectionText.background} fallback="#ffffff" onChange={background => updateSectionItemStyle({ background })} />
                     <ColorField label="强调色" value={selectedSectionText.accentColor} fallback="#5263a5" onChange={accentColor => updateSectionItemStyle({ accentColor })} />
+                    <ColorField label="边框" value={selectedSectionText.borderColor} fallback="#dee0e3" onChange={borderColor => updateSectionItemStyle({ borderColor })} />
                     <NumberField label="字号" value={selectedSectionText.fontSize} min={12} max={48} onChange={fontSize => updateSectionItemStyle({ fontSize })} />
                     <NumberField label="字重" value={selectedSectionText.fontWeight} min={300} max={900} step={100} onChange={fontWeight => updateSectionItemStyle({ fontWeight })} />
                     <NumberField label="字距" value={selectedSectionText.letterSpacing} min={0} max={8} step={0.5} onChange={letterSpacing => updateSectionItemStyle({ letterSpacing })} />
                     <NumberField label="行高" value={selectedSectionText.lineHeight} min={1} max={2.6} step={0.1} onChange={lineHeight => updateSectionItemStyle({ lineHeight })} />
+                    <NumberField label="内边距" value={selectedSectionText.padding} min={0} max={48} onChange={padding => updateSectionItemStyle({ padding })} />
+                    <NumberField label="圆角" value={selectedSectionText.radius} min={0} max={32} onChange={radius => updateSectionItemStyle({ radius })} />
+                    <NumberField label="边框" value={selectedSectionText.borderWidth} min={0} max={8} onChange={borderWidth => updateSectionItemStyle({ borderWidth })} />
+                    <NumberField label="上间距" value={selectedSectionText.marginTop} min={0} max={80} onChange={marginTop => updateSectionItemStyle({ marginTop })} />
+                    <NumberField label="下间距" value={selectedSectionText.marginBottom} min={0} max={80} onChange={marginBottom => updateSectionItemStyle({ marginBottom })} />
                   </div>
                   <label>
                     <span>对齐</span>

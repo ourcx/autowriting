@@ -49,7 +49,7 @@ Design 文件格式不固定，代码不维护格式专用解析器。生成流�
 HTML Block 支持：
 
 - `content`：单个内容源。
-- `section`：组合 2-8 个连续内容源，支持纵向、双栏、主体对比和重点加双栏；`columnRatio` 将双栏比例限制为 `1:1`、`1:2` 或 `2:1`。
+- `section`：组合 2-8 个连续内容源，支持纵向、双栏、主体对比、重点加双栏、时间线和步骤流；`columnRatio` 将双栏比例限制为 `1:1`、`1:2` 或 `2:1`。
 - `decoration`：锚定到内容源前后的安全 SVG Path。
 - `asset`：锚定到内容源前后的 AI 图片素材，AI 只提供提示词，图片服务地址由程序固定。
 
@@ -58,6 +58,8 @@ HTML Block 支持：
 扩展视觉能力包括文档级 `theme`、`editorial` 布局、`lede` 导语、`overline` 眉题、`metric` 数据强调、顶部/左侧/底部强调边、三色轨道、可选阴影、Lucide 图标白名单和 AI 安全 Path 图标。边框默认关闭，由 Design 文件明确要求时再启用。若 AI 没有使用这些结构形成明显区别于 Markdown 的结果，服务端会重试而不是静默回退为普通正文。
 
 `theme.canvasStyle` 与 `section.surfaceStyle` 提供纯色、渐变、条纹、点阵、网格、稿纸和 AI 生成背景。生成背景只接受提示词、图片比例、铺设方式和遮罩参数，由程序绑定固定图片服务并编译为内联样式，不允许模型提供 URL。文档级 `sidePadding` 默认为 8px，限制在 0-48px，并作为预览与微信导出的共同留白来源。
+
+带背景或完整边框的内容块、组合区域和内部 `itemStyles` 至少保留 12px 内边距。正常长度文章必须形成至少两个背景层级，并组合使用多种布局或视觉能力；该约束对普通模板和 Design 文件生成都生效。
 
 自由画板保留 SVG Scene Graph。服务端会对 AI 坐标执行：
 
@@ -72,10 +74,10 @@ HTML Block 支持：
 
 HTML Block 通过专用编译器导出，不直接复制预览 DOM：
 
-- 清除编辑器 class、data 属性和交互状态。
+- 将浏览器计算样式写入内联 style，再清除编辑器 class、data 属性和交互状态。
 - 根容器改为百分比宽度。
 - 双栏使用 `table`，不依赖 Grid/Flex，并保留 DSL 指定的不对称列宽。
-- 文档两侧留白从 `sidePadding` 读取，默认 8px。
+- 文档两侧留白从 `sidePadding` 读取，默认 8px，并通过无边框表格单元格输出，避免微信清洗外层 padding 或普通 div margin。
 - 图片强制 `width:100%;height:auto`。
 - SVG 装饰降级为稳定分割线。
 - 同时写入剪贴板 `text/html` 与 `text/plain`。

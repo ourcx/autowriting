@@ -159,7 +159,7 @@ export interface WechatAssetBlock {
 }
 
 export type WechatSectionLayout = "stack" | "two-column" | "comparison" | "feature"
-  | "editorial"
+  | "editorial" | "timeline" | "steps"
 export type WechatSectionAccent = "none" | "top" | "left" | "bottom" | "tri-color"
 
 export interface WechatTextStyleOverride {
@@ -167,6 +167,12 @@ export interface WechatTextStyleOverride {
   background?: string
   color?: string
   accentColor?: string
+  borderColor?: string
+  borderWidth?: number
+  radius?: number
+  padding?: number
+  marginTop?: number
+  marginBottom?: number
   fontSize?: number
   fontWeight?: number
   fontStyle?: "normal" | "italic"
@@ -304,6 +310,12 @@ function colorIn(value: unknown, fallback: string): string {
   return /^(#[0-9a-f]{3,8}|rgba?\([0-9.,\s%]+\)|transparent)$/i.test(color) ? color : fallback
 }
 
+function hasVisibleFill(color: string): boolean {
+  if (color.toLowerCase() === "transparent") return false
+  const rgba = color.match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([0-9.]+)\s*\)$/i)
+  return !rgba || Number(rgba[1]) > 0
+}
+
 function parseSurfaceStyle(
   value: unknown,
   fallbackColor: string,
@@ -413,18 +425,24 @@ function parseContentBlock(
   const heading = variant === "banner"
   const overline = variant === "overline"
   const lede = variant === "lede" || variant === "quote"
+  const background = colorIn(record.background, "transparent")
+  const borderWidth = numberIn(record.borderWidth, 0, 0, 8)
+  const requestedPadding = numberIn(record.padding, 0, 0, 48)
+  const padding = borderWidth > 0 || hasVisibleFill(background)
+    ? Math.max(12, requestedPadding)
+    : requestedPadding
   return {
     id: idIn(record.id, `block-${index + 1}`),
     type: "content",
     sourceId: idIn(record.sourceId, ""),
     variant,
-    background: colorIn(record.background, "transparent"),
+    background,
     color: colorIn(record.color, theme.text),
     accentColor: colorIn(record.accentColor, theme.accent),
     borderColor: colorIn(record.borderColor, "transparent"),
-    borderWidth: numberIn(record.borderWidth, 0, 0, 8),
+    borderWidth,
     radius: numberIn(record.radius, 0, 0, 32),
-    padding: numberIn(record.padding, 0, 0, 48),
+    padding,
     marginTop: numberIn(record.marginTop, 0, 0, 80),
     marginBottom: numberIn(record.marginBottom, 20, 0, 80),
     fontSize: numberIn(
@@ -572,7 +590,9 @@ function parseSectionBlock(
     ? [...new Set(record.sourceIds.map(value => idIn(value, "")).filter(Boolean))].slice(0, 8)
     : []
   if (sourceIds.length < 2) return null
-  const layouts: WechatSectionLayout[] = ["stack", "two-column", "comparison", "feature", "editorial"]
+  const layouts: WechatSectionLayout[] = [
+    "stack", "two-column", "comparison", "feature", "editorial", "timeline", "steps",
+  ]
   const presets: WechatSectionPreset[] = ["plain", "soft", "feature", "editorial", "callout"]
   const preset = presets.includes(record.preset as WechatSectionPreset)
     ? record.preset as WechatSectionPreset
@@ -594,13 +614,31 @@ function parseSectionBlock(
       "plain", "title", "banner", "card", "quote", "highlight", "lede", "overline", "metric",
     ]
     const aligns: WechatBlockAlign[] = ["left", "center", "right"]
+    const background = style.background === undefined
+      ? undefined
+      : colorIn(style.background, "transparent")
+    const borderWidth = style.borderWidth === undefined
+      ? undefined
+      : numberIn(style.borderWidth, 0, 0, 8)
+    const requestedPadding = style.padding === undefined
+      ? undefined
+      : numberIn(style.padding, 0, 0, 48)
+    const padding = (borderWidth || (background && hasVisibleFill(background)))
+      ? Math.max(12, requestedPadding ?? 0)
+      : requestedPadding
     return [[sourceId, {
       variant: variants.includes(style.variant as Exclude<WechatBlockVariant, "image">)
         ? style.variant as Exclude<WechatBlockVariant, "image">
         : undefined,
-      background: style.background === undefined ? undefined : colorIn(style.background, "transparent"),
+      background,
       color: style.color === undefined ? undefined : colorIn(style.color, "#262626"),
       accentColor: style.accentColor === undefined ? undefined : colorIn(style.accentColor, "#5263a5"),
+      borderColor: style.borderColor === undefined ? undefined : colorIn(style.borderColor, theme.border),
+      borderWidth,
+      radius: style.radius === undefined ? undefined : numberIn(style.radius, 0, 0, 32),
+      padding,
+      marginTop: style.marginTop === undefined ? undefined : numberIn(style.marginTop, 0, 0, 80),
+      marginBottom: style.marginBottom === undefined ? undefined : numberIn(style.marginBottom, 12, 0, 80),
       fontSize: style.fontSize === undefined ? undefined : numberIn(style.fontSize, 17, 12, 48),
       fontWeight: style.fontWeight === undefined ? undefined : numberIn(style.fontWeight, 400, 300, 900),
       fontStyle: style.fontStyle === "italic" ? "italic" : undefined,
@@ -612,6 +650,18 @@ function parseSectionBlock(
         : undefined,
     } satisfies WechatTextStyleOverride]]
   }))
+  const background = colorIn(record.background, framed ? theme.surface : "transparent")
+  const borderWidth = numberIn(record.borderWidth, 0, 0, 8)
+  const surfaceStyle = record.surfaceStyle
+    ? parseSurfaceStyle(record.surfaceStyle, background)
+    : undefined
+  const requestedPadding = numberIn(record.padding, framed ? 24 : 0, 0, 48)
+  const padding = framed
+    || borderWidth > 0
+    || hasVisibleFill(background)
+    || Boolean(surfaceStyle && surfaceStyle.kind !== "none")
+    ? Math.max(12, requestedPadding)
+    : requestedPadding
   return {
     id: idIn(record.id, `section-${index + 1}`),
     type: "section",
@@ -623,13 +673,13 @@ function parseSectionBlock(
       ? record.columnRatio as WechatSectionBlock["columnRatio"]
       : "1:1",
     preset,
-    background: colorIn(record.background, framed ? theme.surface : "transparent"),
+    background,
     color: colorIn(record.color, theme.text),
     accentColor: colorIn(record.accentColor, theme.accent),
     borderColor: colorIn(record.borderColor, theme.border),
-    borderWidth: numberIn(record.borderWidth, 0, 0, 8),
+    borderWidth,
     radius: numberIn(record.radius, theme.radius, 0, 32),
-    padding: numberIn(record.padding, framed ? 24 : 0, 0, 48),
+    padding,
     gap: numberIn(record.gap, 16, 0, 40),
     marginTop: numberIn(record.marginTop, 8, 0, 80),
     marginBottom: numberIn(record.marginBottom, theme.sectionGap, 0, 96),
@@ -638,9 +688,7 @@ function parseSectionBlock(
       ? record.accentStyle as WechatSectionAccent
       : defaultAccent,
     shadow: record.shadow === "soft" ? "soft" : "none",
-    surfaceStyle: record.surfaceStyle
-      ? parseSurfaceStyle(record.surfaceStyle, colorIn(record.background, framed ? theme.surface : "transparent"))
-      : undefined,
+    surfaceStyle,
     leadSourceId: sourceIds.includes(String(record.leadSourceId)) ? String(record.leadSourceId) : undefined,
     overlineSourceId: sourceIds.includes(String(record.overlineSourceId)) ? String(record.overlineSourceId) : undefined,
     icon: parseSectionIcon(record.icon, theme),

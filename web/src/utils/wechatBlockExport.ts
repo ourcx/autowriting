@@ -1,18 +1,118 @@
 const WECHAT_CONTENT_WIDTH = 677
 const DEFAULT_WECHAT_SIDE_SPACE = 8
 
+const WECHAT_INLINE_PROPERTIES = [
+  "color", "background-color", "background-image", "background-position",
+  "background-size", "background-repeat",
+  "font-family", "font-size", "font-weight", "font-style",
+  "line-height", "letter-spacing", "text-align", "text-decoration",
+  "text-transform", "text-indent",
+  "margin-top", "margin-right", "margin-bottom", "margin-left",
+  "padding-top", "padding-right", "padding-bottom", "padding-left",
+  "border-top-width", "border-top-style", "border-top-color",
+  "border-right-width", "border-right-style", "border-right-color",
+  "border-bottom-width", "border-bottom-style", "border-bottom-color",
+  "border-left-width", "border-left-style", "border-left-color",
+  "border-radius", "box-shadow", "box-sizing",
+  "display", "vertical-align", "white-space", "word-break", "overflow-wrap",
+  "justify-content", "align-items", "flex-direction", "gap",
+  "object-fit", "aspect-ratio",
+] as const
+
+const DEFAULT_WECHAT_STYLE_VALUES = new Set([
+  "",
+  "initial",
+  "inherit",
+  "normal",
+  "none",
+  "auto",
+  "visible",
+  "start",
+  "0px",
+  "medium",
+  "currentcolor",
+  "baseline",
+  "row",
+  "fill",
+  "repeat",
+  "0% 0%",
+])
+
+function inlineComputedWechatStyles(source: HTMLElement, clone: HTMLElement): void {
+  const sourceElements = [source, ...Array.from(source.querySelectorAll("*"))]
+  const cloneElements = [clone, ...Array.from(clone.querySelectorAll("*"))]
+  sourceElements.forEach((sourceElement, index) => {
+    const cloneElement = cloneElements[index]
+    if (
+      !cloneElement
+      || (!(cloneElement instanceof HTMLElement) && !(cloneElement instanceof SVGElement))
+    ) return
+    const computed = window.getComputedStyle(sourceElement)
+    WECHAT_INLINE_PROPERTIES.forEach(property => {
+      const value = computed.getPropertyValue(property).trim()
+      if (DEFAULT_WECHAT_STYLE_VALUES.has(value)) return
+      if (property === "background-color" && value === "rgba(0, 0, 0, 0)") return
+      cloneElement.style.setProperty(property, value)
+    })
+  })
+}
+
 function stripEditorAttributes(root: HTMLElement): void {
+  Array.from(root.attributes).forEach(attribute => {
+    if (attribute.name.startsWith("data-")) root.removeAttribute(attribute.name)
+  })
   root.removeAttribute("class")
-  root.removeAttribute("data-wechat-side-padding")
   root.querySelectorAll("*").forEach(node => {
+    Array.from(node.attributes).forEach(attribute => {
+      if (attribute.name.startsWith("data-")) node.removeAttribute(attribute.name)
+    })
     node.removeAttribute("class")
-    node.removeAttribute("data-block-id")
-    node.removeAttribute("data-wechat-icon")
-    node.removeAttribute("data-wechat-material")
-    node.removeAttribute("data-wechat-material-wrapper")
     node.removeAttribute("contenteditable")
     node.removeAttribute("tabindex")
   })
+}
+
+function replaceTopLevelBlockWrappers(root: HTMLElement): void {
+  Array.from(root.children).forEach(child => {
+    if (
+      !(child instanceof HTMLElement)
+      || child.tagName !== "DIV"
+      || !child.hasAttribute("data-block-id")
+    ) return
+    const section = document.createElement("section")
+    Array.from(child.attributes).forEach(attribute => {
+      section.setAttribute(attribute.name, attribute.value)
+    })
+    while (child.firstChild) section.appendChild(child.firstChild)
+    child.replaceWith(section)
+  })
+}
+
+function wrapWithWechatGutter(root: HTMLElement, sideSpace: number): void {
+  const table = document.createElement("table")
+  table.setAttribute("role", "presentation")
+  table.setAttribute("data-wechat-gutter", "true")
+  table.style.width = "100%"
+  table.style.maxWidth = "100%"
+  table.style.tableLayout = "fixed"
+  table.style.borderCollapse = "collapse"
+  table.style.borderSpacing = "0"
+
+  const body = document.createElement("tbody")
+  const row = document.createElement("tr")
+  const cell = document.createElement("td")
+  cell.setAttribute("data-wechat-gutter-cell", "true")
+  cell.style.width = "100%"
+  cell.style.padding = `0 ${sideSpace}px`
+  cell.style.verticalAlign = "top"
+  cell.style.wordBreak = "break-word"
+  cell.style.overflowWrap = "break-word"
+
+  while (root.firstChild) cell.appendChild(root.firstChild)
+  row.appendChild(cell)
+  body.appendChild(row)
+  table.appendChild(body)
+  root.appendChild(table)
 }
 
 function replaceSvgDecorations(root: HTMLElement): void {
@@ -55,17 +155,16 @@ function normalizeWechatElements(root: HTMLElement): void {
   root.style.boxSizing = "border-box"
   root.style.fontFamily = "-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif"
 
+  replaceTopLevelBlockWrappers(root)
   Array.from(root.children).forEach(child => {
     if (!(child instanceof HTMLElement)) return
-    if (child.getAttribute("data-wechat-material-wrapper") === "true") {
-      child.style.maxWidth = "100%"
-      child.removeAttribute("data-wechat-material-wrapper")
-      return
-    }
-    child.style.marginLeft = `${sideSpace}px`
-    child.style.marginRight = `${sideSpace}px`
-    child.style.maxWidth = `calc(100% - ${sideSpace * 2}px)`
+    child.style.width = "100%"
+    child.style.maxWidth = "100%"
+    child.style.marginLeft = "0"
+    child.style.marginRight = "0"
+    child.style.boxSizing = "border-box"
   })
+  wrapWithWechatGutter(root, sideSpace)
 
   root.querySelectorAll("table").forEach(table => {
     table.style.width = "100%"
@@ -109,6 +208,7 @@ function normalizeWechatElements(root: HTMLElement): void {
 
 export function buildWechatBlockHtml(source: HTMLElement): string {
   const clone = source.cloneNode(true) as HTMLElement
+  inlineComputedWechatStyles(source, clone)
   replaceSvgDecorations(clone)
   normalizeWechatElements(clone)
   stripEditorAttributes(clone)
