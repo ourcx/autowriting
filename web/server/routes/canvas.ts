@@ -444,6 +444,11 @@ function blockFailureMessage(error: unknown): string {
   return error instanceof Error ? error.message : "排版结构校验失败"
 }
 
+function isBlockOutputTooLong(error: unknown): boolean {
+  return error instanceof BlockDslError
+    && (error.code === "truncated" || error.code === "incomplete-json")
+}
+
 function blockRepairSuggestion(errors: unknown[]): string {
   const codes = new Set(errors.flatMap(error => (
     error instanceof BlockDslError ? [error.code] : []
@@ -657,6 +662,20 @@ async function generateBlockChunks(input: {
   const chunks = splitBlockSources(input.sources)
   const documents: WechatBlockDocument[] = []
   const attempts: CanvasCompletionData[] = []
+  const appendSmallerChunks = async (sources: CanvasSource[]): Promise<boolean> => {
+    if (sources.length <= 1) return false
+    const middle = Math.ceil(sources.length / 2)
+    for (const smallerSources of [sources.slice(0, middle), sources.slice(middle)]) {
+      const generated = await generateBlockChunks({
+        ...input,
+        sources: smallerSources,
+        onChunk: undefined,
+      })
+      documents.push(generated.document)
+      attempts.push(...generated.attempts)
+    }
+    return true
+  }
 
   for (const [index, sources] of chunks.entries()) {
     const chunkLabel = `第 ${index + 1}/${chunks.length} 组`
@@ -696,8 +715,10 @@ ${manifest}`,
       documents.push(document)
       continue
     } catch (firstError: unknown) {
-      const firstWasTruncated = firstError instanceof BlockDslError
-        && firstError.code === "truncated"
+      const firstWasTruncated = isBlockOutputTooLong(firstError)
+      if (firstWasTruncated && await appendSmallerChunks(sources)) {
+        continue
+      }
       const malformed = firstWasTruncated
         ? ""
         : completionCandidates(first).join("\n").slice(0, 8000)
@@ -724,6 +745,9 @@ ${malformed ? `修复下面的输出：\n${malformed}` : "重新生成本组。"
         assertNonMarkdownLayout(document, sources)
         documents.push(document)
       } catch (repairError: unknown) {
+        if (isBlockOutputTooLong(repairError) && await appendSmallerChunks(sources)) {
+          continue
+        }
         throw new BlockDslError(
           "repair-failed",
           `${chunkLabel}自动修复后仍失败：${blockFailureMessage(repairError)}`,
@@ -921,8 +945,7 @@ async function generateBlockWithRepair(input: {
     }
   } catch (firstError: unknown) {
     input.onRepair?.()
-    const firstWasTruncated = firstError instanceof BlockDslError
-      && firstError.code === "truncated"
+    const firstWasTruncated = isBlockOutputTooLong(firstError)
     if (firstWasTruncated) {
       return generateChunkedDocument([first])
     }
@@ -974,10 +997,7 @@ ${sourceManifest}`,
         attempts: [...analysisAttempts, first, repair],
       }
     } catch (repairError: unknown) {
-      if (
-        repairError instanceof BlockDslError
-        && repairError.code === "truncated"
-      ) {
+      if (isBlockOutputTooLong(repairError)) {
         return generateChunkedDocument([first, repair])
       }
       throw new BlockDslError(
