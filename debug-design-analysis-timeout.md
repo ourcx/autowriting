@@ -35,3 +35,11 @@
 - E Inconclusive: 请求文件不包含上游响应状态。
 
 最小修复：仅为 Canvas 结构化生成设置 300 秒单次超时，保留其他 LLM 调用的 90 秒默认值。
+
+## Post-fix Verification
+
+- `pnpm --dir web build`: passed.
+- `pnpm --dir web arch`: passed, 0 new violations.
+- `SMOKE_PORT=3101 pnpm --dir web smoke`: 23 passed, 0 failed.
+- `pnpm --dir web verify`: blocked by 31 existing lint errors outside this change.
+- Runtime verification with the original long Design request: awaiting user confirmation.

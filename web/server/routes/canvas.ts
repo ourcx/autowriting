@@ -28,6 +28,7 @@ router.use(authMiddleware)
 
 const PROMPT_MAX_LENGTH = 3000
 const CANVAS_LLM_TIMEOUT_MS = 300000
+const BLOCK_MAX_TOKENS = 16000
 const DESIGN_PLAN_SYSTEM_PROMPT = `你是视觉设计文件分析器。输入会包含原始 Design System、设计说明、SVG、XML、JSON 或 Markdown，以及系统模板。
 
 只输出 JSON：
@@ -124,6 +125,9 @@ blocks 仅允许六种：
 规则：
 - 响应首字符必须是 {，末字符必须是 }，只输出一个完整 JSON 对象。
 - 不得输出 Markdown 代码围栏、解释、注释、HTML、CSS、SVG 标签或外部资源地址。
+- 输出紧凑 JSON：只填写改变视觉结果所必需的字段，省略 id 和所有默认值；禁止在多个 block 中重复 theme 已定义的颜色、字体、圆角和间距。
+- sourceId 已关联完整原文，输出中禁止复制正文。内容源超过 16 个时，除标题和图片外优先每 4-8 个连续 sourceId 合并为一个 section，不得为每段正文展开一份完整 content 样式。
+- itemStyles 只设置真正需要特殊强调的少量内容源；普通正文继承 section 和 theme。完整响应尽量控制在 30000 字符以内。
 - 每个内容源必须且只能出现一次：可以由 content.sourceId 单独引用，或由一个 section.sourceIds 组合引用，但不能同时出现。
 - content 不得输出 text、src 或 alt；系统会从 sourceId 回填原文与图片。
 - content 和 section 必须严格保持内容源原顺序，不得交换段落；section 只能组合 2-8 个连续 sourceId。
@@ -650,7 +654,7 @@ async function generateBlockWithRepair(input: {
     model: input.model,
     messages,
     temperature: 0.2,
-    max_tokens: 8000,
+    max_tokens: BLOCK_MAX_TOKENS,
     stream: false,
   }, input.headers)
 
@@ -668,13 +672,20 @@ async function generateBlockWithRepair(input: {
     }
   } catch (firstError: unknown) {
     input.onRepair?.()
-    const malformed = completionCandidates(first).join("\n").slice(0, 20000)
+    const firstWasTruncated = firstError instanceof BlockDslError
+      && firstError.code === "truncated"
+    const malformed = firstWasTruncated
+      ? ""
+      : completionCandidates(first).join("\n").slice(0, 12000)
     const repair = await callStructuredCanvas(input.url, {
       model: input.model,
       messages: [
         {
           role: "system",
-          content: `${BLOCK_SYSTEM_PROMPT}\n\n你现在是 JSON 修复器。只输出一个完整 JSON 对象，不要解释。`,
+          content: `${BLOCK_SYSTEM_PROMPT}
+
+你现在是紧凑 JSON 修复器。只输出一个完整 JSON 对象，不要解释。
+必须省略默认字段和 id；禁止逐段重复完整样式；长文章必须用 section 批量引用连续 sourceId。`,
         },
         {
           role: "user",
@@ -687,14 +698,14 @@ ${input.prompt}
 ${analysis.plan || "无"}
 
 上一轮输出：
-${malformed || "无"}
+${firstWasTruncated ? "输出因长度限制被截断，不要复刻上一轮的冗长结构。" : malformed || "无"}
 
-请重新输出合法且有明确视觉设计的公众号块 DSL。正常长度文章必须包含至少 2 个 section、至少 2 个可见背景层级，并组合使用 layout、surfaceStyle、accentStyle、icon、itemStyles、marks、asset、divider 或 switcher 中至少三类能力。有背景或边框的区域 padding 不得小于 12。内容源：
+请重新输出合法、紧凑且有明确视觉设计的公众号块 DSL。正常长度文章必须包含至少 2 个 section、至少 2 个可见背景层级，并组合使用 layout、surfaceStyle、accentStyle、icon、itemStyles、marks、asset、divider 或 switcher 中至少三类能力。有背景或边框的区域 padding 不得小于 12。除标题和图片外，每个 section 应组合 4-8 个连续 sourceId；普通正文不得单独展开完整 content 样式。内容源：
 ${sourceManifest}`,
         },
       ],
       temperature: 0,
-      max_tokens: 8000,
+      max_tokens: BLOCK_MAX_TOKENS,
       stream: false,
     }, input.headers, 2)
     try {
