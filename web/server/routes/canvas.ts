@@ -879,7 +879,10 @@ ${manifest}`,
     attempts.push(first)
 
     try {
-      const document = parseBlockFromCompletion(first)
+      const document = normalizeBlockVisualSystem(
+        parseBlockFromCompletion(first),
+        sources,
+      )
       assertBlockSourceCoverage(document, sources, chunkLabel)
       assertNonMarkdownLayout(document, sources)
       documents.push(document)
@@ -910,7 +913,10 @@ ${malformed ? `修复下面的输出：\n${malformed}` : "重新生成本组。"
       }, input.headers, 2)
       attempts.push(repair)
       try {
-        const document = parseBlockFromCompletion(repair)
+        const document = normalizeBlockVisualSystem(
+          parseBlockFromCompletion(repair),
+          sources,
+        )
         assertBlockSourceCoverage(document, sources, chunkLabel)
         assertNonMarkdownLayout(document, sources)
         documents.push(document)
