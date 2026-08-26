@@ -214,8 +214,8 @@ function buildSafeWechatFilename(originalName, fallbackBase, ext = '') {
 
 async function prepareWechatArticleImage(buf, contentType = 'image/jpeg') {
   const normalizedType = String(contentType).toLowerCase()
-  const isPng = normalizedType.includes('png')
-  const fallbackName = isPng ? 'content.png' : 'content.jpg'
+  const preserveTransparency = normalizedType.includes('png') || normalizedType.includes('svg')
+  const fallbackName = preserveTransparency ? 'content.png' : 'content.jpg'
 
   try {
     let width = 1600
@@ -225,13 +225,13 @@ async function prepareWechatArticleImage(buf, contentType = 'image/jpeg') {
     for (let i = 0; i < 4; i++) {
       let pipeline = sharp(buf, { animated: false }).rotate()
       pipeline = pipeline.resize({ width, withoutEnlargement: true })
-      outBuf = isPng
+      outBuf = preserveTransparency
         ? await pipeline.png({ compressionLevel: 9, palette: true }).toBuffer()
         : await pipeline.jpeg({ quality, mozjpeg: true }).toBuffer()
       if (outBuf.length <= 1024 * 1024) {
         return {
           buffer: outBuf,
-          contentType: isPng ? 'image/png' : 'image/jpeg',
+          contentType: preserveTransparency ? 'image/png' : 'image/jpeg',
           filename: fallbackName,
         }
       }
@@ -638,6 +638,9 @@ router.post('/draft', async (req, res) => {
       if (product_info) article.product_info = product_info
     }
 
+    // #region debug-point A-B-C-D-E:wechat-payload
+    void fetch('http://127.0.0.1:7777/event', { method: 'POST', body: JSON.stringify({ sessionId: 'wechat-draft-style', runId: 'post-fix', hypothesisId: 'A,B,C,D,E', location: 'server/routes/wechat.ts:submitDraft', msg: '[DEBUG] Final WeChat draft payload prepared', data: { hasRequestedThumb: Boolean(thumb_media_id), hasFinalThumb: Boolean(finalThumbId), htmlLength: rewrittenContent.html.length, blackBorderMatches: (rewrittenContent.html.match(/border[^;"]*(?:#000(?:000)?|rgb\(0,\s*0,\s*0\))/gi) || []).length, dataSvgIconCount: (rewrittenContent.html.match(/data:image\/svg\+xml/gi) || []).length, rewrittenImages: rewrittenContent.rewritten, failedImages: rewrittenContent.failed.length }, ts: Date.now() }) }).catch(() => {})
+    // #endregion
     const resp = await axios.post(
       'https://api.weixin.qq.com/cgi-bin/draft/add',
       { articles: [article] },

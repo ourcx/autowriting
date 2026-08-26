@@ -72,6 +72,17 @@ function stripEditorAttributes(root: HTMLElement): void {
   })
 }
 
+function stripEditorChrome(root: HTMLElement): void {
+  root.style.border = "0"
+  root.style.outline = "0"
+  root.style.boxShadow = "none"
+  root.querySelectorAll<HTMLElement>("[data-block-id],[data-section-source-id]").forEach(node => {
+    node.style.border = "0"
+    node.style.outline = "0"
+    node.style.boxShadow = "none"
+  })
+}
+
 function replaceTopLevelBlockWrappers(root: HTMLElement): void {
   Array.from(root.children).forEach(child => {
     if (
@@ -97,6 +108,10 @@ function wrapWithWechatGutter(root: HTMLElement, sideSpace: number): void {
   table.style.tableLayout = "fixed"
   table.style.borderCollapse = "collapse"
   table.style.borderSpacing = "0"
+  table.style.border = "0"
+  table.setAttribute("border", "0")
+  table.setAttribute("cellpadding", "0")
+  table.setAttribute("cellspacing", "0")
 
   const body = document.createElement("tbody")
   const row = document.createElement("tr")
@@ -107,6 +122,9 @@ function wrapWithWechatGutter(root: HTMLElement, sideSpace: number): void {
   cell.style.verticalAlign = "top"
   cell.style.wordBreak = "break-word"
   cell.style.overflowWrap = "break-word"
+  cell.style.border = "0"
+  body.style.border = "0"
+  row.style.border = "0"
 
   while (root.firstChild) cell.appendChild(root.firstChild)
   row.appendChild(cell)
@@ -153,6 +171,9 @@ function normalizeWechatElements(root: HTMLElement): void {
   root.style.maxWidth = "100%"
   root.style.margin = "0"
   root.style.padding = "0"
+  root.style.border = "0"
+  root.style.outline = "0"
+  root.style.boxShadow = "none"
   root.style.boxSizing = "border-box"
   root.style.fontFamily = "-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif"
 
@@ -173,8 +194,26 @@ function normalizeWechatElements(root: HTMLElement): void {
     table.style.tableLayout = "fixed"
     table.style.borderCollapse = "separate"
     table.style.borderSpacing = "0"
+    table.style.border = "0"
+    table.style.outline = "0"
+    table.style.boxShadow = "none"
+    table.setAttribute("border", "0")
+    table.setAttribute("cellpadding", "0")
+    table.setAttribute("cellspacing", "0")
+  })
+  root.querySelectorAll<HTMLElement>("tbody,tr").forEach(node => {
+    node.style.border = "0"
+    node.style.outline = "0"
   })
   root.querySelectorAll("td").forEach(cell => {
+    const hasIntentionalBorder = ["Top", "Right", "Bottom", "Left"].some(side => {
+      const width = Number.parseFloat(cell.style.getPropertyValue(`border-${side.toLowerCase()}-width`))
+      const style = cell.style.getPropertyValue(`border-${side.toLowerCase()}-style`)
+      return width > 0 && style !== "none"
+    })
+    if (!hasIntentionalBorder) cell.style.border = "0"
+    cell.style.outline = "0"
+    cell.style.boxShadow = "none"
     if (!cell.style.width) cell.style.width = "50%"
     cell.style.verticalAlign = "top"
     cell.style.wordBreak = "break-word"
@@ -210,9 +249,13 @@ function normalizeWechatElements(root: HTMLElement): void {
 export function buildWechatBlockHtml(source: HTMLElement): string {
   const clone = source.cloneNode(true) as HTMLElement
   inlineComputedWechatStyles(source, clone)
+  stripEditorChrome(clone)
   replaceSvgDecorations(clone)
   normalizeWechatElements(clone)
   stripEditorAttributes(clone)
+  // #region debug-point A-B-C:compiled-html
+  navigator.sendBeacon("http://127.0.0.1:7777/event", JSON.stringify({ sessionId: "wechat-draft-style", runId: "post-fix", hypothesisId: "A,B,C", location: "src/utils/wechatBlockExport.ts:buildWechatBlockHtml", msg: "[DEBUG] WeChat block HTML compiled", data: { htmlLength: clone.outerHTML.length, selectedSourceCount: source.querySelectorAll(".is-selected").length, blackBorderCount: Array.from(clone.querySelectorAll<HTMLElement>("*")).filter(node => /rgb\(0,\s*0,\s*0\)|#000(?:000)?/i.test(`${node.style.borderColor};${node.style.borderTopColor};${node.style.borderRightColor};${node.style.borderBottomColor};${node.style.borderLeftColor}`) && /[1-9]\d*(?:\.\d+)?px/.test(`${node.style.borderWidth};${node.style.borderTopWidth};${node.style.borderRightWidth};${node.style.borderBottomWidth};${node.style.borderLeftWidth}`)).length, tableCount: clone.querySelectorAll("table").length, gutterBorder: clone.querySelector<HTMLElement>("[data-wechat-gutter]")?.style.border || "", iconCount: clone.querySelectorAll('img[data-wechat-icon="true"]').length, dataSvgIconCount: clone.querySelectorAll('img[src^="data:image/svg+xml"]').length }, ts: Date.now() }))
+  // #endregion
   return clone.outerHTML
 }
 

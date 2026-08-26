@@ -29,6 +29,9 @@ router.use(authMiddleware)
 const PROMPT_MAX_LENGTH = 3000
 const CANVAS_LLM_TIMEOUT_MS = 300000
 const BLOCK_MAX_TOKENS = 16000
+const BLOCK_CHUNK_MAX_TOKENS = 6000
+const BLOCK_CHUNK_SOURCE_LIMIT = 8
+const BLOCK_CHUNK_THRESHOLD = 18
 const DESIGN_PLAN_SYSTEM_PROMPT = `你是视觉设计文件分析器。输入会包含原始 Design System、设计说明、SVG、XML、JSON 或 Markdown，以及系统模板。
 
 只输出 JSON：
@@ -139,11 +142,14 @@ blocks 仅允许六种：
 - lede 用于导语或首段，overline 用于短眉题，metric 仅用于原文中以数字为主的短内容，quote 用于 pull quote；不得将长正文误设为 overline 或 metric。
 - 这是公众号长文，不是海报：保持连续纵向阅读、清晰层级、17-18px 正文、1.7-2.0 行高和克制留白。
 - sidePadding 默认输出 8，允许 0-48；除非设计文件明确要求，不得擅自扩大到传统 Markdown 的 24-40px 大留白。
-- 必须使用 2-8 个 section 形成明显区别于 Markdown 的组合布局。短段落、对比主体或图片与说明优先使用 two-column/comparison/feature，长正文使用 stack。
+- 必须使用 2-8 个 section 形成明显区别于 Markdown 的组件化编排。借鉴 Tiptap 公众号编辑器的 section/p/span/img 语义组件与 OpenSVG 的组件树思路：用导语、图文、数据、步骤、分隔素材和局部强调组合页面，而不是给正文套 Markdown 风格容器。
+- 短段落、对比主体或图片与说明优先使用 two-column/comparison/feature/media-text/grid；连续长正文使用无背景、无边框、无左侧强调线的 stack，依靠字号、段距、首行缩进和分隔素材建立节奏。
 - 你必须主动完成视觉设计，不要等待用户逐项指定。每篇正常长度文章至少组合使用三类能力：背景层级、非纵向布局、强调边或图标、特殊文字角色、素材或装饰；不得只输出标题加普通正文。
-- 至少两个 section 使用可见但低对比的不同背景层级，可选 solid、linear、dots、grid、ruled-paper 或 generated。背景色必须来自 theme，正文区域必须保持足够对比度。
+- 使用 canvasStyle 加 1-2 个短 feature/lede/metric/媒体区域形成背景层级，可选 solid、linear、dots、grid、ruled-paper 或 generated。背景色必须来自 theme，正文区域必须保持足够对比度。
+- 禁止把 3 个及以上连续正文段落装进 callout、quote、大圆角浅色面板或带左侧粗线的容器；这会退化成放大的 Markdown blockquote。长阅读区必须保持 transparent、borderWidth=0、accentStyle=none。
+- quote 只允许用于 kind=quote 的原文内容源；普通 paragraph 不得设置 quote variant。需要强调普通正文时使用 marks、lede、dropcap、metric、overline 或短 feature，不得伪装成引用。
 - 有背景或完整边框的 content、section、itemStyles 必须设置 padding>=12；禁止文字紧贴边框。纯正文才允许 padding=0。
-- 卡片、标题条、引用、强调色需要围绕文章主题形成统一视觉语言，不要每段都做成独立卡片。
+- 卡片、标题条、引用、强调色需要围绕文章主题形成统一视觉语言。卡片只承载短信息、数据、图片说明或明确的并列关系，不得承载连续长正文。
 - 根据设计文件选择 section 的 layout、accentStyle、shadow、leadSourceId、overlineSourceId 与 itemStyles。杂志系统优先 editorial + top/left accent；学习系统可使用 feature + tri-color；平面系统必须 shadow=none。
 - 有时间演进、事件顺序或阶段推进时使用 timeline；有方法、清单或操作流程时使用 steps。两者的序号和节点由程序生成，不得改写正文。
 - 图片与说明并列时使用 media-text，并用 mediaPosition 控制图片侧；多个短信息、指标或图片可使用 grid，columns 只能为 2 或 3，长正文不得塞入三列。
@@ -163,9 +169,9 @@ blocks 仅允许六种：
 
 布局参考片段（只学习组合方式，不得照抄颜色或 sourceId）：
 A. 杂志留白：
-{"theme":{"canvasStyle":{"kind":"solid","colors":["#fafafa"]}},"blocks":[{"type":"content","sourceId":"source-0","variant":"title"},{"type":"section","sourceIds":["source-1","source-2","source-3"],"layout":"editorial","preset":"plain","leadSourceId":"source-1","accentStyle":"left"}]}
+{"theme":{"canvasStyle":{"kind":"solid","colors":["#fafafa"]}},"blocks":[{"type":"content","sourceId":"source-0","variant":"title"},{"type":"section","sourceIds":["source-1","source-2","source-3"],"layout":"editorial","preset":"plain","leadSourceId":"source-1","accentStyle":"top"},{"type":"section","sourceIds":["source-4","source-5","source-6"],"layout":"stack","preset":"plain","background":"transparent","accentStyle":"none","padding":0}]}
 B. 研究手册：
-{"theme":{"canvasStyle":{"kind":"grid","colors":["#fffdf8"],"patternColor":"rgba(59,130,246,0.10)","size":24}},"blocks":[{"type":"section","sourceIds":["source-1","source-2"],"layout":"feature","preset":"soft","surfaceStyle":{"kind":"dots","colors":["#ffffff"],"patternColor":"rgba(249,115,22,0.12)","size":18},"icon":{"kind":"lucide","name":"lightbulb","size":24}}]}
+{"theme":{"canvasStyle":{"kind":"grid","colors":["#fffdf8"],"patternColor":"rgba(59,130,246,0.10)","size":24}},"blocks":[{"type":"section","sourceIds":["source-1","source-2"],"layout":"feature","preset":"soft","surfaceStyle":{"kind":"dots","colors":["#ffffff"],"patternColor":"rgba(249,115,22,0.12)","size":18},"icon":{"kind":"lucide","name":"lightbulb","size":24}},{"type":"section","sourceIds":["source-3","source-4","source-5","source-6"],"layout":"stack","preset":"plain","background":"transparent","accentStyle":"none","padding":0}]}
 C. 视觉故事：
 {"blocks":[{"type":"asset","anchorSourceId":"source-1","placement":"after","prompt":"Editorial paper collage about the article subject, layered cut paper composition, soft daylight, restrained brand palette, high detail, no text, no logo, no watermark","imageSize":"landscape_16_9","width":597},{"type":"section","sourceIds":["source-2","source-3","source-4"],"layout":"two-column","columnRatio":"2:1","preset":"plain","surfaceStyle":{"kind":"linear","colors":["#ffffff","#f5f7ff"],"angle":135}}]}
 D. 生成背景：
@@ -199,6 +205,7 @@ type BlockDslFailureCode =
   | "empty-blocks"
   | "invalid-blocks"
   | "insufficient-design"
+  | "markdown-like-layout"
   | "repair-failed"
 
 class BlockDslError extends Error {
@@ -339,12 +346,54 @@ function parseBlockFromCompletion(data: CanvasCompletionData): WechatBlockDocume
   throw new BlockDslError("invalid-blocks", "返回的 blocks 不符合公众号块 DSL 结构")
 }
 
+function assertNonMarkdownLayout(
+  document: WechatBlockDocument,
+  sources: CanvasSource[],
+): void {
+  const sourceById = new Map(sources.map(source => [source.id, source]))
+  const sections = document.blocks.filter(block => block.type === "section")
+  const fakeQuoteContent = document.blocks.some(block => (
+    block.type === "content"
+    && block.variant === "quote"
+    && sourceById.get(block.sourceId)?.kind !== "quote"
+  ))
+  const fakeQuoteItems = sections.some(section => (
+    Object.entries(section.itemStyles).some(([sourceId, style]) => (
+      style.variant === "quote" && sourceById.get(sourceId)?.kind !== "quote"
+    ))
+  ))
+  const oversizedQuotePanels = sections.some(section => {
+    const paragraphCount = section.sourceIds.filter(sourceId => (
+      sourceById.get(sourceId)?.kind === "paragraph"
+    )).length
+    const hasVisibleFill = section.background !== "transparent"
+      || Boolean(section.surfaceStyle && section.surfaceStyle.kind !== "none")
+    if (paragraphCount < 3) return false
+    return section.preset === "callout"
+      || (
+        section.layout === "stack"
+        && (
+          (hasVisibleFill && section.accentStyle === "left")
+          || (paragraphCount >= 4 && hasVisibleFill && section.radius >= 8)
+        )
+      )
+  })
+  if (fakeQuoteContent || fakeQuoteItems || oversizedQuotePanels) {
+    throw new BlockDslError(
+      "markdown-like-layout",
+      "AI 把普通长正文包装成了大面积引用或卡片容器，视觉过于接近 Markdown",
+    )
+  }
+}
+
 function assertDesignRichness(
   document: WechatBlockDocument,
-  sourceCount: number,
+  sources: CanvasSource[],
   strict: boolean,
 ): void {
+  const sourceCount = sources.length
   if (sourceCount < 2) return
+  assertNonMarkdownLayout(document, sources)
   const sections = document.blocks.filter(block => block.type === "section")
   const hasVisualMaterial = document.blocks.some(block => (
     block.type === "asset"
@@ -410,6 +459,9 @@ function blockRepairSuggestion(errors: unknown[]): string {
   }
   if (codes.has("insufficient-design")) {
     return "请重试，或调整设计要求后切换能力更强的文章模型。"
+  }
+  if (codes.has("markdown-like-layout")) {
+    return "请重试，系统会改用无框正文和组件化布局。"
   }
   return "请重试；若持续失败，请切换文章模型。"
 }
@@ -519,6 +571,174 @@ async function analyzeDesignBrief(input: {
   }
 }
 
+function blockSourceManifest(sources: CanvasSource[]): string {
+  return JSON.stringify(sources.map(source => ({
+    id: source.id,
+    kind: source.kind,
+    text: source.kind === "image" ? undefined : source.text,
+    alt: source.kind === "image" ? source.alt : undefined,
+  })))
+}
+
+function splitBlockSources(sources: CanvasSource[]): CanvasSource[][] {
+  const chunks: CanvasSource[][] = []
+  let current: CanvasSource[] = []
+  for (const source of sources) {
+    if (
+      current.length >= 4
+      && (source.kind === "heading" || source.kind === "title")
+    ) {
+      chunks.push(current)
+      current = []
+    }
+    current.push(source)
+    if (current.length >= BLOCK_CHUNK_SOURCE_LIMIT) {
+      chunks.push(current)
+      current = []
+    }
+  }
+  if (current.length > 0) chunks.push(current)
+  return chunks
+}
+
+function assertBlockSourceCoverage(
+  document: WechatBlockDocument,
+  sources: CanvasSource[],
+  chunkLabel: string,
+): void {
+  const counts = new Map<string, number>()
+  for (const block of document.blocks) {
+    const sourceIds = block.type === "content"
+      ? [block.sourceId]
+      : block.type === "section"
+        ? block.sourceIds
+        : []
+    for (const sourceId of sourceIds) {
+      counts.set(sourceId, (counts.get(sourceId) || 0) + 1)
+    }
+  }
+  const invalidSource = sources.find(source => counts.get(source.id) !== 1)
+  if (invalidSource) {
+    throw new BlockDslError(
+      "invalid-blocks",
+      `${chunkLabel}未且仅引用一次 ${invalidSource.id}`,
+    )
+  }
+}
+
+function mergeBlockDocuments(
+  documents: WechatBlockDocument[],
+  articleTitle: string,
+): WechatBlockDocument {
+  const first = documents[0]
+  if (!first) {
+    throw new BlockDslError("empty-blocks", "分段生成没有返回任何公众号内容块")
+  }
+  return {
+    ...first,
+    name: articleTitle || first.name,
+    blocks: documents.flatMap(document => document.blocks),
+  }
+}
+
+async function generateBlockChunks(input: {
+  url: string
+  model: string
+  headers: Record<string, string>
+  prompt: string
+  analysisPlan: string
+  articleTitle: string
+  sources: CanvasSource[]
+  onChunk?: (_index: number, _total: number) => void
+}): Promise<{
+  document: WechatBlockDocument
+  attempts: CanvasCompletionData[]
+}> {
+  const chunks = splitBlockSources(input.sources)
+  const documents: WechatBlockDocument[] = []
+  const attempts: CanvasCompletionData[] = []
+
+  for (const [index, sources] of chunks.entries()) {
+    const chunkLabel = `第 ${index + 1}/${chunks.length} 组`
+    const manifest = blockSourceManifest(sources)
+    input.onChunk?.(index + 1, chunks.length)
+    const messages = [
+      {
+        role: "system",
+        content: `${BLOCK_SYSTEM_PROMPT}
+
+你正在分段生成一篇长文章的${chunkLabel}。只处理本组 sourceId，不得引用其他组。
+输出 1-3 个紧凑组件，省略默认字段和 id。普通长正文保持无框；仅短导语、数据或媒体区域使用背景。`,
+      },
+      {
+        role: "user",
+        content: `原始设计输入：${input.prompt}
+
+统一设计分析：${input.analysisPlan || "无，直接阅读原始设计输入"}
+
+本组内容源：
+${manifest}`,
+      },
+    ]
+    const first = await callStructuredCanvas(input.url, {
+      model: input.model,
+      messages,
+      temperature: 0.1,
+      max_tokens: BLOCK_CHUNK_MAX_TOKENS,
+      stream: false,
+    }, input.headers, 2)
+    attempts.push(first)
+
+    try {
+      const document = parseBlockFromCompletion(first)
+      assertBlockSourceCoverage(document, sources, chunkLabel)
+      assertNonMarkdownLayout(document, sources)
+      documents.push(document)
+      continue
+    } catch (firstError: unknown) {
+      const firstWasTruncated = firstError instanceof BlockDslError
+        && firstError.code === "truncated"
+      const malformed = firstWasTruncated
+        ? ""
+        : completionCandidates(first).join("\n").slice(0, 8000)
+      const repair = await callStructuredCanvas(input.url, {
+        model: input.model,
+        messages: [
+          ...messages,
+          {
+            role: "user",
+            content: `${chunkLabel}未通过校验：${blockFailureMessage(firstError)}。
+${malformed ? `修复下面的输出：\n${malformed}` : "重新生成本组。"}
+只输出一个紧凑 JSON 对象；每个 sourceId 必须且只能出现一次。
+普通长正文必须无框，禁止 callout、伪 quote、左侧粗线和大圆角浅色面板。`,
+          },
+        ],
+        temperature: 0,
+        max_tokens: BLOCK_CHUNK_MAX_TOKENS,
+        stream: false,
+      }, input.headers, 2)
+      attempts.push(repair)
+      try {
+        const document = parseBlockFromCompletion(repair)
+        assertBlockSourceCoverage(document, sources, chunkLabel)
+        assertNonMarkdownLayout(document, sources)
+        documents.push(document)
+      } catch (repairError: unknown) {
+        throw new BlockDslError(
+          "repair-failed",
+          `${chunkLabel}自动修复后仍失败：${blockFailureMessage(repairError)}`,
+          repairError,
+        )
+      }
+    }
+  }
+
+  return {
+    document: mergeBlockDocuments(documents, input.articleTitle),
+    attempts,
+  }
+}
+
 async function generateCanvasWithRepair(input: {
   url: string
   model: string
@@ -625,6 +845,7 @@ async function generateBlockWithRepair(input: {
   hasDesignReference: boolean
   onPlan?: () => void
   onRepair?: () => void
+  onChunk?: (_index: number, _total: number) => void
 }): Promise<{
   document: WechatBlockDocument
   attempts: CanvasCompletionData[]
@@ -637,12 +858,40 @@ async function generateBlockWithRepair(input: {
     prompt: input.prompt,
     enabled: input.hasDesignReference,
   })
-  const sourceManifest = JSON.stringify(input.sources.map(source => ({
-    id: source.id,
-    kind: source.kind,
-    text: source.kind === "image" ? undefined : source.text,
-    alt: source.kind === "image" ? source.alt : undefined,
-  })))
+  const analysisAttempts = analysis.completion ? [analysis.completion] : []
+  const generateChunkedDocument = async (
+    precedingAttempts: CanvasCompletionData[] = [],
+  ): Promise<{
+    document: WechatBlockDocument
+    attempts: CanvasCompletionData[]
+  }> => {
+    const chunked = await generateBlockChunks({
+      url: input.url,
+      model: input.model,
+      headers: input.headers,
+      prompt: input.prompt,
+      analysisPlan: analysis.plan,
+      articleTitle: input.articleTitle,
+      sources: input.sources,
+      onChunk: input.onChunk,
+    })
+    assertDesignRichness(chunked.document, input.sources, input.hasDesignReference)
+    return {
+      document: hydrateWechatBlockDocument(
+        chunked.document,
+        input.sources,
+        input.articleTitle,
+        { templateId: input.templateId },
+      ),
+      attempts: [...analysisAttempts, ...precedingAttempts, ...chunked.attempts],
+    }
+  }
+
+  if (input.sources.length > BLOCK_CHUNK_THRESHOLD) {
+    return generateChunkedDocument()
+  }
+
+  const sourceManifest = blockSourceManifest(input.sources)
   const messages = [
     { role: "system", content: BLOCK_SYSTEM_PROMPT },
     {
@@ -660,7 +909,7 @@ async function generateBlockWithRepair(input: {
 
   try {
     const parsed = parseBlockFromCompletion(first)
-    assertDesignRichness(parsed, input.sources.length, input.hasDesignReference)
+    assertDesignRichness(parsed, input.sources, input.hasDesignReference)
     return {
       document: hydrateWechatBlockDocument(
         parsed,
@@ -668,15 +917,16 @@ async function generateBlockWithRepair(input: {
         input.articleTitle,
         { templateId: input.templateId },
       ),
-      attempts: [...(analysis.completion ? [analysis.completion] : []), first],
+      attempts: [...analysisAttempts, first],
     }
   } catch (firstError: unknown) {
     input.onRepair?.()
     const firstWasTruncated = firstError instanceof BlockDslError
       && firstError.code === "truncated"
-    const malformed = firstWasTruncated
-      ? ""
-      : completionCandidates(first).join("\n").slice(0, 12000)
+    if (firstWasTruncated) {
+      return generateChunkedDocument([first])
+    }
+    const malformed = completionCandidates(first).join("\n").slice(0, 12000)
     const repair = await callStructuredCanvas(input.url, {
       model: input.model,
       messages: [
@@ -691,6 +941,9 @@ async function generateBlockWithRepair(input: {
           role: "user",
           content: `上一轮输出未通过设计丰富度或 JSON 校验。
 
+失败原因：
+${blockFailureMessage(firstError)}
+
 原始设计输入：
 ${input.prompt}
 
@@ -698,9 +951,9 @@ ${input.prompt}
 ${analysis.plan || "无"}
 
 上一轮输出：
-${firstWasTruncated ? "输出因长度限制被截断，不要复刻上一轮的冗长结构。" : malformed || "无"}
+${malformed || "无"}
 
-请重新输出合法、紧凑且有明确视觉设计的公众号块 DSL。正常长度文章必须包含至少 2 个 section、至少 2 个可见背景层级，并组合使用 layout、surfaceStyle、accentStyle、icon、itemStyles、marks、asset、divider 或 switcher 中至少三类能力。有背景或边框的区域 padding 不得小于 12。除标题和图片外，每个 section 应组合 4-8 个连续 sourceId；普通正文不得单独展开完整 content 样式。内容源：
+请重新输出合法、紧凑且有明确视觉设计的公众号块 DSL。正常长度文章必须包含至少 2 个 section，并组合使用 layout、surfaceStyle、accentStyle、icon、itemStyles、marks、asset、divider 或 switcher 中至少三类能力。背景层级应由 canvasStyle 和少量短 feature/lede/metric/媒体区域承担；连续 3 个及以上 paragraph 必须使用 transparent、borderWidth=0、accentStyle=none 的无框阅读区，禁止 callout、quote、大圆角浅色面板和左侧粗线。有背景或边框的短区域 padding 不得小于 12。除标题和图片外，每个 section 应组合 4-8 个连续 sourceId；普通正文不得单独展开完整 content 样式。内容源：
 ${sourceManifest}`,
         },
       ],
@@ -710,7 +963,7 @@ ${sourceManifest}`,
     }, input.headers, 2)
     try {
       const repairedDocument = parseBlockFromCompletion(repair)
-      assertDesignRichness(repairedDocument, input.sources.length, input.hasDesignReference)
+      assertDesignRichness(repairedDocument, input.sources, input.hasDesignReference)
       return {
         document: hydrateWechatBlockDocument(
           repairedDocument,
@@ -718,9 +971,15 @@ ${sourceManifest}`,
           input.articleTitle,
           { templateId: input.templateId },
         ),
-        attempts: [...(analysis.completion ? [analysis.completion] : []), first, repair],
+        attempts: [...analysisAttempts, first, repair],
       }
     } catch (repairError: unknown) {
+      if (
+        repairError instanceof BlockDslError
+        && repairError.code === "truncated"
+      ) {
+        return generateChunkedDocument([first, repair])
+      }
       throw new BlockDslError(
         "repair-failed",
         `AI 自动修复排版后仍未通过校验：首轮${blockFailureMessage(firstError)}；`
@@ -955,6 +1214,9 @@ router.post("/generate-block/stream", async (req: AuthedRequest, res) => {
       hasDesignReference,
       onPlan: () => send("progress", { message: "正在阅读并分析设计文件..." }),
       onRepair: () => send("progress", { message: "正在修复块排版结构..." }),
+      onChunk: (index, total) => send("progress", {
+        message: `文章较长，正在分段生成 ${index}/${total}...`,
+      }),
     })
     for (const attempt of generated.attempts) {
       if (!attempt.usage) continue

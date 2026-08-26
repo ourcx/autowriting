@@ -1,0 +1,1 @@
+{"sessionId": "wechat-draft-style", "runId": "post-fix", "hypothesisId": "A,B,C", "location": "src/utils/wechatBlockExport.ts:buildWechatBlockHtml", "msg": "[DEBUG] WeChat block HTML compiled", "data": {"htmlLength": 56108, "selectedSourceCount": 0, "blackBorderCount": 0, "tableCount": 1, "gutterBorder": "", "iconCount": 0, "dataSvgIconCount": 0}, "ts": 1787748955959}

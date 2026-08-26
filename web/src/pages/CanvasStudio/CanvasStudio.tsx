@@ -502,15 +502,29 @@ export default function CanvasStudio() {
       })
       return false
     }
-    const headers = getWechatHeaders()
-    let thumbMediaId: string | undefined
-    if (coverUrl) {
-      try {
-        thumbMediaId = await uploadWechatThumb(coverUrl, headers)
-      } catch {
-        toast.warn("封面上传失败，将使用公众号默认封面继续推送")
-      }
+    if (!coverUrl) {
+      toast.warn("当前文章没有封面，请先在文章预览中选择封面")
+      return false
     }
+    const headers = getWechatHeaders()
+    let thumbMediaId: string
+    // #region debug-point D-E:cover-input
+    navigator.sendBeacon("http://127.0.0.1:7777/event", JSON.stringify({ sessionId: "wechat-draft-style", runId: "post-fix", hypothesisId: "D,E", location: "src/pages/CanvasStudio/CanvasStudio.tsx:submitWechatHtml", msg: "[DEBUG] WeChat draft cover resolved", data: { hasCoverUrl: Boolean(coverUrl), coverScheme: coverUrl.split(":")[0] || "none", htmlLength: html.length }, ts: Date.now() }))
+    // #endregion
+    try {
+      thumbMediaId = await uploadWechatThumb(coverUrl, headers)
+      // #region debug-point D-E:cover-upload-success
+      navigator.sendBeacon("http://127.0.0.1:7777/event", JSON.stringify({ sessionId: "wechat-draft-style", runId: "post-fix", hypothesisId: "D,E", location: "src/pages/CanvasStudio/CanvasStudio.tsx:uploadWechatThumb", msg: "[DEBUG] WeChat cover upload succeeded", data: { hasThumbMediaId: Boolean(thumbMediaId) }, ts: Date.now() }))
+      // #endregion
+    } catch (error: unknown) {
+      // #region debug-point D-E:cover-upload-failure
+      navigator.sendBeacon("http://127.0.0.1:7777/event", JSON.stringify({ sessionId: "wechat-draft-style", runId: "post-fix", hypothesisId: "D,E", location: "src/pages/CanvasStudio/CanvasStudio.tsx:uploadWechatThumb", msg: "[DEBUG] WeChat cover upload failed", data: { error: error instanceof Error ? error.message : "unknown" }, ts: Date.now() }))
+      // #endregion
+      throw error
+    }
+    // #region debug-point D-E:draft-submit
+    navigator.sendBeacon("http://127.0.0.1:7777/event", JSON.stringify({ sessionId: "wechat-draft-style", runId: "post-fix", hypothesisId: "D,E", location: "src/pages/CanvasStudio/CanvasStudio.tsx:pushWechatDraft", msg: "[DEBUG] WeChat draft submitting", data: { hasThumbMediaId: Boolean(thumbMediaId), htmlLength: html.length }, ts: Date.now() }))
+    // #endregion
     const result = await pushWechatDraft({
       title: articleTitle,
       content: html,
@@ -536,8 +550,8 @@ export default function CanvasStudio() {
     if (!source) return
     setPushing(true)
     try {
-      const coverUrl = sources.find(item => item.kind === "image")?.src
-        || localStorage.getItem(`cover_image_${articleId}`)
+      const coverUrl = localStorage.getItem(`cover_image_${articleId}`)
+        || sources.find(item => item.kind === "image")?.src
         || ""
       await submitWechatHtml(
         buildWechatBlockHtml(source),
