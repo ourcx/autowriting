@@ -16,7 +16,12 @@ import {
   hydrateWechatBlockDocument,
   parseWechatBlockDocument,
 } from "../../shared/wechatBlockDsl.ts"
-import type { WechatBlockDocument } from "../../shared/wechatBlockDsl.ts"
+import type {
+  WechatBlockDocument,
+  WechatInlineMark,
+  WechatSurfaceStyle,
+  WechatTextStyleOverride,
+} from "../../shared/wechatBlockDsl.ts"
 import {
   buildCanvasDesignBrief,
   normalizeCanvasDesignTemplateId,
@@ -107,7 +112,7 @@ const BLOCK_SYSTEM_PROMPT = `你是微信公众号 HTML 内容块排版引擎。
     "font":"system|serif|rounded|friendly|editorial",
     "canvas":"#ffffff","surface":"#ffffff","surfaceAlt":"#f7f7f7",
     "text":"#262626","muted":"#6a6a6a",
-    "primary":"#2f6f62","secondary":"#3b82f6","accent":"#e8b94a","border":"#e5e5e5",
+    "primary":"#2f6f62","secondary":"#2f6f62","accent":"#2f6f62","border":"#e5e5e5",
     "displaySize":34,"displayWeight":800,"displayLineHeight":1.25,
     "headingSize":23,"headingWeight":700,"headingLineHeight":1.4,
     "bodySize":17,"bodyWeight":400,"bodyLineHeight":1.8,
@@ -139,6 +144,8 @@ blocks 仅允许六种：
 - 图片内容源只能使用 image 版式，其他内容源不得使用 image。
 - 先用 theme 定义一次全局颜色、字体和几何规则；block 未填写的样式会继承 theme，避免重复输出大量属性。
 - theme 必须忠实复制设计分析结果中的 palette、typography、radius、spacing 和 shadow 语义；禁止回退到默认绿灰、奶油色或通用 Markdown 风格。
+- 整篇只能选择一个 primary 主题色，secondary 和 accent 必须与 primary 相同或属于同一色相；正文、说明文字和分隔线使用中性色，不得为不同章节重新选择颜色。
+- 全文最多 3 个有底色的短内容区域，最多 6 个 marks，且同一 sourceId 最多标记 1 处。禁止大面积彩色文字、逐段换色、彩虹配色和每段都加背景。
 - lede 用于导语或首段，overline 用于短眉题，metric 仅用于原文中以数字为主的短内容，quote 用于 pull quote；不得将长正文误设为 overline 或 metric。
 - 这是公众号长文，不是海报：保持连续纵向阅读、清晰层级、17-18px 正文、1.7-2.0 行高和克制留白。
 - sidePadding 默认输出 8，允许 0-48；除非设计文件明确要求，不得擅自扩大到传统 Markdown 的 24-40px 大留白。
@@ -150,7 +157,7 @@ blocks 仅允许六种：
 - quote 只允许用于 kind=quote 的原文内容源；普通 paragraph 不得设置 quote variant。需要强调普通正文时使用 marks、lede、dropcap、metric、overline 或短 feature，不得伪装成引用。
 - 有背景或完整边框的 content、section、itemStyles 必须设置 padding>=12；禁止文字紧贴边框。纯正文才允许 padding=0。
 - 卡片、标题条、引用、强调色需要围绕文章主题形成统一视觉语言。卡片只承载短信息、数据、图片说明或明确的并列关系，不得承载连续长正文。
-- 根据设计文件选择 section 的 layout、accentStyle、shadow、leadSourceId、overlineSourceId 与 itemStyles。杂志系统优先 editorial + top/left accent；学习系统可使用 feature + tri-color；平面系统必须 shadow=none。
+- 根据设计文件选择 section 的 layout、accentStyle、shadow、leadSourceId、overlineSourceId 与 itemStyles。杂志系统优先 editorial + top accent；学习系统可使用 feature + 同一主色强调；平面系统必须 shadow=none。
 - 有时间演进、事件顺序或阶段推进时使用 timeline；有方法、清单或操作流程时使用 steps。两者的序号和节点由程序生成，不得改写正文。
 - 图片与说明并列时使用 media-text，并用 mediaPosition 控制图片侧；多个短信息、指标或图片可使用 grid，columns 只能为 2 或 3，长正文不得塞入三列。
 - 可为正文设置 textIndent；dropcap 仅用于一篇文章的首个导语或章节首段，不得连续使用。divider 用于章节转场，优先使用主题色和克制宽度，不得每段都插入。
@@ -177,7 +184,7 @@ C. 视觉故事：
 D. 生成背景：
 {"sidePadding":8,"theme":{"canvasStyle":{"kind":"generated","colors":["#ffffff"],"prompt":"Subtle editorial paper texture inspired by the article subject, quiet center, sparse details near edges, soft natural light, restrained palette, no text, no logo, no watermark","imageSize":"portrait_16_9","fit":"cover","overlayColor":"#ffffff","overlayOpacity":0.72}}}
 E. 组件化图文：
-{"blocks":[{"type":"section","sourceIds":["source-1","source-2","source-3"],"layout":"media-text","columnRatio":"1:2","mediaPosition":"left","preset":"soft"},{"type":"divider","anchorSourceId":"source-3","placement":"after","style":"gradient","color":"#5263a5","secondaryColor":"#e8b94a","width":180,"thickness":2},{"type":"section","sourceIds":["source-4","source-5","source-6","source-7"],"layout":"grid","columns":2,"preset":"plain"}]}
+{"blocks":[{"type":"section","sourceIds":["source-1","source-2","source-3"],"layout":"media-text","columnRatio":"1:2","mediaPosition":"left","preset":"soft","divider":false},{"type":"divider","anchorSourceId":"source-3","placement":"after","style":"solid","color":"#5263a5","secondaryColor":"#5263a5","width":180,"thickness":2},{"type":"section","sourceIds":["source-4","source-5","source-6","source-7"],"layout":"grid","columns":2,"preset":"plain","divider":false}]}
 F. 点击切换素材：
 {"blocks":[{"type":"switcher","anchorSourceId":"source-3","placement":"after","beforePrompt":"Closed archival folder on a clean editorial desk, front view, soft daylight, restrained blue and cream palette, no text, no logo, no watermark","afterPrompt":"The same archival folder opened on the same editorial desk, revealing layered photographs and notes without readable text, identical front view and lighting, restrained blue and cream palette, no text, no logo, no watermark","imageSize":"landscape_4_3","width":597}]}`
 
@@ -383,6 +390,168 @@ function assertNonMarkdownLayout(
       "markdown-like-layout",
       "AI 把普通长正文包装成了大面积引用或卡片容器，视觉过于接近 Markdown",
     )
+  }
+}
+
+function hasVisibleBlockColor(value: string | undefined): boolean {
+  return Boolean(value && value !== "transparent" && value !== "rgba(0, 0, 0, 0)")
+}
+
+function normalizeSurfacePalette(
+  surface: WechatSurfaceStyle,
+  theme: WechatBlockDocument["theme"],
+): WechatSurfaceStyle {
+  const colors = surface.kind === "linear" || surface.kind === "stripes"
+    ? [theme.surface, theme.surfaceAlt]
+    : [theme.surfaceAlt]
+  return {
+    ...surface,
+    colors,
+    patternColor: theme.border,
+    overlayColor: theme.canvas,
+  }
+}
+
+function normalizeBlockVisualSystem(
+  document: WechatBlockDocument,
+  sources: CanvasSource[],
+): WechatBlockDocument {
+  const sourceById = new Map(sources.map(source => [source.id, source]))
+  const primary = document.theme.primary
+  const neutralBorder = "#d9dde3"
+  const theme = {
+    ...document.theme,
+    secondary: primary,
+    accent: primary,
+    border: neutralBorder,
+    canvasStyle: normalizeSurfacePalette(document.theme.canvasStyle, {
+      ...document.theme,
+      secondary: primary,
+      accent: primary,
+      border: neutralBorder,
+    }),
+  }
+  let remainingSurfaces = 3
+  let remainingMarks = Math.min(6, Math.max(3, Math.ceil(sources.length / 8)))
+
+  const keepSurface = (requested: boolean, eligible: boolean): boolean => {
+    if (!requested || !eligible || remainingSurfaces <= 0) return false
+    remainingSurfaces -= 1
+    return true
+  }
+  const normalizeMarks = (marks: WechatInlineMark[] | undefined): WechatInlineMark[] | undefined => {
+    if (!marks) return undefined
+    if (remainingMarks <= 0) return []
+    const normalized = marks.slice(0, 1).map(mark => ({
+      ...mark,
+      color: primary,
+      background: hasVisibleBlockColor(mark.background) ? theme.surfaceAlt : "transparent",
+    }))
+    remainingMarks -= normalized.length
+    return normalized
+  }
+  const normalizeTextStyle = (
+    style: WechatTextStyleOverride,
+    sourceId: string,
+  ): WechatTextStyleOverride => {
+    const source = sourceById.get(sourceId)
+    const variant = style.variant
+    const emphasized = variant === "overline" || variant === "metric" || source?.kind === "heading"
+    const requestedSurface = hasVisibleBlockColor(style.background)
+    const eligibleSurface = (source?.text?.length || 0) <= 180
+      && (variant === "lede" || variant === "metric" || source?.kind === "quote" || source?.kind === "list")
+    const useSurface = keepSurface(requestedSurface, eligibleSurface)
+    return {
+      ...style,
+      variant: variant === "quote" && source?.kind !== "quote" ? "plain" : variant,
+      color: style.color === undefined ? undefined : emphasized ? primary : theme.text,
+      background: style.background === undefined
+        ? undefined
+        : useSurface ? theme.surfaceAlt : "transparent",
+      accentColor: style.accentColor === undefined ? undefined : primary,
+      borderColor: style.borderColor === undefined ? undefined : neutralBorder,
+      borderWidth: 0,
+      radius: useSurface ? Math.min(style.radius ?? theme.radius, 8) : 0,
+      padding: useSurface ? Math.max(style.padding ?? 0, 12) : 0,
+      marks: normalizeMarks(style.marks),
+    }
+  }
+
+  const blocks = document.blocks.map(block => {
+    if (block.type === "content") {
+      const source = sourceById.get(block.sourceId)
+      const emphasized = ["title", "banner", "overline", "metric"].includes(block.variant)
+        || source?.kind === "heading"
+      const eligibleSurface = (source?.text?.length || 0) <= 180
+        && (["lede", "metric", "card"].includes(block.variant)
+          || source?.kind === "quote"
+          || source?.kind === "list")
+      const useSurface = keepSurface(hasVisibleBlockColor(block.background), eligibleSurface)
+      return {
+        ...block,
+        variant: block.variant === "quote" && source?.kind !== "quote" ? "plain" as const : block.variant,
+        color: emphasized ? primary : theme.text,
+        background: useSurface ? theme.surfaceAlt : "transparent",
+        accentColor: primary,
+        borderColor: neutralBorder,
+        borderWidth: 0,
+        radius: useSurface ? Math.min(block.radius, 8) : 0,
+        padding: useSurface ? Math.max(block.padding, 12) : 0,
+        marks: normalizeMarks(block.marks) || [],
+      }
+    }
+    if (block.type === "section") {
+      const paragraphCount = block.sourceIds.filter(sourceId => (
+        sourceById.get(sourceId)?.kind === "paragraph"
+      )).length
+      const requestedSurface = hasVisibleBlockColor(block.background)
+        || Boolean(block.surfaceStyle && block.surfaceStyle.kind !== "none")
+      const useSurface = keepSurface(requestedSurface, paragraphCount <= 2)
+      return {
+        ...block,
+        preset: useSurface ? block.preset : "plain" as const,
+        background: useSurface ? theme.surfaceAlt : "transparent",
+        surfaceStyle: useSurface && block.surfaceStyle
+          ? normalizeSurfacePalette(block.surfaceStyle, theme)
+          : undefined,
+        color: theme.text,
+        accentColor: primary,
+        borderColor: neutralBorder,
+        borderWidth: 0,
+        radius: useSurface ? Math.min(block.radius, 8) : 0,
+        padding: useSurface ? Math.max(block.padding, 12) : block.layout === "stack" ? 0 : block.padding,
+        divider: ["comparison", "timeline", "steps"].includes(block.layout)
+          ? block.divider
+          : false,
+        accentStyle: block.accentStyle === "tri-color" ? "top" as const : block.accentStyle,
+        shadow: "none" as const,
+        icon: block.icon ? { ...block.icon, color: primary } : undefined,
+        itemStyles: Object.fromEntries(Object.entries(block.itemStyles).map(([sourceId, style]) => [
+          sourceId,
+          normalizeTextStyle(style, sourceId),
+        ])),
+      }
+    }
+    if (block.type === "decoration") {
+      return {
+        ...block,
+        fill: hasVisibleBlockColor(block.fill) ? primary : "transparent",
+        stroke: primary,
+      }
+    }
+    if (block.type === "divider") {
+      return { ...block, color: primary, secondaryColor: primary }
+    }
+    return block
+  })
+
+  return {
+    ...document,
+    background: theme.canvas,
+    pageBackground: theme.canvas,
+    font: theme.font,
+    theme,
+    blocks,
   }
 }
 
@@ -687,7 +856,8 @@ async function generateBlockChunks(input: {
         content: `${BLOCK_SYSTEM_PROMPT}
 
 你正在分段生成一篇长文章的${chunkLabel}。只处理本组 sourceId，不得引用其他组。
-输出 1-3 个紧凑组件，省略默认字段和 id。普通长正文保持无框；仅短导语、数据或媒体区域使用背景。`,
+输出 1-3 个紧凑组件，省略默认字段和 id。普通长正文保持无框；仅短导语、数据或媒体区域使用背景。
+所有分组必须服从统一设计分析中的同一个 primary 主题色，不得为本组发明新配色或给普通正文单独着色。`,
       },
       {
         role: "user",
@@ -899,10 +1069,11 @@ async function generateBlockWithRepair(input: {
       sources: input.sources,
       onChunk: input.onChunk,
     })
-    assertDesignRichness(chunked.document, input.sources, input.hasDesignReference)
+    const normalizedDocument = normalizeBlockVisualSystem(chunked.document, input.sources)
+    assertDesignRichness(normalizedDocument, input.sources, input.hasDesignReference)
     return {
       document: hydrateWechatBlockDocument(
-        chunked.document,
+        normalizedDocument,
         input.sources,
         input.articleTitle,
         { templateId: input.templateId },
@@ -933,10 +1104,11 @@ async function generateBlockWithRepair(input: {
 
   try {
     const parsed = parseBlockFromCompletion(first)
-    assertDesignRichness(parsed, input.sources, input.hasDesignReference)
+    const normalizedDocument = normalizeBlockVisualSystem(parsed, input.sources)
+    assertDesignRichness(normalizedDocument, input.sources, input.hasDesignReference)
     return {
       document: hydrateWechatBlockDocument(
-        parsed,
+        normalizedDocument,
         input.sources,
         input.articleTitle,
         { templateId: input.templateId },
@@ -986,10 +1158,11 @@ ${sourceManifest}`,
     }, input.headers, 2)
     try {
       const repairedDocument = parseBlockFromCompletion(repair)
-      assertDesignRichness(repairedDocument, input.sources, input.hasDesignReference)
+      const normalizedDocument = normalizeBlockVisualSystem(repairedDocument, input.sources)
+      assertDesignRichness(normalizedDocument, input.sources, input.hasDesignReference)
       return {
         document: hydrateWechatBlockDocument(
-          repairedDocument,
+          normalizedDocument,
           input.sources,
           input.articleTitle,
           { templateId: input.templateId },

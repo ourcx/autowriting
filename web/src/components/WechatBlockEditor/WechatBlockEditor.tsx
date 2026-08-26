@@ -380,8 +380,8 @@ function SectionContent({
       }}
     >
       <span style={{ flex: 2, background: block.accentColor }} />
-      <span style={{ flex: 1, background: "#3b82f6" }} />
-      <span style={{ flex: 1, background: "#22c55e" }} />
+      <span style={{ flex: 1, background: theme.secondary }} />
+      <span style={{ flex: 1, background: theme.accent }} />
     </div>
   ) : block.accentStyle === "top" ? (
     <div
