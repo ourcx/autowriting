@@ -19,6 +19,7 @@ import {
 } from "../../shared/wechatBlockDsl.ts"
 import type {
   WechatBlockDocument,
+  WechatBlockVariant,
   WechatInlineMark,
   WechatSurfaceStyle,
   WechatTextStyleOverride,
@@ -37,7 +38,7 @@ const CANVAS_LLM_TIMEOUT_MS = 300000
 const BLOCK_MAX_TOKENS = 16000
 const BLOCK_CHUNK_MAX_TOKENS = 6000
 const BLOCK_CHUNK_SOURCE_LIMIT = 8
-const BLOCK_CHUNK_THRESHOLD = 18
+const BLOCK_CHUNK_THRESHOLD = BLOCK_CHUNK_SOURCE_LIMIT
 const DESIGN_PLAN_SYSTEM_PROMPT = `你是视觉设计文件分析器。输入会包含原始 Design System、设计说明、SVG、XML、JSON 或 Markdown，以及系统模板。
 
 只输出 JSON：
@@ -188,6 +189,36 @@ E. 组件化图文：
 {"blocks":[{"type":"section","sourceIds":["source-1","source-2","source-3"],"layout":"media-text","columnRatio":"1:2","mediaPosition":"left","preset":"soft","divider":false},{"type":"divider","anchorSourceId":"source-3","placement":"after","style":"solid","color":"#5263a5","secondaryColor":"#5263a5","width":180,"thickness":2},{"type":"section","sourceIds":["source-4","source-5","source-6","source-7"],"layout":"grid","columns":2,"preset":"plain","divider":false}]}
 F. 点击切换素材：
 {"blocks":[{"type":"switcher","anchorSourceId":"source-3","placement":"after","beforePrompt":"Closed archival folder on a clean editorial desk, front view, soft daylight, restrained blue and cream palette, no text, no logo, no watermark","afterPrompt":"The same archival folder opened on the same editorial desk, revealing layered photographs and notes without readable text, identical front view and lighting, restrained blue and cream palette, no text, no logo, no watermark","imageSize":"landscape_4_3","width":597}]}`
+
+const BLOCK_CHUNK_SYSTEM_PROMPT = `你是微信公众号分段排版引擎。正文由 sourceId 关联，程序会补齐全部默认样式和原文；你只输出设计决策。
+
+只输出一个不超过 4500 字符的紧凑 JSON 对象：
+{"version":1,"name":"","theme":{},"blocks":[]}
+
+允许的最小字段：
+- theme：font、canvas、surface、surfaceAlt、text、muted、primary、secondary、accent、border、canvasStyle。仅填写本组需要确定的字段。
+- content：type、sourceId、variant。只用于标题、图片或无法组合的单项。
+- section：type、sourceIds、layout、preset；可选 columnRatio、mediaPosition、columns、surfaceStyle、accentStyle、icon、leadSourceId、overlineSourceId、itemStyles。
+- divider：type、anchorSourceId、placement、style。
+- asset：type、anchorSourceId、placement、prompt、imageSize。
+
+枚举：
+- variant：plain|title|banner|quote|lede|overline|metric|dropcap|image
+- layout：stack|two-column|comparison|feature|editorial|timeline|steps|media-text|grid
+- preset：plain|soft|feature|editorial
+- surfaceStyle.kind / canvasStyle.kind：none|solid|linear|stripes|dots|grid|ruled-paper|generated
+- accentStyle：none|top|left|bottom|tri-color
+- icon.name：book-open|quote|lightbulb|sparkles|mic|trending-up|check-circle|arrow-right|bar-chart
+
+硬规则：
+1. 首字符是 {，末字符是 }；禁止解释、Markdown、HTML、CSS、SVG、注释和默认字段。
+2. 禁止输出正文、图片地址、空 id，以及 width、padding、margin、字号、行高、边框等程序默认值。
+3. 每个 sourceId 必须且只能出现一次，并严格保持输入顺序；section 组合 2-8 个连续 sourceId。
+4. 普通长正文使用无框 stack/editorial；禁止 callout、伪 quote、逐段背景和重复 itemStyles。
+5. 每组输出 1-3 个正文组件，itemStyles 最多 2 项，每项最多 3 个字段。
+6. theme 统一定义颜色；secondary、accent 与 primary 使用同一色相。只有短导语、数据或媒体区域使用背景。
+7. 图片只能使用 image 或 media-text/grid。asset 最多 1 个，提示词不超过 240 字符。
+8. 不确定的字段直接省略，由程序安全补齐；完整、短小的 JSON 优先于装饰数量。`
 
 interface CanvasCompletionData {
   choices?: Array<{
@@ -440,6 +471,44 @@ function normalizeBlockVisualSystem(
     remainingSurfaces -= 1
     return true
   }
+  const typographyFor = (
+    source: CanvasSource | undefined,
+    variant: WechatBlockVariant | undefined,
+  ): { fontSize: number; fontWeight: number; lineHeight: number } => {
+    if (source?.kind === "title" || variant === "title" || variant === "metric") {
+      return {
+        fontSize: theme.displaySize,
+        fontWeight: theme.displayWeight,
+        lineHeight: theme.displayLineHeight,
+      }
+    }
+    if (source?.kind === "heading" || variant === "banner") {
+      return {
+        fontSize: theme.headingSize,
+        fontWeight: theme.headingWeight,
+        lineHeight: theme.headingLineHeight,
+      }
+    }
+    if (variant === "overline") {
+      return {
+        fontSize: Math.min(12, theme.bodySize),
+        fontWeight: theme.headingWeight,
+        lineHeight: theme.headingLineHeight,
+      }
+    }
+    if (variant === "lede" || variant === "quote") {
+      return {
+        fontSize: Math.min(24, theme.bodySize + 3),
+        fontWeight: theme.bodyWeight,
+        lineHeight: theme.bodyLineHeight,
+      }
+    }
+    return {
+      fontSize: theme.bodySize,
+      fontWeight: theme.bodyWeight,
+      lineHeight: theme.bodyLineHeight,
+    }
+  }
   const normalizeMarks = (marks: WechatInlineMark[] | undefined): WechatInlineMark[] | undefined => {
     if (!marks) return undefined
     if (remainingMarks <= 0) return []
@@ -462,9 +531,12 @@ function normalizeBlockVisualSystem(
     const eligibleSurface = (source?.text?.length || 0) <= 180
       && (variant === "lede" || variant === "metric" || source?.kind === "quote" || source?.kind === "list")
     const useSurface = keepSurface(requestedSurface, eligibleSurface)
+    const normalizedVariant = variant === "quote" && source?.kind !== "quote" ? "plain" : variant
+    const typography = typographyFor(source, normalizedVariant)
     return {
       ...style,
-      variant: variant === "quote" && source?.kind !== "quote" ? "plain" : variant,
+      ...typography,
+      variant: normalizedVariant,
       color: style.color === undefined ? undefined : emphasized ? primary : theme.text,
       background: style.background === undefined
         ? undefined
@@ -488,9 +560,14 @@ function normalizeBlockVisualSystem(
           || source?.kind === "quote"
           || source?.kind === "list")
       const useSurface = keepSurface(hasVisibleBlockColor(block.background), eligibleSurface)
+      const normalizedVariant = block.variant === "quote" && source?.kind !== "quote"
+        ? "plain" as const
+        : block.variant
+      const typography = typographyFor(source, normalizedVariant)
       return {
         ...block,
-        variant: block.variant === "quote" && source?.kind !== "quote" ? "plain" as const : block.variant,
+        ...typography,
+        variant: normalizedVariant,
         color: emphasized ? primary : theme.text,
         background: useSurface ? theme.surfaceAlt : "transparent",
         accentColor: primary,
@@ -755,6 +832,43 @@ function blockSourceManifest(sources: CanvasSource[]): string {
   })))
 }
 
+function blockChunkMinimumExample(sources: CanvasSource[]): string {
+  const contentBlock = (source: CanvasSource) => ({
+    type: "content",
+    sourceId: source.id,
+    variant: source.kind === "title"
+      ? "title"
+      : source.kind === "heading"
+        ? "banner"
+        : source.kind === "quote"
+          ? "quote"
+          : source.kind === "image"
+            ? "image"
+            : "plain",
+  })
+  const blocks: Array<Record<string, unknown>> = []
+  let remaining = sources
+  if (sources[0]?.kind === "title") {
+    blocks.push(contentBlock(sources[0]))
+    remaining = sources.slice(1)
+  }
+  if (remaining.length === 1) {
+    blocks.push(contentBlock(remaining[0]))
+  } else if (remaining.length > 1) {
+    blocks.push({
+      type: "section",
+      sourceIds: remaining.map(source => source.id),
+      layout: "stack",
+      preset: "plain",
+    })
+  }
+  return JSON.stringify({
+    version: 1,
+    theme: {},
+    blocks,
+  })
+}
+
 function splitBlockSources(sources: CanvasSource[]): CanvasSource[][] {
   const chunks: CanvasSource[][] = []
   let current: CanvasSource[] = []
@@ -804,14 +918,20 @@ function assertBlockSourceCoverage(
 function mergeBlockDocuments(
   documents: WechatBlockDocument[],
   articleTitle: string,
+  canonicalTheme: WechatBlockDocument["theme"] | null,
 ): WechatBlockDocument {
   const first = documents[0]
   if (!first) {
     throw new BlockDslError("empty-blocks", "分段生成没有返回任何公众号内容块")
   }
+  const theme = canonicalTheme || first.theme
   return {
     ...first,
     name: articleTitle || first.name,
+    background: theme.canvas,
+    pageBackground: theme.canvas,
+    font: theme.font,
+    theme,
     blocks: documents.flatMap(document => document.blocks),
   }
 }
@@ -829,11 +949,13 @@ async function generateBlockChunks(input: {
   document: WechatBlockDocument
   attempts: CanvasCompletionData[]
   degraded: boolean
+  canonicalTheme: WechatBlockDocument["theme"] | null
 }> {
   const chunks = splitBlockSources(input.sources)
   const documents: WechatBlockDocument[] = []
   const attempts: CanvasCompletionData[] = []
   let degraded = false
+  let canonicalTheme: WechatBlockDocument["theme"] | null = null
   const appendSmallerChunks = async (sources: CanvasSource[]): Promise<boolean> => {
     if (sources.length <= 1) return false
     const middle = Math.ceil(sources.length / 2)
@@ -846,6 +968,7 @@ async function generateBlockChunks(input: {
       documents.push(generated.document)
       attempts.push(...generated.attempts)
       degraded ||= generated.degraded
+      canonicalTheme ||= generated.canonicalTheme
     }
     return true
   }
@@ -853,14 +976,14 @@ async function generateBlockChunks(input: {
   for (const [index, sources] of chunks.entries()) {
     const chunkLabel = `第 ${index + 1}/${chunks.length} 组`
     const manifest = blockSourceManifest(sources)
+    const minimumExample = blockChunkMinimumExample(sources)
     input.onChunk?.(index + 1, chunks.length)
     const messages = [
       {
         role: "system",
-        content: `${BLOCK_SYSTEM_PROMPT}
+        content: `${BLOCK_CHUNK_SYSTEM_PROMPT}
 
 你正在分段生成一篇长文章的${chunkLabel}。只处理本组 sourceId，不得引用其他组。
-输出 1-3 个紧凑组件，省略默认字段和 id。普通长正文保持无框；仅短导语、数据或媒体区域使用背景。
 所有分组必须服从统一设计分析中的同一个 primary 主题色，不得为本组发明新配色或给普通正文单独着色。`,
       },
       {
@@ -870,7 +993,10 @@ async function generateBlockChunks(input: {
 统一设计分析：${input.analysisPlan || "无，直接阅读原始设计输入"}
 
 本组内容源：
-${manifest}`,
+${manifest}
+
+本组最小合法示例：
+${minimumExample}`,
       },
     ]
     const first = await callStructuredCanvas(input.url, {
@@ -890,6 +1016,7 @@ ${manifest}`,
       assertBlockSourceCoverage(document, sources, chunkLabel)
       assertNonMarkdownLayout(document, sources)
       documents.push(document)
+      canonicalTheme ||= document.theme
       continue
     } catch (firstError: unknown) {
       const firstWasTruncated = isBlockOutputTooLong(firstError)
@@ -898,17 +1025,31 @@ ${manifest}`,
       }
       const malformed = firstWasTruncated
         ? ""
-        : completionCandidates(first).join("\n").slice(0, 8000)
+        : completionCandidates(first).join("\n")
       const repair = await callStructuredCanvas(input.url, {
         model: input.model,
         messages: [
-          ...messages,
+          {
+            role: "system",
+            content: `${BLOCK_CHUNK_SYSTEM_PROMPT}
+
+这是修复轮。必须重新输出完整对象，不得续写或解释上一轮结果。`,
+          },
           {
             role: "user",
-            content: `${chunkLabel}未通过校验：${blockFailureMessage(firstError)}。
-${malformed ? `修复下面的输出：\n${malformed}` : "重新生成本组。"}
-只输出一个紧凑 JSON 对象；每个 sourceId 必须且只能出现一次。
-普通长正文必须无框，禁止 callout、伪 quote、左侧粗线和大圆角浅色面板。`,
+            content: `${chunkLabel}失败原因：${blockFailureMessage(firstError)}
+
+设计要求：${input.prompt}
+
+统一设计分析：${input.analysisPlan || "无"}
+
+本组内容源：${manifest}
+
+本组最小合法示例：${minimumExample}
+
+${malformed ? `待修复输出：${malformed}` : "上一轮被截断，请从头生成更短的 JSON。"}
+
+每个 sourceId 恰好出现一次。`,
           },
         ],
         temperature: 0,
@@ -924,17 +1065,20 @@ ${malformed ? `修复下面的输出：\n${malformed}` : "重新生成本组。"
         assertBlockSourceCoverage(document, sources, chunkLabel)
         assertNonMarkdownLayout(document, sources)
         documents.push(document)
+        canonicalTheme ||= document.theme
       } catch (repairError: unknown) {
-        if (isBlockOutputTooLong(repairError) && await appendSmallerChunks(sources)) {
+        const outputTooLong = isBlockOutputTooLong(repairError)
+        if (outputTooLong && await appendSmallerChunks(sources)) {
           continue
         }
-        if (isBlockOutputTooLong(repairError) && sources.length === 1) {
-          // 单个 sourceId 已无法继续二分。正文由 sourceId 在 hydrate 阶段回填，
-          // 因此使用本地安全块即可完整保留内容，避免模型反复输出超长样式拖垮整篇排版。
+        if (repairError instanceof BlockDslError) {
+          // 截断通过二分降低输出量；其他结构错误继续拆分并不能提高模型遵循度。
+          // 此时直接回填当前组，避免相同错误触发更多长耗时请求。
           documents.push(createWechatBlockDocument(input.articleTitle, sources))
           degraded = true
-          logger.warn("CANVAS", "单内容源排版输出仍被截断，已降级为本地安全块", {
-            sourceId: sources[0].id,
+          logger.warn("CANVAS", "分组排版输出仍未通过校验，已降级为本地安全块", {
+            sourceIds: sources.map(source => source.id),
+            reason: blockFailureMessage(repairError),
           })
           continue
         }
@@ -948,9 +1092,10 @@ ${malformed ? `修复下面的输出：\n${malformed}` : "重新生成本组。"
   }
 
   return {
-    document: mergeBlockDocuments(documents, input.articleTitle),
+    document: mergeBlockDocuments(documents, input.articleTitle, canonicalTheme),
     attempts,
     degraded,
+    canonicalTheme,
   }
 }
 
@@ -1015,7 +1160,7 @@ async function generateCanvasWithRepair(input: {
     }
   } catch {
     input.onRepair?.()
-    const malformed = completionCandidates(first).join("\n").slice(0, 20000)
+    const malformed = completionCandidates(first).join("\n")
     const repair = await callStructuredCanvas(input.url, {
       model: input.model,
       messages: [
@@ -1144,7 +1289,7 @@ async function generateBlockWithRepair(input: {
     if (firstWasTruncated) {
       return generateChunkedDocument([first])
     }
-    const malformed = completionCandidates(first).join("\n").slice(0, 12000)
+    const malformed = completionCandidates(first).join("\n")
     const repair = await callStructuredCanvas(input.url, {
       model: input.model,
       messages: [
