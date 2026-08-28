@@ -243,7 +243,6 @@ type BlockDslFailureCode =
   | "invalid-json"
   | "empty-blocks"
   | "invalid-blocks"
-  | "insufficient-design"
   | "markdown-like-layout"
   | "repair-failed"
 
@@ -633,60 +632,6 @@ function normalizeBlockVisualSystem(
   }
 }
 
-function assertDesignRichness(
-  document: WechatBlockDocument,
-  sources: CanvasSource[],
-  strict: boolean,
-): void {
-  const sourceCount = sources.length
-  if (sourceCount < 2) return
-  assertNonMarkdownLayout(document, sources)
-  const sections = document.blocks.filter(block => block.type === "section")
-  const hasVisualMaterial = document.blocks.some(block => (
-    block.type === "asset"
-    || block.type === "decoration"
-    || block.type === "divider"
-    || block.type === "switcher"
-  ))
-  const hasCanvasTreatment = document.theme.canvasStyle.kind !== "none"
-  const surfacedSections = sections.filter(section => (
-    section.background !== "transparent"
-    || Boolean(section.surfaceStyle && section.surfaceStyle.kind !== "none")
-  ))
-  const techniques = new Set<string>()
-  if (hasVisualMaterial) techniques.add("material")
-  if (hasCanvasTreatment || surfacedSections.length > 0) techniques.add("surface")
-  if (sections.some(section => section.layout !== "stack")) techniques.add("layout")
-  if (sections.some(section => section.accentStyle !== "none" || Boolean(section.icon))) {
-    techniques.add("accent")
-  }
-  if (sections.some(section => (
-    Object.values(section.itemStyles).some(style => (
-      style.variant === "lede"
-      || style.variant === "overline"
-      || style.variant === "metric"
-      || style.variant === "quote"
-      || Boolean(style.marks?.length)
-    ))
-  )) || document.blocks.some(block => block.type === "content" && block.marks.length > 0)) {
-    techniques.add("typography")
-  }
-
-  const minimumSections = sourceCount >= 5 ? 2 : 1
-  const minimumTechniques = strict ? 3 : 2
-  const surfaceLayers = surfacedSections.length + (hasCanvasTreatment ? 1 : 0)
-  if (
-    sections.length < minimumSections
-    || techniques.size < minimumTechniques
-    || (sourceCount >= 5 && surfaceLayers < 2)
-  ) {
-    throw new BlockDslError(
-      "insufficient-design",
-      "排版结构过于简单，未满足组合布局和背景层级要求",
-    )
-  }
-}
-
 function blockFailureMessage(error: unknown): string {
   return error instanceof Error ? error.message : "排版结构校验失败"
 }
@@ -708,9 +653,6 @@ function blockRepairSuggestion(errors: unknown[]): string {
   }
   if (codes.has("empty-response")) {
     return "请重试或切换文章模型。"
-  }
-  if (codes.has("insufficient-design")) {
-    return "请重试，或调整设计要求后切换能力更强的文章模型。"
   }
   if (codes.has("markdown-like-layout")) {
     return "请重试，系统会改用无框正文和组件化布局。"
@@ -948,13 +890,11 @@ async function generateBlockChunks(input: {
 }): Promise<{
   document: WechatBlockDocument
   attempts: CanvasCompletionData[]
-  degraded: boolean
   canonicalTheme: WechatBlockDocument["theme"] | null
 }> {
   const chunks = splitBlockSources(input.sources)
   const documents: WechatBlockDocument[] = []
   const attempts: CanvasCompletionData[] = []
-  let degraded = false
   let canonicalTheme: WechatBlockDocument["theme"] | null = null
   const appendSmallerChunks = async (sources: CanvasSource[]): Promise<boolean> => {
     if (sources.length <= 1) return false
@@ -967,7 +907,6 @@ async function generateBlockChunks(input: {
       })
       documents.push(generated.document)
       attempts.push(...generated.attempts)
-      degraded ||= generated.degraded
       canonicalTheme ||= generated.canonicalTheme
     }
     return true
@@ -1075,7 +1014,6 @@ ${malformed ? `待修复输出：${malformed}` : "上一轮被截断，请从头
           // 截断通过二分降低输出量；其他结构错误继续拆分并不能提高模型遵循度。
           // 此时直接回填当前组，避免相同错误触发更多长耗时请求。
           documents.push(createWechatBlockDocument(input.articleTitle, sources))
-          degraded = true
           logger.warn("CANVAS", "分组排版输出仍未通过校验，已降级为本地安全块", {
             sourceIds: sources.map(source => source.id),
             reason: blockFailureMessage(repairError),
@@ -1094,7 +1032,6 @@ ${malformed ? `待修复输出：${malformed}` : "上一轮被截断，请从头
   return {
     document: mergeBlockDocuments(documents, input.articleTitle, canonicalTheme),
     attempts,
-    degraded,
     canonicalTheme,
   }
 }
@@ -1236,9 +1173,7 @@ async function generateBlockWithRepair(input: {
       onChunk: input.onChunk,
     })
     const normalizedDocument = normalizeBlockVisualSystem(chunked.document, input.sources)
-    if (!chunked.degraded) {
-      assertDesignRichness(normalizedDocument, input.sources, input.hasDesignReference)
-    }
+    assertNonMarkdownLayout(normalizedDocument, input.sources)
     return {
       document: hydrateWechatBlockDocument(
         normalizedDocument,
@@ -1273,7 +1208,7 @@ async function generateBlockWithRepair(input: {
   try {
     const parsed = parseBlockFromCompletion(first)
     const normalizedDocument = normalizeBlockVisualSystem(parsed, input.sources)
-    assertDesignRichness(normalizedDocument, input.sources, input.hasDesignReference)
+    assertNonMarkdownLayout(normalizedDocument, input.sources)
     return {
       document: hydrateWechatBlockDocument(
         normalizedDocument,
@@ -1327,7 +1262,7 @@ ${sourceManifest}`,
     try {
       const repairedDocument = parseBlockFromCompletion(repair)
       const normalizedDocument = normalizeBlockVisualSystem(repairedDocument, input.sources)
-      assertDesignRichness(normalizedDocument, input.sources, input.hasDesignReference)
+      assertNonMarkdownLayout(normalizedDocument, input.sources)
       return {
         document: hydrateWechatBlockDocument(
           normalizedDocument,
