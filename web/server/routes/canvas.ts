@@ -13,6 +13,7 @@ import {
 } from "../../shared/canvasArticle.ts"
 import type { CanvasSource } from "../../shared/canvasArticle.ts"
 import {
+  createWechatBlockDocument,
   hydrateWechatBlockDocument,
   parseWechatBlockDocument,
 } from "../../shared/wechatBlockDsl.ts"
@@ -827,10 +828,12 @@ async function generateBlockChunks(input: {
 }): Promise<{
   document: WechatBlockDocument
   attempts: CanvasCompletionData[]
+  degraded: boolean
 }> {
   const chunks = splitBlockSources(input.sources)
   const documents: WechatBlockDocument[] = []
   const attempts: CanvasCompletionData[] = []
+  let degraded = false
   const appendSmallerChunks = async (sources: CanvasSource[]): Promise<boolean> => {
     if (sources.length <= 1) return false
     const middle = Math.ceil(sources.length / 2)
@@ -842,6 +845,7 @@ async function generateBlockChunks(input: {
       })
       documents.push(generated.document)
       attempts.push(...generated.attempts)
+      degraded ||= generated.degraded
     }
     return true
   }
@@ -924,6 +928,16 @@ ${malformed ? `修复下面的输出：\n${malformed}` : "重新生成本组。"
         if (isBlockOutputTooLong(repairError) && await appendSmallerChunks(sources)) {
           continue
         }
+        if (isBlockOutputTooLong(repairError) && sources.length === 1) {
+          // 单个 sourceId 已无法继续二分。正文由 sourceId 在 hydrate 阶段回填，
+          // 因此使用本地安全块即可完整保留内容，避免模型反复输出超长样式拖垮整篇排版。
+          documents.push(createWechatBlockDocument(input.articleTitle, sources))
+          degraded = true
+          logger.warn("CANVAS", "单内容源排版输出仍被截断，已降级为本地安全块", {
+            sourceId: sources[0].id,
+          })
+          continue
+        }
         throw new BlockDslError(
           "repair-failed",
           `${chunkLabel}自动修复后仍失败：${blockFailureMessage(repairError)}`,
@@ -936,6 +950,7 @@ ${malformed ? `修复下面的输出：\n${malformed}` : "重新生成本组。"
   return {
     document: mergeBlockDocuments(documents, input.articleTitle),
     attempts,
+    degraded,
   }
 }
 
@@ -1076,7 +1091,9 @@ async function generateBlockWithRepair(input: {
       onChunk: input.onChunk,
     })
     const normalizedDocument = normalizeBlockVisualSystem(chunked.document, input.sources)
-    assertDesignRichness(normalizedDocument, input.sources, input.hasDesignReference)
+    if (!chunked.degraded) {
+      assertDesignRichness(normalizedDocument, input.sources, input.hasDesignReference)
+    }
     return {
       document: hydrateWechatBlockDocument(
         normalizedDocument,
