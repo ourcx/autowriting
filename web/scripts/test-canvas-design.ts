@@ -82,6 +82,11 @@ for (const template of CANVAS_DESIGN_TEMPLATES) {
       assert.equal(block.borderWidth, 0, `${template.id} 不得生成完整边框`)
       assert.equal(block.accentColor, result.document.theme.primary, `${template.id} 必须统一主色`)
     }
+    if (block.type === "section") {
+      for (const style of Object.values(block.itemStyles)) {
+        assert.ok(Array.isArray(style.marks), `${template.id} 的 Section 局部样式必须补齐 marks`)
+      }
+    }
   }
 
   const signature = {

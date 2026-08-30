@@ -343,7 +343,10 @@ function itemStylesForGroup(
       styles[source.id] = { textIndent: system.bodyTextIndent }
     }
   }
-  return styles
+  return Object.fromEntries(Object.entries(styles).map(([sourceId, style]) => [
+    sourceId,
+    { ...style, marks: style.marks || [] },
+  ]))
 }
 
 function styleTitle(

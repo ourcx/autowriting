@@ -314,10 +314,12 @@ function sectionContentBlock(
     : source.id === section.overlineSourceId
       ? { variant: "overline" }
       : {}
+  const itemStyle = section.itemStyles[source.id] || {}
   return {
     ...sectionDefault,
     ...roleOverride,
-    ...(section.itemStyles[source.id] || {}),
+    ...itemStyle,
+    marks: itemStyle.marks || sectionDefault.marks,
   }
 }
 
