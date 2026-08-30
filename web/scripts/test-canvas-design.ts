@@ -1,0 +1,190 @@
+import assert from "node:assert/strict"
+import type { CanvasSource } from "../shared/canvasArticle.ts"
+import {
+  assessCanvasVisualQuality,
+  finalizeCanvasDesign,
+  normalizeCanvasPrimaryColor,
+} from "../shared/canvasDesignSystem.ts"
+import {
+  CANVAS_DESIGN_TEMPLATES,
+  getCanvasDesignTemplate,
+  type CanvasDesignTemplateId,
+} from "../shared/canvasDesignTemplates.ts"
+import { createWechatBlockDocument } from "../shared/wechatBlockDsl.ts"
+
+const sources: CanvasSource[] = [
+  { id: "source-0", kind: "title", text: "一万米高空的逻辑死局" },
+  { id: "source-1", kind: "paragraph", text: "事故发生在风暴边缘，所有系统看似仍在正常工作。" },
+  { id: "source-2", kind: "paragraph", text: "真正危险的是信息突然失去一致性，驾驶舱开始出现认知分裂。" },
+  { id: "source-3", kind: "heading", text: "风暴夹缝中的航程" },
+  { id: "source-4", kind: "paragraph", text: "机组沿既定航路进入雷暴活跃区域，外部环境快速恶化。" },
+  { id: "source-5", kind: "paragraph", text: "皮托管短暂结冰，三套空速数据先后出现冲突。" },
+  { id: "source-6", kind: "paragraph", text: "自动驾驶断开后，控制权重新回到飞行员手中。" },
+  { id: "source-7", kind: "heading", text: "四分钟里的逻辑断裂" },
+  { id: "source-8", kind: "quote", text: "我来控制。" },
+  { id: "source-9", kind: "paragraph", text: "错误动作与错误反馈互相强化，留给机组的判断窗口越来越小。" },
+  { id: "source-10", kind: "image", src: "/uploads/canvas-quality-fixture.png", alt: "驾驶舱示意" },
+  { id: "source-11", kind: "paragraph", text: "示意图用于解释两侧操纵输入无法被另一侧直接感知。" },
+  { id: "source-12", kind: "paragraph", text: "技术故障最终演变为训练、协作与人机界面的共同失败。" },
+]
+
+const expectedSignatures: Record<CanvasDesignTemplateId, {
+  primary: string
+  font: string
+  layouts: string[]
+  icons: string[]
+}> = {
+  "editorial-story": {
+    primary: "#a84632",
+    font: "editorial",
+    layouts: ["editorial", "editorial", "stack", "media-text"],
+    icons: ["sparkles", "book-open"],
+  },
+  "interview-notes": {
+    primary: "#c56f4f",
+    font: "friendly",
+    layouts: ["feature", "stack", "two-column", "media-text"],
+    icons: ["mic", "mic"],
+  },
+  "weekly-dashboard": {
+    primary: "#5263a5",
+    font: "system",
+    layouts: ["comparison", "comparison", "grid", "media-text"],
+    icons: ["bar-chart", "bar-chart", "trending-up"],
+  },
+  "design-reference": {
+    primary: "#2f6f62",
+    font: "system",
+    layouts: ["editorial", "editorial", "stack", "media-text"],
+    icons: ["sparkles", "book-open"],
+  },
+}
+
+for (const template of CANVAS_DESIGN_TEMPLATES) {
+  const initial = createWechatBlockDocument("视觉质量夹具", sources)
+  const flatReport = assessCanvasVisualQuality(initial, sources)
+  assert.equal(flatReport.passed, false, `${template.id} 的平铺文档必须被质量门禁拒绝`)
+
+  const result = finalizeCanvasDesign(initial, sources, template.id)
+  assert.equal(result.report.passed, true, `${template.id} 应通过确定性设计质量门禁`)
+  assert.deepEqual(result.report.issues, [])
+
+  const sourceIds = result.document.blocks.flatMap(block => {
+    if (block.type === "content") return [block.sourceId]
+    if (block.type === "section") return block.sourceIds
+    return []
+  })
+  assert.deepEqual(sourceIds, sources.map(source => source.id), `${template.id} 必须保持内容源顺序`)
+  assert.equal(new Set(sourceIds).size, sources.length, `${template.id} 不得重复内容源`)
+
+  for (const block of result.document.blocks) {
+    if (block.type === "content" || block.type === "section") {
+      assert.equal(block.borderWidth, 0, `${template.id} 不得生成完整边框`)
+      assert.equal(block.accentColor, result.document.theme.primary, `${template.id} 必须统一主色`)
+    }
+  }
+
+  const signature = {
+    primary: result.document.theme.primary,
+    font: result.document.theme.font,
+    layouts: result.document.blocks.flatMap(block => block.type === "section" ? [block.layout] : []),
+    icons: result.document.blocks.flatMap(block => (
+      block.type === "section" && block.icon?.name ? [block.icon.name] : []
+    )),
+  }
+  assert.deepEqual(signature, expectedSignatures[template.id], `${template.id} 的视觉签名发生变化`)
+
+  if (!template.designSystem.inheritModelTheme) {
+    assert.equal(
+      result.document.theme.primary,
+      getCanvasDesignTemplate(template.id).designSystem.theme.primary,
+      `${template.id} 必须应用模板 Token`,
+    )
+  }
+}
+
+const groupedTitleFixture = finalizeCanvasDesign(
+  createWechatBlockDocument("分组标题夹具", sources),
+  sources,
+  "editorial-story",
+).document
+const groupedTitleSection = groupedTitleFixture.blocks.find(block => block.type === "section")
+assert.ok(groupedTitleSection)
+groupedTitleSection.sourceIds.unshift(sources[0].id)
+groupedTitleFixture.blocks = groupedTitleFixture.blocks.filter(block => (
+  block.type !== "content" || block.sourceId !== sources[0].id
+))
+const regroupedTitle = finalizeCanvasDesign(groupedTitleFixture, sources, "editorial-story").document
+assert.equal(regroupedTitle.blocks[0]?.type, "content", "标题必须从 AI section 中拆出")
+if (regroupedTitle.blocks[0]?.type === "content") {
+  assert.equal(regroupedTitle.blocks[0].sourceId, sources[0].id, "标题必须保持文章首位")
+  assert.equal(regroupedTitle.blocks[0].variant, "title", "标题必须使用独立标题样式")
+}
+
+const longProseSources: CanvasSource[] = [
+  { id: "long-title", kind: "title", text: "长篇叙事" },
+  ...Array.from({ length: 12 }, (_, index): CanvasSource => ({
+    id: `long-${index}`,
+    kind: "paragraph",
+    text: `第 ${index + 1} 段：${"这是一段需要保持单列阅读宽度的长正文。".repeat(16)}`,
+  })),
+]
+const longProseResult = finalizeCanvasDesign(
+  createWechatBlockDocument("长正文安全布局夹具", longProseSources),
+  longProseSources,
+  "editorial-story",
+)
+assert.equal(longProseResult.report.passed, true, "长正文安全退回单列时不应被误判为低质量")
+assert.equal(longProseResult.report.metrics.layoutOpportunityCount, 0)
+
+const imageRichSources: CanvasSource[] = [
+  { id: "gallery-title", kind: "title", text: "影像周记" },
+  ...Array.from({ length: 7 }, (_, index): CanvasSource => ({
+    id: `gallery-${index}`,
+    kind: "image",
+    src: `/uploads/gallery-${index}.png`,
+    alt: `影像 ${index + 1}`,
+  })),
+]
+const imageRichResult = finalizeCanvasDesign(
+  createWechatBlockDocument("多图安全布局夹具", imageRichSources),
+  imageRichSources,
+  "editorial-story",
+)
+assert.equal(imageRichResult.report.passed, true, "连续图片必须形成安全画廊并通过质量门禁")
+assert.ok(imageRichResult.report.metrics.mediaSectionCount >= 2)
+assert.ok(imageRichResult.document.blocks.some(block => block.type === "section" && block.layout === "grid"))
+
+const preservationFixture = finalizeCanvasDesign(
+  createWechatBlockDocument("归一化夹具", sources),
+  sources,
+  "editorial-story",
+).document
+const preservationSection = preservationFixture.blocks.find(block => block.type === "section")
+assert.ok(preservationSection)
+preservationSection.background = "#abcdef"
+preservationSection.shadow = "soft"
+preservationSection.padding = 31
+preservationSection.borderWidth = 3
+preservationSection.accentColor = "#ff00ff"
+preservationSection.itemStyles[preservationSection.sourceIds[0]] = {
+  fontSize: 27,
+  background: "#fedcba",
+  borderWidth: 4,
+  accentColor: "#00ff00",
+}
+const normalized = normalizeCanvasPrimaryColor(preservationFixture)
+const normalizedSection = normalized.blocks.find(block => block.type === "section")
+assert.ok(normalizedSection)
+assert.equal(normalizedSection.background, "#abcdef", "归一化不得清除背景")
+assert.equal(normalizedSection.shadow, "soft", "归一化不得清除阴影")
+assert.equal(normalizedSection.padding, 31, "归一化不得改写间距")
+assert.equal(normalizedSection.borderWidth, 0, "归一化必须清除完整边框")
+assert.equal(normalizedSection.accentColor, normalized.theme.primary, "归一化必须统一主色")
+assert.equal(normalizedSection.itemStyles[normalizedSection.sourceIds[0]]?.fontSize, 27, "归一化不得改写字号")
+assert.equal(normalizedSection.itemStyles[normalizedSection.sourceIds[0]]?.background, "#fedcba", "归一化不得清除局部背景")
+assert.equal(normalizedSection.itemStyles[normalizedSection.sourceIds[0]]?.borderWidth, 0, "归一化必须清除局部边框")
+assert.equal(normalized.theme.secondary, normalized.theme.primary)
+assert.equal(normalized.theme.accent, normalized.theme.primary)
+
+process.stdout.write("canvas design quality: 4 templates passed\n")

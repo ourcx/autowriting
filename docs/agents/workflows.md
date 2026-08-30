@@ -24,7 +24,8 @@ pnpm --dir web rebuild:native       # 原生模块重编译
 | `pnpm --dir web build` | Vite 构建 | 慢 | 兜底 |
 | `pnpm --dir web smoke` | 起 server + 调几个关键接口 | 慢 | API 契约改动 |
 | `pnpm --dir web test:deploy` | 模拟脏服务器发布并校验运行数据不变 | 快 | 部署流水线改动 |
-| `pnpm --dir web verify` | **lint + arch + typecheck:changed + build** | 慢 | **默认验收命令** |
+| `pnpm --dir web test:canvas` | 画布模板视觉签名 + 内容覆盖 + 质量门禁 | 快 | 改画布 DSL、模板或生成链路 |
+| `pnpm --dir web verify` | **lint + arch + typecheck:changed + test:canvas + build** | 慢 | **默认验收命令** |
 
 ## 三层反馈回路
 

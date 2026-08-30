@@ -17,18 +17,16 @@ import {
   hydrateWechatBlockDocument,
   parseWechatBlockDocument,
 } from "../../shared/wechatBlockDsl.ts"
-import type {
-  WechatBlockDocument,
-  WechatBlockVariant,
-  WechatInlineMark,
-  WechatSurfaceStyle,
-  WechatTextStyleOverride,
-} from "../../shared/wechatBlockDsl.ts"
+import type { WechatBlockDocument } from "../../shared/wechatBlockDsl.ts"
 import {
   buildCanvasDesignBrief,
   normalizeCanvasDesignTemplateId,
 } from "../../shared/canvasDesignTemplates.ts"
 import type { CanvasDesignTemplateId } from "../../shared/canvasDesignTemplates.ts"
+import {
+  finalizeCanvasDesign,
+  normalizeCanvasPrimaryColor,
+} from "../../shared/canvasDesignSystem.ts"
 
 const router = Router()
 router.use(authMiddleware)
@@ -94,10 +92,10 @@ const CANVAS_SYSTEM_PROMPT = `你是公众号长图排版引擎。文章内容�
 - 不输出 SVG 标签、HTML、脚本、CSS、事件或外部字体。
 - 不得生成“在这里填写”“示例”“______”等占位内容。
 
-以下仅是能力参考，不得照抄 sourceId、颜色或主题：
-参考 A（杂志）：theme.canvasStyle=solid；标题 title；首段 lede；章节使用 editorial + plain，无完整边框，以 overline、红色强调边和大留白建立层级。
-参考 B（研究手册）：theme.canvasStyle=grid；正文 section 交替使用 plain 与 callout；重点区 surfaceStyle=dots；章节前可放置 book-open/lightbulb 图标。
-参考 C（视觉故事）：theme.canvasStyle=linear；关键章节使用 feature；在主题切换处插入 landscape_16_9 asset；其他正文保持无框，避免整页卡片化。`
+以下仅是当前自由画板节点能力参考，不得照抄 sourceId、颜色或主题：
+参考 A（杂志）：使用大字号 text 标题、窄色条 shape、错位 image 与短引语 text 形成不对称版面；正文保持宽列和大留白。
+参考 B（研究手册）：使用浅色 shape 作为局部章节底板，配合短 path 线稿和左右并排的短 text；长正文仍使用单栏。
+参考 C（视觉故事）：在章节转场放置横向 image 或原创 path 插画，使用少量 shape 建立色块层级；不得输出 theme、section、asset、icon 或其他块排版字段。`
 
 const BLOCK_SYSTEM_PROMPT = `你是微信公众号 HTML 内容块排版引擎。文章内容由系统提供，你只能设计样式和局部 SVG 装饰，绝对不能创作、改写、概括、合并、拆分或省略正文。
 
@@ -193,10 +191,10 @@ F. 点击切换素材：
 const BLOCK_CHUNK_SYSTEM_PROMPT = `你是微信公众号分段排版引擎。正文由 sourceId 关联，程序会补齐全部默认样式和原文；你只输出设计决策。
 
 只输出一个不超过 4500 字符的紧凑 JSON 对象：
-{"version":1,"name":"","theme":{},"blocks":[]}
+{"version":1,"blocks":[]}
 
 允许的最小字段：
-- theme：font、canvas、surface、surfaceAlt、text、muted、primary、secondary、accent、border、canvasStyle。仅填写本组需要确定的字段。
+- theme：只有系统明确说明“这是第一组”时才允许输出；后续分组禁止输出 theme。
 - content：type、sourceId、variant。只用于标题、图片或无法组合的单项。
 - section：type、sourceIds、layout、preset；可选 columnRatio、mediaPosition、columns、surfaceStyle、accentStyle、icon、leadSourceId、overlineSourceId、itemStyles。
 - divider：type、anchorSourceId、placement、style。
@@ -424,212 +422,34 @@ function assertNonMarkdownLayout(
   }
 }
 
-function hasVisibleBlockColor(value: string | undefined): boolean {
-  return Boolean(value && value !== "transparent" && value !== "rgba(0, 0, 0, 0)")
-}
-
-function normalizeSurfacePalette(
-  surface: WechatSurfaceStyle,
-  theme: WechatBlockDocument["theme"],
-): WechatSurfaceStyle {
-  const colors = surface.kind === "linear" || surface.kind === "stripes"
-    ? [theme.surface, theme.surfaceAlt]
-    : [theme.surfaceAlt]
-  return {
-    ...surface,
-    colors,
-    patternColor: theme.border,
-    overlayColor: theme.canvas,
+function finalizeBlockDocument(input: {
+  document: WechatBlockDocument
+  sources: CanvasSource[]
+  articleTitle: string
+  templateId: CanvasDesignTemplateId
+}): WechatBlockDocument {
+  const normalized = normalizeCanvasPrimaryColor(input.document)
+  assertNonMarkdownLayout(normalized, input.sources)
+  const hydrated = hydrateWechatBlockDocument(
+    normalized,
+    input.sources,
+    input.articleTitle,
+  )
+  const finalized = finalizeCanvasDesign(hydrated, input.sources, input.templateId)
+  if (finalized.rebuilt || !finalized.report.passed) {
+    logger.warn("CANVAS", "画布视觉质量门禁触发确定性重建", {
+      rebuilt: finalized.rebuilt,
+      score: finalized.report.score,
+      issues: finalized.report.issues,
+      metrics: finalized.report.metrics,
+    })
+  } else {
+    logger.info("CANVAS", "画布视觉质量门禁通过", {
+      score: finalized.report.score,
+      metrics: finalized.report.metrics,
+    })
   }
-}
-
-function normalizeBlockVisualSystem(
-  document: WechatBlockDocument,
-  sources: CanvasSource[],
-): WechatBlockDocument {
-  const sourceById = new Map(sources.map(source => [source.id, source]))
-  const primary = document.theme.primary
-  const neutralBorder = "#d9dde3"
-  const theme = {
-    ...document.theme,
-    secondary: primary,
-    accent: primary,
-    border: neutralBorder,
-    canvasStyle: normalizeSurfacePalette(document.theme.canvasStyle, {
-      ...document.theme,
-      secondary: primary,
-      accent: primary,
-      border: neutralBorder,
-    }),
-  }
-  let remainingSurfaces = 3
-  let remainingMarks = Math.min(6, Math.max(3, Math.ceil(sources.length / 8)))
-
-  const keepSurface = (requested: boolean, eligible: boolean): boolean => {
-    if (!requested || !eligible || remainingSurfaces <= 0) return false
-    remainingSurfaces -= 1
-    return true
-  }
-  const typographyFor = (
-    source: CanvasSource | undefined,
-    variant: WechatBlockVariant | undefined,
-  ): { fontSize: number; fontWeight: number; lineHeight: number } => {
-    if (source?.kind === "title" || variant === "title" || variant === "metric") {
-      return {
-        fontSize: theme.displaySize,
-        fontWeight: theme.displayWeight,
-        lineHeight: theme.displayLineHeight,
-      }
-    }
-    if (source?.kind === "heading" || variant === "banner") {
-      return {
-        fontSize: theme.headingSize,
-        fontWeight: theme.headingWeight,
-        lineHeight: theme.headingLineHeight,
-      }
-    }
-    if (variant === "overline") {
-      return {
-        fontSize: Math.min(12, theme.bodySize),
-        fontWeight: theme.headingWeight,
-        lineHeight: theme.headingLineHeight,
-      }
-    }
-    if (variant === "lede" || variant === "quote") {
-      return {
-        fontSize: Math.min(24, theme.bodySize + 3),
-        fontWeight: theme.bodyWeight,
-        lineHeight: theme.bodyLineHeight,
-      }
-    }
-    return {
-      fontSize: theme.bodySize,
-      fontWeight: theme.bodyWeight,
-      lineHeight: theme.bodyLineHeight,
-    }
-  }
-  const normalizeMarks = (marks: WechatInlineMark[] | undefined): WechatInlineMark[] | undefined => {
-    if (!marks) return undefined
-    if (remainingMarks <= 0) return []
-    const normalized = marks.slice(0, 1).map(mark => ({
-      ...mark,
-      color: primary,
-      background: hasVisibleBlockColor(mark.background) ? theme.surfaceAlt : "transparent",
-    }))
-    remainingMarks -= normalized.length
-    return normalized
-  }
-  const normalizeTextStyle = (
-    style: WechatTextStyleOverride,
-    sourceId: string,
-  ): WechatTextStyleOverride => {
-    const source = sourceById.get(sourceId)
-    const variant = style.variant
-    const emphasized = variant === "overline" || variant === "metric" || source?.kind === "heading"
-    const requestedSurface = hasVisibleBlockColor(style.background)
-    const eligibleSurface = (source?.text?.length || 0) <= 180
-      && (variant === "lede" || variant === "metric" || source?.kind === "quote" || source?.kind === "list")
-    const useSurface = keepSurface(requestedSurface, eligibleSurface)
-    const normalizedVariant = variant === "quote" && source?.kind !== "quote" ? "plain" : variant
-    const typography = typographyFor(source, normalizedVariant)
-    return {
-      ...style,
-      ...typography,
-      variant: normalizedVariant,
-      color: style.color === undefined ? undefined : emphasized ? primary : theme.text,
-      background: style.background === undefined
-        ? undefined
-        : useSurface ? theme.surfaceAlt : "transparent",
-      accentColor: style.accentColor === undefined ? undefined : primary,
-      borderColor: style.borderColor === undefined ? undefined : neutralBorder,
-      borderWidth: 0,
-      radius: useSurface ? Math.min(style.radius ?? theme.radius, 8) : 0,
-      padding: useSurface ? Math.max(style.padding ?? 0, 12) : 0,
-      marks: normalizeMarks(style.marks),
-    }
-  }
-
-  const blocks = document.blocks.map(block => {
-    if (block.type === "content") {
-      const source = sourceById.get(block.sourceId)
-      const emphasized = ["title", "banner", "overline", "metric"].includes(block.variant)
-        || source?.kind === "heading"
-      const eligibleSurface = (source?.text?.length || 0) <= 180
-        && (["lede", "metric", "card"].includes(block.variant)
-          || source?.kind === "quote"
-          || source?.kind === "list")
-      const useSurface = keepSurface(hasVisibleBlockColor(block.background), eligibleSurface)
-      const normalizedVariant = block.variant === "quote" && source?.kind !== "quote"
-        ? "plain" as const
-        : block.variant
-      const typography = typographyFor(source, normalizedVariant)
-      return {
-        ...block,
-        ...typography,
-        variant: normalizedVariant,
-        color: emphasized ? primary : theme.text,
-        background: useSurface ? theme.surfaceAlt : "transparent",
-        accentColor: primary,
-        borderColor: neutralBorder,
-        borderWidth: 0,
-        radius: useSurface ? Math.min(block.radius, 8) : 0,
-        padding: useSurface ? Math.max(block.padding, 12) : 0,
-        marks: normalizeMarks(block.marks) || [],
-      }
-    }
-    if (block.type === "section") {
-      const paragraphCount = block.sourceIds.filter(sourceId => (
-        sourceById.get(sourceId)?.kind === "paragraph"
-      )).length
-      const requestedSurface = hasVisibleBlockColor(block.background)
-        || Boolean(block.surfaceStyle && block.surfaceStyle.kind !== "none")
-      const useSurface = keepSurface(requestedSurface, paragraphCount <= 2)
-      return {
-        ...block,
-        preset: useSurface ? block.preset : "plain" as const,
-        background: useSurface ? theme.surfaceAlt : "transparent",
-        surfaceStyle: useSurface && block.surfaceStyle
-          ? normalizeSurfacePalette(block.surfaceStyle, theme)
-          : undefined,
-        color: theme.text,
-        accentColor: primary,
-        borderColor: neutralBorder,
-        borderWidth: 0,
-        radius: useSurface ? Math.min(block.radius, 8) : 0,
-        padding: useSurface ? Math.max(block.padding, 12) : block.layout === "stack" ? 0 : block.padding,
-        divider: ["comparison", "timeline", "steps"].includes(block.layout)
-          ? block.divider
-          : false,
-        accentStyle: block.accentStyle === "tri-color" ? "top" as const : block.accentStyle,
-        shadow: "none" as const,
-        icon: block.icon ? { ...block.icon, color: primary } : undefined,
-        itemStyles: Object.fromEntries(Object.entries(block.itemStyles).map(([sourceId, style]) => [
-          sourceId,
-          normalizeTextStyle(style, sourceId),
-        ])),
-      }
-    }
-    if (block.type === "decoration") {
-      return {
-        ...block,
-        fill: hasVisibleBlockColor(block.fill) ? primary : "transparent",
-        stroke: primary,
-      }
-    }
-    if (block.type === "divider") {
-      return { ...block, color: primary, secondaryColor: primary }
-    }
-    return block
-  })
-
-  return {
-    ...document,
-    background: theme.canvas,
-    pageBackground: theme.canvas,
-    font: theme.font,
-    theme,
-    blocks,
-  }
+  return finalized.document
 }
 
 function blockFailureMessage(error: unknown): string {
@@ -774,7 +594,7 @@ function blockSourceManifest(sources: CanvasSource[]): string {
   })))
 }
 
-function blockChunkMinimumExample(sources: CanvasSource[]): string {
+function blockChunkMinimumExample(sources: CanvasSource[], includeTheme: boolean): string {
   const contentBlock = (source: CanvasSource) => ({
     type: "content",
     sourceId: source.id,
@@ -806,7 +626,7 @@ function blockChunkMinimumExample(sources: CanvasSource[]): string {
   }
   return JSON.stringify({
     version: 1,
-    theme: {},
+    ...(includeTheme ? { theme: {} } : {}),
     blocks,
   })
 }
@@ -886,6 +706,7 @@ async function generateBlockChunks(input: {
   analysisPlan: string
   articleTitle: string
   sources: CanvasSource[]
+  allowTheme?: boolean
   onChunk?: (_index: number, _total: number) => void
 }): Promise<{
   document: WechatBlockDocument
@@ -900,9 +721,13 @@ async function generateBlockChunks(input: {
     if (sources.length <= 1) return false
     const middle = Math.ceil(sources.length / 2)
     for (const smallerSources of [sources.slice(0, middle), sources.slice(middle)]) {
+      const allowTheme = (input.allowTheme ?? true)
+        && canonicalTheme === null
+        && documents.length === 0
       const generated = await generateBlockChunks({
         ...input,
         sources: smallerSources,
+        allowTheme,
         onChunk: undefined,
       })
       documents.push(generated.document)
@@ -915,7 +740,11 @@ async function generateBlockChunks(input: {
   for (const [index, sources] of chunks.entries()) {
     const chunkLabel = `第 ${index + 1}/${chunks.length} 组`
     const manifest = blockSourceManifest(sources)
-    const minimumExample = blockChunkMinimumExample(sources)
+    const includeTheme = (input.allowTheme ?? true) && index === 0 && documents.length === 0
+    const minimumExample = blockChunkMinimumExample(sources, includeTheme)
+    const themeInstruction = includeTheme
+      ? "这是第一组：允许输出一次 theme，必须忠实使用可执行设计系统或设计分析中的 Token。"
+      : "这不是第一组：禁止输出 theme、name、width、background、pageBackground 和 font。"
     input.onChunk?.(index + 1, chunks.length)
     const messages = [
       {
@@ -923,7 +752,8 @@ async function generateBlockChunks(input: {
         content: `${BLOCK_CHUNK_SYSTEM_PROMPT}
 
 你正在分段生成一篇长文章的${chunkLabel}。只处理本组 sourceId，不得引用其他组。
-所有分组必须服从统一设计分析中的同一个 primary 主题色，不得为本组发明新配色或给普通正文单独着色。`,
+${themeInstruction}
+不得为本组发明新配色或给普通正文单独着色。`,
       },
       {
         role: "user",
@@ -948,10 +778,7 @@ ${minimumExample}`,
     attempts.push(first)
 
     try {
-      const document = normalizeBlockVisualSystem(
-        parseBlockFromCompletion(first),
-        sources,
-      )
+      const document = normalizeCanvasPrimaryColor(parseBlockFromCompletion(first))
       assertBlockSourceCoverage(document, sources, chunkLabel)
       assertNonMarkdownLayout(document, sources)
       documents.push(document)
@@ -972,7 +799,8 @@ ${minimumExample}`,
             role: "system",
             content: `${BLOCK_CHUNK_SYSTEM_PROMPT}
 
-这是修复轮。必须重新输出完整对象，不得续写或解释上一轮结果。`,
+这是修复轮。${themeInstruction}
+必须重新输出完整对象，不得续写或解释上一轮结果。`,
           },
           {
             role: "user",
@@ -997,10 +825,7 @@ ${malformed ? `待修复输出：${malformed}` : "上一轮被截断，请从头
       }, input.headers, 2)
       attempts.push(repair)
       try {
-        const document = normalizeBlockVisualSystem(
-          parseBlockFromCompletion(repair),
-          sources,
-        )
+        const document = normalizeCanvasPrimaryColor(parseBlockFromCompletion(repair))
         assertBlockSourceCoverage(document, sources, chunkLabel)
         assertNonMarkdownLayout(document, sources)
         documents.push(document)
@@ -1172,15 +997,13 @@ async function generateBlockWithRepair(input: {
       sources: input.sources,
       onChunk: input.onChunk,
     })
-    const normalizedDocument = normalizeBlockVisualSystem(chunked.document, input.sources)
-    assertNonMarkdownLayout(normalizedDocument, input.sources)
     return {
-      document: hydrateWechatBlockDocument(
-        normalizedDocument,
-        input.sources,
-        input.articleTitle,
-        { templateId: input.templateId },
-      ),
+      document: finalizeBlockDocument({
+        document: chunked.document,
+        sources: input.sources,
+        articleTitle: input.articleTitle,
+        templateId: input.templateId,
+      }),
       attempts: [...analysisAttempts, ...precedingAttempts, ...chunked.attempts],
     }
   }
@@ -1207,15 +1030,13 @@ async function generateBlockWithRepair(input: {
 
   try {
     const parsed = parseBlockFromCompletion(first)
-    const normalizedDocument = normalizeBlockVisualSystem(parsed, input.sources)
-    assertNonMarkdownLayout(normalizedDocument, input.sources)
     return {
-      document: hydrateWechatBlockDocument(
-        normalizedDocument,
-        input.sources,
-        input.articleTitle,
-        { templateId: input.templateId },
-      ),
+      document: finalizeBlockDocument({
+        document: parsed,
+        sources: input.sources,
+        articleTitle: input.articleTitle,
+        templateId: input.templateId,
+      }),
       attempts: [...analysisAttempts, first],
     }
   } catch (firstError: unknown) {
@@ -1261,15 +1082,13 @@ ${sourceManifest}`,
     }, input.headers, 2)
     try {
       const repairedDocument = parseBlockFromCompletion(repair)
-      const normalizedDocument = normalizeBlockVisualSystem(repairedDocument, input.sources)
-      assertNonMarkdownLayout(normalizedDocument, input.sources)
       return {
-        document: hydrateWechatBlockDocument(
-          normalizedDocument,
-          input.sources,
-          input.articleTitle,
-          { templateId: input.templateId },
-        ),
+        document: finalizeBlockDocument({
+          document: repairedDocument,
+          sources: input.sources,
+          articleTitle: input.articleTitle,
+          templateId: input.templateId,
+        }),
         attempts: [...analysisAttempts, first, repair],
       }
     } catch (repairError: unknown) {

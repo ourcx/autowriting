@@ -11,10 +11,10 @@
 ```text
 ArticleData
   -> CanvasSource（不可变正文与图片）
-  -> Design Template（可信结构、Token、防重叠规则）
+  -> Executable Design System（可信 Token、Section 配方、安全布局规则）
   -> User Prompt / Design File（不可信参考）
-  -> AI 仅映射 sourceId 与安全布局参数
-  -> Server Hydration / Validation
+  -> AI 仅生成 sourceId 语义分组与安全布局建议
+  -> Server Hydration / Deterministic Design Compilation / Quality Gate
   -> HTML Block Renderer 或 Freeform SVG Renderer
   -> 微信兼容 HTML / PNG
 ```
@@ -37,12 +37,13 @@ ArticleData
 - 图表或文章类型。
 - 结构要求。
 - UI 规范。
-- 视觉 Token。
-- 防重叠约束。
+- 可执行视觉 Token。
+- 标题规则、正文缩进、导语/正文/媒体 Section 配方和布局循环。
+- 防重叠与长正文安全退回单列的规则。
 
 用户提示词与上传的 `.txt`、`.md`、`.json`、`.svg`、`.xml`、`.drawio` 文件均标记为不可信参考。服务端只提取视觉与布局信息，并限制长度；文件内容不能覆盖系统约束。
 
-Design 文件格式不固定，代码不维护格式专用解析器。生成流程先将原始文件直接交给 AI 形成设计计划，再把设计计划、原始文件和文章内容源一并交给布局模型。代码只负责验证安全 DSL、内容完整性和最低设计丰富度。
+Design 文件格式不固定，代码不维护格式专用解析器。生成流程先将原始文件直接交给 AI 形成设计计划，再把设计计划、原始文件和文章内容源一并交给布局模型。AI 的结果只决定语义分组和受控组件建议；服务端会补齐内容源，并通过 `canvasDesignSystem.ts` 将模板 Token 与 Section 配方确定性编译成最终 DSL。
 
 ### 布局层
 
@@ -58,11 +59,11 @@ HTML Block 支持：
 
 `section.itemStyles` 按 `sourceId` 保存内部文字的独立样式，保证组合布局中的文字仍可单独选择和修改。
 
-扩展视觉能力包括文档级 `theme`、`editorial` 布局、`lede` 导语、`overline` 眉题、`metric` 数据强调、顶部/左侧/底部强调边、三色轨道、可选阴影、Lucide 图标白名单和 AI 安全 Path 图标。边框默认关闭，由 Design 文件明确要求时再启用。若 AI 没有使用这些结构形成明显区别于 Markdown 的结果，服务端会重试而不是静默回退为普通正文。
+扩展视觉能力包括文档级 `theme`、`editorial` 布局、`lede` 导语、`overline` 眉题、`metric` 数据强调、顶部/左侧/底部强调边、三色轨道、可选阴影、Lucide 图标白名单和 AI 安全 Path 图标。完整边框统一关闭，视觉层次由背景、强调边、排版、图标与素材承担。生成结果会进入视觉质量门禁；未达标时由可执行设计系统确定性重建，不再依赖模型重试整篇 JSON。
 
 `theme.canvasStyle` 与 `section.surfaceStyle` 提供纯色、渐变、条纹、点阵、网格、稿纸和 AI 生成背景。生成背景只接受提示词、图片比例、铺设方式和遮罩参数，由程序绑定固定图片服务并编译为内联样式，不允许模型提供 URL。文档级 `sidePadding` 默认为 8px，限制在 0-48px，并作为预览与微信导出的共同留白来源。
 
-带背景或完整边框的内容块、组合区域和内部 `itemStyles` 至少保留 12px 内边距。正常长度文章必须形成至少两个背景层级，并组合使用多种布局或视觉能力；该约束对普通模板和 Design 文件生成都生效。
+带背景的内容块、组合区域和内部 `itemStyles` 至少保留 12px 内边距。正常长度文章需要组合背景、强调、图标、素材或文字角色等视觉手段；仅当内容存在多个安全布局机会时才要求布局多样性，长正文退回单列不会被误判。质量门禁同时检查内容源唯一覆盖和组合区域比例，对普通模板和 Design 文件生成都生效。
 
 自由画板保留 SVG Scene Graph。服务端会对 AI 坐标执行：
 

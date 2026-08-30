@@ -1,5 +1,4 @@
 import type { CanvasSource, CanvasSourceKind } from "./canvasArticle.ts"
-import type { CanvasDesignTemplateId } from "./canvasDesignTemplates.ts"
 
 export type WechatBlockVariant =
   | "plain"
@@ -986,140 +985,10 @@ function validSection(
   ))
 }
 
-function createTemplateSection(
-  sourceIds: string[],
-  templateId: CanvasDesignTemplateId,
-  index: number,
-): WechatSectionBlock {
-  if (templateId === "weekly-dashboard") {
-    return {
-      id: `template-section-${index}`,
-      type: "section",
-      sourceIds,
-      layout: "comparison",
-      columnRatio: "1:1",
-      mediaPosition: "left",
-      columns: 2,
-      preset: "soft",
-      background: "#f7f7f7",
-      color: "#1f2329",
-      accentColor: "#5263a5",
-      borderColor: "#dee0e3",
-      borderWidth: 0,
-      radius: 8,
-      padding: 20,
-      gap: 16,
-      marginTop: 8,
-      marginBottom: 24,
-      divider: true,
-      accentStyle: "none",
-      shadow: "none",
-      itemStyles: {},
-    }
-  }
-  if (templateId === "interview-notes") {
-    return {
-      id: `template-section-${index}`,
-      type: "section",
-      sourceIds,
-      layout: "two-column",
-      columnRatio: "1:1",
-      mediaPosition: "left",
-      columns: 2,
-      preset: "soft",
-      background: "#fff8ec",
-      color: "#2d2b27",
-      accentColor: "#d9855b",
-      borderColor: "#ead8bd",
-      borderWidth: 0,
-      radius: 8,
-      padding: 20,
-      gap: 14,
-      marginTop: 8,
-      marginBottom: 24,
-      divider: false,
-      accentStyle: "none",
-      shadow: "none",
-      itemStyles: {},
-    }
-  }
-  return {
-    id: `template-section-${index}`,
-    type: "section",
-    sourceIds,
-    layout: "feature",
-    columnRatio: "1:1",
-    mediaPosition: "left",
-    columns: 2,
-    preset: "plain",
-    background: "transparent",
-    color: "#262626",
-    accentColor: "#2f6f62",
-    borderColor: "#e3e5e7",
-    borderWidth: 0,
-    radius: 6,
-    padding: 20,
-    gap: 16,
-    marginTop: 8,
-    marginBottom: 24,
-    divider: false,
-    accentStyle: "none",
-    shadow: "none",
-    itemStyles: {},
-  }
-}
-
-function applyTemplateSections(
-  blocks: WechatBlock[],
-  sources: CanvasSource[],
-  templateId: CanvasDesignTemplateId,
-): WechatBlock[] {
-  if (blocks.filter(block => block.type === "section").length >= 2 || sources.length < 4) {
-    return blocks
-  }
-  const sourceMap = new Map(sources.map(source => [source.id, source]))
-  const result: WechatBlock[] = []
-  const pending: WechatContentBlock[] = []
-  let sectionIndex = 0
-
-  const flush = () => {
-    while (pending.length > 0) {
-      const chunk = pending.splice(0, Math.min(4, pending.length))
-      if (chunk.length === 1) result.push(chunk[0])
-      else {
-        result.push(createTemplateSection(
-          chunk.map(block => block.sourceId),
-          templateId,
-          sectionIndex++,
-        ))
-      }
-    }
-  }
-
-  for (const block of blocks) {
-    if (block.type !== "content") {
-      flush()
-      result.push(block)
-      continue
-    }
-    const source = sourceMap.get(block.sourceId)
-    if (source?.kind === "title") {
-      flush()
-      result.push(block)
-      continue
-    }
-    if (source?.kind === "heading" && pending.length > 0) flush()
-    pending.push(block)
-  }
-  flush()
-  return result
-}
-
 export function hydrateWechatBlockDocument(
   value: unknown,
   sources: CanvasSource[],
   name: string,
-  options: { templateId?: CanvasDesignTemplateId } = {},
 ): WechatBlockDocument {
   const parsed = parseWechatBlockDocument(value)
   const sourceIds = new Set(sources.map(source => source.id))
@@ -1238,12 +1107,9 @@ export function hydrateWechatBlockDocument(
     )))
   }
 
-  const templatedBlocks = options.templateId
-    ? applyTemplateSections(blocks, sources, options.templateId)
-    : blocks
   return {
     ...parsed,
     name: name || parsed.name,
-    blocks: templatedBlocks,
+    blocks,
   }
 }

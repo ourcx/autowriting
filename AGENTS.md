@@ -70,7 +70,7 @@
 pnpm --dir web verify
 ```
 
-包含：ESLint（前端 + 后端）→ arch-check → typecheck:changed → build。改 API 契约/鉴权/路径时额外跑 `pnpm --dir web smoke`。
+包含：ESLint（前端 + 后端）→ arch-check → typecheck:changed → 画布视觉质量测试 → build。改 API 契约/鉴权/路径时额外跑 `pnpm --dir web smoke`。
 
 ## 强约束（违反 = 阻断，**不要尝试绕过**）
 
