@@ -649,6 +649,8 @@ function contentStyle(block: WechatContentBlock): CSSProperties {
     margin: `${block.marginTop}px 0 ${block.marginBottom}px`,
     padding: block.padding,
     border: `${block.borderWidth}px solid ${block.borderColor}`,
+    // 变体切换时显式还原左边框，避免 React 清除长属性后留下不一致的边框声明。
+    borderLeft: `${block.borderWidth}px solid ${block.borderColor}`,
     borderRadius: block.radius,
     background: block.background,
     color: block.color,
@@ -714,10 +716,6 @@ function SourceContent({
       : undefined,
     textTransform: block.variant === "overline" ? "uppercase" : undefined,
     fontVariantNumeric: block.variant === "metric" ? "tabular-nums" : undefined,
-  }
-  if (fontTheme === "editorial" && (source.kind === "title" || block.variant === "title")) {
-    style.paddingBottom = Math.max(14, block.padding)
-    style.borderBottom = `3px solid ${block.accentColor}`
   }
   if (fontTheme === "editorial" && block.variant === "quote") {
     style.borderLeft = `4px solid ${block.accentColor}`

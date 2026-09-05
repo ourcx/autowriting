@@ -183,15 +183,15 @@ export const CANVAS_DESIGN_TEMPLATES: CanvasDesignTemplate[] = [
   {
     id: "editorial-story",
     name: "杂志叙事",
-    description: "知识分享 · 清晰章节、重点引语、连续阅读",
+    description: "知识分享 · 清晰章节、留白节奏、连续阅读",
     brief: `[图表类型]
 公众号杂志式长文
 
 [结构要求]
-按文章语义将连续内容组织成 4-10 个章节。标题建立强视觉锚点；章节使用标题、正文、重点引语和图片形成节奏。正文始终单栏连续阅读，图片独立占行；引用可使用浅底色强调。不得把普通段落拆成双栏，不得改变内容顺序。
+按文章语义将连续内容组织成 4-10 个章节。标题建立强视觉锚点；章节使用标题、正文、重点引语和图片形成节奏。正文始终单栏连续阅读，图片独立占行；引用与正文保持同一底色，仅用留白、字重和对齐建立节奏，禁止引用框和左侧竖线。不得把普通段落拆成双栏，不得改变内容顺序。
 
 [UI规范]
-风格专业克制，避免每段都使用卡片。正文保持高可读性，重点内容通过留白、描边和单一强调色建立层级。
+风格专业克制，避免每段都使用卡片。正文保持高可读性，重点内容通过留白、字号与字重建立层级，不使用 Markdown 式引用框、标题竖线或标题下划线。
 
 [视觉Token]
 白色正文背景；深色正文；单一品牌强调色；正文 17-18px，行高 1.75-1.95；卡片圆角不超过 8px。
@@ -203,8 +203,8 @@ export const CANVAS_DESIGN_TEMPLATES: CanvasDesignTemplate[] = [
       theme: editorialTheme,
       titleAlign: "left",
       bodyTextIndent: 0,
-      // 导语提供轻量视觉入口，正文不按段落轮换卡片，保证手机上的阅读连续性。
-      intro: { layout: "stack", preset: "soft", columnRatio: "1:1", surface: "surfaceAlt", surfaceKind: "solid", accentStyle: "left", shadow: "none", divider: false },
+      // 导语沿用纸面底色，以文字层级和留白开篇，避免回到 Markdown 引用框的视觉语言。
+      intro: { layout: "stack", preset: "plain", columnRatio: "1:1", surface: "none", surfaceKind: "none", accentStyle: "none", shadow: "none", divider: false },
       bodyCycle: [{ layout: "stack", preset: "plain", columnRatio: "1:1", surface: "none", surfaceKind: "none", accentStyle: "none", shadow: "none", divider: false }],
       media: { layout: "media-text", preset: "soft", columnRatio: "2:1", surface: "surfaceAlt", surfaceKind: "solid", accentStyle: "none", shadow: "none", divider: false },
     },

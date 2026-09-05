@@ -70,8 +70,13 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
   overflow:[root,...root.querySelectorAll('*')].filter(el=>el.scrollWidth>el.clientWidth+2 && el.clientWidth>0).map(el=>el.tagName),
   headings:[...root.querySelectorAll('h2')].map(el=>({size:getComputedStyle(el).fontSize,text:el.textContent})),
   text:root.innerText,
+  quotes:[...root.querySelectorAll('blockquote')].map(el=>({border:getComputedStyle(el).borderLeftWidth, background:getComputedStyle(el).backgroundColor})),
+  titleBorder:getComputedStyle(root.querySelector('h1')).borderBottomWidth,
  }));
  assert.deepEqual(report.overflow,[]);
+ assert.ok(report.quotes.length > 0);
+ assert.ok(report.quotes.every(quote=>quote.border === '0px' && quote.background === 'rgba(0, 0, 0, 0)'));
+ assert.equal(report.titleBorder, '0px');
  assert.equal(report.text,before);
  assert.ok(report.headings.every(h=>parseFloat(h.size)>=20));
  await page.getByRole('button',{name:'返回编辑',exact:true}).click();

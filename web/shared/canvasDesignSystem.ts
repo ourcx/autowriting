@@ -305,7 +305,7 @@ function itemStylesForGroup(
       // 章节标题必须大于正文，眉题样式仅保留给其他模板，避免长文层级倒置。
       if (templateId === "editorial-story") {
         styles[source.id] = {
-          variant: "banner", color: theme.text, fontSize: theme.headingSize,
+          variant: "plain", color: theme.text, fontSize: theme.headingSize,
           fontWeight: theme.headingWeight, lineHeight: theme.headingLineHeight,
           padding: 0, marginTop: 12, marginBottom: 20,
         }
@@ -329,8 +329,11 @@ function itemStylesForGroup(
         fontSize: Math.min(22, theme.bodySize + 2),
         fontWeight: 500,
         ...(templateId === "editorial-story" ? {
-          background: theme.surfaceAlt, padding: 16, fontSize: theme.bodySize,
-          marginTop: 12, marginBottom: 20, lineHeight: theme.bodyLineHeight,
+          // 保留引用的内容语义，但不渲染引用框；短句通过居中与留白形成停顿。
+          variant: "plain", background: "transparent", padding: 0,
+          fontSize: theme.bodySize + 1, fontWeight: 600,
+          align: sourceTextLength(source) <= 50 ? "center" : "left",
+          marginTop: 28, marginBottom: 28, lineHeight: theme.bodyLineHeight,
         } : {}),
       }
       continue
@@ -404,8 +407,13 @@ function styleStandaloneContent(
     borderColor: theme.border,
     borderWidth: 0,
     ...(templateId === "editorial-story" ? {
-      background: source.kind === "quote" ? theme.surfaceAlt : "transparent",
-      padding: source.kind === "quote" ? 16 : 0,
+      variant: source.kind === "image" ? block.variant : "plain" as const,
+      background: "transparent",
+      padding: 0,
+      ...(source.kind === "quote" ? {
+        fontWeight: 600, align: sourceTextLength(source) <= 50 ? "center" as const : "left" as const,
+        marginTop: 28, marginBottom: 28,
+      } : {}),
       fontSize: source.kind === "heading" ? theme.headingSize : theme.bodySize,
       lineHeight: source.kind === "heading" ? theme.headingLineHeight : theme.bodyLineHeight,
     } : {}),
@@ -613,27 +621,29 @@ export function assessCanvasVisualQuality(
   const requestedSections = sources.length >= 8 ? 2 : sources.length >= 3 ? 1 : 0
   const minimumSections = Math.min(requestedSections, composableGroupCount)
   if (sections.length < minimumSections) issues.push("组合区域不足")
+  // 无边框排版由真实文字层级、可读字号和章节留白验收，不强迫插入装饰来凑数量。
+  const headings = sources.filter(source => source.kind === "heading")
+  const readableHeadings = headings.every(source => sections.some(section => {
+    const style = section.itemStyles[source.id]
+    return (style?.fontSize || 0) >= document.theme.bodySize + 3
+  }) || contentBlocks.some(block => block.sourceId === source.id && block.fontSize >= document.theme.bodySize + 3))
+  const readableSections = readableHeadings
+    && typographyRoles.has("title")
+    && (typographyRoles.has("lede") || headings.length > 0)
+    && document.theme.bodySize >= 16
+    && document.theme.bodyLineHeight >= 1.75
+    && sections.length > 0
+    && sections.every(section => section.marginBottom >= 24 && ["stack", "grid"].includes(section.layout))
   const techniques = [
     surfaceCount > 0,
     accentCount > 0,
     iconCount > 0,
     mediaSectionCount > 0,
     materials.length > 0,
-  ]
-    .filter(Boolean).length
-  if (sources.length >= 6 && composableGroupCount > 0 && techniques < 2) {
+  ].filter(Boolean).length
+  if (sources.length >= 6 && composableGroupCount > 0 && techniques < 2 && !readableSections) {
     issues.push("视觉手段不足")
   }
-  // 单栏长文也可以有完整节奏：以导语和清晰章节层级验收，不靠强塞双栏达标。
-  const headings = sources.filter(source => source.kind === "heading")
-  const readableHeadings = headings.every(source => sections.some(section => {
-    const style = section.itemStyles[source.id]
-    return style?.variant === "banner" && (style.fontSize || 0) >= document.theme.bodySize + 3
-  }) || contentBlocks.some(block => block.sourceId === source.id && block.fontSize >= document.theme.bodySize + 3))
-  const readableSections = readableHeadings
-    && typographyRoles.has("title")
-    && (typographyRoles.has("lede") || headings.length > 0)
-    && accentCount > 0
   if (sources.length >= 10 && layoutOpportunityCount >= 2 && layouts.size < 2 && !readableSections) {
     issues.push("长文布局节奏单一")
   }

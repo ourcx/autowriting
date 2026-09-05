@@ -214,3 +214,20 @@ const remark = finalizeCanvasDesign(readingDocument, sources, "editorial-story")
 const remarkSection = remark.blocks.find(block => block.type === "section" && block.sourceIds.includes(marked.sourceIds[0]))
 assert.ok(remarkSection && remarkSection.type === "section")
 assert.deepEqual(remarkSection.itemStyles[marked.sourceIds[0]].marks, marked.itemStyles[marked.sourceIds[0]].marks, "切换模板不得抹掉 AI 或用户选择的重点文字")
+
+// 去掉引用框后仍须保留内容；导语、章节与引用不能通过边框或底色模拟 Markdown 样式。
+for (const block of readingDocument.blocks) {
+  if (block.type !== "section") continue
+  assert.equal(block.accentStyle, "none", "默认文章不应有章节或导语竖线")
+  assert.equal(block.background, "transparent", "默认正文和导语应沿用纸面底色")
+  for (const sourceId of block.sourceIds) {
+    const source = sources.find(item => item.id === sourceId)
+    if (source?.kind === "heading" || source?.kind === "quote") {
+      assert.equal(block.itemStyles[sourceId].variant, "plain", "章节和引用不得使用自动描边变体")
+    }
+    if (source?.kind === "quote") {
+      assert.equal(block.itemStyles[sourceId].background, "transparent")
+      assert.equal(block.itemStyles[sourceId].padding, 0)
+    }
+  }
+}
