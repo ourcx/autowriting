@@ -564,3 +564,112 @@
     font-size: 0;
   }
 }
+
+/* 工作台与文章分开呈现，手机预览使用真实宽度，防止缩放掩盖字号和换行问题。 */
+.cs-edit-bar,
+.cs-edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cs-edit-bar {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--color-hairline);
+  background: var(--color-canvas);
+}
+.cs-edit-actions select {
+  border: 0;
+  background: transparent;
+  color: var(--color-body);
+  font: inherit;
+  font-size: 12px;
+}
+.cs-edit-hint,
+.cs-reading-caption {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.cs-design-reference {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--color-hairline);
+}
+.cs-design-reference summary {
+  padding: 7px 20px;
+  color: var(--color-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+.cs-template-shelf {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  padding: 12px 20px;
+  flex: 0 0 auto;
+  background: var(--color-canvas);
+}
+.cs-template-intro {
+  display: flex;
+  flex: 0 0 150px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.cs-template-intro span { color: var(--color-muted); font-size: 11px; }
+.cs-template-card {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  text-align: left;
+  border: 1px solid var(--color-hairline);
+  border-radius: 10px;
+  background: var(--color-surface-soft);
+  color: var(--color-ink);
+  cursor: pointer;
+}
+.cs-template-card.is-active { border-color: var(--color-brand-teal); background: var(--color-canvas); }
+.cs-template-card > span:not(.cs-template-check) { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 6px; }
+.cs-template-card strong { font-size: 13px; }
+.cs-template-card small { color: var(--color-muted); font-size: 11px; line-height: 1.5; }
+.cs-template-check { color: var(--color-brand-teal); width: 14px; }
+.cs-template-thumb { position: relative; width: 48px; height: 68px; flex: 0 0 48px; overflow: hidden; background: white; border: 1px solid var(--color-hairline); }
+.cs-template-thumb > div { width: 375px; transform: scale(0.128); transform-origin: top left; pointer-events: none; }
+.cs-reading { flex: 1; min-height: 0; overflow: auto; padding: 24px; background: var(--color-surface-strong); }
+.cs-reading-caption { margin-bottom: 16px; text-align: center; }
+.cs-reading-paper { max-width: 100%; margin: 0 auto; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.08); }
+.cs-reading .wbe-rendered-block,
+.cs-reading .wbe-section-item { cursor: default; }
+.cs-reading .wbe-rendered-block::after,
+.cs-reading .wbe-section-item::after { display: none; }
+.cs-empty { display: flex; flex: 1; align-items: center; justify-content: center; flex-direction: column; gap: 16px; color: var(--color-muted); }
+.cs-empty h2 { color: var(--color-ink); font-size: 22px; margin: 0; }
+.cs-empty p { margin: 0; font-size: 14px; }
+.cs-root .wbe-stage-meta { flex-wrap: wrap; gap: 6px; }
+.cs-root .wbe-paper { box-shadow: 0 6px 28px rgba(0, 0, 0, 0.08); }
+@media (max-width: 1100px) {
+  .cs-template-intro, .cs-edit-hint { display: none; }
+  .cs-template-card small { display: none; }
+  .cs-root .wbe-workspace { grid-template-columns: 170px minmax(280px, 1fr) 230px; }
+  .cs-root .wbe-stage { padding: 16px 12px; }
+}
+@media (max-width: 760px) {
+  .cs-template-shelf { padding: 8px; gap: 6px; }
+  .cs-template-thumb { display: none; }
+  .cs-template-card { padding: 10px 8px; gap: 4px; }
+  .cs-template-card strong { font-size: 11px; }
+  .cs-root .wbe-workspace { display: flex; flex-direction: column; overflow: auto; }
+  .cs-root .wbe-outline { display: none; }
+  .cs-root .wbe-stage { overflow: visible; }
+  .cs-root .wbe-inspector { min-height: 320px; overflow: visible; }
+  .cs-edit-bar { padding: 8px; }
+}
+
+/* 选择段落时优先展示局部样式，整篇背景等低频选项收起，缩短编辑路径。 */
+.cs-root .wbe-global-settings > summary { cursor: pointer; font-size: 12px; color: var(--color-muted); }
+.cs-root .wbe-global-settings > label,
+.cs-root .wbe-global-settings > div { margin-top: 14px; }

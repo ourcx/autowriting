@@ -37,8 +37,8 @@ const expectedSignatures: Record<CanvasDesignTemplateId, {
   "editorial-story": {
     primary: "#a84632",
     font: "editorial",
-    layouts: ["editorial", "editorial", "stack", "media-text"],
-    icons: ["sparkles", "book-open"],
+    layouts: ["stack", "stack", "stack", "stack"],
+    icons: [],
   },
   "interview-notes": {
     primary: "#c56f4f",
@@ -193,3 +193,24 @@ assert.equal(normalized.theme.secondary, normalized.theme.primary)
 assert.equal(normalized.theme.accent, normalized.theme.primary)
 
 process.stdout.write("canvas design quality: 4 templates passed\n")
+
+// 阅读模板的验收关注正文宽度和语义层级，不能退回短正文双栏或小于正文的章节标题。
+const readingDocument = finalizeCanvasDesign(createWechatBlockDocument("阅读夹具", sources), sources, "editorial-story").document
+for (const section of readingDocument.blocks.filter(block => block.type === "section")) {
+  assert.equal(section.layout, "stack", "知识长文中的正文和单图必须上下排列")
+  for (const sourceId of section.sourceIds) {
+    if (sources.find(source => source.id === sourceId)?.kind === "heading") {
+      assert.ok((section.itemStyles[sourceId]?.fontSize || 0) >= readingDocument.theme.bodySize + 3, "章节标题必须大于正文")
+    }
+  }
+}
+assert.ok(readingDocument.theme.displaySize <= 32, "手机标题不能使用海报字号")
+const shortProse = longProseSources.map(source => ({ ...source, text: source.text?.slice(0, 55) }))
+assert.equal(finalizeCanvasDesign(createWechatBlockDocument("短段落", shortProse), shortProse, "editorial-story").report.passed, true, "无小标题的短段落长文也应能单栏成稿")
+const marked = readingDocument.blocks.find(block => block.type === "section")
+assert.ok(marked)
+marked.itemStyles[marked.sourceIds[0]] = { marks: [{ match: "事故", occurrence: 1, color: readingDocument.theme.primary, background: "transparent", fontWeight: 700, textDecoration: "none" }] }
+const remark = finalizeCanvasDesign(readingDocument, sources, "editorial-story").document
+const remarkSection = remark.blocks.find(block => block.type === "section" && block.sourceIds.includes(marked.sourceIds[0]))
+assert.ok(remarkSection && remarkSection.type === "section")
+assert.deepEqual(remarkSection.itemStyles[marked.sourceIds[0]].marks, marked.itemStyles[marked.sourceIds[0]].marks, "切换模板不得抹掉 AI 或用户选择的重点文字")

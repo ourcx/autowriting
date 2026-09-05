@@ -302,6 +302,15 @@ function itemStylesForGroup(
   const system = getCanvasDesignTemplate(templateId).designSystem
   for (const [index, source] of sources.entries()) {
     if (source.kind === "heading") {
+      // 章节标题必须大于正文，眉题样式仅保留给其他模板，避免长文层级倒置。
+      if (templateId === "editorial-story") {
+        styles[source.id] = {
+          variant: "banner", color: theme.text, fontSize: theme.headingSize,
+          fontWeight: theme.headingWeight, lineHeight: theme.headingLineHeight,
+          padding: 0, marginTop: 12, marginBottom: 20,
+        }
+        continue
+      }
       styles[source.id] = {
         variant: "overline",
         color: theme.primary,
@@ -319,6 +328,10 @@ function itemStylesForGroup(
         accentColor: theme.primary,
         fontSize: Math.min(22, theme.bodySize + 2),
         fontWeight: 500,
+        ...(templateId === "editorial-story" ? {
+          background: theme.surfaceAlt, padding: 16, fontSize: theme.bodySize,
+          marginTop: 12, marginBottom: 20, lineHeight: theme.bodyLineHeight,
+        } : {}),
       }
       continue
     }
@@ -334,7 +347,9 @@ function itemStylesForGroup(
     if (isIntro && index === 0 && source.kind === "paragraph") {
       styles[source.id] = {
         variant: "lede",
-        fontSize: Math.min(22, theme.bodySize + 2),
+        fontSize: templateId === "editorial-story" && sourceTextLength(source) > 80
+          ? theme.bodySize
+          : Math.min(22, theme.bodySize + 2),
         lineHeight: theme.bodyLineHeight,
       }
       continue
@@ -388,6 +403,12 @@ function styleStandaloneContent(
     accentColor: theme.primary,
     borderColor: theme.border,
     borderWidth: 0,
+    ...(templateId === "editorial-story" ? {
+      background: source.kind === "quote" ? theme.surfaceAlt : "transparent",
+      padding: source.kind === "quote" ? 16 : 0,
+      fontSize: source.kind === "heading" ? theme.headingSize : theme.bodySize,
+      lineHeight: source.kind === "heading" ? theme.headingLineHeight : theme.bodyLineHeight,
+    } : {}),
     textIndent: source.kind === "paragraph" ? system.bodyTextIndent : block.textIndent,
   }
 }
@@ -404,7 +425,12 @@ function createSection(
     : recipe.surface === "surfaceAlt"
       ? theme.surfaceAlt
       : "transparent"
-  const layout = safeLayout(recipe, sources)
+  // 叙事文章的图文上下排列，只有连续图片可以形成画廊。
+  const readingMedia = templateId === "editorial-story" && sources[0]?.kind === "image"
+  const layout = readingMedia
+    ? sources.every(source => source.kind === "image") && sources.length > 1 ? "grid" : "stack"
+    : safeLayout(recipe, sources)
+  const plainMedia = readingMedia && layout === "stack"
   const surfaced = background !== "transparent" || recipe.surfaceKind !== "none"
   return {
     id: `design-section-${sources[0].id}`,
@@ -415,20 +441,20 @@ function createSection(
     mediaPosition: sectionIndex % 2 === 0 ? "left" : "right",
     columns: 2,
     preset: surfaced ? recipe.preset : "plain",
-    background,
+    background: plainMedia ? "transparent" : background,
     color: theme.text,
     accentColor: theme.primary,
     borderColor: theme.border,
     borderWidth: 0,
     radius: surfaced ? theme.radius : 0,
-    padding: surfaced || layout !== "stack" ? 18 : 0,
+    padding: plainMedia ? 0 : surfaced || layout !== "stack" ? 18 : 0,
     gap: 16,
     marginTop: 8,
     marginBottom: theme.sectionGap,
     divider: recipe.divider,
     accentStyle: recipe.accentStyle,
     shadow: recipe.shadow,
-    surfaceStyle: surfaceStyle(recipe, theme),
+    surfaceStyle: plainMedia ? undefined : surfaceStyle(recipe, theme),
     leadSourceId: sectionIndex === 0
       ? sources.find(source => source.kind === "paragraph")?.id
       : undefined,
@@ -496,9 +522,29 @@ export function compileCanvasDesignSystem(
     blocks.push(...materialsForGroup(materials, sourceIds, "after"))
   }
 
+  const sourceMarks = new Map<string, WechatInlineMark[]>()
+  for (const block of document.blocks) {
+    if (block.type === "content" && block.marks.length) sourceMarks.set(block.sourceId, block.marks)
+    if (block.type === "section") {
+      for (const [sourceId, style] of Object.entries(block.itemStyles)) {
+        if (style.marks?.length) sourceMarks.set(sourceId, style.marks)
+      }
+    }
+  }
+  // AI 挑出的强调文字属于内容语义；重新套模板只换布局，不丢失已经选择的重点。
+  for (const block of blocks) {
+    if (block.type === "content") block.marks = sourceMarks.get(block.sourceId) || block.marks
+    if (block.type === "section") {
+      for (const sourceId of block.sourceIds) {
+        const marks = sourceMarks.get(sourceId)
+        if (marks) block.itemStyles[sourceId] = { ...block.itemStyles[sourceId], marks }
+      }
+    }
+  }
   return {
     ...document,
     name: document.name,
+    sidePadding: templateId === "editorial-story" ? 20 : document.sidePadding,
     background: theme.canvas,
     pageBackground: theme.canvas,
     font: theme.font,
@@ -578,7 +624,17 @@ export function assessCanvasVisualQuality(
   if (sources.length >= 6 && composableGroupCount > 0 && techniques < 2) {
     issues.push("视觉手段不足")
   }
-  if (sources.length >= 10 && layoutOpportunityCount >= 2 && layouts.size < 2) {
+  // 单栏长文也可以有完整节奏：以导语和清晰章节层级验收，不靠强塞双栏达标。
+  const headings = sources.filter(source => source.kind === "heading")
+  const readableHeadings = headings.every(source => sections.some(section => {
+    const style = section.itemStyles[source.id]
+    return style?.variant === "banner" && (style.fontSize || 0) >= document.theme.bodySize + 3
+  }) || contentBlocks.some(block => block.sourceId === source.id && block.fontSize >= document.theme.bodySize + 3))
+  const readableSections = readableHeadings
+    && typographyRoles.has("title")
+    && (typographyRoles.has("lede") || headings.length > 0)
+    && accentCount > 0
+  if (sources.length >= 10 && layoutOpportunityCount >= 2 && layouts.size < 2 && !readableSections) {
     issues.push("长文布局节奏单一")
   }
   if (sources.length >= 8 && typographyRoles.size < 2) issues.push("文字角色层级不足")

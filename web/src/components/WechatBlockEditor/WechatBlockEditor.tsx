@@ -42,6 +42,7 @@ interface WechatBlockEditorProps {
   document: WechatBlockDocument
   sources: CanvasSource[]
   selectedId: string | null
+  previewWidth?: number
   contentRef: RefObject<HTMLElement>
   onSelect: (id: string | null) => void
   onChange: (document: WechatBlockDocument) => void
@@ -221,7 +222,13 @@ function blockLabel(block: WechatBlock, source?: CanvasSource): string {
   if (block.type === "asset") return "AI 图片素材"
   if (block.type === "divider") return "分隔线"
   if (block.type === "switcher") return "点击切换素材"
-  if (block.type === "section") return `${block.layout} · ${block.sourceIds.length} 项`
+  if (block.type === "section") {
+    const layouts: Record<WechatSectionBlock["layout"], string> = {
+      stack: "正文段落", "two-column": "双栏内容", comparison: "对比", feature: "重点内容",
+      editorial: "杂志图文", timeline: "时间线", steps: "步骤", "media-text": "图文组合", grid: "图片画廊",
+    }
+    return `${block.leadSourceId ? "文章导语" : layouts[block.layout]} · ${block.sourceIds.length} 项`
+  }
   if (source?.kind === "image") return source.alt || "文章图片"
   return source?.text?.split("\n")[0] || "内容块"
 }
@@ -314,7 +321,10 @@ function sectionContentBlock(
     : source.id === section.overlineSourceId
       ? { variant: "overline" }
       : {}
-  const itemStyle = section.itemStyles[source.id] || {}
+  // 持久化解析会补出值为 undefined 的可选字段；忽略这些字段，避免刷新后覆盖正文默认样式。
+  const itemStyle: WechatTextStyleOverride = Object.fromEntries(
+    Object.entries(section.itemStyles[source.id] || {}).filter(([, value]) => value !== undefined),
+  )
   return {
     ...sectionDefault,
     ...roleOverride,
@@ -1225,6 +1235,7 @@ function SurfaceFields({
 }
 
 export default function WechatBlockEditor({
+  previewWidth = 677,
   document,
   sources,
   selectedId,
@@ -1417,9 +1428,9 @@ export default function WechatBlockEditor({
       <section className="wbe-stage" style={{ background: document.pageBackground }}>
         <div className="wbe-stage-meta">
           <strong>{document.name}</strong>
-          <span>微信正文宽度 {document.width}px · 高度随内容增长</span>
+          <span>{previewWidth}px 阅读视口</span>
         </div>
-        <div className="wbe-paper">
+        <div className="wbe-paper" style={{ width: Math.min(document.width, previewWidth), maxWidth: "100%" }}>
           <WechatBlockRenderer
             document={document}
             sources={sources}
@@ -1436,6 +1447,8 @@ export default function WechatBlockEditor({
           样式属性
         </div>
         <div className="wbe-properties">
+          <details className="wbe-global-settings" open={!selectedBlock && !selectedSection}>
+            <summary>整篇样式</summary>
           <label>
             <span>排版名称</span>
             <input value={document.name} onChange={event => updateDocument({ name: event.target.value })} />
@@ -1471,6 +1484,8 @@ export default function WechatBlockEditor({
               theme: { ...document.theme, canvasStyle },
             })}
           />
+
+          </details>
 
           {selectedBlock?.type === "content" ? (
             <>

@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import {
+  Undo2,
+  Redo2,
+  Eye,
+  Smartphone,
   ArrowDown,
   ArrowUp,
   Braces,
@@ -22,7 +26,7 @@ import {
 import PageHeader from "../../components/PageHeader/PageHeader"
 import CanvasRenderer from "../../components/CanvasRenderer/CanvasRenderer"
 import CanvasDesignInput from "../../components/CanvasDesignInput/CanvasDesignInput"
-import WechatBlockEditor from "../../components/WechatBlockEditor/WechatBlockEditor"
+import WechatBlockEditor, { WechatBlockRenderer } from "../../components/WechatBlockEditor/WechatBlockEditor"
 import { toast } from "../../components/Toast/Toast"
 import {
   fetchArticle,
@@ -66,6 +70,9 @@ import {
   DEFAULT_CANVAS_DESIGN_TEMPLATE_ID,
   type CanvasDesignTemplateId,
 } from "../../../shared/canvasDesignTemplates"
+import { compileCanvasDesignSystem } from "../../../shared/canvasDesignSystem"
+import CanvasTemplateShelf from "./CanvasTemplateShelf"
+import { useCanvasHistory } from "./useCanvasHistory"
 import "./CanvasStudio.css"
 
 const STORAGE_KEY = "visual-article-canvas-v2"
@@ -165,9 +172,17 @@ export default function CanvasStudio() {
   const svgRef = useRef<SVGSVGElement>(null)
   const blockContentRef = useRef<HTMLElement>(null)
   const [document, setDocument] = useState<CanvasDocument>(cloneDefaultDocument)
-  const [blockDocument, setBlockDocument] = useState<WechatBlockDocument>(() => (
+  const { document: blockDocument, change: setBlockDocument, reset: resetBlockDocument, undo, redo, canUndo, canRedo } = useCanvasHistory(() => (
     createWechatBlockDocument("公众号块排版", [])
   ))
+  // 预览尺寸和阅读模式属于编辑工作区，不写入文章，避免影响导出格式。
+  const [previewWidth, setPreviewWidth] = useState(375)
+  const [reading, setReading] = useState(false)
+  const generationArticleRef = useRef(articleId)
+  useEffect(() => {
+    generationArticleRef.current = articleId
+    return () => { generationArticleRef.current = "" }
+  }, [articleId])
   const [selectedId, setSelectedId] = useState<string | null>(document.nodes[document.nodes.length - 1]?.id ?? null)
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("properties")
@@ -254,9 +269,13 @@ export default function CanvasStudio() {
           articleId,
           nextSources,
           data.title || "公众号块排版",
-        ) || createWechatBlockDocument(data.title || "公众号块排版", nextSources)
+        ) || compileCanvasDesignSystem(
+          createWechatBlockDocument(data.title || "公众号块排版", nextSources),
+          nextSources,
+          DEFAULT_CANVAS_DESIGN_TEMPLATE_ID,
+        )
         setDocument(nextDocument)
-        setBlockDocument(nextBlockDocument)
+        resetBlockDocument(nextBlockDocument)
         setSelectedId(nextDocument.nodes[nextDocument.nodes.length - 1]?.id ?? null)
         setSelectedBlockId(null)
       } catch {
@@ -269,7 +288,7 @@ export default function CanvasStudio() {
     return () => {
       cancelled = true
     }
-  }, [articleId])
+  }, [articleId, resetBlockDocument])
 
   useEffect(() => {
     if (articleId && loadedArticleId === articleId && sources.length > 0) {
@@ -344,6 +363,7 @@ export default function CanvasStudio() {
       toast.warn("请先选择一篇已生成正文的公众号文章")
       return
     }
+    const requestedArticleId = articleId
     setGenerating(true)
     setGenerationMessage("正在连接 AI...")
     try {
@@ -358,6 +378,8 @@ export default function CanvasStudio() {
             designReference,
           },
         )
+        // 请求期间切换文章时，旧结果不能覆盖新文章的本地排版。
+        if (generationArticleRef.current !== requestedArticleId) return
         setBlockDocument(nextDocument)
         setSelectedBlockId(null)
         toast.success("AI 块排版已生成")
@@ -373,6 +395,7 @@ export default function CanvasStudio() {
           designReference,
         },
       )
+      if (generationArticleRef.current !== requestedArticleId) return
       setDocument(nextDocument)
       setSelectedId(nextDocument.nodes[nextDocument.nodes.length - 1]?.id ?? null)
       toast.success("AI 画布已生成")
@@ -607,7 +630,7 @@ export default function CanvasStudio() {
   return (
     <div className="cs-root">
       <PageHeader
-        title="公众号视觉排版"
+        title="公众号编辑器"
         icon={mode === "blocks" ? <PanelLeft size={16} /> : <Shapes size={16} />}
         subtitle={articleId
           ? `${articleData.title || "当前文章"} · ${sources.filter(source => source.kind !== "image").length} 个内容块 · ${sources.filter(source => source.kind === "image").length} 张图片`
@@ -621,13 +644,13 @@ export default function CanvasStudio() {
             </button>
             {mode === "blocks" ? (
               <>
-                <button className="cs-header-btn" onClick={() => void copyBlockContent()}>
+                <button className="cs-header-btn" disabled={articleLoading || loadedArticleId !== articleId || !sources.length} onClick={() => void copyBlockContent()}>
                   <Copy size={14} />
                   复制公众号内容
                 </button>
                 <button
                   className="cs-header-btn cs-header-btn--primary"
-                  disabled={pushing}
+                  disabled={pushing || articleLoading || loadedArticleId !== articleId || !sources.length}
                   onClick={() => void pushBlockToWechat()}
                 >
                   <Send size={14} />
@@ -666,7 +689,7 @@ export default function CanvasStudio() {
         <div className="cs-mode-switch" role="group" aria-label="排版模式">
           <button className={mode === "blocks" ? "active" : ""} onClick={() => setMode("blocks")}>
             <PanelLeft size={15} />
-            HTML 块排版
+            文章排版
           </button>
           <button className={mode === "svg" ? "active" : ""} onClick={() => setMode("svg")}>
             <Shapes size={15} />
@@ -703,8 +726,8 @@ export default function CanvasStudio() {
           value={aiPrompt}
           onChange={event => setAiPrompt(event.target.value)}
           placeholder={mode === "blocks"
-            ? "补充偏好（不可信输入）：模板会负责结构、视觉 Token 和防重叠约束"
-            : "补充画板偏好（不可信输入）：模板会负责结构、视觉 Token 和防重叠约束"}
+            ? "告诉 AI 你的想法，例如：适合知识分享，重点突出引用，正文清爽、少装饰"
+            : "描述你想要的画板风格、配色和重点内容"}
           rows={2}
         />
         <button
@@ -716,11 +739,14 @@ export default function CanvasStudio() {
           {generating
             ? generationMessage || "生成中..."
             : mode === "blocks"
-              ? "AI 生成块排版"
+              ? "AI 设计排版"
               : "AI 生成画板"}
         </button>
       </div>
 
+      {mode === "blocks" ? <CanvasTemplateShelf selected={designTemplateId} onSelect={setDesignTemplateId} /> : null}
+      <details className="cs-design-reference">
+        <summary>设计参考与更多模板{designFileName ? ` · ${designFileName}` : "（可选）"}</summary>
       <CanvasDesignInput
         templateId={designTemplateId}
         fileName={designFileName}
@@ -734,16 +760,52 @@ export default function CanvasStudio() {
         }}
         onError={message => toast.error(message)}
       />
+      </details>
 
       {mode === "blocks" ? (
-        <WechatBlockEditor
-          document={blockDocument}
-          sources={sources}
-          selectedId={selectedBlockId}
-          contentRef={blockContentRef}
-          onSelect={setSelectedBlockId}
-          onChange={setBlockDocument}
-        />
+        <>
+          <div className="cs-edit-bar">
+            <div className="cs-edit-actions">
+              <button className="cs-header-btn" disabled={generating || articleLoading || !sources.length || designTemplateId === "design-reference"} onClick={() => {
+                setBlockDocument(compileCanvasDesignSystem(blockDocument, sources, designTemplateId, { forceRecipes: true }))
+                setSelectedBlockId(null)
+                toast.success("模板已应用，不满意可撤销")
+              }}><LayoutTemplate size={14} />应用模板</button>
+              <button className="cs-header-btn" title="撤销" aria-label="撤销" disabled={!canUndo || articleLoading || generating} onClick={undo}><Undo2 size={15} /></button>
+              <button className="cs-header-btn" title="重做" aria-label="重做" disabled={!canRedo || articleLoading || generating} onClick={redo}><Redo2 size={15} /></button>
+              <span className="cs-edit-hint">选模板试排，再点击正文调整样式</span>
+            </div>
+            <div className="cs-edit-actions">
+              <Smartphone size={15} />
+              <select aria-label="预览宽度" value={previewWidth} onChange={event => setPreviewWidth(Number(event.target.value))}>
+                <option value={375}>手机 · 375px</option>
+                <option value={414}>大屏手机 · 414px</option>
+                <option value={677}>宽屏 · 677px</option>
+              </select>
+              <button className="cs-header-btn" aria-pressed={reading} onClick={() => setReading(!reading)}><Eye size={14} />{reading ? "返回编辑" : "阅读预览"}</button>
+            </div>
+          </div>
+          {articleLoading ? <div className="cs-empty">正在加载文章…</div> : !sources.length ? (
+            <div className="cs-empty"><FileText size={32} /><h2>让内容，成为一篇好看的文章</h2><p>选择一篇已有文章，或先使用 AI 完成正文，再来设计排版。</p><button className="cs-header-btn" onClick={() => navigate("/")}>去写文章</button></div>
+          ) : reading ? (
+            <section className="cs-reading">
+              <div className="cs-reading-caption">阅读预览 · {previewWidth}px · 样式已自动保存在本机</div>
+              <div className="cs-reading-paper" style={{ width: previewWidth }}>
+                <WechatBlockRenderer document={blockDocument} sources={sources} selectedId={null} contentRef={blockContentRef} onSelect={() => {}} />
+              </div>
+            </section>
+          ) : (
+            <WechatBlockEditor
+              document={blockDocument}
+              sources={sources}
+              selectedId={selectedBlockId}
+              contentRef={blockContentRef}
+              previewWidth={previewWidth}
+              onSelect={setSelectedBlockId}
+              onChange={setBlockDocument}
+            />
+          )}
+        </>
       ) : (
         <main className="cs-workspace">
         <aside className="cs-layers">

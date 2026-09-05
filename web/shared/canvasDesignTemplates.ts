@@ -80,11 +80,11 @@ const editorialTheme: CanvasDesignTheme = {
   muted: "#706a63",
   primary: "#a84632",
   border: "#d9d0c7",
-  displaySize: 38,
-  displayWeight: 800,
-  displayLineHeight: 1.18,
-  headingSize: 24,
-  headingWeight: 750,
+  displaySize: 30,
+  displayWeight: 700,
+  displayLineHeight: 1.4,
+  headingSize: 22,
+  headingWeight: 700,
   headingLineHeight: 1.35,
   bodySize: 17,
   bodyWeight: 400,
@@ -183,12 +183,12 @@ export const CANVAS_DESIGN_TEMPLATES: CanvasDesignTemplate[] = [
   {
     id: "editorial-story",
     name: "杂志叙事",
-    description: "大标题、重点引语、图文穿插和克制留白",
+    description: "知识分享 · 清晰章节、重点引语、连续阅读",
     brief: `[图表类型]
 公众号杂志式长文
 
 [结构要求]
-按文章语义将连续内容组织成 4-10 个章节。标题建立强视觉锚点；章节使用标题、正文、重点引语和图片形成节奏。允许用 feature、two-column、card 结构组合连续内容，但不得改变内容顺序。
+按文章语义将连续内容组织成 4-10 个章节。标题建立强视觉锚点；章节使用标题、正文、重点引语和图片形成节奏。正文始终单栏连续阅读，图片独立占行；引用可使用浅底色强调。不得把普通段落拆成双栏，不得改变内容顺序。
 
 [UI规范]
 风格专业克制，避免每段都使用卡片。正文保持高可读性，重点内容通过留白、描边和单一强调色建立层级。
@@ -203,8 +203,9 @@ export const CANVAS_DESIGN_TEMPLATES: CanvasDesignTemplate[] = [
       theme: editorialTheme,
       titleAlign: "left",
       bodyTextIndent: 0,
-      intro: { layout: "editorial", preset: "feature", columnRatio: "2:1", surface: "surfaceAlt", surfaceKind: "linear", accentStyle: "top", icon: "sparkles", shadow: "none", divider: false },
-      bodyCycle: editorialBody,
+      // 导语提供轻量视觉入口，正文不按段落轮换卡片，保证手机上的阅读连续性。
+      intro: { layout: "stack", preset: "soft", columnRatio: "1:1", surface: "surfaceAlt", surfaceKind: "solid", accentStyle: "left", shadow: "none", divider: false },
+      bodyCycle: [{ layout: "stack", preset: "plain", columnRatio: "1:1", surface: "none", surfaceKind: "none", accentStyle: "none", shadow: "none", divider: false }],
       media: { layout: "media-text", preset: "soft", columnRatio: "2:1", surface: "surfaceAlt", surfaceKind: "solid", accentStyle: "none", shadow: "none", divider: false },
     },
   },
