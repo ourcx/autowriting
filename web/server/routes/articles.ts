@@ -20,6 +20,7 @@ import { retrieveRelevant, formatRetrievedContext, formatExampleContext, extract
 import { saveAnalysis, getLatestAnalysis, listAnalyses, recordTokenUsage, getEffectivePrompt, getSetting } from '../db.js'
 import { authMiddleware } from '../authMiddleware.js'
 import { logger } from '../logger.js'
+import { startSseHeartbeat } from '../sseHeartbeat.js'
 import { triggerBuildIndex } from './rag.js'
 
 const router = Router()
@@ -350,6 +351,8 @@ router.post('/:articleId/generate/stream', async (req, res) => {
   res.setHeader('Connection', 'keep-alive')
   res.setHeader('X-Accel-Buffering', 'no')
   res.flushHeaders()
+  // 两个平台共用长连接；检索、模型思考和平台切换期间也必须持续保活。
+  startSseHeartbeat(res)
 
   // 工具：向客户端发送一个 SSE 事件
   const send = (event, data) => {

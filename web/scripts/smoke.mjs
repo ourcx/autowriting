@@ -10,6 +10,7 @@
  */
 
 import { spawn } from 'node:child_process'
+import { smokeArticleStream } from './smoke-article-stream.mjs'
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve, dirname, join } from 'node:path'
@@ -479,6 +480,11 @@ cases.push({
     })
     if (r.status !== 400) throw new Error(`期望 400，实际 ${r.status}`)
   },
+})
+
+cases.push({
+  name: '普通文章双平台生成在模型静默期间应持续保活并保存完整正文',
+  run: () => smokeArticleStream(BASE, token),
 })
 
 ;(async () => {
