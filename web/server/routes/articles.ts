@@ -21,6 +21,7 @@ import { saveAnalysis, getLatestAnalysis, listAnalyses, recordTokenUsage, getEff
 import { authMiddleware } from '../authMiddleware.js'
 import { logger } from '../logger.js'
 import { startSseHeartbeat } from '../sseHeartbeat.js'
+import { consumeOpenAiContentStream } from '../utils/openAiStream.js'
 import { triggerBuildIndex } from './rag.js'
 
 const router = Router()
@@ -373,6 +374,9 @@ router.post('/:articleId/generate/stream', async (req, res) => {
       console.warn('[Stream] 中断时保存部分内容失败:', e.message)
     }
   }
+  res.once('close', () => {
+    if (!res.writableEnded) savePartial()
+  })
 
   try {
     if (!task || !materials) {
@@ -510,65 +514,32 @@ ${materials}
         { headers, responseType: 'stream' }
       )
 
-      await new Promise((resolve, reject) => {
-        let buffer = ''
-        let fullContent = ''
-
-        res2.data.on('data', (chunk) => {
-          buffer += chunk.toString('utf-8')
-          const lines = buffer.split('\n')
-          buffer = lines.pop()
-
-          for (const line of lines) {
-            const trimmed = line.trim()
-            if (!trimmed || trimmed === 'data: [DONE]') continue
-            if (!trimmed.startsWith('data:')) continue
-            try {
-              const json    = JSON.parse(trimmed.slice(5).trim())
-              const content = json.choices?.[0]?.delta?.content
-              if (content) {
-                fullContent += content
-                if (platformKey === 'wechat') fullText = fullContent
-                else fullTextToutiao = fullContent
-                send('chunk', { text: content, platform: platformKey })
-              }
-            } catch { /* ignore */ }
-          }
-        })
-
-        res2.data.on('end', () => {
-          // 持久化
-          try {
-            const articlePath = getArticlePath(articleId, 'article', req.user.id)
-            if (platformKey === 'wechat') {
-              writeArticleSafely({ articlePath, articleId, userId: req.user.id, content: fullContent })
-            } else {
-              const toutiaoPath = getArticleSidecarPath(articlePath, 'article_toutiao')
-              ensureDir(path.dirname(toutiaoPath))
-              fs.writeFileSync(toutiaoPath, fullContent, 'utf-8')
-            }
-          } catch (e) {
-            console.error(`[Stream] 写入${platformKey}文章失败:`, e.message)
-          }
-          recordTokenUsage({
-            articleId, userId: req.user.id, operation: 'generate', model,
-            outputTokens: Math.ceil(fullContent.length / 1.5),
-          })
-          const ragCount = platformKey === 'wechat' ? (selectedRagContext ? selectedRagContext.split('###').length - 1 : autoRagCount) : 0
-          send('done', { article: fullContent, platform: platformKey, ragCount })
-          if (isLast) res.end()
-          resolve()
-        })
-
-        res2.data.on('error', (e) => {
-          console.error(`[Stream] ${platformKey}上游流错误:`, e.message)
-          reject(e)
-        })
-
-        req.on('close', () => {
-          if (!res.writableEnded) savePartial()
-        })
+      const fullContent = await consumeOpenAiContentStream(res2.data, content => {
+        if (platformKey === 'wechat') fullText += content
+        else fullTextToutiao += content
+        send('chunk', { text: content, platform: platformKey })
       })
+
+      // 两个平台分别持久化；只有完整消费上游流后才发送 done。
+      try {
+        const articlePath = getArticlePath(articleId, 'article', req.user.id)
+        if (platformKey === 'wechat') {
+          writeArticleSafely({ articlePath, articleId, userId: req.user.id, content: fullContent })
+        } else {
+          const toutiaoPath = getArticleSidecarPath(articlePath, 'article_toutiao')
+          ensureDir(path.dirname(toutiaoPath))
+          fs.writeFileSync(toutiaoPath, fullContent, 'utf-8')
+        }
+      } catch (e) {
+        console.error(`[Stream] 写入${platformKey}文章失败:`, e.message)
+      }
+      recordTokenUsage({
+        articleId, userId: req.user.id, operation: 'generate', model,
+        outputTokens: Math.ceil(fullContent.length / 1.5),
+      })
+      const ragCount = platformKey === 'wechat' ? (selectedRagContext ? selectedRagContext.split('###').length - 1 : autoRagCount) : 0
+      send('done', { article: fullContent, platform: platformKey, ragCount })
+      if (isLast) res.end()
     }
 
     // system 消息直接用数据库提示词，避免再叠一层硬编码 system 造成重复

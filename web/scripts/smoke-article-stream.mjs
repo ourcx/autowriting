@@ -15,7 +15,15 @@ export async function smokeArticleStream(base, token) {
     const timer = setTimeout(() => {
       timers.delete(timer)
       res.writeHead(200, { 'Content-Type': 'text/event-stream' })
-      res.end(`data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\ndata: [DONE]\n\n`)
+      const splitAt = content.indexOf('用于确认')
+      const firstContent = content.slice(0, splitAt)
+      const finalContent = content.slice(splitAt)
+      res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: firstContent } }] })}\n\n`)
+      const finalEvent = Buffer.from(`data: ${JSON.stringify({ choices: [{ delta: { content: finalContent } }] })}`)
+      const chineseStart = finalEvent.indexOf(Buffer.from('用'))
+      // 故意把一个三字节中文字符拆到两个网络分片，并让最后一个 SSE 事件没有换行。
+      res.write(finalEvent.subarray(0, chineseStart + 1))
+      setImmediate(() => res.end(finalEvent.subarray(chineseStart + 1)))
     }, call === 1 ? delay : 16_000)
     timers.add(timer)
   })
