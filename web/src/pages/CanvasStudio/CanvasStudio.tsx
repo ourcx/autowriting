@@ -238,7 +238,17 @@ export default function CanvasStudio() {
           : await fetchUploadedArticleImages(articleId).catch(() => [])
         // 封面用于发布元信息，不再自动追加为文章结尾的正文图片。
         const cover = localStorage.getItem(`cover_image_${articleId}`)
-        const extraImages = uploaded.filter(image => image.src !== cover)
+        // 封面保存为绝对地址、图库返回相对地址；统一后比较，并识别历史粘贴封面。
+        const imageKey = (src: string) => {
+          try { return new URL(src, window.location.origin).href }
+          catch { return src }
+        }
+        const coverImages = new Set(uploaded.filter(image => (
+          /^cover-paste-\d+\.[a-z0-9]+$/i.test(image.alt)
+          || (cover && imageKey(image.src) === imageKey(cover))
+        )).map(image => imageKey(image.src)))
+        if (cover) coverImages.add(imageKey(cover))
+        const extraImages = uploaded.filter(image => !coverImages.has(imageKey(image.src)))
         const nextSources = extractCanvasSources({
           title: data.title || data.article.split("\n")[0]?.replace(/^#+\s*/, "") || "未命名文章",
           article: data.article,
@@ -260,6 +270,10 @@ export default function CanvasStudio() {
           nextSources,
           DEFAULT_CANVAS_DESIGN_TEMPLATE_ID,
         )
+        // 旧自由画板可能缓存了自动追加的封面；正文显式引用的图片仍然保留。
+        nextDocument.nodes = nextDocument.nodes.filter(node => node.type !== "image"
+          || !coverImages.has(imageKey(node.src))
+          || nextSources.some(source => source.kind === "image" && source.src && imageKey(source.src) === imageKey(node.src)))
         setDocument(nextDocument)
         resetBlockDocument(nextBlockDocument)
         setSelectedId(nextDocument.nodes[nextDocument.nodes.length - 1]?.id ?? null)

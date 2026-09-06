@@ -42,13 +42,16 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
 > 不必一次改变所有工作，先让明天的一件事变得更轻松。`,materials:'',task:''};
  await context.addInitScript(()=>{
   localStorage.setItem('auth_token','local-browser-fixture')
-  localStorage.setItem('cover_image_canvas-fixture','https://example.com/cover-only-fixture.png')
+  localStorage.setItem('cover_image_canvas-fixture','http://127.0.0.1:5173/api/images/uploads/current-cover.png')
  });
  await page.route('**/api/auth/me',r=>r.fulfill({json:{user:{id:'fixture',username:'local',role:'admin'}}}));
  await page.route('**/api/articles',r=>r.fulfill({json:[{id:'canvas-fixture',title:article.title,status:'generated'},{id:'canvas-second',title:'第二篇文章',status:'generated'}]}));
  await page.route('**/api/articles/canvas-fixture',r=>r.fulfill({json:article}));
  await page.route('**/api/articles/canvas-second', r=>r.fulfill({json:{...article,title:'第二篇文章'}}))
- await page.route('**/api/images/uploaded?*',r=>r.fulfill({json:[]}));
+ await page.route('**/api/images/uploaded?*',r=>r.fulfill({json:r.request().url().includes('articleId=canvas-fixture') ? [
+  {url:'/api/images/uploads/current-cover.png',originalName:'当前封面.png'},
+  {url:'/api/images/uploads/old-cover.png',originalName:'cover-paste-1788684907747.png'},
+ ] : []}));
  await page.route('**/api/images',r=>r.fulfill({json:[{imageUrl:'/api/images/uploads/library-fixture.png',title:'图库照片测试'}]}))
  await page.route('**/api/images/uploads/library-fixture.png',r=>r.fulfill({contentType:'image/png',body:fs.readFileSync(new URL('../public/canvas-materials/watercolor-bunting.png',import.meta.url))}))
  const aiRequests = []
@@ -66,7 +69,8 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
  const editorArea = await page.locator('.wbe-workspace').boundingBox()
  assert.ok(editorArea.y < 280 && editorArea.height > 450, JSON.stringify(editorArea))
  await page.setViewportSize({width:1440,height:1080})
- assert.equal(await paper.locator('img[src="https://example.com/cover-only-fixture.png"]').count(),0,'封面不得自动追加到正文')
+ assert.equal(await paper.locator('img').count(),0,'当前与历史封面不得自动追加到正文')
+ assert.ok(!(await paper.innerText()).includes('cover-paste-'))
  const before=await paper.innerText();
  // 默认模板是唯一排版入口；不再提供秀米导入或 AI 生成。
  assert.equal(await page.getByRole('button', {name:'AI 设计排版',exact:true}).count(), 0)
@@ -137,6 +141,7 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
  })
  fs.writeFileSync(path.join(artifactDir, 'article.html'), copied)
  assert.ok(copied.includes(article.title))
+ assert.ok(!copied.includes('old-cover.png') && !copied.includes('current-cover.png') && !copied.includes('cover-paste-'), '导出不得包含自动追加的封面')
  assert.ok(copied.includes('font-size: 22px'))
  assert.ok(!copied.includes('data-block-id'))
  assert.ok(!copied.includes('<button'))
