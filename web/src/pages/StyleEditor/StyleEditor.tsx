@@ -1,3 +1,4 @@
+import { generateArticleStyle, extractErrorMessage } from "../../utils/apiHelpers"
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -134,6 +135,7 @@ export default function StyleEditor() {
     setEditColor(t.accentColor)
     setEditCss(t.css)
     setIsDirty(false)
+    setAiPreviewCss('')
   }, [selectedId, templates])
 
   // 实时把 CSS 注入预览区
@@ -148,9 +150,9 @@ export default function StyleEditor() {
       }
       styleElRef.current = el
     }
-    styleElRef.current.textContent = editCss
+    styleElRef.current.textContent = aiPreviewCss || editCss
     return () => { if (styleElRef.current) styleElRef.current.textContent = '' }
-  }, [editCss])
+  }, [editCss, aiPreviewCss])
 
   const isBuiltin = BUILTIN_TEMPLATES.some(t => t.id === selectedId)
   const selectedTemplate = templates.find(t => t.id === selectedId)
@@ -161,39 +163,45 @@ export default function StyleEditor() {
 
   // 保存（自定义）
   const handleSave = async () => {
-    if (!selectedTemplate) return
-    const t: TemplateItem = {
-      ...selectedTemplate,
-      name: editName,
-      desc: editDesc,
-      accentColor: editColor,
-      css: editCss,
-      isBuiltin: false,
-    }
-    await saveCustomTemplate(t)
-    setIsDirty(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+    try {
+      if (!selectedTemplate) return
+      const t: TemplateItem = {
+        ...selectedTemplate,
+        name: editName,
+        desc: editDesc,
+        accentColor: editColor,
+        css: editCss,
+        isBuiltin: false,
+      }
+      await saveCustomTemplate(t)
+      setIsDirty(false)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (error) { toast.error(extractErrorMessage(error, "保存失败")) }
   }
 
   // 克隆内置模板 → 新自定义模板
   const handleClone = async () => {
-    if (!selectedTemplate) return
-    const t = createNewTemplate({
-      name: `${selectedTemplate.name} 副本`,
-      desc: selectedTemplate.desc,
-      accentColor: selectedTemplate.accentColor,
-      css: selectedTemplate.css,
-    })
-    await saveCustomTemplate(t)
-    setSelectedId(t.id)
+    try {
+      if (!selectedTemplate) return
+      const t = createNewTemplate({
+        name: `${editName} 副本`,
+        desc: editDesc,
+        accentColor: editColor,
+        css: editCss,
+      })
+      await saveCustomTemplate(t)
+      setSelectedId(t.id)
+    } catch (error) { toast.error(extractErrorMessage(error, "保存失败")) }
   }
 
   // 新建空模板
   const handleNewTemplate = async () => {
-    const t = createNewTemplate()
-    await saveCustomTemplate(t)
-    setSelectedId(t.id)
+    try {
+      const t = createNewTemplate()
+      await saveCustomTemplate(t)
+      setSelectedId(t.id)
+    } catch (error) { toast.error(extractErrorMessage(error, "保存失败")) }
   }
 
   // 删除自定义模板
@@ -205,8 +213,10 @@ export default function StyleEditor() {
       confirmText: '删除',
       danger: true,
       onConfirm: async () => {
-        await deleteCustomTemplate(selectedId)
-        setSelectedId(DEFAULT_WECHAT_TEMPLATE_ID)
+        try {
+          await deleteCustomTemplate(selectedId)
+          setSelectedId(DEFAULT_WECHAT_TEMPLATE_ID)
+        } catch (error) { toast.error(extractErrorMessage(error, "删除失败")) }
       },
     })
   }
@@ -221,34 +231,33 @@ export default function StyleEditor() {
       setAiGenerating(true)
       setAiPreviewCss('')
       const aiConfig = loadAIConfig()
-      const resp = await fetch('/api/generate-style', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: aiPrompt,
-          baseCSS: editCss,
-          aiConfig,
-        }),
-      })
-      const data = await resp.json()
-      if (!resp.ok) throw new Error(data.error || '生成失败')
-      setAiPreviewCss(data.css)
+      setAiPreviewCss(await generateArticleStyle(aiPrompt, editCss, aiConfig))
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : '生成失败'
+      const msg = extractErrorMessage(err, '生成失败')
       toast.error(msg)
     } finally {
       setAiGenerating(false)
     }
   }
 
-  // 把 AI 预览结果应用到编辑器
-  const handleApplyAI = () => {
+  // 把 AI 预览结果保存为模板或应用到当前自定义模板
+  const handleApplyAI = async () => {
     if (!aiPreviewCss) return
-    setEditCss(aiPreviewCss)
-    setIsDirty(true)
+    // 内置模板不能覆盖，应用 AI 结果时直接另存，确保重新打开也能找到。
+    if (isBuiltin) {
+      const template = createNewTemplate({ name: `${editName} · AI`, desc: aiPrompt, accentColor: editColor, css: aiPreviewCss })
+      try {
+        await saveCustomTemplate(template)
+        setTemplates(await fetchAllTemplates())
+        setSelectedId(template.id)
+      } catch (error) { toast.error(extractErrorMessage(error, "保存失败")); return }
+    } else {
+      setEditCss(aiPreviewCss)
+      setIsDirty(true)
+    }
     setAiPreviewCss('')
     setAiPanelOpen(false)
-    toast.success('样式已应用，记得点保存')
+    toast.success(isBuiltin ? '已另存为我的模板' : '样式已应用，记得点保存')
   }
 
   // CSS textarea Tab 键支持
@@ -283,7 +292,7 @@ export default function StyleEditor() {
         onBack={() => navigate(-1)}
         actions={<div className="se-header-actions">
           {isBuiltin ? (
-            <button className="se-btn se-btn-secondary" onClick={handleClone}>
+            <button className="se-btn se-btn-secondary" onClick={handleClone} disabled={aiGenerating}>
               <Copy size={14} />
               克隆此模板
             </button>
@@ -315,6 +324,7 @@ export default function StyleEditor() {
               <button
                 key={t.id}
                 className={`se-tmpl-item ${selectedId === t.id ? 'active' : ''}`}
+                disabled={aiGenerating}
                 onClick={() => setSelectedId(t.id)}
               >
                 <span className="se-tmpl-dot" style={{ background: t.accentColor }} />
@@ -332,7 +342,7 @@ export default function StyleEditor() {
           <div className="se-sidebar-section">
             <div className="se-section-row">
               <p className="se-section-label">我的模板</p>
-              <button className="se-new-btn" onClick={handleNewTemplate} title="新建模板">
+              <button className="se-new-btn" onClick={handleNewTemplate} disabled={aiGenerating} title="新建模板">
                 <Plus size={13} />
                 新建
               </button>
@@ -344,6 +354,7 @@ export default function StyleEditor() {
               <button
                 key={t.id}
                 className={`se-tmpl-item ${selectedId === t.id ? 'active' : ''}`}
+                disabled={aiGenerating}
                 onClick={() => setSelectedId(t.id)}
               >
                 <span className="se-tmpl-dot" style={{ background: t.accentColor }} />
@@ -467,13 +478,14 @@ export default function StyleEditor() {
                       : <><Wand2 size={14} /> 生成 CSS</>
                     }
                   </button>
+                  {aiPreviewCss && <button className="se-ai-btn-apply" onClick={() => setAiPreviewCss('')}>取消预览</button>}
                   {aiPreviewCss && (
                     <button
                       className="se-ai-btn-apply"
                       onClick={handleApplyAI}
                     >
                       <Check size={14} />
-                      应用到编辑器
+                      {isBuiltin ? "另存为我的模板" : "应用到编辑器"}
                     </button>
                   )}
                 </div>
@@ -481,7 +493,7 @@ export default function StyleEditor() {
                 {/* 预览生成结果 */}
                 {aiPreviewCss && (
                   <div className="se-ai-preview-wrap">
-                    <div className="se-ai-preview-label">生成结果（点击「应用」替换当前 CSS）</div>
+                    <div className="se-ai-preview-label">右侧正在预览生成结果，确认后应用</div>
                     <pre className="se-ai-preview-code">{aiPreviewCss}</pre>
                   </div>
                 )}

@@ -1,9 +1,11 @@
+import { readStyleTemplates, writeStyleTemplate, removeStyleTemplate } from "./apiHelpers"
 /**
  * WeChat CSS Template Store
  * 内置模板 + localStorage 自定义模板 CRUD
  */
 
 import {
+  CSS_MOSS_JOURNAL, CSS_CREAM_LETTER, CSS_BLUE_COLUMN, CSS_ROSE_EDITION,
   CSS_BEST_PRACTICE,
   CSS_EASTERN_LETTER,
   CSS_GALLERY_STORY,
@@ -901,6 +903,11 @@ export const CSS_AURORA = `/* ====== 极光紫 ====== */
 // ── 内置模板列表（前端本地副本，用于离线 fallback） ──────────────────────────
 
 export const BUILTIN_TEMPLATES: TemplateItem[] = [
+  { id: 'moss-journal', name: '青苔手记', desc: '自然绿与细侧线，适合日常、旅行和成长记录', accentColor: '#466650', css: CSS_MOSS_JOURNAL, isBuiltin: true, createdAt: 0, updatedAt: 0 },
+  { id: 'cream-letter', name: '奶油来信', desc: '暖纸色与信笺边框，适合书信和人文故事', accentColor: '#976140', css: CSS_CREAM_LETTER, isBuiltin: true, createdAt: 0, updatedAt: 0 },
+  { id: 'blue-column', name: '蓝调专栏', desc: '深蓝栏目标题与清晰层级，适合观点和知识分享', accentColor: '#284e70', css: CSS_BLUE_COLUMN, isBuiltin: true, createdAt: 0, updatedAt: 0 },
+  { id: 'rose-edition', name: '玫瑰刊物', desc: '柔粉刊头与圆角章节，适合生活美学和节日特辑', accentColor: '#965569', css: CSS_ROSE_EDITION, isBuiltin: true, createdAt: 0, updatedAt: 0 },
+
   { id: DEFAULT_WECHAT_TEMPLATE_ID, name: '默认样式', desc: '公众号最佳实践，正文、列表、代码与表格完整适配', accentColor: '#1e6bb8', css: CSS_BEST_PRACTICE, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: 'eastern-letter', name: '东方笺谱', desc: '现代人文长文，宋体留白与朱砂点睛', accentColor: '#a33a2b', css: CSS_EASTERN_LETTER, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: 'receipt-note', name: '黑白小票', desc: '清单感与打印纸质感，适合教程和复盘', accentColor: '#171717', css: CSS_RECEIPT_NOTE, isBuiltin: true, createdAt: 0, updatedAt: 0 },
@@ -918,9 +925,7 @@ export const BUILTIN_TEMPLATES: TemplateItem[] = [
 /** 从服务端拉取所有模板（内置 + 自定义） */
 export async function fetchAllTemplates(): Promise<TemplateItem[]> {
   try {
-    const resp = await fetch('/api/templates')
-    if (!resp.ok) throw new Error('fetch failed')
-    const data = await resp.json() as Array<Record<string, unknown>>
+    const data = await readStyleTemplates()
     const serverTemplates = data.map(t => ({
       id:          String(t.id),
       name:        String(t.name),
@@ -952,32 +957,14 @@ export async function saveCustomTemplate(t: TemplateItem): Promise<void> {
     css:         t.css,
     isBuiltin:   false,
   }
-  try {
-    await fetch('/api/templates', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(payload),
-    })
-  } catch {
-    // fallback：写 localStorage
-    const customs = loadCustomTemplatesLocal()
-    const idx = customs.findIndex(c => c.id === t.id)
-    const updated = { ...t, updatedAt: Date.now() }
-    if (idx >= 0) customs[idx] = updated
-    else customs.push(updated)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(customs))
-  }
+  // 服务端拒绝保存时向上抛错，避免把失败展示为已保存。
+  await writeStyleTemplate(payload)
   window.dispatchEvent(new CustomEvent('wxtemplates-updated'))
 }
 
 /** 删除自定义模板 */
 export async function deleteCustomTemplate(id: string): Promise<void> {
-  try {
-    await fetch(`/api/templates/${id}`, { method: 'DELETE' })
-  } catch {
-    const customs = loadCustomTemplatesLocal().filter(c => c.id !== id)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(customs))
-  }
+  await removeStyleTemplate(id)
   window.dispatchEvent(new CustomEvent('wxtemplates-updated'))
 }
 
@@ -1017,51 +1004,36 @@ export function createNewTemplate(base?: Partial<TemplateItem>): TemplateItem {
 }
 
 /** 用于预览的示例 Markdown，覆盖常见文章元素 */
-export const PREVIEW_MARKDOWN = `# 一级标题样式
+/** 用完整短文观察阅读节奏，元素清单放在组件预览中。 */
+export const PREVIEW_MARKDOWN = `# 把日子过成一封慢慢写的信
 
-这是**正文段落**，包含*斜体*、~~删除线~~和\`行内代码\`示例。点击[这是链接](#)查看效果。段落文字随模板自动调整行高、字距和段间距。
+周末的清晨，推开窗，街边的树叶已经换了一种绿。楼下的早餐铺刚刚开门，热气从蒸笼的缝隙里冒出来。这些寻常的小事，让忙了一周的人终于愿意慢下来。
 
-第二段用于观察连续阅读体验。好的公众号排版不只要“第一眼好看”，还要让长文在手机屏幕上保持稳定节奏。
+我们总想给生活留下一点特别的记录。后来发现，**值得记下的，往往就是眼前这一刻**：一顿认真做的饭，一次没有目的地的散步，和朋友聊到天黑的下午。
 
-## 二级标题
+## 01 留一点时间给自己
 
-> [!NOTE] 这是提示块，适合补充背景信息和读者需要记住的关键结论。
+不必把每个空闲都填满。找一本读到一半的书，泡一杯喜欢的茶，把手机放远一点。没有完成什么，也可以是一个很好的下午。
 
-### 三级标题
+> 生活的丰盛，有时来自我们愿意停下来，看见已经拥有的东西。
 
-- [x] 已完成：核对文章结构和标题层级
-- [ ] 待完成：检查发布后的手机端效果
-- 无序列表项
-  - 嵌套列表用于验证层级
-- 支持 **加粗** 和 *斜体* 混排
+## 02 收藏平凡里的微光
 
-1. 有序列表一
-2. 有序列表二
-3. 有序列表三
+给窗边的植物浇水，记下今天听到的一句话，认真回复一位老朋友。日常里的温柔并不声张，却能在回头看的时候，连成一条清晰的线。
 
-#### 四级标题
+### 从一件小事开始
+
+- 给自己做一份热乎的早餐。
+- 沿着熟悉的街道，多走十分钟。
+- 在睡前写下今天值得记住的一件事。
+
+## 03 与喜欢的人好好相处
+
+约一次见面，不必等到大家都有大段的空闲。一起吃顿饭，聊聊近况，就足以让普通的一天变得不同。
 
 ---
 
-### 图片样式预览
-
-![示例图片](https://picsum.photos/seed/style/600/300)
-
-*图片注释文字——斜体紧跟在图片下方会被识别为图注*
-
-\`\`\`javascript
-// 代码块样式预览
-function greet(name) {
-  return \`Hello, \${name}!\`
-}
-
-console.log(greet("公众号读者"))
-\`\`\`
-
-| 表头 A | 表头 B | 表头 C |
-|--------|--------|--------|
-| 数据 1 | 数据 2 | 数据 3 |
-| 数据 4 | 数据 5 | 数据 6 |
+愿我们都能在匆忙的日子里，留住一点从容。下一封写给生活的信，就从今天开始。
 `
 
 /** 组件模式用于集中检查模板对扩展语义块的覆盖程度。 */

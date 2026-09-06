@@ -441,3 +441,26 @@ export async function fetchXiumiReference(url: string): Promise<{title: string; 
   const response = await axios.post("/api/canvas/xiumi-reference", {url}, {timeout: 60000})
   return response.data
 }
+
+
+/** 样式管理统一复用登录请求；未填写本地密钥时保留服务端配置。 */
+export async function generateArticleStyle(prompt: string, baseCSS: string, aiConfig: AIConfig): Promise<string> {
+  const { data } = await axios.post<{ css: string }>("/api/generate-style", {
+    prompt, baseCSS, ...(isLocalApiKeyConfigured(aiConfig) ? { aiConfig } : {}),
+  }, { timeout: 300000 })
+  const css = typeof data.css === "string" ? data.css.trim() : ""
+  if (!css.includes("#wemd") || !css.includes("{")) throw new Error("AI 未返回有效样式，请换一种描述重试")
+  return css
+}
+
+export async function readStyleTemplates(): Promise<Array<Record<string, unknown>>> {
+  return (await axios.get<Array<Record<string, unknown>>>("/api/templates")).data
+}
+
+export async function writeStyleTemplate(payload: { id: string; name: string; desc: string; accentColor: string; css: string; isBuiltin: boolean }): Promise<void> {
+  await axios.post("/api/templates", payload)
+}
+
+export async function removeStyleTemplate(id: string): Promise<void> {
+  await axios.delete(`/api/templates/${encodeURIComponent(id)}`)
+}

@@ -1071,3 +1071,63 @@ export const CSS_GALLERY_STORY = `/* ====== 留白画册 · 图片故事 ====== 
 #wemd tr:nth-child(2n) td { background: #f8f5f0; }
 #wemd .task-list-item { list-style: none; margin-left: -20px; }
 #wemd .task-list-status { display: inline-block; width: 22px; color: #80503f; font-weight: 800; }`
+
+
+// 共用完整元素适配，再用每套模板的标题、边框和留白定义阅读节奏；装饰不依赖伪元素。
+function readingStyle(primary: string, surface: string, ink: string): string {
+  return `${CSS_BEST_PRACTICE}
+#wemd { padding: 26px 22px; background: ${surface}; color: ${ink}; font-size: 16px; line-height: 1.95; }
+#wemd p, #wemd li, #wemd li section { color: ${ink}; font-weight: 400; line-height: 1.95; }
+#wemd p { margin: 0 0 20px; text-align: justify; }
+#wemd h1 { margin: 16px 0 34px; font-size: 27px; line-height: 1.5; }
+#wemd h2 { margin: 36px 0 20px; font-size: 20px; line-height: 1.6; }
+#wemd h3 { margin: 26px 0 14px; font-size: 17px; }
+#wemd h1, #wemd h2, #wemd h3, #wemd h4, #wemd strong, #wemd a { color: ${primary}; }
+#wemd blockquote, #wemd .multiquote-1, #wemd .callout { margin: 26px 0; padding: 18px; background: #ffffff; border: 0; border-left: 2px solid ${primary}; color: ${ink}; box-shadow: none; border-radius: 0; }
+#wemd blockquote p, #wemd .callout p { margin: 0; color: ${ink}; }
+#wemd .callout-title { color: ${primary}; }
+#wemd hr { margin: 32px 0; border: 0; border-top: 1px solid ${primary}; }
+#wemd mark { background: #f4e4bf; color: ${ink}; }
+#wemd img { display: block; max-width: 100%; height: auto; margin: 22px auto 10px; border-radius: 2px; }
+#wemd figcaption { font-size: 12px; color: ${ink}; text-align: center; }
+#wemd code, #wemd p code, #wemd li code { color: ${primary}; background: #f0f0ed; }
+#wemd pre, #wemd pre.custom { padding: 16px; background: #272c30; overflow-x: auto; }
+#wemd pre code { color: #f4f4f0; background: none; padding: 0; font-size: 13px; }
+#wemd table { width: 100%; border-collapse: collapse; font-size: 13px; }
+#wemd th { background: ${primary}; color: #ffffff; padding: 10px; border: 1px solid ${primary}; }
+#wemd td { color: ${ink}; padding: 10px; border: 1px solid #deded8; }
+#wemd tr:nth-child(even) td { background: #f5f5f0; }
+`
+}
+
+export const CSS_MOSS_JOURNAL = `${readingStyle("#466650", "#fafbf6", "#38443b")}
+#wemd h1 { font-family: "Songti SC", SimSun, serif; border-bottom: 1px solid #b9c8b5; padding-bottom: 24px; }
+#wemd h2 { border-left: 4px solid #466650; padding-left: 14px; }
+#wemd h3 { letter-spacing: 1px; }
+#wemd blockquote { background: #edf2e7; }
+#wemd hr { width: 42px; margin: 36px auto; border-top: 3px solid #b9c8b5; }
+`
+
+export const CSS_CREAM_LETTER = `${readingStyle("#976140", "#fffbf1", "#554b40")}
+#wemd { font-family: "Songti SC", SimSun, Georgia, serif; border-top: 5px double #d6b894; }
+#wemd h1 { text-align: center; padding: 16px 0 24px; border-bottom: 1px solid #d6b894; letter-spacing: 3px; }
+#wemd h2 { text-align: center; padding: 10px 4px; border-top: 1px dashed #d6b894; border-bottom: 1px dashed #d6b894; }
+#wemd blockquote { border: 1px solid #d6b894; background: #fffef9; }
+#wemd img { padding: 6px; border: 1px solid #e1d3ba; box-sizing: border-box; }
+`
+
+export const CSS_BLUE_COLUMN = `${readingStyle("#284e70", "#ffffff", "#394652")}
+#wemd h1 { border-top: 5px solid #284e70; padding-top: 22px; font-weight: 800; }
+#wemd h2 { background: #284e70; color: #ffffff; padding: 10px 14px; font-size: 18px; }
+#wemd h3 { padding-bottom: 8px; border-bottom: 1px solid #cbd9e4; }
+#wemd blockquote { background: #edf3f8; border-left: 0; border-top: 2px solid #284e70; }
+#wemd hr { border-color: #cbd9e4; }
+`
+
+export const CSS_ROSE_EDITION = `${readingStyle("#965569", "#fffafa", "#59474e")}
+#wemd h1 { text-align: center; font-family: "Songti SC", SimSun, serif; letter-spacing: 2px; padding: 14px 0 26px; border-bottom: 3px double #cda8b4; }
+#wemd h2 { text-align: center; padding: 12px; background: #f5e8ed; border-radius: 24px; font-size: 18px; }
+#wemd h3 { border-bottom: 1px solid #e6cfd7; padding-bottom: 8px; }
+#wemd blockquote { border: 0; background: #f5e8ed; border-radius: 4px; }
+#wemd hr { width: 48px; margin: 36px auto; border-top: 2px solid #cda8b4; }
+`
