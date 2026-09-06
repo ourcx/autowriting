@@ -1,3 +1,4 @@
+import Button from "../../components/Button/Button"
 import { generateArticleStyle, extractErrorMessage } from "../../utils/apiHelpers"
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
@@ -292,24 +293,23 @@ export default function StyleEditor() {
         onBack={() => navigate(-1)}
         actions={<div className="se-header-actions">
           {isBuiltin ? (
-            <button className="se-btn se-btn-secondary" onClick={handleClone} disabled={aiGenerating}>
+            <Button variant="secondary" onClick={handleClone} disabled={aiGenerating}>
               <Copy size={14} />
               克隆此模板
-            </button>
+            </Button>
           ) : (
             <>
-              <button className="se-btn se-btn-danger" onClick={handleDelete}>
+              <Button variant="danger" onClick={handleDelete}>
                 <Trash2 size={14} />
                 删除
-              </button>
-              <button
-                className={`se-btn se-btn-primary ${saved ? 'success' : ''}`}
+              </Button>
+              <Button variant="primary"
                 onClick={handleSave}
                 disabled={!isDirty && !saved}
               >
                 {saved ? <Check size={14} /> : <Save size={14} />}
                 {saved ? '已保存' : '保存'}
-              </button>
+              </Button>
             </>
           )}
         </div>}

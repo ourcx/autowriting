@@ -108,73 +108,6 @@
   flex-shrink: 0;
 }
 
-/* ── Buttons ─────────────────────────────────────────────────────── */
-.se-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 16px;
-  border: none;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.12s, opacity 0.12s, transform 0.1s, box-shadow 0.15s;
-  line-height: 1;
-}
-
-.se-btn:active {
-  transform: translateY(1px);
-}
-
-.se-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-/* 主按钮：深绿 */
-.se-btn-primary {
-  background: #1a3a3a;
-  color: #ffffff;
-}
-
-.se-btn-primary:hover:not(:disabled) {
-  background: #2d6a4f;
-  box-shadow: 0 4px 12px rgba(26, 58, 58, 0.25);
-  transform: translateY(-1px);
-}
-
-.se-btn-primary.success {
-  background: #2d6a4f;
-}
-
-/* 次按钮 */
-.se-btn-secondary {
-  background: var(--color-canvas);
-  color: var(--color-body);
-  border: 1px solid var(--color-hairline);
-}
-
-.se-btn-secondary:hover {
-  background: #f0f7f4;
-  border-color: #a4d4c5;
-  color: #1a3a3a;
-}
-
-/* 危险按钮 */
-.se-btn-danger {
-  background: transparent;
-  color: var(--color-error);
-  border: 1px solid rgba(239,68,68,0.25);
-}
-
-.se-btn-danger:hover {
-  background: rgba(239,68,68,0.06);
-  border-color: rgba(239,68,68,0.4);
-}
-
 /* ── Body 三栏 ───────────────────────────────────────────────────── */
 .se-body {
   flex: 1;
@@ -801,7 +734,7 @@
   width: 100%;
   margin: 0 auto;
   background: #ffffff;
-  border-radius: 14px;
+  border-radius: 4px;
   border: 1px solid var(--color-hairline);
   overflow: hidden;
   box-shadow:
@@ -821,14 +754,6 @@
 @keyframes card-slide-in {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
-}
-
-/* 顶部绿色渐变装饰条 */
-.se-preview-card::before {
-  content: '';
-  display: block;
-  height: 3px;
-  background: linear-gradient(90deg, #1a3a3a 0%, #2d6a4f 40%, #a4d4c5 100%);
 }
 
 #wemd {

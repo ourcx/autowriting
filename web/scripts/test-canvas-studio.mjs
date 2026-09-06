@@ -73,6 +73,8 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
  await page.getByText('主题与模板',{exact:true}).click()
  assert.equal(await page.getByLabel('从秀米公开分享链接生成').count(), 0)
  assert.equal(await page.locator('.cs-template-card').count(), 7)
+ assert.ok((await page.locator('.cs-template-thumb').first().boundingBox()).width >= 80, '模板缩略图应清晰可辨')
+ await page.screenshot({path:path.join(artifactDir, 'template-shelf.png')})
  await page.getByText('主题与模板',{exact:true}).click()
  for (const name of ['自然手记','节庆邀请','影像画册']) {
   await page.getByText('主题与模板',{exact:true}).click()

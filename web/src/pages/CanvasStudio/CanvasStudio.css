@@ -7,7 +7,6 @@
   color: var(--color-ink);
 }
 
-.cs-header-btn,
 .cs-generate,
 .cs-add-grid button,
 .cs-layer-actions button,
@@ -28,7 +27,6 @@
   cursor: pointer;
 }
 
-.cs-header-btn:hover,
 .cs-add-grid button:hover,
 .cs-layer-actions button:hover {
   border-color: var(--color-brand-mint);
@@ -36,7 +34,6 @@
   color: var(--color-brand-teal);
 }
 
-.cs-header-btn--primary,
 .cs-generate,
 .cs-dsl-editor button {
   border-color: var(--color-primary);
@@ -144,7 +141,7 @@
   cursor: wait;
 }
 
-.cs-header-btn:disabled {
+.cs-root .ui-button:disabled {
   opacity: 0.55;
   cursor: wait;
 }
@@ -557,7 +554,7 @@
 }
 
 @media (max-width: 720px) {
-  .cs-header-btn {
+  .cs-root .ui-button {
     width: 36px;
     padding: 0;
     gap: 0;
@@ -637,8 +634,8 @@
 .cs-template-card strong { font-size: 13px; }
 .cs-template-card small { color: var(--color-muted); font-size: 11px; line-height: 1.5; }
 .cs-template-check { color: var(--color-brand-teal); width: 14px; }
-.cs-template-thumb { position: relative; width: 48px; height: 68px; flex: 0 0 48px; overflow: hidden; background: white; border: 1px solid var(--color-hairline); }
-.cs-template-thumb > div { width: 375px; transform: scale(0.128); transform-origin: top left; pointer-events: none; }
+.cs-template-thumb { position: relative; width: 88px; height: 124px; flex: 0 0 88px; border-radius: 4px; overflow: hidden; background: white; border: 1px solid var(--color-hairline); }
+.cs-template-thumb > div { width: 375px; transform: scale(0.235); transform-origin: top left; pointer-events: none; }
 .cs-reading { flex: 1; min-height: 0; overflow: auto; padding: 24px; background: var(--color-surface-strong); }
 .cs-reading-caption { margin-bottom: 16px; text-align: center; }
 .cs-reading-paper { max-width: 100%; margin: 0 auto; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.08); }
@@ -688,7 +685,7 @@
 .cs-tools { display: flex; align-items: center; gap: 20px; position: relative; flex: 0 0 auto; padding: 0 20px; border-bottom: 1px solid var(--color-hairline); }
 .cs-tools-menu { border: 0; }
 .cs-tools-menu > summary { padding: 8px 0; cursor: pointer; font-size: 12px; color: var(--color-body); }
-.cs-tools-popover { position: absolute; top: 100%; left: 12px; right: 12px; z-index: 30; max-height: min(420px, 60vh); overflow: auto; padding: 12px; background: var(--color-canvas); border: 1px solid var(--color-hairline); border-radius: 8px; box-shadow: 0 8px 24px #0002; }
+.cs-tools-popover { position: absolute; top: 100%; left: 12px; right: 12px; max-width: 1000px; z-index: 30; max-height: min(480px, 65vh); overflow: auto; padding: 12px; background: var(--color-canvas); border: 1px solid var(--color-hairline); border-radius: 8px; box-shadow: 0 8px 24px #0002; }
 .cs-tools .cs-material-shelf { margin: 0 0 8px; padding: 10px; }
 .cs-toolbar { padding: 8px 16px; }
 .cs-toolbar textarea { min-height: 38px; height: 38px; }
@@ -697,19 +694,14 @@
 .cs-theme-status i { width: 10px; height: 10px; border-radius: 50%; }
 @media (max-width: 900px) { .cs-theme-status { display: none; } }
 
-/* 模板数量增加后使用网格，避免一排卡片越挤越窄；参考导入复用同一面板。 */
-.cs-tools .cs-template-shelf { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); padding: 0; }
+/* 模板预览与描述并排，缩略图保留足够尺寸辨认标题和纸张样式。 */
+.cs-tools .cs-template-shelf { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); padding: 0; }
 .cs-tools .cs-template-intro { display: none; }
 .cs-tools .cs-template-card { min-height: 96px; }
 .cs-tools .cs-template-card small { display: block; }
 
-.cs-tools .cdi-template { display: none; }
-.cs-tools .cdi-root { grid-template-columns: minmax(0, 1fr); }
 
-.cs-link-import { margin-top: 16px; padding: 14px 0; border-top: 1px solid var(--color-hairline); }
-.cs-link-import-input { display: flex; gap: 8px; margin: 8px 0; }
-.cs-link-import input { min-width: 0; flex: 1; padding: 8px; border: 1px solid var(--color-hairline); border-radius: 6px; }
-.cs-link-import button { padding: 8px 12px; cursor: pointer; border: 1px solid var(--color-hairline); border-radius: 6px; background: var(--color-canvas); }
-.cs-link-import button:disabled { opacity: .5; cursor: default; }
-.cs-link-import small { color: var(--color-muted); }
-.cs-link-preview { width: 375px; max-width: 100%; margin: 12px auto; max-height: 380px; overflow: auto; }
+/* 明确选择与键盘焦点，悬停不移动卡片，避免误触。 */
+.cs-template-card:hover { border-color: var(--color-brand-mint); background: var(--color-canvas); }
+.cs-template-card:focus-visible, .cs-tools-menu > summary:focus-visible { outline: 2px solid var(--color-brand-teal); outline-offset: 2px; }
+.cs-template-card.is-active { border-color: var(--color-brand-teal); box-shadow: inset 0 0 0 1px var(--color-brand-teal); }

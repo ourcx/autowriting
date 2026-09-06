@@ -1,3 +1,4 @@
+import Button from "../../components/Button/Button"
 import CanvasMaterialShelf from "./CanvasMaterialShelf"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
@@ -574,47 +575,47 @@ export default function CanvasStudio() {
         onBack={() => navigate("/")}
         actions={(
           <>
-            <button className="cs-header-btn" onClick={() => navigate("/styles")}>
+            <Button variant="secondary" onClick={() => navigate("/styles")}>
               <LayoutTemplate size={14} />
               Markdown 样式
-            </button>
+            </Button>
             {mode === "blocks" ? (
               <>
-                <button className="cs-header-btn" disabled={articleLoading || loadedArticleId !== articleId || !sources.length} onClick={() => void copyBlockContent()}>
+                <Button variant="secondary" disabled={articleLoading || loadedArticleId !== articleId || !sources.length} onClick={() => void copyBlockContent()}>
                   <Copy size={14} />
                   复制公众号内容
-                </button>
-                <button
-                  className="cs-header-btn cs-header-btn--primary"
+                </Button>
+                <Button variant="primary"
+
                   disabled={pushing || articleLoading || loadedArticleId !== articleId || !sources.length}
                   onClick={() => void pushBlockToWechat()}
                 >
                   <Send size={14} />
                   {pushing ? "推送中..." : "推送公众号"}
-                </button>
+                </Button>
               </>
             ) : (
               <>
-                <button className="cs-header-btn" onClick={copyDsl}>
+                <Button variant="secondary" onClick={copyDsl}>
                   <Copy size={14} />
                   复制 DSL
-                </button>
-                <button className="cs-header-btn" onClick={downloadSvg}>
+                </Button>
+                <Button variant="secondary" onClick={downloadSvg}>
                   <Download size={14} />
                   SVG 源文件
-                </button>
-                <button className="cs-header-btn cs-header-btn--primary" onClick={downloadPng}>
+                </Button>
+                <Button variant="primary" onClick={downloadPng}>
                   <Image size={14} />
                   下载公众号长图
-                </button>
-                <button
-                  className="cs-header-btn cs-header-btn--primary"
+                </Button>
+                <Button variant="primary"
+
                   disabled={pushing}
                   onClick={() => void pushCanvasToWechat()}
                 >
                   <Send size={14} />
                   {pushing ? "推送中..." : "推送公众号"}
-                </button>
+                </Button>
               </>
             )}
           </>
@@ -693,13 +694,13 @@ export default function CanvasStudio() {
         <>
           <div className="cs-edit-bar">
             <div className="cs-edit-actions">
-              <button className="cs-header-btn" disabled={articleLoading || !sources.length || designTemplateId === "design-reference"} onClick={() => {
+              <Button variant="secondary" disabled={articleLoading || !sources.length || designTemplateId === "design-reference"} onClick={() => {
                 setBlockDocument(compileCanvasDesignSystem(blockDocument, sources, designTemplateId, { forceRecipes: true }))
                 setSelectedBlockId(null)
                 toast.success("模板已应用，不满意可撤销")
-              }}><LayoutTemplate size={14} />应用模板</button>
-              <button className="cs-header-btn" title="撤销" aria-label="撤销" disabled={!canUndo || articleLoading} onClick={undo}><Undo2 size={15} /></button>
-              <button className="cs-header-btn" title="重做" aria-label="重做" disabled={!canRedo || articleLoading} onClick={redo}><Redo2 size={15} /></button>
+              }}><LayoutTemplate size={14} />应用模板</Button>
+              <Button variant="secondary" title="撤销" aria-label="撤销" disabled={!canUndo || articleLoading} onClick={undo}><Undo2 size={15} /></Button>
+              <Button variant="secondary" title="重做" aria-label="重做" disabled={!canRedo || articleLoading} onClick={redo}><Redo2 size={15} /></Button>
               <span className="cs-edit-hint">打开「主题与模板」选择风格，点击应用后可继续编辑</span>
             </div>
             <div className="cs-edit-actions">
@@ -709,11 +710,11 @@ export default function CanvasStudio() {
                 <option value={414}>大屏手机 · 414px</option>
                 <option value={677}>宽屏 · 677px</option>
               </select>
-              <button className="cs-header-btn" aria-pressed={reading} onClick={() => setReading(!reading)}><Eye size={14} />{reading ? "返回编辑" : "阅读预览"}</button>
+              <Button variant="secondary" aria-pressed={reading} onClick={() => setReading(!reading)}><Eye size={14} />{reading ? "返回编辑" : "阅读预览"}</Button>
             </div>
           </div>
           {articleLoading ? <div className="cs-empty">正在加载文章…</div> : !sources.length ? (
-            <div className="cs-empty"><FileText size={32} /><h2>让内容，成为一篇好看的文章</h2><p>选择一篇已有文章，或先使用 AI 完成正文，再来设计排版。</p><button className="cs-header-btn" onClick={() => navigate("/")}>去写文章</button></div>
+            <div className="cs-empty"><FileText size={32} /><h2>让内容，成为一篇好看的文章</h2><p>选择一篇已有文章，或先使用 AI 完成正文，再来设计排版。</p><Button variant="secondary" onClick={() => navigate("/")}>去写文章</Button></div>
           ) : reading ? (
             <section className="cs-reading">
               <div className="cs-reading-caption">阅读预览 · {previewWidth}px · 样式已自动保存在本机</div>
