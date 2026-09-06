@@ -1,5 +1,18 @@
 // 原创素材只通过白名单 ID 引用，DSL 不接受任意 URL，也不依赖临时在线生图。
 export const CANVAS_MATERIALS = [
+  { id: "lantern-pair", name: "双灯笼", category: "节庆装饰", src: "/canvas-materials/lantern-pair.svg", ratio: "8 / 3" },
+  { id: "gift-box", name: "心意礼盒", category: "节庆装饰", src: "/canvas-materials/gift-box.svg", ratio: "8 / 3" },
+  { id: "birthday-cake", name: "生日小蛋糕", category: "节庆装饰", src: "/canvas-materials/birthday-cake.svg", ratio: "8 / 3" },
+  { id: "firework-stars", name: "烟花星点", category: "节庆装饰", src: "/canvas-materials/firework-stars.svg", ratio: "8 / 3" },
+  { id: "book-stack", name: "书与书签", category: "阅读装饰", src: "/canvas-materials/book-stack.svg", ratio: "8 / 3" },
+  { id: "reading-glasses", name: "阅读眼镜", category: "阅读装饰", src: "/canvas-materials/reading-glasses.svg", ratio: "8 / 3" },
+  { id: "ink-quill", name: "羽毛笔", category: "阅读装饰", src: "/canvas-materials/ink-quill.svg", ratio: "8 / 3" },
+  { id: "bookmark-ribbon", name: "书签分隔", category: "章节装饰", src: "/canvas-materials/bookmark-ribbon.svg", ratio: "8 / 3" },
+  { id: "mountain-sun", name: "山间日出", category: "旅行装饰", src: "/canvas-materials/mountain-sun.svg", ratio: "8 / 3" },
+  { id: "travel-suitcase", name: "旅行手提箱", category: "旅行装饰", src: "/canvas-materials/travel-suitcase.svg", ratio: "8 / 3" },
+  { id: "heart-ending", name: "爱心结尾线", category: "结尾装饰", src: "/canvas-materials/heart-ending.svg", ratio: "8 / 3" },
+  { id: "petal-ending", name: "花瓣留白线", category: "结尾装饰", src: "/canvas-materials/petal-ending.svg", ratio: "8 / 3" },
+
   { id: "olive-divider", name: "橄榄枝分隔", category: "自然装饰", src: "/canvas-materials/olive-divider.svg", ratio: "8 / 3" },
   { id: "daisy-divider", name: "雏菊花边", category: "自然装饰", src: "/canvas-materials/daisy-divider.svg", ratio: "8 / 3" },
   { id: "tulip-garden", name: "春日郁金香", category: "自然装饰", src: "/canvas-materials/tulip-garden.svg", ratio: "8 / 3" },
