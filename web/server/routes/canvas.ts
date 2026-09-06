@@ -205,9 +205,10 @@ const BLOCK_CHUNK_SYSTEM_PROMPT = `你是微信公众号分段排版引擎。正
 允许的最小字段：
 - theme：只有系统明确说明“这是第一组”时才允许输出；后续分组禁止输出 theme。
 - content：type、sourceId、variant。只用于标题、图片或无法组合的单项。
-- section：type、sourceIds、layout、preset；可选 columnRatio、mediaPosition、columns、surfaceStyle、accentStyle、icon、leadSourceId、overlineSourceId、itemStyles。
+- section：type、sourceIds、layout、preset；可选 frame、columnRatio、mediaPosition、columns、surfaceStyle、accentStyle、icon、leadSourceId、overlineSourceId、itemStyles。
 - divider：type、anchorSourceId、placement、style。
-- asset：type、anchorSourceId、placement、prompt、imageSize。
+- asset：type、anchorSourceId、placement、materialId 或 prompt、imageSize。
+- 手绘主题组件：frame 可选 notebook|photo|collage|letter|ticket；materialId 可选 svg-bunting|svg-rings|svg-plane|svg-leaf|watercolor-bunting|watercolor-rings|watercolor-clip，选素材 ID 时不需要 prompt。校园选活页/纸飞机，节庆选彩旗/票券，自然旅行选枝叶/照片，严肃文章不强加纸框。主题颜色和字号由所选模板统一补齐。
 
 枚举：
 - variant：plain|title|banner|quote|lede|overline|metric|dropcap|image

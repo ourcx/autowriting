@@ -671,34 +671,24 @@ export function finalizeCanvasDesign(
   sources: CanvasSource[],
   templateId: CanvasDesignTemplateId,
 ): CanvasDesignFinalization {
-  // 标题保持独立；仅拆出误分组的标题，不重写其余章节的布局、文字样式和素材。
-  const sourceById = new Map(sources.map(source => [source.id, source]))
-  const preserved = {
-    ...document,
-    blocks: document.blocks.flatMap((block): WechatBlock[] => {
-      if (block.type !== "section") return [block]
-      const titles = block.sourceIds.filter(id => sourceById.get(id)?.kind === "title")
-      if (!titles.length) return [block]
-      const remaining = block.sourceIds.filter(id => !titles.includes(id))
-      return [
-        ...titles.flatMap(id => {
-          const source = sourceById.get(id)
-          return source ? [styleStandaloneContent(source, document.theme, templateId)] : []
-        }),
-        ...(remaining.length ? [{ ...block, sourceIds: remaining }] : []),
-      ]
+  // 分段 AI 只输出结构决策，字号、间距和主题色必须由模板补齐，不能直接返回解析默认值。
+  const base = compileCanvasDesignSystem(document, sources, templateId)
+  const compiled = {
+    ...base,
+    blocks: base.blocks.map(block => {
+      if (block.type !== "section") return block
+      const original = document.blocks.find(candidate => candidate.type === "section"
+        && candidate.sourceIds.join("\0") === block.sourceIds.join("\0"))
+      if (!original || original.type !== "section") return block
+      // 只继承布局决策，配色和文字层级由同一套主题负责，避免各分组各画一套。
+      return { ...block, layout: original.layout, frame: original.frame || block.frame,
+        columnRatio: original.columnRatio, mediaPosition: original.mediaPosition, columns: original.columns }
     }),
   }
-  // 已解析的 AI 方案保留原布局；视觉评分只提示，不因装饰数量不足重画整篇。
-  // 初始平铺文档仍走模板；主动“应用模板”继续由 forceRecipes 控制。
-  const ids = contentSourceIds(preserved)
-  const complete = ids.length === sources.length && ids.every((id, index) => id === sources[index].id)
-  if (complete && preserved.blocks.some(block => block.type === "section")) {
-    return { document: preserved, report: assessCanvasVisualQuality(preserved, sources), rebuilt: false }
-  }
-  const compiled = compileCanvasDesignSystem(document, sources, templateId)
   const report = assessCanvasVisualQuality(compiled, sources)
-  if (report.passed) return { document: compiled, report, rebuilt: false }
+  const ids = contentSourceIds(compiled)
+  const complete = ids.length === sources.length && ids.every((id, index) => id === sources[index].id)
+  if (complete && (report.passed || document.blocks.some(block => block.type === "section"))) return { document: compiled, report, rebuilt: false }
 
   const rebuilt = compileCanvasDesignSystem(document, sources, templateId, { forceRecipes: true })
   return {

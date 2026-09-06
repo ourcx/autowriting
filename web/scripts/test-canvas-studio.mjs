@@ -65,6 +65,11 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
  await page.screenshot({path:path.join(artifactDir, 'editor.png')});
  const paper=page.locator('.wbe-paper');
  assert.equal(Math.round((await paper.boundingBox()).width),375);
+ // 在常见笔记本高度下，默认控件不能把编辑器挤出首屏。
+ await page.setViewportSize({width:1366,height:768})
+ const editorArea = await page.locator('.wbe-workspace').boundingBox()
+ assert.ok(editorArea.y < 280 && editorArea.height > 450, JSON.stringify(editorArea))
+ await page.setViewportSize({width:1440,height:1080})
  const before=await paper.innerText();
  await page.getByRole('button',{name:'阅读预览',exact:true}).click();
  await page.screenshot({path:path.join(artifactDir, 'reading.png')});
@@ -82,6 +87,7 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
  assert.equal(report.text,before);
  assert.ok(report.headings.every(h=>parseFloat(h.size)>=20));
  await page.getByRole('button',{name:'返回编辑',exact:true}).click();
+ await page.getByText('主题与模板',{exact:true}).click();
  await page.getByRole('button',{name:/采访手记 人物故事/}).click();
  await page.getByRole('button',{name:'应用模板',exact:true}).click();
  const after=await paper.locator('.wbe-document').getAttribute('style');
@@ -119,6 +125,7 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
  assert.ok(!copied.includes('data-block-id'))
  assert.ok(!copied.includes('<button'))
  fs.writeFileSync(path.join(artifactDir, 'article.html'), copied)
+ await page.getByText('主题与模板',{exact:true}).click()
  await page.getByRole('button', {name:/杂志叙事 知识分享/}).click()
  await page.getByRole('button', {name:'AI 设计排版',exact:true}).click()
  await page.getByRole('button', {name:'AI 设计排版',exact:true}).waitFor()
@@ -144,6 +151,7 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
  assert.ok(await page.getByRole('button',{name:'撤销',exact:true}).isDisabled())
  // 新主题使用真实静态素材；验收插入、刷新、导出，不调用在线图片服务。
  await page.getByRole('button',{name:'返回编辑',exact:true}).click()
+ await page.getByText('主题与模板',{exact:true}).click()
  await page.getByRole('button',{name:/手绘纸笺 水彩彩旗/}).click()
  await page.getByRole('button',{name:'应用模板',exact:true}).click()
  await page.locator('.wbe-paper [data-publication-frame="notebook"]').first().waitFor()
@@ -153,6 +161,7 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
  await page.getByRole('combobox',{name:'章节布局'}).selectOption('timeline')
  assert.ok(await paper.locator('[data-publication-frame="letter"] table').count())
  const scrapbookText = await paper.innerText()
+ await page.getByText('素材库',{exact:true}).click()
  await page.locator('.cs-material-shelf summary').filter({hasText:'装饰素材库'}).click()
  await page.getByRole('button',{name:'心形夹板 照片装饰',exact:true}).click()
  assert.equal(await page.getByRole('combobox',{name:'素材来源'}).inputValue(), 'watercolor-clip')
@@ -162,6 +171,7 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
  await page.getByRole('textbox',{name:'筛选图库图片'}).fill('图库照片')
  await page.getByRole('button',{name:'图库照片测试 插入照片',exact:true}).click()
  assert.equal(await page.getByRole('combobox',{name:'素材来源'}).inputValue(), 'library')
+ await page.getByText('素材库',{exact:true}).click()
  // 阅读态去掉编辑器原有的外扩 3px 选中框，检查实际交付内容是否溢出。
  await page.getByRole('button',{name:'阅读预览',exact:true}).click()
  for (const width of ['375','414','677']) {

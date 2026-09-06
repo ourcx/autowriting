@@ -267,7 +267,20 @@ customSection.itemStyles[customSection.sourceIds[0]] = { fontSize: 23, marks: []
 const hydratedComposition = hydrateWechatBlockDocument(composed, sources, "组合")
 const finalComposition = finalizeCanvasDesign(hydratedComposition, sources, "scrapbook-letter")
 assert.equal(finalComposition.rebuilt, false)
-assert.deepEqual(finalComposition.document.blocks, hydratedComposition.blocks, "合法 AI 布局应完整保留")
+const finalSection = finalComposition.document.blocks.find(block => block.type === "section" && block.sourceIds[0] === customSection.sourceIds[0])
+assert.ok(finalSection && finalSection.type === "section")
+assert.equal(finalSection.layout, "timeline", "AI 布局决策仍需保留")
+assert.equal(finalSection.frame, "letter", "AI 组件选择仍需保留")
+assert.equal(finalSection.itemStyles[customSection.sourceIds[0]].fontSize, 17, "正文应恢复主题字号")
+assert.equal(finalComposition.document.theme.primary, "#b63f68", "颜色由所选主题固定")
+const minimalAi = hydrateWechatBlockDocument({blocks: [
+  {type: "content", sourceId: "source-0", variant: "title"},
+  {type: "section", sourceIds: ["source-1", "source-2"], layout: "stack"},
+  {type: "section", sourceIds: ["source-3", "source-4", "source-5", "source-6"], layout: "stack"},
+]}, sources, "分段最小输出")
+const themedAi = finalizeCanvasDesign(minimalAi, sources, "editorial-story").document
+assert.equal(themedAi.theme.primary, "#a84632")
+assert.ok(themedAi.blocks.some(block => block.type === "section" && (block.itemStyles["source-3"]?.fontSize || 0) >= 20), "省略样式的 AI 输出也必须补齐标题层级")
 const brokenComposition = structuredClone(composed)
 brokenComposition.blocks = brokenComposition.blocks.filter(block => block.type !== "content")
 const repaired = finalizeCanvasDesign(brokenComposition, sources, "scrapbook-letter").document

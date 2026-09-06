@@ -69,6 +69,7 @@ import {
 import type { WechatBlockDocument } from "../../../shared/wechatBlockDsl"
 import {
   DEFAULT_CANVAS_DESIGN_TEMPLATE_ID,
+  getCanvasDesignTemplate,
   type CanvasDesignTemplateId,
 } from "../../../shared/canvasDesignTemplates"
 import { compileCanvasDesignSystem } from "../../../shared/canvasDesignSystem"
@@ -729,7 +730,7 @@ export default function CanvasStudio() {
           placeholder={mode === "blocks"
             ? "告诉 AI 你的想法，例如：适合知识分享，重点突出引用，正文清爽、少装饰"
             : "描述你想要的画板风格、配色和重点内容"}
-          rows={2}
+          rows={1}
         />
         <button
           className="cs-generate"
@@ -745,10 +746,15 @@ export default function CanvasStudio() {
         </button>
       </div>
 
-      {mode === "blocks" ? <CanvasTemplateShelf selected={designTemplateId} onSelect={setDesignTemplateId} /> : null}
-      <details className="cs-design-reference">
+      <div className="cs-tools">
+      {mode === "blocks" ? <details className="cs-tools-menu"><summary>主题与模板</summary><div className="cs-tools-popover">
+        <CanvasTemplateShelf selected={designTemplateId} onSelect={id => {
+          setDesignTemplateId(id)
+        }} />
+      </div></details> : null}
+      <details className="cs-design-reference cs-tools-menu">
         <summary>设计参考与更多模板{designFileName ? ` · ${designFileName}` : "（可选）"}</summary>
-      <CanvasDesignInput
+      <div className="cs-tools-popover"><CanvasDesignInput
         templateId={designTemplateId}
         fileName={designFileName}
         onTemplateChange={setDesignTemplateId}
@@ -761,10 +767,8 @@ export default function CanvasStudio() {
         }}
         onError={message => toast.error(message)}
       />
-      </details>
-
-      {mode === "blocks" ? (
-        <>
+      </div></details>
+      {mode === "blocks" && !reading ? <details className="cs-tools-menu"><summary>素材库</summary><div className="cs-tools-popover">
           {!reading ? <CanvasMaterialShelf disabled={!sources.length || generating || articleLoading} onInsert={(materialId, libraryImage) => {
             // 辅助素材锚定正文，复用现有历史和本机保存，不另建一套素材状态。
             const selected = selectedBlockId?.split("::")[0]
@@ -783,6 +787,12 @@ export default function CanvasStudio() {
             setBlockDocument({ ...blockDocument, blocks })
             setSelectedBlockId(id)
           }} /> : null}
+      </div></details> : null}
+      {mode === "blocks" ? <span className="cs-theme-status"><i style={{ background: blockDocument.theme.primary }} />当前主色 · {blockDocument.theme.primary} · 待用主题：{getCanvasDesignTemplate(designTemplateId).name}</span> : null}
+      </div>
+
+      {mode === "blocks" ? (
+        <>
           <div className="cs-edit-bar">
             <div className="cs-edit-actions">
               <button className="cs-header-btn" disabled={generating || articleLoading || !sources.length || designTemplateId === "design-reference"} onClick={() => {
