@@ -34,6 +34,9 @@ const expectedSignatures: Record<CanvasDesignTemplateId, {
   layouts: string[]
   icons: string[]
 }> = {
+  "nature-journal": { primary: "#48735b", font: "serif", layouts: ["stack", "stack", "stack", "stack"], icons: [] },
+  "festival-invite": { primary: "#b4483e", font: "rounded", layouts: ["stack", "stack", "stack", "stack"], icons: [] },
+  "photo-album": { primary: "#4b545b", font: "editorial", layouts: ["stack", "stack", "stack", "stack"], icons: [] },
   "scrapbook-letter": { primary: "#b63f68", font: "system", layouts: ["stack", "stack", "stack", "stack"], icons: [] },
   "editorial-story": {
     primary: "#a84632",

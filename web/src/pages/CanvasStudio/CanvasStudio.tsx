@@ -250,11 +250,9 @@ export default function CanvasStudio() {
         const uploaded = articleId.startsWith("local:")
           ? []
           : await fetchUploadedArticleImages(articleId).catch(() => [])
+        // 封面用于发布元信息，不再自动追加为文章结尾的正文图片。
         const cover = localStorage.getItem(`cover_image_${articleId}`)
-        const extraImages = [
-          ...(cover ? [{ src: cover, alt: "文章封面" }] : []),
-          ...uploaded,
-        ]
+        const extraImages = uploaded.filter(image => image.src !== cover)
         const nextSources = extractCanvasSources({
           title: data.title || data.article.split("\n")[0]?.replace(/^#+\s*/, "") || "未命名文章",
           article: data.article,
@@ -747,14 +745,13 @@ export default function CanvasStudio() {
       </div>
 
       <div className="cs-tools">
-      {mode === "blocks" ? <details className="cs-tools-menu"><summary>主题与模板</summary><div className="cs-tools-popover">
+      {<details className="cs-tools-menu"><summary>主题与模板</summary><div className="cs-tools-popover">
         <CanvasTemplateShelf selected={designTemplateId} onSelect={id => {
           setDesignTemplateId(id)
         }} />
-      </div></details> : null}
-      <details className="cs-design-reference cs-tools-menu">
-        <summary>设计参考与更多模板{designFileName ? ` · ${designFileName}` : "（可选）"}</summary>
-      <div className="cs-tools-popover"><CanvasDesignInput
+      <details className="cs-design-reference">
+        <summary>导入设计参考{designFileName ? ` · ${designFileName}` : "（可选）"}</summary>
+      <div><CanvasDesignInput
         templateId={designTemplateId}
         fileName={designFileName}
         onTemplateChange={setDesignTemplateId}
@@ -768,6 +765,7 @@ export default function CanvasStudio() {
         onError={message => toast.error(message)}
       />
       </div></details>
+      </div></details>}
       {mode === "blocks" && !reading ? <details className="cs-tools-menu"><summary>素材库</summary><div className="cs-tools-popover">
           {!reading ? <CanvasMaterialShelf disabled={!sources.length || generating || articleLoading} onInsert={(materialId, libraryImage) => {
             // 辅助素材锚定正文，复用现有历史和本机保存，不另建一套素材状态。

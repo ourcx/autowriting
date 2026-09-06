@@ -307,9 +307,9 @@ function itemStylesForGroup(
   for (const [index, source] of sources.entries()) {
     if (source.kind === "heading") {
       // 章节标题必须大于正文，眉题样式仅保留给其他模板，避免长文层级倒置。
-      if (templateId === "editorial-story") {
+      if ((templateId === "editorial-story" || system.bodyCycle.some(recipe => recipe.frame))) {
         styles[source.id] = {
-          variant: "plain", color: theme.text, fontSize: theme.headingSize,
+          variant: "plain", color: system.bodyCycle.some(recipe => recipe.frame) ? theme.primary : theme.text, fontSize: theme.headingSize,
           fontWeight: theme.headingWeight, lineHeight: theme.headingLineHeight,
           padding: 0, marginTop: 12, marginBottom: 20,
         }
@@ -332,7 +332,7 @@ function itemStylesForGroup(
         accentColor: theme.primary,
         fontSize: Math.min(22, theme.bodySize + 2),
         fontWeight: 500,
-        ...(templateId === "editorial-story" ? {
+        ...((templateId === "editorial-story" || system.bodyCycle.some(recipe => recipe.frame)) ? {
           // 保留引用的内容语义，但不渲染引用框；短句通过居中与留白形成停顿。
           variant: "plain", background: "transparent", padding: 0,
           fontSize: theme.bodySize + 1, fontWeight: 600,
@@ -354,7 +354,7 @@ function itemStylesForGroup(
     if (isIntro && index === 0 && source.kind === "paragraph") {
       styles[source.id] = {
         variant: "lede",
-        fontSize: templateId === "editorial-story" && sourceTextLength(source) > 80
+        fontSize: (templateId === "editorial-story" || system.bodyCycle.some(recipe => recipe.frame)) && sourceTextLength(source) > 80
           ? theme.bodySize
           : Math.min(22, theme.bodySize + 2),
         lineHeight: theme.bodyLineHeight,
@@ -410,7 +410,7 @@ function styleStandaloneContent(
     accentColor: theme.primary,
     borderColor: theme.border,
     borderWidth: 0,
-    ...(templateId === "editorial-story" ? {
+    ...((templateId === "editorial-story" || system.bodyCycle.some(recipe => recipe.frame)) ? {
       variant: source.kind === "image" ? block.variant : "plain" as const,
       background: "transparent",
       padding: 0,
@@ -446,6 +446,7 @@ function createSection(
   const surfaced = background !== "transparent" || recipe.surfaceKind !== "none"
   return {
     id: `design-section-${sources[0].id}`,
+    frame: recipe.frame,
     type: "section",
     sourceIds: sources.map(source => source.id),
     layout,

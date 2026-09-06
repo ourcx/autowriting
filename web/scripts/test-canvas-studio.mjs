@@ -44,7 +44,10 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
 当一个小任务稳定下来，再把相邻的步骤接进来。真正的改变，通常是许多次小小的改进累积起来的。
 
 > 不必一次改变所有工作，先让明天的一件事变得更轻松。`,materials:'',task:''};
- await context.addInitScript(()=>localStorage.setItem('auth_token','local-browser-fixture'));
+ await context.addInitScript(()=>{
+  localStorage.setItem('auth_token','local-browser-fixture')
+  localStorage.setItem('cover_image_canvas-fixture','https://example.com/cover-only-fixture.png')
+ });
  await page.route('**/api/auth/me',r=>r.fulfill({json:{user:{id:'fixture',username:'local',role:'admin'}}}));
  await page.route('**/api/articles',r=>r.fulfill({json:[{id:'canvas-fixture',title:article.title,status:'generated'},{id:'canvas-second',title:'第二篇文章',status:'generated'}]}));
  await page.route('**/api/articles/canvas-fixture',r=>r.fulfill({json:article}));
@@ -70,7 +73,19 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
  const editorArea = await page.locator('.wbe-workspace').boundingBox()
  assert.ok(editorArea.y < 280 && editorArea.height > 450, JSON.stringify(editorArea))
  await page.setViewportSize({width:1440,height:1080})
+ assert.equal(await paper.locator('img[src="https://example.com/cover-only-fixture.png"]').count(),0,'封面不得自动追加到正文')
  const before=await paper.innerText();
+ for (const name of ['自然手记','节庆邀请','影像画册']) {
+  await page.getByText('主题与模板',{exact:true}).click()
+  await page.getByRole('button',{name:new RegExp(name)}).click()
+  await page.getByRole('button',{name:'应用模板',exact:true}).click()
+  assert.ok(await paper.locator('[data-publication-frame]').count())
+  await page.screenshot({path:path.join(artifactDir,`${name}.png`)})
+  await page.getByRole('button',{name:'阅读预览',exact:true}).click()
+  assert.equal(await page.locator('.cs-reading-paper').evaluate(root=>root.scrollWidth>root.clientWidth+2),false,`${name} 不得溢出`)
+  await page.getByRole('button',{name:'返回编辑',exact:true}).click()
+  await page.getByRole('button',{name:'撤销',exact:true}).click()
+ }
  await page.getByRole('button',{name:'阅读预览',exact:true}).click();
  await page.screenshot({path:path.join(artifactDir, 'reading.png')});
  const report=await page.locator('.cs-reading-paper').evaluate(root=>({

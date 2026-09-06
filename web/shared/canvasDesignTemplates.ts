@@ -1,4 +1,7 @@
 export type CanvasDesignTemplateId =
+  | "nature-journal"
+  | "festival-invite"
+  | "photo-album"
   | "scrapbook-letter"
   | "editorial-story"
   | "interview-notes"
@@ -46,6 +49,7 @@ export interface CanvasDesignTheme {
 }
 
 export interface CanvasDesignSectionRecipe {
+  frame?: "letter" | "ticket" | "photo"
   layout: CanvasDesignSectionLayout
   preset: CanvasDesignSectionPreset
   columnRatio: "1:1" | "1:2" | "2:1"
@@ -183,7 +187,26 @@ const dashboardBody: CanvasDesignSectionRecipe[] = [
   { layout: "steps", preset: "plain", columnRatio: "1:1", surface: "none", surfaceKind: "none", accentStyle: "none", icon: "check-circle", shadow: "none", divider: true },
 ]
 
+// 成套主题同时定义纸张结构与配色，避免只换颜色却仍是同一个模板。
+function publicationTemplate(id: CanvasDesignTemplateId, name: string, description: string,
+  primary: string, font: CanvasDesignFont, frame: "letter" | "ticket" | "photo"): CanvasDesignTemplate {
+  const plain: CanvasDesignSectionRecipe = { layout: "stack", preset: "plain", columnRatio: "1:1",
+    surface: "none", surfaceKind: "none", accentStyle: "none", shadow: "none", divider: false }
+  const canvas = frame === "photo" ? "#f4f3ef" : frame === "ticket" ? "#fff5e9" : "#f5f8f1"
+  return { id, name, description,
+    brief: `${name}：${description}。正文保持单栏，完整章节使用 ${frame} 结构。主色固定 ${primary}，正文深灰；标题、章节标题和图片说明形成层级。不要把普通正文包装成引用，也不要逐段套框。`,
+    designSystem: { inheritModelTheme: false,
+      theme: { ...editorialTheme, font, primary, canvas, border: primary, displaySize: 32,
+        sectionGap: 36, canvasStyle: { ...editorialTheme.canvasStyle, colors: [canvas] } },
+      titleAlign: "center", bodyTextIndent: 0, intro: plain,
+      bodyCycle: [{ ...plain, frame }], media: { ...plain, frame: "photo" } },
+  }
+}
+
 export const CANVAS_DESIGN_TEMPLATES: CanvasDesignTemplate[] = [
+  publicationTemplate("nature-journal", "自然手记", "草木绿 · 信纸章节与舒展留白", "#48735b", "serif", "letter"),
+  publicationTemplate("festival-invite", "节庆邀请", "朱红色 · 票券章节与居中标题", "#b4483e", "rounded", "ticket"),
+  publicationTemplate("photo-album", "影像画册", "石墨灰 · 相框章节与照片叙事", "#4b545b", "editorial", "photo"),
   {
     id: "editorial-story",
     name: "杂志叙事",
@@ -331,7 +354,7 @@ export function normalizeCanvasDesignTemplateId(value: unknown): CanvasDesignTem
 
 export function getCanvasDesignTemplate(templateId: CanvasDesignTemplateId): CanvasDesignTemplate {
   return CANVAS_DESIGN_TEMPLATES.find(template => template.id === templateId)
-    || CANVAS_DESIGN_TEMPLATES[0]
+    || CANVAS_DESIGN_TEMPLATES.find(template => template.id === DEFAULT_CANVAS_DESIGN_TEMPLATE_ID)!
 }
 
 export function buildCanvasDesignBrief(input: {

@@ -696,3 +696,12 @@
 .cs-theme-status { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--color-muted); }
 .cs-theme-status i { width: 10px; height: 10px; border-radius: 50%; }
 @media (max-width: 900px) { .cs-theme-status { display: none; } }
+
+/* 模板数量增加后使用网格，避免一排卡片越挤越窄；参考导入复用同一面板。 */
+.cs-tools .cs-template-shelf { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); padding: 0; }
+.cs-tools .cs-template-intro { display: none; }
+.cs-tools .cs-template-card { min-height: 96px; }
+.cs-tools .cs-template-card small { display: block; }
+
+.cs-tools .cdi-template { display: none; }
+.cs-tools .cdi-root { grid-template-columns: minmax(0, 1fr); }
