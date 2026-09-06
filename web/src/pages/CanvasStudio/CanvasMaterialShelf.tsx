@@ -13,6 +13,14 @@ export default function CanvasMaterialShelf({ disabled, onInsert }: CanvasMateri
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [query, setQuery] = useState("")
+  const [materialQuery, setMaterialQuery] = useState("")
+  const [materialCategory, setMaterialCategory] = useState("全部")
+  const materialCategories = ["全部", ...new Set(CANVAS_MATERIALS.map(material => material.category))]
+  const normalizedMaterialQuery = materialQuery.trim().toLowerCase()
+  const visibleMaterials = CANVAS_MATERIALS.filter(material => (
+    (materialCategory === "全部" || material.category === materialCategory)
+    && (!normalizedMaterialQuery || `${material.name} ${material.category} ${material.id}`.toLowerCase().includes(normalizedMaterialQuery))
+  ))
   const load = async () => {
     if (loading) return
     setLoading(true)
@@ -23,11 +31,24 @@ export default function CanvasMaterialShelf({ disabled, onInsert }: CanvasMateri
   }
   return <><details className="cs-material-shelf">
     <summary>装饰素材库 <span>水彩与矢量 · 插在选中内容之后</span></summary>
+    <div className="cs-material-filters">
+      <input
+        aria-label="搜索装饰素材"
+        placeholder="搜索花草、节庆、阅读……"
+        value={materialQuery}
+        onChange={event => setMaterialQuery(event.target.value)}
+      />
+      <select aria-label="素材分类" value={materialCategory} onChange={event => setMaterialCategory(event.target.value)}>
+        {materialCategories.map(category => <option key={category}>{category}</option>)}
+      </select>
+      <span>{visibleMaterials.length} 款</span>
+    </div>
     <div className="cs-material-grid">
-      {CANVAS_MATERIALS.map(material => <button key={material.id} disabled={disabled} onClick={() => onInsert(material.id)}>
+      {visibleMaterials.map(material => <button key={material.id} disabled={disabled} onClick={() => onInsert(material.id)}>
         <img src={material.src} alt="" /><strong>{material.name}</strong><small>{material.category}</small>
       </button>)}
     </div>
+    {visibleMaterials.length === 0 ? <p className="cs-material-empty">没有匹配的素材，换个关键词试试。</p> : null}
   </details>
     <details className="cs-material-shelf" onToggle={event => {
       if (event.currentTarget.open && images === null && !loading) void load()

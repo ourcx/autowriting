@@ -17,6 +17,7 @@ import {
   type WechatSurfaceStyle,
   type WechatTextStyleOverride,
 } from "./wechatBlockDsl.ts"
+import type { CanvasMaterialId } from "./canvasMaterialLibrary.ts"
 
 export interface CanvasVisualQualityMetrics {
   sectionCount: number
@@ -502,6 +503,28 @@ function materialsForGroup(
   ))
 }
 
+function templateAsset(
+  materialId: CanvasMaterialId,
+  anchorSourceId: string,
+  placement: "before" | "after",
+  slot: "opening" | "section" | "ending",
+): AnchoredMaterial {
+  return {
+    id: `template-material-${slot}-${anchorSourceId}`,
+    type: "asset",
+    materialId,
+    anchorSourceId,
+    placement,
+    prompt: `template:${slot}`,
+    imageSize: "landscape_16_9",
+    width: slot === "section" ? 150 : 220,
+    radius: 0,
+    align: "center",
+    marginTop: slot === "opening" ? 0 : 10,
+    marginBottom: slot === "ending" ? 4 : 24,
+  }
+}
+
 export function compileCanvasDesignSystem(
   document: WechatBlockDocument,
   sources: CanvasSource[],
@@ -517,14 +540,23 @@ export function compileCanvasDesignSystem(
   const groups = useExistingGroups
     ? documentSourceGroups(document, sourceById)
     : semanticSourceGroups(sources, theme.publicationStyle === "scrapbook" ? 8 : 4)
-  const materials = anchoredMaterials(document)
+  // 模板素材随模板切换，人工插入的素材继续保留。
+  const materials = anchoredMaterials(document).filter(material => (
+    !(material.type === "asset" && material.prompt.startsWith("template:"))
+  ))
   const blocks: WechatBlock[] = []
   let sectionIndex = 0
+  let sectionMaterialAdded = false
 
   for (const group of groups) {
     if (group.length === 0) continue
     const sourceIds = new Set(group.map(source => source.id))
     blocks.push(...materialsForGroup(materials, sourceIds, "before"))
+    const sectionMaterial = system.materials?.section
+    if (sectionMaterial && !sectionMaterialAdded && group.some(source => source.kind === "heading")) {
+      blocks.push(templateAsset(sectionMaterial, group[0].id, "before", "section"))
+      sectionMaterialAdded = true
+    }
     if (group.length === 1) {
       blocks.push(styleStandaloneContent(group[0], theme, templateId))
     } else {
@@ -532,7 +564,17 @@ export function compileCanvasDesignSystem(
       blocks.push(createSection(group, recipe, theme, templateId, sectionIndex))
       sectionIndex += 1
     }
+    const openingMaterial = system.materials?.opening
+    if (openingMaterial && group[0]?.kind === "title") {
+      blocks.push(templateAsset(openingMaterial, group[0].id, "after", "opening"))
+    }
     blocks.push(...materialsForGroup(materials, sourceIds, "after"))
+  }
+
+  const endingMaterial = system.materials?.ending
+  const endingSourceId = sources[sources.length - 1]?.id
+  if (endingMaterial && endingSourceId) {
+    blocks.push(templateAsset(endingMaterial, endingSourceId, "after", "ending"))
   }
 
   const sourceMarks = new Map<string, WechatInlineMark[]>()

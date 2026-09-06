@@ -1019,7 +1019,8 @@ export function hydrateWechatBlockDocument(
         .filter(candidate => candidate.type === block.type)
         .length < (
           block.type === "asset"
-            ? 4
+            // 固定模板占用最多 3 个素材位，额外空间留给人工快速编排。
+            ? 12
             : block.type === "switcher"
               ? 3
               : block.type === "divider"

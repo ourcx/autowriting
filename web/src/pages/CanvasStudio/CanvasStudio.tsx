@@ -1,5 +1,6 @@
 import Button from "../../components/Button/Button"
 import CanvasMaterialShelf from "./CanvasMaterialShelf"
+import CanvasSectionPresetShelf from "./CanvasSectionPresetShelf"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import {
@@ -69,6 +70,10 @@ import {
   type CanvasDesignTemplateId,
 } from "../../../shared/canvasDesignTemplates"
 import { compileCanvasDesignSystem } from "../../../shared/canvasDesignSystem"
+import {
+  applyCanvasSectionPreset,
+  type CanvasSectionPresetId,
+} from "../../../shared/canvasSectionPresets"
 import CanvasTemplateShelf from "./CanvasTemplateShelf"
 import { useCanvasHistory } from "./useCanvasHistory"
 import "./CanvasStudio.css"
@@ -194,6 +199,21 @@ export default function CanvasStudio() {
     () => document.nodes.find(node => node.id === selectedId) ?? null,
     [document.nodes, selectedId],
   )
+  const selectedSectionId = useMemo(() => {
+    const sectionId = selectedBlockId?.split("::")[0]
+    return sectionId && blockDocument.blocks.some(block => block.id === sectionId && block.type === "section")
+      ? sectionId
+      : ""
+  }, [blockDocument.blocks, selectedBlockId])
+
+  const applySectionPreset = (presetId: CanvasSectionPresetId) => {
+    if (!selectedBlockId || !selectedSectionId) {
+      toast.warn("请先选择一个章节")
+      return
+    }
+    setBlockDocument(applyCanvasSectionPreset(blockDocument, selectedBlockId, presetId, sources))
+    toast.success("章节样式已替换，不满意可撤销")
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -681,6 +701,9 @@ export default function CanvasStudio() {
           setDesignTemplateId(id)
         }} />
       </div></details>}
+      {mode === "blocks" && !reading ? <details className="cs-tools-menu"><summary>章节组件</summary><div className="cs-tools-popover">
+        <CanvasSectionPresetShelf disabled={!selectedSectionId || articleLoading} onApply={applySectionPreset} />
+      </div></details> : null}
       {mode === "blocks" && !reading ? <details className="cs-tools-menu"><summary>素材库</summary><div className="cs-tools-popover">
           {!reading ? <CanvasMaterialShelf disabled={!sources.length || articleLoading} onInsert={(materialId, libraryImage) => {
             // 辅助素材锚定正文，复用现有历史和本机保存，不另建一套素材状态。

@@ -1,7 +1,21 @@
+import type { CanvasMaterialId } from "./canvasMaterialLibrary.ts"
+
 export type CanvasDesignTemplateId =
   | "nature-journal"
   | "festival-invite"
   | "photo-album"
+  | "forest-letter"
+  | "campus-notes"
+  | "reading-club"
+  | "spring-garden"
+  | "birthday-party"
+  | "new-year-festival"
+  | "travel-diary"
+  | "coffee-life"
+  | "photo-story"
+  | "brand-brief"
+  | "knowledge-card"
+  | "night-reading"
   | "scrapbook-letter"
   | "editorial-story"
   | "interview-notes"
@@ -69,6 +83,11 @@ export interface CanvasTemplateDesignSystem {
   intro: CanvasDesignSectionRecipe
   bodyCycle: CanvasDesignSectionRecipe[]
   media: CanvasDesignSectionRecipe
+  materials?: {
+    opening?: CanvasMaterialId
+    section?: CanvasMaterialId
+    ending?: CanvasMaterialId
+  }
 }
 
 export interface CanvasDesignTemplate {
@@ -189,7 +208,8 @@ const dashboardBody: CanvasDesignSectionRecipe[] = [
 
 // 成套主题同时定义纸张结构与配色，避免只换颜色却仍是同一个模板。
 function publicationTemplate(id: CanvasDesignTemplateId, name: string, description: string,
-  primary: string, font: CanvasDesignFont, frame: "letter" | "ticket" | "photo"): CanvasDesignTemplate {
+  primary: string, font: CanvasDesignFont, frame: "letter" | "ticket" | "photo",
+  materials?: CanvasTemplateDesignSystem["materials"]): CanvasDesignTemplate {
   const plain: CanvasDesignSectionRecipe = { layout: "stack", preset: "plain", columnRatio: "1:1",
     surface: "none", surfaceKind: "none", accentStyle: "none", shadow: "none", divider: false }
   const canvas = frame === "photo" ? "#f4f3ef" : frame === "ticket" ? "#fff5e9" : "#f5f8f1"
@@ -199,14 +219,75 @@ function publicationTemplate(id: CanvasDesignTemplateId, name: string, descripti
       theme: { ...editorialTheme, font, primary, canvas, border: primary, displaySize: 32,
         sectionGap: 36, canvasStyle: { ...editorialTheme.canvasStyle, colors: [canvas] } },
       titleAlign: "center", bodyTextIndent: 0, intro: plain,
-      bodyCycle: [{ ...plain, frame }], media: { ...plain, frame: "photo" } },
+      bodyCycle: [{ ...plain, frame }], media: { ...plain, frame: "photo" }, materials },
+  }
+}
+
+function themedTemplate(
+  id: CanvasDesignTemplateId,
+  name: string,
+  description: string,
+  colors: { primary: string; canvas: string; surfaceAlt: string; text?: string },
+  font: CanvasDesignFont,
+  layouts: CanvasDesignSectionLayout[],
+  materials: NonNullable<CanvasTemplateDesignSystem["materials"]>,
+): CanvasDesignTemplate {
+  const recipe = (layout: CanvasDesignSectionLayout, index: number): CanvasDesignSectionRecipe => ({
+    layout,
+    preset: index % 2 === 0 ? "plain" : "soft",
+    columnRatio: index % 2 === 0 ? "2:1" : "1:1",
+    surface: index % 2 === 0 ? "none" : "surfaceAlt",
+    surfaceKind: index % 2 === 0 ? "none" : "solid",
+    accentStyle: index % 3 === 0 ? "top" : index % 3 === 1 ? "left" : "none",
+    shadow: "none",
+    divider: index % 3 === 2,
+  })
+  const theme: CanvasDesignTheme = {
+    ...editorialTheme,
+    font,
+    primary: colors.primary,
+    canvas: colors.canvas,
+    surface: "#ffffff",
+    surfaceAlt: colors.surfaceAlt,
+    text: colors.text || "#343230",
+    border: colors.primary,
+    radius: 6,
+    canvasStyle: { ...editorialTheme.canvasStyle, colors: [colors.canvas] },
+  }
+  return {
+    id,
+    name,
+    description,
+    brief: `${name}：${description}。使用固定主题、章节组件和原创素材组成公众号长文；保留正文顺序，普通段落保持连续阅读。`,
+    designSystem: {
+      inheritModelTheme: false,
+      theme,
+      titleAlign: layouts.includes("editorial") ? "left" : "center",
+      bodyTextIndent: 0,
+      intro: recipe(layouts[0], 0),
+      bodyCycle: layouts.map(recipe),
+      media: { ...recipe("media-text", 1), columnRatio: "1:1" },
+      materials,
+    },
   }
 }
 
 export const CANVAS_DESIGN_TEMPLATES: CanvasDesignTemplate[] = [
-  publicationTemplate("nature-journal", "自然手记", "草木绿 · 信纸章节与舒展留白", "#48735b", "serif", "letter"),
-  publicationTemplate("festival-invite", "节庆邀请", "朱红色 · 票券章节与居中标题", "#b4483e", "rounded", "ticket"),
-  publicationTemplate("photo-album", "影像画册", "石墨灰 · 相框章节与照片叙事", "#4b545b", "editorial", "photo"),
+  publicationTemplate("nature-journal", "自然手记", "草木绿 · 信纸章节与舒展留白", "#48735b", "serif", "letter", { opening: "tulip-garden", section: "olive-divider", ending: "petal-ending" }),
+  publicationTemplate("festival-invite", "节庆邀请", "朱红色 · 票券章节与居中标题", "#b4483e", "rounded", "ticket", { opening: "ribbon-banner", section: "star-divider", ending: "heart-ending" }),
+  publicationTemplate("photo-album", "影像画册", "石墨灰 · 相框章节与照片叙事", "#4b545b", "editorial", "photo", { opening: "little-camera", section: "washi-tape", ending: "star-divider" }),
+  themedTemplate("forest-letter", "森系来信", "墨绿信纸、枝叶分隔与花瓣收尾", { primary: "#42624b", canvas: "#f7f8f1", surfaceAlt: "#edf2e7" }, "serif", ["stack", "feature"], { opening: "olive-divider", section: "daisy-divider", ending: "petal-ending" }),
+  themedTemplate("campus-notes", "校园笔记", "蓝灰笔记、书页与铅笔便签", { primary: "#50728a", canvas: "#f7f8f5", surfaceAlt: "#eaf1f4" }, "friendly", ["stack", "steps"], { opening: "open-book", section: "pencil-note", ending: "svg-plane" }),
+  themedTemplate("reading-club", "共读书房", "暖棕书卷、阅读眉题与书签分隔", { primary: "#83624a", canvas: "#fbf7ef", surfaceAlt: "#f2e9dc" }, "serif", ["editorial", "stack"], { opening: "book-stack", section: "bookmark-ribbon", ending: "ink-quill" }),
+  themedTemplate("spring-garden", "春日花园", "柔粉花卉、轻盈章节和自然留白", { primary: "#a45f6e", canvas: "#fff9f5", surfaceAlt: "#f8e9e9" }, "rounded", ["stack", "feature"], { opening: "tulip-garden", section: "daisy-divider", ending: "petal-ending" }),
+  themedTemplate("birthday-party", "生日派对", "蛋糕、礼盒与柔和彩旗", { primary: "#b65c72", canvas: "#fff7ed", surfaceAlt: "#fbe7e5" }, "rounded", ["feature", "steps"], { opening: "birthday-cake", section: "gift-box", ending: "heart-ending" }),
+  themedTemplate("new-year-festival", "新年特辑", "灯笼、烟花和喜庆票券节奏", { primary: "#b33f35", canvas: "#fff6e9", surfaceAlt: "#f9e3d2" }, "serif", ["feature", "timeline"], { opening: "lantern-pair", section: "firework-stars", ending: "ribbon-banner" }),
+  themedTemplate("travel-diary", "旅行日记", "山间日出、手提箱与路线式章节", { primary: "#527b73", canvas: "#f7f5ed", surfaceAlt: "#e7efea" }, "friendly", ["media-text", "timeline"], { opening: "mountain-sun", section: "travel-suitcase", ending: "little-camera" }),
+  themedTemplate("coffee-life", "咖啡生活", "奶咖纸色、轻松卡片和日常留白", { primary: "#8a654e", canvas: "#fbf5ec", surfaceAlt: "#efe3d5" }, "editorial", ["stack", "two-column"], { opening: "coffee-break", section: "washi-tape", ending: "heart-ending" }),
+  themedTemplate("photo-story", "照片故事", "相机开篇、图文交错与画册收尾", { primary: "#4e6269", canvas: "#f5f4f0", surfaceAlt: "#e8edef" }, "editorial", ["media-text", "editorial"], { opening: "little-camera", section: "star-divider", ending: "washi-tape" }),
+  themedTemplate("brand-brief", "品牌简报", "克制深蓝、信息卡片与重点分隔", { primary: "#315872", canvas: "#f6f8f8", surfaceAlt: "#e9f0f3" }, "system", ["comparison", "grid"], { opening: "star-divider", section: "bookmark-ribbon", ending: "olive-divider" }),
+  themedTemplate("knowledge-card", "知识卡片", "清晰步骤、要点网格与阅读符号", { primary: "#3e6a61", canvas: "#f8faf7", surfaceAlt: "#e8f1ed" }, "system", ["steps", "grid"], { opening: "reading-glasses", section: "open-book", ending: "bookmark-ribbon" }),
+  themedTemplate("night-reading", "夜读时光", "深靛标题、月云装饰与安静留白", { primary: "#526080", canvas: "#f5f4f7", surfaceAlt: "#e8e7ef", text: "#333542" }, "serif", ["editorial", "stack"], { opening: "moon-cloud", section: "star-divider", ending: "ink-quill" }),
   {
     id: "editorial-story",
     name: "杂志叙事",
@@ -234,6 +315,7 @@ export const CANVAS_DESIGN_TEMPLATES: CanvasDesignTemplate[] = [
       intro: { layout: "stack", preset: "plain", columnRatio: "1:1", surface: "none", surfaceKind: "none", accentStyle: "none", shadow: "none", divider: false },
       bodyCycle: [{ layout: "stack", preset: "plain", columnRatio: "1:1", surface: "none", surfaceKind: "none", accentStyle: "none", shadow: "none", divider: false }],
       media: { layout: "media-text", preset: "soft", columnRatio: "2:1", surface: "surfaceAlt", surfaceKind: "solid", accentStyle: "none", shadow: "none", divider: false },
+      materials: { opening: "bookmark-ribbon", section: "star-divider", ending: "olive-divider" },
     },
   },
   {
@@ -255,6 +337,7 @@ export const CANVAS_DESIGN_TEMPLATES: CanvasDesignTemplate[] = [
       intro: { layout: "stack", preset: "plain", columnRatio: "1:1", surface: "none", surfaceKind: "none", accentStyle: "none", shadow: "none", divider: false },
       bodyCycle: [{ layout: "stack", preset: "plain", columnRatio: "1:1", surface: "none", surfaceKind: "none", accentStyle: "none", shadow: "none", divider: false }],
       media: { layout: "stack", preset: "plain", columnRatio: "1:1", surface: "none", surfaceKind: "none", accentStyle: "none", shadow: "none", divider: false },
+      materials: { opening: "watercolor-bunting", section: "svg-plane", ending: "heart-ending" },
     },
   },
   {
@@ -283,6 +366,7 @@ export const CANVAS_DESIGN_TEMPLATES: CanvasDesignTemplate[] = [
       intro: { layout: "feature", preset: "soft", columnRatio: "1:2", surface: "surface", surfaceKind: "dots", accentStyle: "left", icon: "mic", shadow: "none", divider: false },
       bodyCycle: interviewBody,
       media: { layout: "media-text", preset: "soft", columnRatio: "1:1", surface: "surface", surfaceKind: "solid", accentStyle: "none", shadow: "none", divider: false },
+      materials: { opening: "coffee-break", section: "ink-quill", ending: "heart-ending" },
     },
   },
   {
@@ -314,6 +398,7 @@ export const CANVAS_DESIGN_TEMPLATES: CanvasDesignTemplate[] = [
       intro: { layout: "comparison", preset: "feature", columnRatio: "1:1", surface: "surface", surfaceKind: "solid", accentStyle: "top", icon: "bar-chart", shadow: "soft", divider: true },
       bodyCycle: dashboardBody,
       media: { layout: "media-text", preset: "soft", columnRatio: "1:1", surface: "surface", surfaceKind: "solid", accentStyle: "top", shadow: "soft", divider: true },
+      materials: { opening: "star-divider", section: "bookmark-ribbon", ending: "olive-divider" },
     },
   },
   {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import type { CanvasSource } from "../shared/canvasArticle.ts"
 import {
   assessCanvasVisualQuality,
+  compileCanvasDesignSystem,
   finalizeCanvasDesign,
   normalizeCanvasPrimaryColor,
 } from "../shared/canvasDesignSystem.ts"
@@ -11,6 +12,7 @@ import {
   type CanvasDesignTemplateId,
 } from "../shared/canvasDesignTemplates.ts"
 import { createWechatBlockDocument, hydrateWechatBlockDocument, parseWechatBlockDocument } from "../shared/wechatBlockDsl.ts"
+import { applyCanvasSectionPreset, CANVAS_SECTION_PRESETS } from "../shared/canvasSectionPresets.ts"
 
 const sources: CanvasSource[] = [
   { id: "source-0", kind: "title", text: "一万米高空的逻辑死局" },
@@ -28,12 +30,12 @@ const sources: CanvasSource[] = [
   { id: "source-12", kind: "paragraph", text: "技术故障最终演变为训练、协作与人机界面的共同失败。" },
 ]
 
-const expectedSignatures: Record<CanvasDesignTemplateId, {
+const expectedSignatures: Partial<Record<CanvasDesignTemplateId, {
   primary: string
   font: string
   layouts: string[]
   icons: string[]
-}> = {
+}>> = {
   "nature-journal": { primary: "#48735b", font: "serif", layouts: ["stack", "stack", "stack", "stack"], icons: [] },
   "festival-invite": { primary: "#b4483e", font: "rounded", layouts: ["stack", "stack", "stack", "stack"], icons: [] },
   "photo-album": { primary: "#4b545b", font: "editorial", layouts: ["stack", "stack", "stack", "stack"], icons: [] },
@@ -101,7 +103,10 @@ for (const template of CANVAS_DESIGN_TEMPLATES) {
       block.type === "section" && block.icon?.name ? [block.icon.name] : []
     )),
   }
-  assert.deepEqual(signature, expectedSignatures[template.id], `${template.id} 的视觉签名发生变化`)
+  const expectedSignature = expectedSignatures[template.id]
+  if (expectedSignature) {
+    assert.deepEqual(signature, expectedSignature, `${template.id} 的视觉签名发生变化`)
+  }
 
   if (!template.designSystem.inheritModelTheme) {
     assert.equal(
@@ -111,6 +116,57 @@ for (const template of CANVAS_DESIGN_TEMPLATES) {
     )
   }
 }
+
+const publicTemplates = CANVAS_DESIGN_TEMPLATES.filter(template => template.id !== "design-reference")
+assert.equal(publicTemplates.length, 19, "应提供原有 7 套和新增 12 套固定模板")
+for (const template of publicTemplates) {
+  assert.ok(template.designSystem.materials, `${template.id} 必须组合素材`)
+  const document = finalizeCanvasDesign(
+    createWechatBlockDocument("模板素材夹具", sources),
+    sources,
+    template.id,
+  ).document
+  const templateAssets = document.blocks.filter(block => block.type === "asset" && block.id.startsWith("template-material-"))
+  assert.ok(templateAssets.length >= 2, `${template.id} 应实际插入模板素材`)
+}
+
+assert.equal(CANVAS_SECTION_PRESETS.length, 10, "应提供 10 种章节组件")
+const sectionFixture = finalizeCanvasDesign(
+  createWechatBlockDocument("章节组件夹具", sources),
+  sources,
+  "editorial-story",
+).document
+const targetSection = sectionFixture.blocks.find(block => block.type === "section" && block.sourceIds.includes("source-3"))
+assert.ok(targetSection && targetSection.type === "section")
+for (const preset of CANVAS_SECTION_PRESETS) {
+  const applied = applyCanvasSectionPreset(sectionFixture, `${targetSection.id}::source-3`, preset.id, sources)
+  const nextSection = applied.blocks.find(block => block.id === targetSection.id)
+  assert.ok(nextSection && nextSection.type === "section", `${preset.id} 应保留章节`)
+  assert.deepEqual(nextSection.sourceIds, targetSection.sourceIds, `${preset.id} 不得改变章节内容`)
+  assert.notEqual(nextSection, targetSection, `${preset.id} 应替换章节样式`)
+}
+
+const manuallyDecorated = {
+  ...sectionFixture,
+  blocks: [...sectionFixture.blocks, {
+    id: "manual-material",
+    type: "asset" as const,
+    materialId: "coffee-break" as const,
+    anchorSourceId: sources[1].id,
+    placement: "after" as const,
+    prompt: "",
+    imageSize: "landscape_16_9" as const,
+    width: 160,
+    radius: 0,
+    align: "center" as const,
+    marginTop: 8,
+    marginBottom: 16,
+  }],
+}
+const switchedTemplate = compileCanvasDesignSystem(manuallyDecorated, sources, "campus-notes", { forceRecipes: true })
+const switchedAssets = switchedTemplate.blocks.filter(block => block.type === "asset")
+assert.equal(switchedAssets.filter(block => block.type === "asset" && block.prompt.startsWith("template:")).length, 3)
+assert.ok(switchedAssets.some(block => block.type === "asset" && block.materialId === "coffee-break" && !block.prompt))
 
 const groupedTitleFixture = finalizeCanvasDesign(
   createWechatBlockDocument("分组标题夹具", sources),
@@ -249,7 +305,12 @@ const materialFixture = parseWechatBlockDocument({ ...scrapbook, blocks: [
 ] })
 assert.equal(materialFixture.blocks.length, 1, "不接受任意 URL 伪装成本地素材")
 assert.equal(materialFixture.blocks[0].type, "asset")
-assert.equal(hydrateWechatBlockDocument({ ...scrapbook, blocks: [...scrapbook.blocks, ...materialFixture.blocks] }, sources).blocks.filter(block => block.type === "asset").length, 1)
+const hydratedAssets = hydrateWechatBlockDocument(
+  { ...scrapbook, blocks: [...scrapbook.blocks, ...materialFixture.blocks] },
+  sources,
+).blocks.filter(block => block.type === "asset")
+assert.ok(hydratedAssets.some(block => block.type === "asset" && block.materialId === "watercolor-clip"))
+assert.ok(hydratedAssets.every(block => block.type !== "asset" || block.materialId !== "https://example.com/untrusted.png"))
 
 const libraryFixture = parseWechatBlockDocument({ ...scrapbook, blocks: [
   { type: "asset", libraryImage: { url: "https://example.com/photo.jpg", title: "教室" }, anchorSourceId: "source-0" },

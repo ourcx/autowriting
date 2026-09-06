@@ -680,6 +680,11 @@
 .cs-material-grid img { width: 100%; height: 76px; object-fit: contain; }
 .cs-material-grid small { color: #777; }
 .cs-material-grid button:disabled { opacity: .5; cursor: default; }
+.cs-material-filters { display: grid; grid-template-columns: minmax(180px, 1fr) 150px auto; gap: 8px; align-items: center; margin-top: 12px; }
+.cs-material-filters input,
+.cs-material-filters select { min-width: 0; height: 36px; padding: 0 10px; border: 1px solid var(--color-hairline); border-radius: 7px; background: var(--color-canvas); color: var(--color-body); }
+.cs-material-filters span { color: var(--color-muted); font-size: 11px; }
+.cs-material-empty { margin: 22px 0 8px; color: var(--color-muted); text-align: center; }
 
 /* 低频入口共用一行，面板浮层展开，不改变编辑器可用高度。 */
 .cs-tools { display: flex; align-items: center; gap: 20px; position: relative; flex: 0 0 auto; padding: 0 20px; border-bottom: 1px solid var(--color-hairline); }
@@ -705,3 +710,28 @@
 .cs-template-card:hover { border-color: var(--color-brand-mint); background: var(--color-canvas); }
 .cs-template-card:focus-visible, .cs-tools-menu > summary:focus-visible { outline: 2px solid var(--color-brand-teal); outline-offset: 2px; }
 .cs-template-card.is-active { border-color: var(--color-brand-teal); box-shadow: inset 0 0 0 1px var(--color-brand-teal); }
+
+/* 章节组件只保存可复用的视觉预设，内容和章节归属仍由编辑器维护。 */
+.cs-shelf-heading { display: flex; align-items: baseline; gap: 10px; margin: 2px 2px 12px; }
+.cs-shelf-heading span { color: var(--color-muted); font-size: 11px; }
+.cs-section-preset-grid { display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)); gap: 10px; }
+.cs-section-preset-grid button { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--color-hairline); border-radius: 9px; background: var(--color-surface-soft); color: var(--color-body); text-align: left; cursor: pointer; }
+.cs-section-preset-grid button:hover:not(:disabled) { border-color: var(--color-brand-mint); background: var(--color-canvas); }
+.cs-section-preset-grid button:disabled { opacity: .45; cursor: not-allowed; }
+.cs-section-preset-grid small { color: var(--color-muted); font-size: 11px; }
+.cs-section-preset-preview { display: flex; min-height: 46px; flex-direction: column; justify-content: center; gap: 5px; padding: 7px; border-radius: 5px; background: #fff; border: 1px solid #e4dfd5; }
+.cs-section-preset-preview i { display: block; width: 78%; height: 3px; border-radius: 2px; background: #c9c2b7; }
+.cs-section-preset-preview i:first-child { width: 45%; height: 6px; background: var(--color-brand-teal); }
+.cs-section-preset-preview--side-note { border-left: 4px solid var(--color-brand-teal); }
+.cs-section-preset-preview--soft-card { background: #edf3ee; }
+.cs-section-preset-preview--ticket-chapter { border-style: dashed; border-color: #bb765e; }
+.cs-section-preset-preview--letter-chapter { box-shadow: inset 0 8px #f4ead6; }
+.cs-section-preset-preview--numbered-steps,
+.cs-section-preset-preview--timeline-story { border-left: 2px solid #7a91a0; }
+.cs-section-preset-preview--two-column,
+.cs-section-preset-preview--media-story { display: grid; grid-template-columns: 1fr 1fr; align-content: center; }
+.cs-section-preset-preview--editorial-lead i:first-child { width: 90%; height: 9px; }
+@media (max-width: 900px) {
+  .cs-section-preset-grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+  .cs-material-filters { grid-template-columns: 1fr; }
+}
