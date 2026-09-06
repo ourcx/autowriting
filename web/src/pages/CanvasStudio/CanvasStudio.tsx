@@ -1,3 +1,4 @@
+import CanvasLinkImport from "./CanvasLinkImport"
 import CanvasMaterialShelf from "./CanvasMaterialShelf"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
@@ -748,6 +749,15 @@ export default function CanvasStudio() {
       {<details className="cs-tools-menu"><summary>主题与模板</summary><div className="cs-tools-popover">
         <CanvasTemplateShelf selected={designTemplateId} onSelect={id => {
           setDesignTemplateId(id)
+        }} />
+      <CanvasLinkImport key={articleId} sources={sources} disabled={generating || articleLoading}
+        onBusy={setGenerating} onApply={(document, reference, title) => {
+          setDesignReference(reference)
+          setDesignFileName(`秀米：${title}`)
+          setBlockDocument(document)
+          setSelectedBlockId(null)
+          setDesignTemplateId("design-reference")
+          toast.success("模板预览已应用，可继续编辑或撤销")
         }} />
       <details className="cs-design-reference">
         <summary>导入设计参考{designFileName ? ` · ${designFileName}` : "（可选）"}</summary>

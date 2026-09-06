@@ -121,6 +121,13 @@ cases.push({
 })
 
 cases.push({
+  name: '未登录不得读取秀米模板',
+  run: async () => {
+    const r = await fetch(`${BASE}/api/canvas/xiumi-reference`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:'https://v.xiumi.us/board/v5/test/123'})})
+    if (![401,403].includes(r.status)) throw new Error(`status=${r.status}`)
+  },
+})
+cases.push({
   name: '未知 API 应返回 JSON 404，不得回退前端页面',
   run: async () => {
     const r = await fetch(`${BASE}/api/does-not-exist`)
@@ -283,6 +290,15 @@ cases.push({
     smokeUserId = j.user?.id
     if (!token) throw new Error('响应中没有 token')
     if (!smokeUserId) throw new Error('响应中没有用户 ID')
+  },
+})
+cases.push({
+  name: '秀米导入拒绝任意主机与编辑器链接',
+  run: async () => {
+    for (const url of ['http://127.0.0.1/', 'https://v.xiumi.us.evil.test/board/v5/x/123', 'https://xiumi.us/studio/v5']) {
+      const r = await fetch(`${BASE}/api/canvas/xiumi-reference`, {method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({url})})
+      if (r.status !== 400) throw new Error(`status=${r.status}`)
+    }
   },
 })
 cases.push({

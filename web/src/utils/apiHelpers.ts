@@ -436,3 +436,8 @@ export async function fetchCanvasLibraryImages(): Promise<CanvasLibraryImage[]> 
     return image ? [image] : []
   })
 }
+
+export async function fetchXiumiReference(url: string): Promise<{title: string; reference: string; styleCount: number}> {
+  const response = await axios.post("/api/canvas/xiumi-reference", {url}, {timeout: 60000})
+  return response.data
+}

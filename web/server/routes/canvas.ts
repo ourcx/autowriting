@@ -28,8 +28,26 @@ import {
   normalizeCanvasPrimaryColor,
 } from "../../shared/canvasDesignSystem.ts"
 
+import { readXiumiReference, validateXiumiUrl } from "../utils/xiumiReference.ts"
+
 const router = Router()
 router.use(authMiddleware)
+
+const activeXiumiReaders = new Set<string>()
+router.post("/xiumi-reference", async (req, res) => {
+  try { validateXiumiUrl(req.body?.url) }
+  catch { res.status(400).json({ error: "请输入 HTTPS 秀米公开分享链接（board/v5）" }); return }
+  const userId = String((req as AuthedRequest).user?.id)
+  if (activeXiumiReaders.has(userId) || activeXiumiReaders.size >= 4) {
+    res.status(429).json({ error: "正在读取模板，请稍后重试" }); return
+  }
+  activeXiumiReaders.add(userId)
+  try { res.json(await readXiumiReference(req.body.url)) }
+  catch (error) {
+    logger.warn("CANVAS", "秀米参考读取失败", { error: error instanceof Error ? error.message : "未知错误" })
+    res.status(422).json({ error: error instanceof Error ? error.message : "秀米参考读取失败" })
+  } finally { activeXiumiReaders.delete(userId) }
+})
 
 const PROMPT_MAX_LENGTH = 3000
 const CANVAS_LLM_TIMEOUT_MS = 300000

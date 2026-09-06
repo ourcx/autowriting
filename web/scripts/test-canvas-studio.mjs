@@ -55,9 +55,10 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
  await page.route('**/api/images/uploaded?*',r=>r.fulfill({json:[]}));
  await page.route('**/api/images',r=>r.fulfill({json:[{imageUrl:'/api/images/uploads/library-fixture.png',title:'图库照片测试'}]}))
  await page.route('**/api/images/uploads/library-fixture.png',r=>r.fulfill({contentType:'image/png',body:fs.readFileSync(new URL('../public/canvas-materials/watercolor-bunting.png',import.meta.url))}))
+ await page.route('**/api/canvas/xiumi-reference',route=>route.fulfill({json:{title:'秀米样式夹具',reference:'{"styles":[{"color":"#2f6f62","fontSize":"20px"}]}',styleCount:1}}))
  await page.route('**/api/canvas/generate-block/stream', async route => {
   const input = route.request().postDataJSON()
-  assert.equal(input.templateId, "editorial-story")
+  assert.ok(["editorial-story", "design-reference"].includes(input.templateId))
   const result = finalizeCanvasDesign(createWechatBlockDocument(article.title, input.sources), input.sources, input.templateId)
   assert.equal(result.report.passed, true)
   if (holdGeneration) await new Promise(resolve => { releaseGeneration = resolve })
@@ -75,6 +76,19 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
  await page.setViewportSize({width:1440,height:1080})
  assert.equal(await paper.locator('img[src="https://example.com/cover-only-fixture.png"]').count(),0,'封面不得自动追加到正文')
  const before=await paper.innerText();
+ // 导入预览不会立即覆盖画布，只有应用后才进入可撤销的编辑历史。
+ const originalStyle = await paper.locator('.wbe-document').getAttribute('style')
+ await page.getByText('主题与模板',{exact:true}).click()
+ await page.getByLabel('从秀米公开分享链接生成').fill('https://v.xiumi.us/board/v5/demo/123')
+ await page.getByRole('button',{name:'生成模板预览',exact:true}).click()
+ await page.getByRole('button',{name:'应用此预览',exact:true}).waitFor()
+ assert.equal(await paper.locator('.wbe-document').getAttribute('style'),originalStyle)
+ assert.ok(await page.locator('.cs-link-preview h1').count())
+ await page.getByRole('button',{name:'应用此预览',exact:true}).click()
+ assert.notEqual(await paper.locator('.wbe-document').getAttribute('style'),originalStyle)
+ await page.getByText('主题与模板',{exact:true}).click()
+ await page.getByRole('button',{name:'撤销',exact:true}).click()
+ assert.equal(await paper.locator('.wbe-document').getAttribute('style'),originalStyle)
  for (const name of ['自然手记','节庆邀请','影像画册']) {
   await page.getByText('主题与模板',{exact:true}).click()
   await page.getByRole('button',{name:new RegExp(name)}).click()

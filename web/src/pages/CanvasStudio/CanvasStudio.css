@@ -705,3 +705,11 @@
 
 .cs-tools .cdi-template { display: none; }
 .cs-tools .cdi-root { grid-template-columns: minmax(0, 1fr); }
+
+.cs-link-import { margin-top: 16px; padding: 14px 0; border-top: 1px solid var(--color-hairline); }
+.cs-link-import-input { display: flex; gap: 8px; margin: 8px 0; }
+.cs-link-import input { min-width: 0; flex: 1; padding: 8px; border: 1px solid var(--color-hairline); border-radius: 6px; }
+.cs-link-import button { padding: 8px 12px; cursor: pointer; border: 1px solid var(--color-hairline); border-radius: 6px; background: var(--color-canvas); }
+.cs-link-import button:disabled { opacity: .5; cursor: default; }
+.cs-link-import small { color: var(--color-muted); }
+.cs-link-preview { width: 375px; max-width: 100%; margin: 12px auto; max-height: 380px; overflow: auto; }
