@@ -73,7 +73,8 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          command_timeout: 10m
+          # 备份已观测到超过六分钟，为后续安装和健康检查保留时间。
+          command_timeout: 30m
           script: |
             set -euo pipefail
             PROJECT_DIR=/home/admin/autowriting
@@ -181,9 +182,13 @@ jobs:
             fi
 
             echo "[deploy] install release without touching runtime data"
+            echo "[deploy] copy release files at $(date -u +%FT%TZ)"
             cp -a "$STAGING_DIR"/. "$PROJECT_DIR"/
+            echo "[deploy] release files copied at $(date -u +%FT%TZ)"
             rm -f "$ARCHIVE"
+            echo "[deploy] install dependencies at $(date -u +%FT%TZ)"
             pnpm --dir web install --frozen-lockfile --prefer-offline
+            echo "[deploy] dependencies installed at $(date -u +%FT%TZ)"
             test -f web/dist/index.html
 
             echo "[deploy] restart PM2; Nginx keeps proxying port 3000"
