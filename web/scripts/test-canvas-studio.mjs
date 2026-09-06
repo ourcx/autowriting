@@ -50,6 +50,8 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
  await page.route('**/api/articles/canvas-fixture',r=>r.fulfill({json:article}));
  await page.route('**/api/articles/canvas-second', r=>r.fulfill({json:{...article,title:'第二篇文章'}}))
  await page.route('**/api/images/uploaded?*',r=>r.fulfill({json:[]}));
+ await page.route('**/api/images',r=>r.fulfill({json:[{imageUrl:'/api/images/uploads/library-fixture.png',title:'图库照片测试'}]}))
+ await page.route('**/api/images/uploads/library-fixture.png',r=>r.fulfill({contentType:'image/png',body:fs.readFileSync(new URL('../public/canvas-materials/watercolor-bunting.png',import.meta.url))}))
  await page.route('**/api/canvas/generate-block/stream', async route => {
   const input = route.request().postDataJSON()
   assert.equal(input.templateId, "editorial-story")
@@ -140,7 +142,47 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
  await page.getByRole('button', {name:'AI 设计排版',exact:true}).waitFor()
  assert.equal(await page.locator('.cs-reading-paper h1').innerText(), '第二篇文章')
  assert.ok(await page.getByRole('button',{name:'撤销',exact:true}).isDisabled())
- fs.writeFileSync(path.join(artifactDir, 'report.json'),JSON.stringify({errors,checks:['375px/414px 预览','无横向溢出','章节字号','模板切换','撤销重做','段落选择及字号修改','刷新保留排版','实际剪贴板 HTML','AI 流式响应模拟','跨文章请求隔离']},null,2))
+ // 新主题使用真实静态素材；验收插入、刷新、导出，不调用在线图片服务。
+ await page.getByRole('button',{name:'返回编辑',exact:true}).click()
+ await page.getByRole('button',{name:/手绘纸笺 水彩彩旗/}).click()
+ await page.getByRole('button',{name:'应用模板',exact:true}).click()
+ await page.locator('.wbe-paper [data-publication-frame="notebook"]').first().waitFor()
+ const scrapbookText = await paper.innerText()
+ await page.locator('.cs-material-shelf summary').filter({hasText:'装饰素材库'}).click()
+ await page.getByRole('button',{name:'心形夹板 照片装饰',exact:true}).click()
+ assert.equal(await page.getByRole('combobox',{name:'素材来源'}).inputValue(), 'watercolor-clip')
+ await page.getByText('照片与插画库',{exact:false}).click()
+ await page.getByRole('textbox',{name:'筛选图库图片'}).fill('图库照片')
+ await page.getByRole('button',{name:'图库照片测试 插入照片',exact:true}).click()
+ assert.equal(await page.getByRole('combobox',{name:'素材来源'}).inputValue(), 'library')
+ // 阅读态去掉编辑器原有的外扩 3px 选中框，检查实际交付内容是否溢出。
+ await page.getByRole('button',{name:'阅读预览',exact:true}).click()
+ for (const width of ['375','414','677']) {
+  await page.getByRole('combobox',{name:'预览宽度'}).selectOption(width)
+  assert.deepEqual(await page.locator('.cs-reading-paper').evaluate(root=>[root,...root.querySelectorAll('*')].filter(el=>el.clientWidth>0 && el.scrollWidth>el.clientWidth+2).map(el=>({tag:el.tagName,cls:el.className,w:el.clientWidth,scroll:el.scrollWidth}))), [], `手绘主题 ${width}px 溢出`)
+ }
+ await page.getByRole('combobox',{name:'预览宽度'}).selectOption('375')
+ await page.getByRole('button',{name:'返回编辑',exact:true}).click()
+ await page.reload();await page.locator('.wbe-paper [data-publication-frame="notebook"]').first().waitFor()
+ assert.equal(await paper.innerText(), scrapbookText)
+ await page.waitForFunction(()=>[...document.querySelectorAll('.wbe-paper img')].every(img=>img.complete && img.naturalWidth>0))
+ await page.screenshot({path:path.join(artifactDir,'scrapbook-editor.png'),fullPage:true})
+ await page.getByRole('button',{name:'复制公众号内容',exact:true}).click()
+ await page.getByText('已复制公众号富文本，可直接粘贴到编辑器',{exact:true}).waitFor()
+ const themedHtml = await page.evaluate(async()=>{const items=await navigator.clipboard.read();return (await items.find(item=>item.types.includes('text/html')).getType('text/html')).text()})
+ assert.ok(themedHtml.includes('data:image/png;base64,'))
+ assert.ok(!themedHtml.includes('/canvas-materials/'))
+ assert.ok(!themedHtml.includes('/api/images/uploads/'))
+ assert.ok(!themedHtml.includes('data-block-id'))
+ fs.writeFileSync(path.join(artifactDir,'scrapbook.html'),themedHtml)
+ const themedPage=await context.newPage()
+ await themedPage.setViewportSize({width:375,height:900})
+ await themedPage.setContent(themedHtml)
+ await themedPage.addStyleTag({content:'body { margin: 0; }'})
+ assert.equal(await themedPage.locator('body').evaluate(el=>el.scrollWidth>375),false)
+ await themedPage.screenshot({path:path.join(artifactDir,'scrapbook-export.png'),fullPage:true})
+ await themedPage.close()
+ fs.writeFileSync(path.join(artifactDir, 'report.json'),JSON.stringify({errors,checks:['375px/414px 预览','无横向溢出','章节字号','模板切换','撤销重做','段落选择及字号修改','刷新保留排版','实际剪贴板 HTML','AI 流式响应模拟','跨文章请求隔离','手绘纸笺与装饰、照片筛选插入','375/414/677px 新主题无溢出','新主题刷新与内嵌素材导出']},null,2))
  assert.deepEqual(errors,[]);
  await context.clearCookies();
  console.log(`Browser checks passed · ${artifactDir}`);

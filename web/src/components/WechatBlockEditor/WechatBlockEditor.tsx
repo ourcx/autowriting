@@ -1,3 +1,5 @@
+import { CANVAS_MATERIALS, getCanvasMaterial } from "../../../shared/canvasMaterialLibrary"
+import { PublicationFrame, PublicationMaterial } from "./PublicationFrame"
 import type { CSSProperties, ReactNode, RefObject } from "react"
 import {
   ArrowDown,
@@ -152,6 +154,9 @@ function generatedImageUrl(
 }
 
 function generatedAssetUrl(block: WechatAssetBlock): string {
+  const material = getCanvasMaterial(block.materialId)
+  if (material) return material.src
+  if (block.libraryImage) return block.libraryImage.url
   const prompt = [
     block.prompt,
     "Clean web editorial asset suitable for a WeChat article.",
@@ -160,7 +165,7 @@ function generatedAssetUrl(block: WechatAssetBlock): string {
 }
 
 function generatedAssetRatio(block: WechatAssetBlock): string {
-  return generatedImageRatio(block.imageSize)
+  return getCanvasMaterial(block.materialId)?.ratio || (block.libraryImage ? "auto" : generatedImageRatio(block.imageSize))
 }
 
 function generatedImageRatio(imageSize: WechatAssetBlock["imageSize"]): string {
@@ -219,7 +224,7 @@ function SectionIcon({ icon }: { icon: WechatSectionIcon }) {
 
 function blockLabel(block: WechatBlock, source?: CanvasSource): string {
   if (block.type === "decoration") return "AI SVG 装饰"
-  if (block.type === "asset") return "AI 图片素材"
+  if (block.type === "asset") return getCanvasMaterial(block.materialId)?.name || block.libraryImage?.title || "AI 图片素材"
   if (block.type === "divider") return "分隔线"
   if (block.type === "switcher") return "点击切换素材"
   if (block.type === "section") {
@@ -364,6 +369,7 @@ function SectionContent({
           block={sectionContentBlock(source, block, theme)}
           source={source}
           fontTheme={fontTheme}
+          publicationStyle={theme.publicationStyle}
         />
       </div>
     )
@@ -419,6 +425,19 @@ function SectionContent({
       <SectionIcon icon={block.icon} />
     </div>
   ) : null
+  if (block.frame) {
+    const content = block.frame === "collage" && sources.every(source => source.kind === "image")
+      ? <table role="presentation" style={{ width: "100%", tableLayout: "fixed", borderSpacing: 0 }}><tbody>
+          {Array.from({ length: Math.ceil(sources.length / 2) }, (_, row) => <tr key={row}>
+            {sources.slice(row * 2, row * 2 + 2).map((source, column) => <td key={source.id}
+              style={{ width: "50%", verticalAlign: "top", padding: column ? "48px 0 0 6px" : "0 6px 0 0" }}>
+              {renderSource(source)}
+            </td>)}
+          </tr>)}
+        </tbody></table>
+      : sources.map(renderSource)
+    return <PublicationFrame kind={block.frame} border={block.borderColor}>{content}</PublicationFrame>
+  }
   if (block.layout === "stack") {
     return <section style={wrapperStyle}>{accentRail}{sectionIcon}{sources.map(renderSource)}</section>
   }
@@ -677,10 +696,12 @@ function SourceContent({
   block,
   source,
   fontTheme,
+  publicationStyle,
 }: {
   block: WechatContentBlock
   source: CanvasSource
   fontTheme: WechatBlockDocument["font"]
+  publicationStyle?: WechatBlockTheme["publicationStyle"]
 }) {
   if (source.kind === "image") {
     return (
@@ -692,7 +713,9 @@ function SourceContent({
             display: "block",
             width: "100%",
             maxWidth: "100%",
-            height: block.imageFit === "cover" ? 360 : "auto",
+            height: publicationStyle === "scrapbook" ? "auto" : block.imageFit === "cover" ? 360 : "auto",
+            boxSizing: "border-box",
+            border: publicationStyle === "scrapbook" ? "5px solid #f5e4ed" : undefined,
             objectFit: block.imageFit,
             borderRadius: block.imageRadius,
           }}
@@ -720,6 +743,12 @@ function SourceContent({
   if (fontTheme === "editorial" && block.variant === "quote") {
     style.borderLeft = `4px solid ${block.accentColor}`
   }
+  if (source.kind === "title" && publicationStyle === "scrapbook") return <section style={{ marginBottom: 38 }}>
+    <PublicationMaterial id="watercolor-bunting" />
+    <section style={{ margin: "-4px 6px 0", padding: "32px 16px", border: "1px solid #d99876", borderRadius: "48% 43% 46% 39% / 18% 21% 17% 20%", background: "#ffffff" }}>
+      <h1 style={{ ...style, margin: 0, whiteSpace: "pre-line" }}>{markedText}</h1>
+    </section>
+  </section>
   if (source.kind === "title") return <h1 style={style}>{markedText}</h1>
   if (source.kind === "heading") {
     return (
@@ -818,12 +847,13 @@ function GeneratedAsset({ block }: { block: WechatAssetBlock }) {
     >
       <img
         data-wechat-material="true"
+        data-wechat-library-image={block.libraryImage ? "true" : undefined}
         src={generatedAssetUrl(block)}
-        alt=""
+        alt={block.libraryImage?.title || ""}
         style={{
           display: "block",
           width: "100%",
-          height: "100%",
+          height: block.libraryImage ? "auto" : "100%",
           objectFit: "cover",
           borderRadius: block.radius,
         }}
@@ -992,11 +1022,11 @@ export function WechatBlockRenderer({
                   />
                 )
                 : (
-                  <SourceContent
-                    block={block}
-                    source={source as CanvasSource}
-                    fontTheme={document.font}
-                  />
+                  document.theme.publicationStyle === "scrapbook" && source?.kind === "image"
+                    ? <PublicationFrame kind="photo" border={document.theme.border}>
+                        <SourceContent block={block} source={source} fontTheme={document.font} publicationStyle="scrapbook" />
+                      </PublicationFrame>
+                    : <SourceContent block={block} source={source as CanvasSource} fontTheme={document.font} publicationStyle={document.theme.publicationStyle} />
                 )}
           </div>
         )
@@ -1580,7 +1610,14 @@ export default function WechatBlockEditor({
 
           {selectedBlock?.type === "asset" ? (
             <>
-              <div className="wbe-property-heading">AI 图片素材</div>
+              <div className="wbe-property-heading">图片素材</div>
+              <label><span>素材来源</span><select aria-label="素材来源" value={selectedBlock.materialId || (selectedBlock.libraryImage ? "library" : "generated")}
+                onChange={event => updateBlock({ materialId: getCanvasMaterial(event.target.value)?.id })}>
+                {selectedBlock.libraryImage ? <option value="library">已选图库照片</option> : null}
+                {selectedBlock.prompt ? <option value="generated">AI 生成图片</option> : null}
+                {CANVAS_MATERIALS.map(material => <option key={material.id} value={material.id}>{material.name}</option>)}
+              </select></label>
+              {!selectedBlock.materialId && !selectedBlock.libraryImage ? <>
               <label>
                 <span>图片生成提示词</span>
                 <textarea
@@ -1605,6 +1642,7 @@ export default function WechatBlockEditor({
                   <option value="portrait_16_9">竖图 16:9</option>
                 </select>
               </label>
+              </> : null}
               <div className="wbe-property-grid">
                 <NumberField label="宽度" value={selectedBlock.width} min={80} max={677} onChange={width => updateBlock({ width })} />
                 <NumberField label="圆角" value={selectedBlock.radius} min={0} max={32} onChange={radius => updateBlock({ radius })} />
@@ -1728,6 +1766,11 @@ export default function WechatBlockEditor({
 
           {selectedBlock?.type === "section" ? (
             <>
+              <label><span>纸张结构</span><select aria-label="纸张结构" value={selectedBlock.frame || "none"}
+                onChange={event => updateBlock({ frame: event.target.value === "none" ? undefined : event.target.value as WechatSectionBlock["frame"] })}>
+                <option value="none">普通布局</option><option value="notebook">活页纸章节</option>
+                <option value="photo">夹板相框</option><option value="collage">错位照片组合</option>
+              </select></label>
               <div className="wbe-property-heading">组合区域 · {selectedBlock.sourceIds.length} 项</div>
               <label>
                 <span>布局</span>

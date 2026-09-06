@@ -1,4 +1,5 @@
 export type CanvasDesignTemplateId =
+  | "scrapbook-letter"
   | "editorial-story"
   | "interview-notes"
   | "weekly-dashboard"
@@ -12,6 +13,9 @@ export type CanvasDesignSectionAccent = "none" | "top" | "left" | "bottom"
 export type CanvasDesignIconName = "book-open" | "quote" | "lightbulb" | "sparkles" | "mic" | "trending-up" | "check-circle" | "arrow-right" | "bar-chart"
 
 export interface CanvasDesignTheme {
+  publicationStyle?: "scrapbook"
+  secondary?: string
+  accent?: string
   font: CanvasDesignFont
   canvas: string
   surface: string
@@ -207,6 +211,27 @@ export const CANVAS_DESIGN_TEMPLATES: CanvasDesignTemplate[] = [
       intro: { layout: "stack", preset: "plain", columnRatio: "1:1", surface: "none", surfaceKind: "none", accentStyle: "none", shadow: "none", divider: false },
       bodyCycle: [{ layout: "stack", preset: "plain", columnRatio: "1:1", surface: "none", surfaceKind: "none", accentStyle: "none", shadow: "none", divider: false }],
       media: { layout: "media-text", preset: "soft", columnRatio: "2:1", surface: "surfaceAlt", surfaceKind: "solid", accentStyle: "none", shadow: "none", divider: false },
+    },
+  },
+  {
+    id: "scrapbook-letter",
+    name: "手绘纸笺",
+    description: "水彩彩旗 · 活页纸章节 · 夹板相框 · 粉蓝配色",
+    brief: `参考秀米的整篇主题编排：奶油纸底、原创水彩素材、粉蓝标题签、白色活页纸章节和夹板相框。正文单栏连续阅读；相邻照片可错位排列。用 theme.publicationStyle=scrapbook、section.frame=notebook|photo|collage 和 asset.materialId 引用内置素材。只把完整章节放进纸张，不要逐段套引用框。保留原文顺序与可编辑文字，不生成教师节等原文没有的文案。`,
+    designSystem: {
+      inheritModelTheme: false,
+      theme: {
+        ...editorialTheme, publicationStyle: "scrapbook", font: "system",
+        canvas: "#fff7e4", surface: "#ffffff", surfaceAlt: "#fff0f4",
+        primary: "#b63f68", secondary: "#387699", accent: "#936cb0", border: "#d99876",
+        text: "#54504d", displaySize: 34, displayWeight: 800, headingSize: 21,
+        bodySize: 17, bodyLineHeight: 2, sectionGap: 36, radius: 0,
+        canvasStyle: { ...editorialTheme.canvasStyle, colors: ["#fff7e4"] },
+      },
+      titleAlign: "center", bodyTextIndent: 0,
+      intro: { layout: "stack", preset: "plain", columnRatio: "1:1", surface: "none", surfaceKind: "none", accentStyle: "none", shadow: "none", divider: false },
+      bodyCycle: [{ layout: "stack", preset: "plain", columnRatio: "1:1", surface: "none", surfaceKind: "none", accentStyle: "none", shadow: "none", divider: false }],
+      media: { layout: "stack", preset: "plain", columnRatio: "1:1", surface: "none", surfaceKind: "none", accentStyle: "none", shadow: "none", divider: false },
     },
   },
   {

@@ -1,3 +1,4 @@
+import { applyScrapbookDesign } from "./canvasScrapbook.ts"
 import type { CanvasSource } from "./canvasArticle.ts"
 import {
   getCanvasDesignTemplate,
@@ -49,6 +50,8 @@ type AnchoredMaterial = Extract<WechatBlock, { type: "asset" | "decoration" | "d
 export function normalizeCanvasPrimaryColor(
   document: WechatBlockDocument,
 ): WechatBlockDocument {
+  // 成套手绘主题保留粉蓝辅色和纸张描边；旧模板仍保持原有单色策略。
+  if (document.theme.publicationStyle === "scrapbook") return document
   const primary = document.theme.primary
   const normalizeMarks = (marks: WechatInlineMark[] | undefined): WechatInlineMark[] | undefined => (
     marks?.map(mark => ({ ...mark, color: primary }))
@@ -149,8 +152,9 @@ function themeFromDesignSystem(
     ...modelTheme,
     ...source,
     primary,
-    secondary: primary,
-    accent: primary,
+    publicationStyle: source.publicationStyle,
+    secondary: source.publicationStyle === "scrapbook" ? source.secondary || primary : primary,
+    accent: source.publicationStyle === "scrapbook" ? source.accent || primary : primary,
     canvasStyle,
   }
 }
@@ -170,7 +174,7 @@ function isNumericSource(source: CanvasSource): boolean {
   return digits >= 2 && source.text.length <= 100
 }
 
-function semanticSourceGroups(sources: CanvasSource[]): CanvasSource[][] {
+function semanticSourceGroups(sources: CanvasSource[], maximumGroupSize = 4): CanvasSource[][] {
   const groups: CanvasSource[][] = []
   let pending: CanvasSource[] = []
   const flush = () => {
@@ -209,7 +213,7 @@ function semanticSourceGroups(sources: CanvasSource[]): CanvasSource[][] {
       continue
     }
     pending.push(source)
-    if (pending.length >= 4) flush()
+    if (pending.length >= maximumGroupSize) flush()
   }
   flush()
   return groups
@@ -511,7 +515,7 @@ export function compileCanvasDesignSystem(
   const useExistingGroups = !options.forceRecipes && existingSections.length >= 2
   const groups = useExistingGroups
     ? documentSourceGroups(document, sourceById)
-    : semanticSourceGroups(sources)
+    : semanticSourceGroups(sources, theme.publicationStyle === "scrapbook" ? 8 : 4)
   const materials = anchoredMaterials(document)
   const blocks: WechatBlock[] = []
   let sectionIndex = 0
@@ -549,7 +553,7 @@ export function compileCanvasDesignSystem(
       }
     }
   }
-  return {
+  const compiled: WechatBlockDocument = {
     ...document,
     name: document.name,
     sidePadding: templateId === "editorial-story" ? 20 : document.sidePadding,
@@ -559,6 +563,7 @@ export function compileCanvasDesignSystem(
     theme,
     blocks,
   }
+  return theme.publicationStyle === "scrapbook" ? applyScrapbookDesign(compiled, sources) : compiled
 }
 
 function contentSourceIds(document: WechatBlockDocument): string[] {

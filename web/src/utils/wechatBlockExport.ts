@@ -1,3 +1,5 @@
+import { CANVAS_MATERIALS } from "../../shared/canvasMaterialLibrary"
+
 const WECHAT_CONTENT_WIDTH = 677
 const DEFAULT_WECHAT_SIDE_SPACE = 8
 
@@ -246,8 +248,28 @@ function normalizeWechatElements(root: HTMLElement): void {
   })
 }
 
+// 项目内置素材在导出时内嵌，避免把仅本机可访问的 /canvas-materials 地址复制到公众号。
+function embedPublicationMaterials(source: HTMLElement, clone: HTMLElement): void {
+  const originals = Array.from(source.querySelectorAll("img"))
+  const copies = Array.from(clone.querySelectorAll("img"))
+  originals.forEach((image, index) => {
+    const url = new URL(image.src, window.location.href)
+    if (url.origin !== window.location.origin || !(CANVAS_MATERIALS.some(material => material.src === url.pathname) || image.dataset.wechatLibraryImage === "true")) return
+    if (!image.complete || !image.naturalWidth) throw new Error("装饰素材尚未加载完成，请稍后再复制")
+    const canvas = document.createElement("canvas")
+    // 按显示宽度的两倍导出，保留透明度与清晰度，避免重复装饰把富文本膨胀到数 MB。
+    canvas.width = Math.min(image.naturalWidth, Math.max(320, image.clientWidth * 2))
+    canvas.height = Math.round(image.naturalHeight * canvas.width / image.naturalWidth)
+    const context = canvas.getContext("2d")
+    if (!context) throw new Error("浏览器无法导出装饰素材")
+    context.drawImage(image, 0, 0, canvas.width, canvas.height)
+    copies[index].src = canvas.toDataURL("image/png")
+  })
+}
+
 export function buildWechatBlockHtml(source: HTMLElement): string {
   const clone = source.cloneNode(true) as HTMLElement
+  embedPublicationMaterials(source, clone)
   inlineComputedWechatStyles(source, clone)
   stripEditorChrome(clone)
   replaceSvgDecorations(clone)

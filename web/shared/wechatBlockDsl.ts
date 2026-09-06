@@ -1,3 +1,4 @@
+import { getCanvasMaterial, parseCanvasLibraryImage, type CanvasLibraryImage, type CanvasMaterialId } from "./canvasMaterialLibrary.ts"
 import type { CanvasSource, CanvasSourceKind } from "./canvasArticle.ts"
 
 export type WechatBlockVariant =
@@ -51,6 +52,7 @@ export interface WechatSurfaceStyle {
 }
 
 export interface WechatBlockTheme {
+  publicationStyle?: "scrapbook"
   font: WechatBlockFont
   canvas: string
   surface: string
@@ -156,6 +158,8 @@ export type WechatGeneratedImageSize =
   | "landscape_16_9"
 
 export interface WechatAssetBlock {
+  libraryImage?: CanvasLibraryImage
+  materialId?: CanvasMaterialId
   id: string
   type: "asset"
   anchorSourceId: string
@@ -226,6 +230,7 @@ export interface WechatTextStyleOverride {
 }
 
 export interface WechatSectionBlock {
+  frame?: "notebook" | "photo" | "collage"
   id: string
   type: "section"
   sourceIds: string[]
@@ -418,6 +423,7 @@ function parseTheme(value: unknown): WechatBlockTheme {
     ? value as Record<string, unknown>
     : {}
   return {
+    publicationStyle: record.publicationStyle === "scrapbook" ? "scrapbook" : undefined,
     font: fontIn(record.font, DEFAULT_WECHAT_BLOCK_THEME.font),
     canvas: colorIn(record.canvas, DEFAULT_WECHAT_BLOCK_THEME.canvas),
     surface: colorIn(record.surface, DEFAULT_WECHAT_BLOCK_THEME.surface),
@@ -611,10 +617,14 @@ function parseAssetBlock(
   index: number,
 ): WechatAssetBlock | null {
   const prompt = promptIn(record.prompt)
-  if (!prompt) return null
+  const materialId = getCanvasMaterial(record.materialId)?.id
+  const libraryImage = parseCanvasLibraryImage(record.libraryImage)
+  if (!prompt && !materialId && !libraryImage) return null
   const aligns: WechatBlockAlign[] = ["left", "center", "right"]
   return {
     id: idIn(record.id, `asset-${index + 1}`),
+    materialId,
+    libraryImage,
     type: "asset",
     anchorSourceId: idIn(record.anchorSourceId, ""),
     placement: record.placement === "before" ? "before" : "after",
@@ -818,6 +828,8 @@ function parseSectionBlock(
     : requestedPadding
   return {
     id: idIn(record.id, `section-${index + 1}`),
+    frame: ["notebook", "photo", "collage"].includes(String(record.frame))
+      ? record.frame as WechatSectionBlock["frame"] : undefined,
     type: "section",
     sourceIds,
     layout: layouts.includes(record.layout as WechatSectionLayout)
@@ -1074,7 +1086,7 @@ export function hydrateWechatBlockDocument(
 
     const candidate = contentCandidates.get(source.id)
     const fallback = createWechatContentBlock(source, parsed.theme)
-    const semanticVariant = candidate?.variant === "plain"
+    const semanticVariant = candidate?.variant === "plain" && parsed.theme.publicationStyle !== "scrapbook"
       ? source.kind === "title"
         ? "title"
         : source.kind === "heading"

@@ -673,3 +673,13 @@
 .cs-root .wbe-global-settings > summary { cursor: pointer; font-size: 12px; color: var(--color-muted); }
 .cs-root .wbe-global-settings > label,
 .cs-root .wbe-global-settings > div { margin-top: 14px; }
+
+/* 素材使用实际资源缩略图，插入与模板切换保持两个明确入口。 */
+.cs-material-shelf { margin: 12px 0; padding: 14px 18px; border: 1px solid var(--border-color, #dedbd5); border-radius: 12px; }
+.cs-material-shelf summary { cursor: pointer; font-weight: 600; }
+.cs-material-shelf summary span { font-weight: 400; color: #777; margin-left: 12px; font-size: 12px; }
+.cs-material-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; }
+.cs-material-grid button { width: 158px; display: grid; gap: 6px; padding: 10px; border: 1px solid #e7e0d6; border-radius: 8px; background: #fffaf2; cursor: pointer; text-align: left; color: #544c45; }
+.cs-material-grid img { width: 100%; height: 76px; object-fit: contain; }
+.cs-material-grid small { color: #777; }
+.cs-material-grid button:disabled { opacity: .5; cursor: default; }

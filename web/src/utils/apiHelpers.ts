@@ -1,3 +1,4 @@
+import { parseCanvasLibraryImage, type CanvasLibraryImage } from "../../shared/canvasMaterialLibrary"
 /* ============================================================
  * apiHelpers.ts — 前端 API 请求公共工具函数
  * ============================================================ */
@@ -422,4 +423,16 @@ export async function testAIConnection(cfg: AIConfig): Promise<{ ok: boolean; ms
   } catch (e: unknown) {
     return { ok: false, msg: e instanceof Error ? e.message : '网络连接失败，请检查 Base URL' }
   }
+}
+
+// 复用已有图库读取接口，仅返回经过校验、可安全插入画布的图片元数据。
+export async function fetchCanvasLibraryImages(): Promise<CanvasLibraryImage[]> {
+  const response = await axios.get<unknown>("/api/images")
+  if (!Array.isArray(response.data)) return []
+  return response.data.flatMap((item: unknown) => {
+    if (!item || typeof item !== "object") return []
+    const record = item as Record<string, unknown>
+    const image = parseCanvasLibraryImage({ url: record.imageUrl, title: record.title })
+    return image ? [image] : []
+  })
 }

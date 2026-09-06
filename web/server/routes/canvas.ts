@@ -130,6 +130,12 @@ blocks 仅允许六种：
 5. switcher: {"id":"","type":"switcher","anchorSourceId":"source-2","placement":"before|after","beforePrompt":"切换前英文图片提示词","afterPrompt":"同构图切换后英文图片提示词","imageSize":"square_hd|square|portrait_4_3|portrait_16_9|landscape_4_3|landscape_16_9","width":597,"radius":0,"align":"left|center|right","marginTop":16,"marginBottom":24}
 6. section: {"id":"","type":"section","sourceIds":["source-1","source-2"],"layout":"stack|two-column|comparison|feature|editorial|timeline|steps|media-text|grid","columnRatio":"1:1|1:2|2:1","mediaPosition":"left|right","columns":2,"preset":"plain|soft|feature|editorial|callout","background":"transparent","surfaceStyle":{"kind":"none|solid|linear|stripes|dots|grid|ruled-paper|generated","colors":["#ffffff","#f7f7f7"],"patternColor":"rgba(82,99,165,0.12)","angle":135,"size":20,"opacity":0.12,"prompt":"","imageSize":"landscape_16_9","fit":"cover|contain|tile","overlayColor":"#ffffff","overlayOpacity":0.12},"color":"#262626","accentColor":"#5263a5","borderColor":"#dee0e3","borderWidth":0,"radius":0,"padding":16,"gap":16,"marginTop":8,"marginBottom":24,"divider":true,"accentStyle":"none|top|left|bottom|tri-color","shadow":"none|soft","leadSourceId":"source-2","overlineSourceId":"source-1","icon":{"kind":"lucide|path","name":"book-open|quote|lightbulb|sparkles|mic|trending-up|check-circle|arrow-right|bar-chart","d":"","color":"#5263a5","size":24,"position":"top-left|top-right|inline"},"itemStyles":{"source-1":{"variant":"overline","fontSize":11,"fontWeight":700,"color":"#1f2329"},"source-2":{"variant":"lede","fontSize":20,"background":"#f7f7f7","borderColor":"#dee0e3","borderWidth":0,"radius":6,"padding":14,"marginTop":0,"marginBottom":12,"textIndent":0,"marks":[]}}}
 
+秀米式主题扩展（优先于下方默认克制排版规则，仅在手绘纸笺模板或用户明确要求手帐/纸张风格时启用）：
+- theme.publicationStyle="scrapbook"；同套素材可使用粉色 primary、蓝色 secondary、紫色 accent，正文仍用深灰。
+- section.frame 可为 notebook（完整活页章节）、photo（夹板相框）、collage（仅连续照片错位组合）。这些结构不等于引用框，可容纳完整章节；正文不分窄栏，不改变顺序。
+- asset.materialId 可为 watercolor-bunting、watercolor-rings、watercolor-clip。引用内置原创素材时无需 prompt，不输出素材 URL。不要使用 Lucide 办公图标代替手绘插画。
+- 先建立开篇、导语、纸张章节、照片和收尾的阅读节奏；不机械给每段增加装饰。标题签允许粉蓝交替与细线边框，保留正文文字可编辑。
+
 规则：
 - 响应首字符必须是 {，末字符必须是 }，只输出一个完整 JSON 对象。
 - 不得输出 Markdown 代码围栏、解释、注释、HTML、CSS、SVG 标签或外部资源地址。

@@ -1,3 +1,4 @@
+import CanvasMaterialShelf from "./CanvasMaterialShelf"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import {
@@ -764,6 +765,24 @@ export default function CanvasStudio() {
 
       {mode === "blocks" ? (
         <>
+          {!reading ? <CanvasMaterialShelf disabled={!sources.length || generating || articleLoading} onInsert={(materialId, libraryImage) => {
+            // 辅助素材锚定正文，复用现有历史和本机保存，不另建一套素材状态。
+            const selected = selectedBlockId?.split("::")[0]
+            const index = blockDocument.blocks.findIndex(block => block.id === selected)
+            const anchor = blockDocument.blocks[index]
+            const anchorSourceId = anchor?.type === "section" ? anchor.sourceIds[anchor.sourceIds.length - 1]
+              : anchor?.type === "content" ? anchor.sourceId
+              : anchor ? anchor.anchorSourceId : sources[sources.length - 1].id
+            const id = `material-${crypto.randomUUID()}`
+            const blocks = [...blockDocument.blocks]
+            blocks.splice(index >= 0 ? index + 1 : blocks.length, 0, {
+              id, type: "asset", materialId, libraryImage, anchorSourceId, placement: "after", prompt: "",
+              imageSize: "landscape_16_9", width: libraryImage || materialId === "watercolor-bunting" ? 600 : 160,
+              radius: 0, align: "center", marginTop: 12, marginBottom: 24,
+            })
+            setBlockDocument({ ...blockDocument, blocks })
+            setSelectedBlockId(id)
+          }} /> : null}
           <div className="cs-edit-bar">
             <div className="cs-edit-actions">
               <button className="cs-header-btn" disabled={generating || articleLoading || !sources.length || designTemplateId === "design-reference"} onClick={() => {

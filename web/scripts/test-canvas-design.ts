@@ -10,7 +10,7 @@ import {
   getCanvasDesignTemplate,
   type CanvasDesignTemplateId,
 } from "../shared/canvasDesignTemplates.ts"
-import { createWechatBlockDocument } from "../shared/wechatBlockDsl.ts"
+import { createWechatBlockDocument, hydrateWechatBlockDocument, parseWechatBlockDocument } from "../shared/wechatBlockDsl.ts"
 
 const sources: CanvasSource[] = [
   { id: "source-0", kind: "title", text: "一万米高空的逻辑死局" },
@@ -34,6 +34,7 @@ const expectedSignatures: Record<CanvasDesignTemplateId, {
   layouts: string[]
   icons: string[]
 }> = {
+  "scrapbook-letter": { primary: "#b63f68", font: "system", layouts: ["stack", "stack", "stack", "stack"], icons: [] },
   "editorial-story": {
     primary: "#a84632",
     font: "editorial",
@@ -192,7 +193,7 @@ assert.equal(normalizedSection.itemStyles[normalizedSection.sourceIds[0]]?.borde
 assert.equal(normalized.theme.secondary, normalized.theme.primary)
 assert.equal(normalized.theme.accent, normalized.theme.primary)
 
-process.stdout.write("canvas design quality: 4 templates passed\n")
+process.stdout.write(`canvas design quality: ${CANVAS_DESIGN_TEMPLATES.length} templates passed\n`)
 
 // 阅读模板的验收关注正文宽度和语义层级，不能退回短正文双栏或小于正文的章节标题。
 const readingDocument = finalizeCanvasDesign(createWechatBlockDocument("阅读夹具", sources), sources, "editorial-story").document
@@ -231,3 +232,26 @@ for (const block of readingDocument.blocks) {
     }
   }
 }
+
+// 主题扩展经过与真实保存、生成相同的解析链路，必须保持内容覆盖及素材白名单。
+const scrapbook = finalizeCanvasDesign(createWechatBlockDocument("纸笺", sources), sources, "scrapbook-letter").document
+const savedScrapbook = hydrateWechatBlockDocument(JSON.parse(JSON.stringify(scrapbook)), sources)
+assert.equal(savedScrapbook.theme.publicationStyle, "scrapbook")
+assert.equal(normalizeCanvasPrimaryColor(savedScrapbook).theme.secondary, "#387699")
+assert.ok(savedScrapbook.blocks.some(block => block.type === "section" && block.frame === "notebook"))
+assert.equal(assessCanvasVisualQuality(savedScrapbook, sources).passed, true)
+const materialFixture = parseWechatBlockDocument({ ...scrapbook, blocks: [
+  { type: "asset", materialId: "watercolor-clip", anchorSourceId: "source-0" },
+  { type: "asset", materialId: "https://example.com/untrusted.png", anchorSourceId: "source-0" },
+] })
+assert.equal(materialFixture.blocks.length, 1, "不接受任意 URL 伪装成本地素材")
+assert.equal(materialFixture.blocks[0].type, "asset")
+assert.equal(hydrateWechatBlockDocument({ ...scrapbook, blocks: [...scrapbook.blocks, ...materialFixture.blocks] }, sources).blocks.filter(block => block.type === "asset").length, 1)
+
+const libraryFixture = parseWechatBlockDocument({ ...scrapbook, blocks: [
+  { type: "asset", libraryImage: { url: "https://example.com/photo.jpg", title: "教室" }, anchorSourceId: "source-0" },
+  { type: "asset", libraryImage: { url: "javascript:alert(1)" }, anchorSourceId: "source-0" },
+  { type: "asset", libraryImage: { url: "/api/images/uploads/../../secrets.png" }, anchorSourceId: "source-0" },
+] })
+assert.equal(libraryFixture.blocks.length, 1, "图库照片拒绝脚本协议及本地路径逃逸")
+assert.equal(libraryFixture.blocks[0].type === "asset" && libraryFixture.blocks[0].libraryImage?.title, "教室")
