@@ -1,5 +1,18 @@
 // 原创素材只通过白名单 ID 引用，DSL 不接受任意 URL，也不依赖临时在线生图。
 export const CANVAS_MATERIALS = [
+  { id: "olive-divider", name: "橄榄枝分隔", category: "自然装饰", src: "/canvas-materials/olive-divider.svg", ratio: "8 / 3" },
+  { id: "daisy-divider", name: "雏菊花边", category: "自然装饰", src: "/canvas-materials/daisy-divider.svg", ratio: "8 / 3" },
+  { id: "tulip-garden", name: "春日郁金香", category: "自然装饰", src: "/canvas-materials/tulip-garden.svg", ratio: "8 / 3" },
+  { id: "open-book", name: "翻开的书页", category: "校园装饰", src: "/canvas-materials/open-book.svg", ratio: "8 / 3" },
+  { id: "pencil-note", name: "铅笔与便签", category: "校园装饰", src: "/canvas-materials/pencil-note.svg", ratio: "8 / 3" },
+  { id: "envelope-heart", name: "心意信封", category: "手账装饰", src: "/canvas-materials/envelope-heart.svg", ratio: "8 / 3" },
+  { id: "washi-tape", name: "双色和纸胶带", category: "手账装饰", src: "/canvas-materials/washi-tape.svg", ratio: "8 / 3" },
+  { id: "coffee-break", name: "咖啡小憩", category: "生活装饰", src: "/canvas-materials/coffee-break.svg", ratio: "8 / 3" },
+  { id: "little-camera", name: "复古相机", category: "生活装饰", src: "/canvas-materials/little-camera.svg", ratio: "8 / 3" },
+  { id: "star-divider", name: "星光分隔线", category: "章节装饰", src: "/canvas-materials/star-divider.svg", ratio: "8 / 3" },
+  { id: "ribbon-banner", name: "庆祝缎带", category: "节庆装饰", src: "/canvas-materials/ribbon-banner.svg", ratio: "8 / 3" },
+  { id: "moon-cloud", name: "月亮与云", category: "章节装饰", src: "/canvas-materials/moon-cloud.svg", ratio: "8 / 3" },
+
   { id: "svg-bunting", name: "矢量彩旗", category: "节庆装饰", src: "/canvas-materials/svg-bunting.svg", ratio: "32 / 9" },
   { id: "svg-rings", name: "矢量活页环", category: "纸张边饰", src: "/canvas-materials/svg-rings.svg", ratio: "160 / 27" },
   { id: "svg-plane", name: "矢量纸飞机", category: "校园装饰", src: "/canvas-materials/svg-plane.svg", ratio: "12 / 5" },
