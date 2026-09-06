@@ -41,6 +41,8 @@ RUN pnpm exec playwright install-deps chromium \
 COPY --from=build /ms-playwright /ms-playwright
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/server ./server
+# 后端运行时直接导入共享 DSL，前端构建产物不能替代这些源模块。
+COPY --from=build /app/shared ./shared
 COPY --from=build /app/server.ts ./server.ts
 COPY --from=build /app/tsconfig.json /app/tsconfig.node.json /app/tsconfig.server.json ./
 COPY AGENTS.md ./AGENTS.md

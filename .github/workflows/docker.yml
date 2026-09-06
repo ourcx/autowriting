@@ -10,6 +10,7 @@ on:
       - web/pnpm-lock.yaml
       - web/server.ts
       - web/server/**
+      - web/shared/**
       - scripts/docker-*.sh
       - .github/workflows/docker.yml
   push:
@@ -22,6 +23,7 @@ on:
       - web/pnpm-lock.yaml
       - web/server.ts
       - web/server/**
+      - web/shared/**
       - scripts/docker-*.sh
       - .github/workflows/docker.yml
   workflow_dispatch:
