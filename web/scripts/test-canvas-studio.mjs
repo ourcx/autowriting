@@ -3,10 +3,8 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import assert from "node:assert/strict"
-import { createWechatBlockDocument } from "../shared/wechatBlockDsl.ts"
-import { finalizeCanvasDesign } from "../shared/canvasDesignSystem.ts"
 
-// 仅模拟文章读取和 AI 流式返回，验证真实页面、模板编译和导出；不访问数据库或线上服务。
+// 仅模拟文章读取，禁止排版流程调用 AI，验证真实页面、模板编译和导出；不访问数据库或线上服务。
 const artifactDir = process.env.CANVAS_TEST_OUTPUT || fs.mkdtempSync(path.join(os.tmpdir(), "canvas-studio-"))
 fs.mkdirSync(artifactDir, { recursive: true })
 const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
@@ -16,8 +14,6 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
  try {
  const context = await browser.newContext({viewport:{width:1440,height:1080}});
  const page = await context.newPage();
- let holdGeneration = false
- let releaseGeneration
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  const article={title:'把 AI 用进日常工作，从一个小任务开始', article:`很多人第一次打开 AI，都会问同一个问题：它到底能帮我做什么？试了几次聊天、写作和总结之后，新鲜感过去了，工作方式却没有改变。
 
@@ -55,14 +51,10 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
  await page.route('**/api/images/uploaded?*',r=>r.fulfill({json:[]}));
  await page.route('**/api/images',r=>r.fulfill({json:[{imageUrl:'/api/images/uploads/library-fixture.png',title:'图库照片测试'}]}))
  await page.route('**/api/images/uploads/library-fixture.png',r=>r.fulfill({contentType:'image/png',body:fs.readFileSync(new URL('../public/canvas-materials/watercolor-bunting.png',import.meta.url))}))
- await page.route('**/api/canvas/xiumi-reference',route=>route.fulfill({json:{title:'秀米样式夹具',reference:'{"styles":[{"color":"#2f6f62","fontSize":"20px"}]}',styleCount:1}}))
- await page.route('**/api/canvas/generate-block/stream', async route => {
-  const input = route.request().postDataJSON()
-  assert.ok(["editorial-story", "design-reference"].includes(input.templateId))
-  const result = finalizeCanvasDesign(createWechatBlockDocument(article.title, input.sources), input.sources, input.templateId)
-  assert.equal(result.report.passed, true)
-  if (holdGeneration) await new Promise(resolve => { releaseGeneration = resolve })
-  await route.fulfill({contentType:"text/event-stream",body:`event: result\ndata: ${JSON.stringify({document:result.document})}\n\n`})
+ const aiRequests = []
+ await page.route('**/api/canvas/**', route => {
+  aiRequests.push(route.request().url())
+  return route.abort()
  })
  await page.goto(`${baseUrl}/canvas?articleId=canvas-fixture`);
  await page.locator('.wbe-paper h1').waitFor();
@@ -76,19 +68,12 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
  await page.setViewportSize({width:1440,height:1080})
  assert.equal(await paper.locator('img[src="https://example.com/cover-only-fixture.png"]').count(),0,'封面不得自动追加到正文')
  const before=await paper.innerText();
- // 导入预览不会立即覆盖画布，只有应用后才进入可撤销的编辑历史。
- const originalStyle = await paper.locator('.wbe-document').getAttribute('style')
+ // 默认模板是唯一排版入口；不再提供秀米导入或 AI 生成。
+ assert.equal(await page.getByRole('button', {name:'AI 设计排版',exact:true}).count(), 0)
  await page.getByText('主题与模板',{exact:true}).click()
- await page.getByLabel('从秀米公开分享链接生成').fill('https://v.xiumi.us/board/v5/demo/123')
- await page.getByRole('button',{name:'生成模板预览',exact:true}).click()
- await page.getByRole('button',{name:'应用此预览',exact:true}).waitFor()
- assert.equal(await paper.locator('.wbe-document').getAttribute('style'),originalStyle)
- assert.ok(await page.locator('.cs-link-preview h1').count())
- await page.getByRole('button',{name:'应用此预览',exact:true}).click()
- assert.notEqual(await paper.locator('.wbe-document').getAttribute('style'),originalStyle)
+ assert.equal(await page.getByLabel('从秀米公开分享链接生成').count(), 0)
+ assert.equal(await page.locator('.cs-template-card').count(), 7)
  await page.getByText('主题与模板',{exact:true}).click()
- await page.getByRole('button',{name:'撤销',exact:true}).click()
- assert.equal(await paper.locator('.wbe-document').getAttribute('style'),originalStyle)
  for (const name of ['自然手记','节庆邀请','影像画册']) {
   await page.getByText('主题与模板',{exact:true}).click()
   await page.getByRole('button',{name:new RegExp(name)}).click()
@@ -156,8 +141,7 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
  fs.writeFileSync(path.join(artifactDir, 'article.html'), copied)
  await page.getByText('主题与模板',{exact:true}).click()
  await page.getByRole('button', {name:/杂志叙事 知识分享/}).click()
- await page.getByRole('button', {name:'AI 设计排版',exact:true}).click()
- await page.getByRole('button', {name:'AI 设计排版',exact:true}).waitFor()
+ await page.getByRole('button', {name:'应用模板',exact:true}).click()
  assert.ok(await page.getByRole('button', {name:'撤销',exact:true}).isEnabled())
  assert.equal(await paper.innerText(), before)
  await page.getByRole('button', {name:'阅读预览',exact:true}).click()
@@ -168,14 +152,9 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
  assert.equal(await exportPage.locator('body').evaluate(el=>el.scrollWidth > 375), false)
  await exportPage.screenshot({path:path.join(artifactDir,'article.png'),fullPage:true})
  await exportPage.close()
- // 切换文章时，让旧请求延迟返回，验证结果不会写进新文章。
- holdGeneration = true
- await Promise.all([page.waitForRequest('**/api/canvas/generate-block/stream'), page.getByRole('button', {name:'AI 设计排版',exact:true}).click()])
+ // 切换文章后，模板和历史仍按文章隔离。
  await page.getByRole('combobox', {name:'选择公众号文章'}).selectOption('canvas-second')
  await page.locator('.cs-reading-paper h1').filter({hasText:'第二篇文章'}).waitFor()
- assert.ok(releaseGeneration)
- releaseGeneration()
- await page.getByRole('button', {name:'AI 设计排版',exact:true}).waitFor()
  assert.equal(await page.locator('.cs-reading-paper h1').innerText(), '第二篇文章')
  assert.ok(await page.getByRole('button',{name:'撤销',exact:true}).isDisabled())
  // 新主题使用真实静态素材；验收插入、刷新、导出，不调用在线图片服务。
@@ -254,7 +233,8 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
  assert.ok(timelineColumns.every(column=>column.body / column.row > 0.7), JSON.stringify(timelineColumns))
  await themedPage.screenshot({path:path.join(artifactDir,'scrapbook-export.png'),fullPage:true})
  await themedPage.close()
- fs.writeFileSync(path.join(artifactDir, 'report.json'),JSON.stringify({errors,checks:['375px/414px 预览','无横向溢出','章节字号','模板切换','撤销重做','段落选择及字号修改','刷新保留排版','实际剪贴板 HTML','AI 流式响应模拟','跨文章请求隔离','手绘纸笺与装饰、照片筛选插入','375/414/677px 新主题无溢出','新主题刷新与内嵌素材导出','信纸与时间线组合及导出列宽','自由 SVG 形状、相邻文字与 PNG 剪贴板']},null,2))
+ assert.deepEqual(aiRequests, [], '应用模板、编辑和导出不应发起 AI 请求')
+ fs.writeFileSync(path.join(artifactDir, 'report.json'),JSON.stringify({errors,checks:['375px/414px 预览','无横向溢出','章节字号','模板切换','撤销重做','段落选择及字号修改','刷新保留排版','实际剪贴板 HTML','默认模板不调用 AI','跨文章历史隔离','手绘纸笺与装饰、照片筛选插入','375/414/677px 新主题无溢出','新主题刷新与内嵌素材导出','信纸与时间线组合及导出列宽','自由 SVG 形状、相邻文字与 PNG 剪贴板']},null,2))
  assert.deepEqual(errors,[]);
  await context.clearCookies();
  console.log(`Browser checks passed · ${artifactDir}`);

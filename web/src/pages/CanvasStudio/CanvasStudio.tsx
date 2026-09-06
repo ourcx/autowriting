@@ -1,4 +1,3 @@
-import CanvasLinkImport from "./CanvasLinkImport"
 import CanvasMaterialShelf from "./CanvasMaterialShelf"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
@@ -20,27 +19,22 @@ import {
   PenTool,
   Send,
   Shapes,
-  Sparkles,
   Square,
   Trash2,
   Type,
 } from "lucide-react"
 import PageHeader from "../../components/PageHeader/PageHeader"
 import CanvasRenderer from "../../components/CanvasRenderer/CanvasRenderer"
-import CanvasDesignInput from "../../components/CanvasDesignInput/CanvasDesignInput"
 import WechatBlockEditor, { WechatBlockRenderer } from "../../components/WechatBlockEditor/WechatBlockEditor"
 import { toast } from "../../components/Toast/Toast"
 import {
   fetchArticle,
   fetchArticleList,
   fetchUploadedArticleImages,
-  generateCanvasDocument,
-  generateWechatBlockDocument,
   pushWechatDraft,
   uploadWechatThumb,
 } from "../../utils/apiHelpers"
 import { getWechatHeaders, loadWechatCredentials } from "../../utils/accountBindings"
-import { loadAIConfig } from "../../utils/aiConfig"
 import {
   buildWechatBlockHtml,
   copyWechatBlockHtml,
@@ -116,7 +110,7 @@ function nodeLabel(node: CanvasNode): string {
   if (node.type === "text") return node.text.split("\n")[0] || "文本"
   if (node.type === "image") return "图片"
   if (node.type === "shape") return node.shape === "ellipse" ? "椭圆" : "矩形"
-  if (node.type === "path") return "AI SVG 路径"
+  if (node.type === "path") return "SVG 路径"
   return `SVG · ${node.motif}`
 }
 
@@ -181,24 +175,14 @@ export default function CanvasStudio() {
   // 预览尺寸和阅读模式属于编辑工作区，不写入文章，避免影响导出格式。
   const [previewWidth, setPreviewWidth] = useState(375)
   const [reading, setReading] = useState(false)
-  const generationArticleRef = useRef(articleId)
-  useEffect(() => {
-    generationArticleRef.current = articleId
-    return () => { generationArticleRef.current = "" }
-  }, [articleId])
   const [selectedId, setSelectedId] = useState<string | null>(document.nodes[document.nodes.length - 1]?.id ?? null)
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("properties")
   const [dslDraft, setDslDraft] = useState(() => JSON.stringify(document, null, 2))
-  const [aiPrompt, setAiPrompt] = useState("")
   const [designTemplateId, setDesignTemplateId] = useState<CanvasDesignTemplateId>(
     DEFAULT_CANVAS_DESIGN_TEMPLATE_ID,
   )
-  const [designReference, setDesignReference] = useState("")
-  const [designFileName, setDesignFileName] = useState("")
-  const [generating, setGenerating] = useState(false)
   const [pushing, setPushing] = useState(false)
-  const [generationMessage, setGenerationMessage] = useState("")
   const [articles, setArticles] = useState<Array<{ id: string; title: string; status: string }>>([])
   const [articleData, setArticleData] = useState<ArticleData>(createEmptyArticleData)
   const [sources, setSources] = useState<CanvasSource[]>([])
@@ -356,55 +340,6 @@ export default function CanvasStudio() {
       toast.success("画布 DSL 已应用")
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "画布 DSL 格式错误")
-    }
-  }
-
-  const handleGenerate = async () => {
-    if (sources.length === 0 || !articleData.article.trim()) {
-      toast.warn("请先选择一篇已生成正文的公众号文章")
-      return
-    }
-    const requestedArticleId = articleId
-    setGenerating(true)
-    setGenerationMessage("正在连接 AI...")
-    try {
-      if (mode === "blocks") {
-        const nextDocument = await generateWechatBlockDocument(
-          aiPrompt.trim(),
-          sources,
-          loadAIConfig(),
-          setGenerationMessage,
-          {
-            templateId: designTemplateId,
-            designReference,
-          },
-        )
-        // 请求期间切换文章时，旧结果不能覆盖新文章的本地排版。
-        if (generationArticleRef.current !== requestedArticleId) return
-        setBlockDocument(nextDocument)
-        setSelectedBlockId(null)
-        toast.success("AI 块排版已生成")
-        return
-      }
-      const nextDocument = await generateCanvasDocument(
-        aiPrompt.trim(),
-        sources,
-        loadAIConfig(),
-        setGenerationMessage,
-        {
-          templateId: designTemplateId,
-          designReference,
-        },
-      )
-      if (generationArticleRef.current !== requestedArticleId) return
-      setDocument(nextDocument)
-      setSelectedId(nextDocument.nodes[nextDocument.nodes.length - 1]?.id ?? null)
-      toast.success("AI 画布已生成")
-    } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "AI 画布生成失败")
-    } finally {
-      setGenerating(false)
-      setGenerationMessage("")
     }
   }
 
@@ -635,7 +570,7 @@ export default function CanvasStudio() {
         icon={mode === "blocks" ? <PanelLeft size={16} /> : <Shapes size={16} />}
         subtitle={articleId
           ? `${articleData.title || "当前文章"} · ${sources.filter(source => source.kind !== "image").length} 个内容块 · ${sources.filter(source => source.kind === "image").length} 张图片`
-          : "选择公众号文章后由 AI 负责排版"}
+          : "选择文章，应用默认模板后继续编辑"}
         onBack={() => navigate("/")}
         actions={(
           <>
@@ -723,61 +658,16 @@ export default function CanvasStudio() {
             ))}
           </select>
         </label>
-        <textarea
-          value={aiPrompt}
-          onChange={event => setAiPrompt(event.target.value)}
-          placeholder={mode === "blocks"
-            ? "告诉 AI 你的想法，例如：适合知识分享，重点突出引用，正文清爽、少装饰"
-            : "描述你想要的画板风格、配色和重点内容"}
-          rows={1}
-        />
-        <button
-          className="cs-generate"
-          disabled={generating || articleLoading || sources.length === 0}
-          onClick={handleGenerate}
-        >
-          <Sparkles size={15} />
-          {generating
-            ? generationMessage || "生成中..."
-            : mode === "blocks"
-              ? "AI 设计排版"
-              : "AI 生成画板"}
-        </button>
       </div>
 
       <div className="cs-tools">
-      {<details className="cs-tools-menu"><summary>主题与模板</summary><div className="cs-tools-popover">
+      {mode === "blocks" && <details className="cs-tools-menu"><summary>主题与模板</summary><div className="cs-tools-popover">
         <CanvasTemplateShelf selected={designTemplateId} onSelect={id => {
           setDesignTemplateId(id)
         }} />
-      <CanvasLinkImport key={articleId} sources={sources} disabled={generating || articleLoading}
-        onBusy={setGenerating} onApply={(document, reference, title) => {
-          setDesignReference(reference)
-          setDesignFileName(`秀米：${title}`)
-          setBlockDocument(document)
-          setSelectedBlockId(null)
-          setDesignTemplateId("design-reference")
-          toast.success("模板预览已应用，可继续编辑或撤销")
-        }} />
-      <details className="cs-design-reference">
-        <summary>导入设计参考{designFileName ? ` · ${designFileName}` : "（可选）"}</summary>
-      <div><CanvasDesignInput
-        templateId={designTemplateId}
-        fileName={designFileName}
-        onTemplateChange={setDesignTemplateId}
-        onDesignReferenceChange={(content, fileName) => {
-          setDesignReference(content)
-          setDesignFileName(fileName)
-          if (content) {
-            setDesignTemplateId("design-reference")
-          }
-        }}
-        onError={message => toast.error(message)}
-      />
-      </div></details>
       </div></details>}
       {mode === "blocks" && !reading ? <details className="cs-tools-menu"><summary>素材库</summary><div className="cs-tools-popover">
-          {!reading ? <CanvasMaterialShelf disabled={!sources.length || generating || articleLoading} onInsert={(materialId, libraryImage) => {
+          {!reading ? <CanvasMaterialShelf disabled={!sources.length || articleLoading} onInsert={(materialId, libraryImage) => {
             // 辅助素材锚定正文，复用现有历史和本机保存，不另建一套素材状态。
             const selected = selectedBlockId?.split("::")[0]
             const index = blockDocument.blocks.findIndex(block => block.id === selected)
@@ -803,14 +693,14 @@ export default function CanvasStudio() {
         <>
           <div className="cs-edit-bar">
             <div className="cs-edit-actions">
-              <button className="cs-header-btn" disabled={generating || articleLoading || !sources.length || designTemplateId === "design-reference"} onClick={() => {
+              <button className="cs-header-btn" disabled={articleLoading || !sources.length || designTemplateId === "design-reference"} onClick={() => {
                 setBlockDocument(compileCanvasDesignSystem(blockDocument, sources, designTemplateId, { forceRecipes: true }))
                 setSelectedBlockId(null)
                 toast.success("模板已应用，不满意可撤销")
               }}><LayoutTemplate size={14} />应用模板</button>
-              <button className="cs-header-btn" title="撤销" aria-label="撤销" disabled={!canUndo || articleLoading || generating} onClick={undo}><Undo2 size={15} /></button>
-              <button className="cs-header-btn" title="重做" aria-label="重做" disabled={!canRedo || articleLoading || generating} onClick={redo}><Redo2 size={15} /></button>
-              <span className="cs-edit-hint">选模板试排，再点击正文调整样式</span>
+              <button className="cs-header-btn" title="撤销" aria-label="撤销" disabled={!canUndo || articleLoading} onClick={undo}><Undo2 size={15} /></button>
+              <button className="cs-header-btn" title="重做" aria-label="重做" disabled={!canRedo || articleLoading} onClick={redo}><Redo2 size={15} /></button>
+              <span className="cs-edit-hint">打开「主题与模板」选择风格，点击应用后可继续编辑</span>
             </div>
             <div className="cs-edit-actions">
               <Smartphone size={15} />
