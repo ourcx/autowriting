@@ -230,7 +230,7 @@ export interface WechatTextStyleOverride {
 }
 
 export interface WechatSectionBlock {
-  frame?: "notebook" | "photo" | "collage"
+  frame?: "notebook" | "photo" | "collage" | "letter" | "ticket"
   id: string
   type: "section"
   sourceIds: string[]
@@ -828,7 +828,7 @@ function parseSectionBlock(
     : requestedPadding
   return {
     id: idIn(record.id, `section-${index + 1}`),
-    frame: ["notebook", "photo", "collage"].includes(String(record.frame))
+    frame: ["notebook", "photo", "collage", "letter", "ticket"].includes(String(record.frame))
       ? record.frame as WechatSectionBlock["frame"] : undefined,
     type: "section",
     sourceIds,

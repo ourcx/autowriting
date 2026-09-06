@@ -147,10 +147,17 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
  await page.getByRole('button',{name:/手绘纸笺 水彩彩旗/}).click()
  await page.getByRole('button',{name:'应用模板',exact:true}).click()
  await page.locator('.wbe-paper [data-publication-frame="notebook"]').first().waitFor()
+ // 在真实编辑器中验证纸张与时间线独立组合，刷新和导出不能退回 stack。
+ await page.locator('.wbe-paper [data-publication-frame="notebook"]').first().click({position:{x:5,y:5}})
+ await page.getByRole('combobox',{name:'纸张结构'}).selectOption('letter')
+ await page.getByRole('combobox',{name:'章节布局'}).selectOption('timeline')
+ assert.ok(await paper.locator('[data-publication-frame="letter"] table').count())
  const scrapbookText = await paper.innerText()
  await page.locator('.cs-material-shelf summary').filter({hasText:'装饰素材库'}).click()
  await page.getByRole('button',{name:'心形夹板 照片装饰',exact:true}).click()
  assert.equal(await page.getByRole('combobox',{name:'素材来源'}).inputValue(), 'watercolor-clip')
+ await page.getByRole('button',{name:'矢量纸飞机 校园装饰',exact:true}).click()
+ assert.equal(await page.getByRole('combobox',{name:'素材来源'}).inputValue(), 'svg-plane')
  await page.getByText('照片与插画库',{exact:false}).click()
  await page.getByRole('textbox',{name:'筛选图库图片'}).fill('图库照片')
  await page.getByRole('button',{name:'图库照片测试 插入照片',exact:true}).click()
@@ -165,6 +172,7 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
  await page.getByRole('button',{name:'返回编辑',exact:true}).click()
  await page.reload();await page.locator('.wbe-paper [data-publication-frame="notebook"]').first().waitFor()
  assert.equal(await paper.innerText(), scrapbookText)
+ assert.ok(await paper.locator('[data-publication-frame="letter"] table').count())
  await page.waitForFunction(()=>[...document.querySelectorAll('.wbe-paper img')].every(img=>img.complete && img.naturalWidth>0))
  await page.screenshot({path:path.join(artifactDir,'scrapbook-editor.png'),fullPage:true})
  await page.getByRole('button',{name:'复制公众号内容',exact:true}).click()
@@ -174,15 +182,40 @@ const baseUrl = process.env.CANVAS_STUDIO_URL || "http://127.0.0.1:5173"
  assert.ok(!themedHtml.includes('/canvas-materials/'))
  assert.ok(!themedHtml.includes('/api/images/uploads/'))
  assert.ok(!themedHtml.includes('data-block-id'))
+ // 独立验证自由 SVG 曲线的形状、尺寸和同容器文字均未被导出器删除。
+ const vectorExport = await page.evaluate(async () => {
+  const { buildWechatBlockHtml, copyWechatBlockHtml } = await import('/src/utils/wechatBlockExport.ts')
+  const source = document.createElement('section')
+  source.innerHTML = '<section><span>必须保留的相邻文字</span><svg xmlns="http://www.w3.org/2000/svg" width="180" height="40" viewBox="0 0 180 40"><path d="M0 20Q90 0 180 20" fill="none" stroke="#b63f68"/></svg></section>'
+  document.body.append(source)
+  try {
+   const html = buildWechatBlockHtml(source)
+   await copyWechatBlockHtml(source)
+   return html
+  } finally { source.remove() }
+ })
+ assert.ok(vectorExport.includes('必须保留的相邻文字'))
+ assert.ok(vectorExport.includes(encodeURIComponent('M0 20Q90 0 180 20')))
+ assert.ok(vectorExport.includes('width: 180px'))
+ const vectorClipboard = await page.evaluate(async()=>{const items=await navigator.clipboard.read();return (await items.find(item=>item.types.includes('text/html')).getType('text/html')).text()})
+ assert.ok(vectorClipboard.includes('data:image/png;base64,'))
+ assert.ok(!vectorClipboard.includes('data:image/svg+xml'))
+ assert.ok(vectorClipboard.includes('必须保留的相邻文字'))
  fs.writeFileSync(path.join(artifactDir,'scrapbook.html'),themedHtml)
  const themedPage=await context.newPage()
  await themedPage.setViewportSize({width:375,height:900})
  await themedPage.setContent(themedHtml)
  await themedPage.addStyleTag({content:'body { margin: 0; }'})
  assert.equal(await themedPage.locator('body').evaluate(el=>el.scrollWidth>375),false)
+ // 时间线保留窄标记列，导出后的文字列至少占行宽的七成。
+ const timelineColumns = await themedPage.locator('td').evaluateAll(cells => cells
+  .filter(cell => cell.style.width === '30px')
+  .map(cell => ({marker:cell.getBoundingClientRect().width,body:cell.nextElementSibling.getBoundingClientRect().width,row:cell.parentElement.getBoundingClientRect().width})))
+ assert.ok(timelineColumns.length > 0)
+ assert.ok(timelineColumns.every(column=>column.body / column.row > 0.7), JSON.stringify(timelineColumns))
  await themedPage.screenshot({path:path.join(artifactDir,'scrapbook-export.png'),fullPage:true})
  await themedPage.close()
- fs.writeFileSync(path.join(artifactDir, 'report.json'),JSON.stringify({errors,checks:['375px/414px 预览','无横向溢出','章节字号','模板切换','撤销重做','段落选择及字号修改','刷新保留排版','实际剪贴板 HTML','AI 流式响应模拟','跨文章请求隔离','手绘纸笺与装饰、照片筛选插入','375/414/677px 新主题无溢出','新主题刷新与内嵌素材导出']},null,2))
+ fs.writeFileSync(path.join(artifactDir, 'report.json'),JSON.stringify({errors,checks:['375px/414px 预览','无横向溢出','章节字号','模板切换','撤销重做','段落选择及字号修改','刷新保留排版','实际剪贴板 HTML','AI 流式响应模拟','跨文章请求隔离','手绘纸笺与装饰、照片筛选插入','375/414/677px 新主题无溢出','新主题刷新与内嵌素材导出','信纸与时间线组合及导出列宽','自由 SVG 形状、相邻文字与 PNG 剪贴板']},null,2))
  assert.deepEqual(errors,[]);
  await context.clearCookies();
  console.log(`Browser checks passed · ${artifactDir}`);

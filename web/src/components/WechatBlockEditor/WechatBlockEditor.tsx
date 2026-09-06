@@ -435,7 +435,8 @@ function SectionContent({
             </td>)}
           </tr>)}
         </tbody></table>
-      : sources.map(renderSource)
+      : <SectionContent block={{ ...block, frame: undefined }} sources={sources}
+          selectedId={selectedId} onSelect={onSelect} fontTheme={fontTheme} theme={theme} />
     return <PublicationFrame kind={block.frame} border={block.borderColor}>{content}</PublicationFrame>
   }
   if (block.layout === "stack") {
@@ -1769,12 +1770,14 @@ export default function WechatBlockEditor({
               <label><span>纸张结构</span><select aria-label="纸张结构" value={selectedBlock.frame || "none"}
                 onChange={event => updateBlock({ frame: event.target.value === "none" ? undefined : event.target.value as WechatSectionBlock["frame"] })}>
                 <option value="none">普通布局</option><option value="notebook">活页纸章节</option>
+                <option value="letter">简洁信纸</option><option value="ticket">虚线票券</option>
                 <option value="photo">夹板相框</option><option value="collage">错位照片组合</option>
               </select></label>
               <div className="wbe-property-heading">组合区域 · {selectedBlock.sourceIds.length} 项</div>
               <label>
                 <span>布局</span>
                 <select
+                  aria-label="章节布局"
                   value={selectedBlock.layout}
                   onChange={event => updateBlock({ layout: event.target.value as WechatSectionBlock["layout"] })}
                 >

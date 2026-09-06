@@ -1,5 +1,9 @@
 // 原创素材只通过白名单 ID 引用，DSL 不接受任意 URL，也不依赖临时在线生图。
 export const CANVAS_MATERIALS = [
+  { id: "svg-bunting", name: "矢量彩旗", category: "节庆装饰", src: "/canvas-materials/svg-bunting.svg", ratio: "32 / 9" },
+  { id: "svg-rings", name: "矢量活页环", category: "纸张边饰", src: "/canvas-materials/svg-rings.svg", ratio: "160 / 27" },
+  { id: "svg-plane", name: "矢量纸飞机", category: "校园装饰", src: "/canvas-materials/svg-plane.svg", ratio: "12 / 5" },
+  { id: "svg-leaf", name: "矢量枝叶", category: "自然装饰", src: "/canvas-materials/svg-leaf.svg", ratio: "8 / 3" },
   { id: "watercolor-bunting", name: "水彩彩旗与纸飞机", category: "章节装饰", src: "/canvas-materials/watercolor-bunting.png", ratio: "2 / 1" },
   { id: "watercolor-rings", name: "手绘活页环", category: "纸张边饰", src: "/canvas-materials/watercolor-rings.png", ratio: "3 / 1" },
   { id: "watercolor-clip", name: "心形夹板", category: "照片装饰", src: "/canvas-materials/watercolor-clip.png", ratio: "1 / 1" },

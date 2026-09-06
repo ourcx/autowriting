@@ -132,8 +132,11 @@ blocks 仅允许六种：
 
 秀米式主题扩展（优先于下方默认克制排版规则，仅在手绘纸笺模板或用户明确要求手帐/纸张风格时启用）：
 - theme.publicationStyle="scrapbook"；同套素材可使用粉色 primary、蓝色 secondary、紫色 accent，正文仍用深灰。
-- section.frame 可为 notebook（完整活页章节）、photo（夹板相框）、collage（仅连续照片错位组合）。这些结构不等于引用框，可容纳完整章节；正文不分窄栏，不改变顺序。
-- asset.materialId 可为 watercolor-bunting、watercolor-rings、watercolor-clip。引用内置原创素材时无需 prompt，不输出素材 URL。不要使用 Lucide 办公图标代替手绘插画。
+- section.frame 可为 notebook（完整活页章节）、photo（夹板相框）、collage（仅连续照片错位组合）、letter（CSS 信纸）、ticket（CSS 虚线票券）。这些结构不等于引用框，可容纳完整章节；正文不分窄栏，不改变顺序。
+- asset.materialId 可为 watercolor-bunting、watercolor-rings、watercolor-clip、svg-bunting、svg-rings、svg-plane、svg-leaf。引用内置原创素材时无需 prompt，不输出素材 URL。不要使用 Lucide 办公图标代替手绘插画。
+- 按文章语义选组件：校园/教师节选 notebook + svg-plane；节庆选 svg-bunting + ticket；自然/旅行选 svg-leaf + photo/collage；书信/人物故事选 letter；严肃技术文章优先无 frame。不要每篇固定使用同一组装饰。
+- frame 是外层纸张，layout 是内部内容组织，可以组合：letter + timeline 表达经历；ticket + steps 表达简短步骤；photo + media-text 展示照片与说明。长正文用 stack，连续照片可用 collage，短对比内容才用 comparison。所有 sourceIds 保持连续且不重复。
+- 用 itemStyles 定义章节标题签和正文层级，装饰 asset 用 anchorSourceId/placement 放在章节前后。保留文字可编辑，不把整篇变成图片，也不要生成任意 HTML/CSS/SVG 代码。
 - 先建立开篇、导语、纸张章节、照片和收尾的阅读节奏；不机械给每段增加装饰。标题签允许粉蓝交替与细线边框，保留正文文字可编辑。
 
 规则：
@@ -443,7 +446,7 @@ function finalizeBlockDocument(input: {
   )
   const finalized = finalizeCanvasDesign(hydrated, input.sources, input.templateId)
   if (finalized.rebuilt || !finalized.report.passed) {
-    logger.warn("CANVAS", "画布视觉质量门禁触发确定性重建", {
+    logger.warn("CANVAS", "画布视觉质量提示（是否重建见 rebuilt）", {
       rebuilt: finalized.rebuilt,
       score: finalized.report.score,
       issues: finalized.report.issues,

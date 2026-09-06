@@ -22,7 +22,7 @@ export default function CanvasMaterialShelf({ disabled, onInsert }: CanvasMateri
     finally { setLoading(false) }
   }
   return <><details className="cs-material-shelf">
-    <summary>装饰素材库 <span>原创水彩 · 插在选中内容之后</span></summary>
+    <summary>装饰素材库 <span>水彩与矢量 · 插在选中内容之后</span></summary>
     <div className="cs-material-grid">
       {CANVAS_MATERIALS.map(material => <button key={material.id} disabled={disabled} onClick={() => onInsert(material.id)}>
         <img src={material.src} alt="" /><strong>{material.name}</strong><small>{material.category}</small>

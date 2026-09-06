@@ -138,29 +138,18 @@ function wrapWithWechatGutter(root: HTMLElement, sideSpace: number): void {
 function replaceSvgDecorations(root: HTMLElement): void {
   root.querySelectorAll("svg").forEach(svg => {
     if (svg.closest("[data-wechat-interactive]")) return
-    if (svg.getAttribute("data-wechat-icon") === "true") {
-      const clone = svg.cloneNode(true) as SVGElement
-      clone.setAttribute("xmlns", "http://www.w3.org/2000/svg")
-      clone.removeAttribute("data-wechat-icon")
-      const image = document.createElement("img")
-      image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(new XMLSerializer().serializeToString(clone))}`
-      image.alt = ""
-      image.setAttribute("data-wechat-icon", "true")
-      image.setAttribute(
-        "style",
-        `display:block;width:${svg.getAttribute("width") || "24"}px;height:${svg.getAttribute("height") || "24"}px;`,
-      )
-      svg.replaceWith(image)
-      return
-    }
-    const path = svg.querySelector("path")
-    const stroke = path?.getAttribute("stroke") || "#dee0e3"
-    const divider = document.createElement("section")
-    divider.setAttribute(
-      "style",
-      `margin:12px auto 18px;width:96px;border-top:2px solid ${stroke};line-height:0;height:0;`,
-    )
-    svg.parentElement?.replaceWith(divider)
+    // 保留完整矢量图和原容器，不能把曲线、图案或相邻文字替换成分隔线。
+    const vector = svg.cloneNode(true) as SVGElement
+    vector.setAttribute("xmlns", "http://www.w3.org/2000/svg")
+    const image = document.createElement("img")
+    image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(new XMLSerializer().serializeToString(vector))}`
+    image.alt = ""
+    image.style.cssText = svg.getAttribute("style") || ""
+    image.style.display = "block"
+    image.style.width = svg.style.width || `${svg.getAttribute("width") || "24"}`.replace(/^(\d+(?:\.\d+)?)$/, "$1px")
+    image.style.height = svg.style.height || `${svg.getAttribute("height") || "24"}`.replace(/^(\d+(?:\.\d+)?)$/, "$1px")
+    image.setAttribute("data-wechat-material", "true")
+    svg.replaceWith(image)
   })
 }
 
@@ -216,7 +205,7 @@ function normalizeWechatElements(root: HTMLElement): void {
     if (!hasIntentionalBorder) cell.style.border = "0"
     cell.style.outline = "0"
     cell.style.boxShadow = "none"
-    if (!cell.style.width) cell.style.width = "50%"
+    // 未指定宽度的正文列应占据剩余空间，不能把时间线等窄标记布局强制平分。
     cell.style.verticalAlign = "top"
     cell.style.wordBreak = "break-word"
     cell.style.overflowWrap = "break-word"
@@ -309,8 +298,26 @@ function copyViaSelection(html: string): boolean {
   }
 }
 
+// 剪贴板使用 PNG 承载静态 SVG，避免目标编辑器过滤 SVG data URL；文字仍是 HTML。
+async function rasterizeExportVectors(html: string): Promise<string> {
+  const container = document.createElement("div")
+  container.innerHTML = html
+  for (const image of container.querySelectorAll<HTMLImageElement>('img[src^="data:image/svg+xml"]')) {
+    await image.decode()
+    const canvas = document.createElement("canvas")
+    const scale = Math.min(2, 2048 / Math.max(1, image.naturalWidth), 2048 / Math.max(1, image.naturalHeight))
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale))
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale))
+    const context = canvas.getContext("2d")
+    if (!context) throw new Error("浏览器无法导出 SVG 素材")
+    context.drawImage(image, 0, 0, canvas.width, canvas.height)
+    image.src = canvas.toDataURL("image/png")
+  }
+  return container.innerHTML
+}
+
 export async function copyWechatBlockHtml(source: HTMLElement): Promise<void> {
-  const html = buildWechatBlockHtml(source)
+  const html = await rasterizeExportVectors(buildWechatBlockHtml(source))
   const plainText = source.innerText
   if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
     try {

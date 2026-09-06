@@ -255,3 +255,26 @@ const libraryFixture = parseWechatBlockDocument({ ...scrapbook, blocks: [
 ] })
 assert.equal(libraryFixture.blocks.length, 1, "图库照片拒绝脚本协议及本地路径逃逸")
 assert.equal(libraryFixture.blocks[0].type === "asset" && libraryFixture.blocks[0].libraryImage?.title, "教室")
+
+// 真实 AI 返回值经过解析、补齐、终检后，不得丢失合法的组件组合和文字样式。
+const composed = structuredClone(scrapbook)
+const customSection = composed.blocks.find(block => block.type === "section")
+assert.ok(customSection)
+customSection.layout = "timeline"
+customSection.frame = "letter"
+customSection.borderWidth = 2
+customSection.itemStyles[customSection.sourceIds[0]] = { fontSize: 23, marks: [] }
+const hydratedComposition = hydrateWechatBlockDocument(composed, sources, "组合")
+const finalComposition = finalizeCanvasDesign(hydratedComposition, sources, "scrapbook-letter")
+assert.equal(finalComposition.rebuilt, false)
+assert.deepEqual(finalComposition.document.blocks, hydratedComposition.blocks, "合法 AI 布局应完整保留")
+const brokenComposition = structuredClone(composed)
+brokenComposition.blocks = brokenComposition.blocks.filter(block => block.type !== "content")
+const repaired = finalizeCanvasDesign(brokenComposition, sources, "scrapbook-letter").document
+assert.deepEqual(repaired.blocks.flatMap(block => block.type === "content" ? [block.sourceId] : block.type === "section" ? block.sourceIds : []), sources.map(source => source.id))
+const svgFixture = parseWechatBlockDocument({ ...scrapbook, blocks: [
+  { type: "asset", materialId: "svg-plane", anchorSourceId: "source-0" },
+  { ...customSection, frame: "ticket" },
+] })
+assert.equal(svgFixture.blocks[0].type === "asset" && svgFixture.blocks[0].materialId, "svg-plane")
+assert.equal(svgFixture.blocks[1].type === "section" && svgFixture.blocks[1].frame, "ticket")
