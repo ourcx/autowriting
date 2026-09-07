@@ -123,7 +123,7 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
       const resp = await fetch('/api/rag/candidates', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', ...authHeader },
-        body:    JSON.stringify({ query: task, topK: 8, aiConfig }),
+        body:    JSON.stringify({ query: task, materials, topK: 8, aiConfig }),
       })
       const data = await resp.json()
       if (!resp.ok) throw new Error(data.error || '查询失败')

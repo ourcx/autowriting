@@ -325,6 +325,26 @@ cases.push({
   },
 })
 cases.push({
+  name: 'RAG 候选接口应接受任务与素材组合查询',
+  run: async () => {
+    const r = await fetch(`${BASE}/api/rag/candidates`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query: '固定写作模板',
+        materials: '本篇文章独有的主题素材',
+        topK: 8,
+      }),
+    })
+    if (!r.ok) throw new Error(`status=${r.status}`)
+    const body = await r.json()
+    if (!Array.isArray(body.candidates)) throw new Error('响应中缺少 candidates 数组')
+  },
+})
+cases.push({
   name: '小红书标题超过 20 字仍应通过长度校验',
   run: async () => {
     const r = await fetch(`${BASE}/api/xiaohongshu/article-metadata`, {

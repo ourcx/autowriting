@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * RAG 管理路由
  * POST /api/rag/index      - 异步构建/重建向量索引（立即返回 queued: true）
@@ -10,7 +9,14 @@
 import { Router } from 'express'
 import fs from 'fs'
 import path from 'path'
-import { buildIndex, retrieveRelevant, getIndexStatus, extractSearchQuery } from '../rag.js'
+import {
+  aggregateArticleCandidates,
+  buildCandidateSearchQuery,
+  buildIndex,
+  retrieveRelevant,
+  getIndexStatus,
+  extractSearchQuery,
+} from '../rag.js'
 import { SERVER_AI_CONFIG, DRAFTS_DIR } from '../config.js'
 import { authMiddleware } from '../authMiddleware.js'
 import { logger } from '../logger.js'
@@ -233,40 +239,30 @@ function readDirTitle(baseDir, fallback) {
 // 返回: { candidates: [{ dir, title, snippet, score, sim, types }] }
 router.post('/candidates', async (req, res) => {
   try {
-    const { query, topK = 8, aiConfig: clientAiConfig } = req.body
+    const { query, materials = '', topK = 8, aiConfig: clientAiConfig } = req.body
     if (!query) return res.status(400).json({ error: '缺少 query' })
 
     const aiConfig = { ...SERVER_AI_CONFIG, ...(clientAiConfig || {}) }
     const userId = req.user.id
 
     // 使用查询预处理提取核心主题，避免指令性文本干扰检索
-    const searchQuery = extractSearchQuery(query) || query
+    const searchQuery = buildCandidateSearchQuery(query, materials)
 
     // 检索更多 chunk，以便按文章目录聚合
-    const chunks = await retrieveRelevant(searchQuery, { topK: topK * 3, aiConfig, userId })
+    const chunks = await retrieveRelevant(searchQuery, {
+      topK: topK * 3,
+      aiConfig,
+      userId,
+      types: ['article'],
+    })
 
-    // 按 dir 聚合：同一目录取最高相似度（最大的 sim 值），合并内容片段
-    const dirMap = new Map()
-    for (const chunk of chunks) {
-      const { dir, content, type, score, sim } = chunk
-      if (!dirMap.has(dir)) {
-        dirMap.set(dir, { dir, score, sim, types: new Set([type]), snippets: [content] })
-      } else {
-        const entry = dirMap.get(dir)
-        // sim 是余弦相似度百分比，越大越相似
-        if (sim > entry.sim) {
-          entry.sim = sim
-          entry.score = score
-        }
-        entry.types.add(type)
-        if (entry.snippets.length < 3) entry.snippets.push(content)
-      }
-    }
+    // 面板展示的是“往期文章”，只按正文 chunk 聚合，并保留混合检索排序。
+    const aggregated = aggregateArticleCandidates(chunks)
 
     // 读取每个目录对应的文章标题（兼容带后缀的文件名）
     const userDraftsDir = path.join(DRAFTS_DIR, String(userId))
     const candidates = []
-    for (const [, entry] of dirMap) {
+    for (const entry of aggregated) {
       const dirPath = path.join(userDraftsDir, entry.dir)
       const title = readDirTitle(dirPath, entry.dir)
 
@@ -274,14 +270,14 @@ router.post('/candidates', async (req, res) => {
         dir:     entry.dir,
         title,
         score:   parseFloat(entry.score.toFixed(4)),
-        sim:     Math.round(entry.sim),  // sim 已是百分比
+        sim:     Math.round(entry.sim),
+        finalScore: parseFloat(entry.finalScore.toFixed(1)),
         types:   [...entry.types],
         snippet: entry.snippets.join(' … ').slice(0, 200),
       })
     }
 
-    // 按相似度排序（sim 越大越相似），只返回前 topK 个文章
-    candidates.sort((a, b) => b.sim - a.sim)
+    // aggregateArticleCandidates 已按混合得分排序，这里只截取所需数量。
     res.json({ candidates: candidates.slice(0, topK) })
   } catch (err) {
     logger.error('RAG', 'candidates 查询失败', { error: err.message })

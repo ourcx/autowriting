@@ -1,10 +1,9 @@
 /**
  * RAG 模块：向量索引 + 混合检索（向量 + 关键词）
  *
- * HNSWLib 默认使用 L2（欧几里得距离）空间。
- * 对于归一化向量，L2 距离与余弦相似度的关系：
- *   L2² = 2 - 2 × cos_sim  →  cos_sim = 1 - L2² / 2
- * 距离范围 [0, 2]，距离越小越相似。
+ * LangChain HNSWLib 默认使用 cosine 空间，返回值是余弦距离：
+ *   cosine_distance = 1 - cosine_similarity
+ * 距离越小越相似，不能再按 L2 距离平方换算，否则会把相似度严重抬高。
  */
 import fs from "fs"
 import path from "path"
@@ -20,10 +19,9 @@ import { logger } from "./logger.ts"
 const LOCAL_EMBED_MODEL = "Xenova/multilingual-e5-small"
 
 // ── 检索默认参数 ───────────────────────────────────────────────────────────────
-// HNSWLib 使用 L2 距离，归一化向量范围 [0, 2]
-// 0.85 对应 cosine_similarity ≈ 1 - 0.85²/2 ≈ 0.64，即 64% 余弦相似度
-// 本地小模型（e5-small）的语义距离通常较大，0.85 能覆盖大部分相关结果
-const DEFAULT_SCORE_THRESHOLD = 0.85
+// HNSWLib 返回余弦距离；0.45 表示至少保留 55% 的余弦相似度。
+// 阈值不能过宽，否则大部分语料都会进入候选集，导致不同主题反复出现同一批文章。
+const DEFAULT_SCORE_THRESHOLD = 0.45
 const DEFAULT_TOP_K = 10
 const KEYWORD_WEIGHT = 0.25
 
@@ -80,14 +78,14 @@ function getEmbeddingKey(cfg: AIConfig): string {
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
-// ── L2 距离 → 余弦相似度转换 ──────────────────────────────────────────────────
+// ── 余弦距离 → 余弦相似度转换 ─────────────────────────────────────────────────
 
 /**
- * 将 HNSWLib 返回的 L2 距离转换为余弦相似度（0~1）。
- * 公式：cos_sim = 1 - L2² / 2（仅对归一化向量成立）
+ * 将 HNSWLib 返回的余弦距离转换为余弦相似度（0~1）。
+ * 做边界裁剪是为了兼容浮点误差，避免 UI 出现负数或超过 100%。
  */
-function l2ToCosine(l2Distance: number): number {
-  return Math.max(0, 1 - (l2Distance * l2Distance) / 2)
+export function cosineDistanceToSimilarity(distance: number): number {
+  return Math.max(0, Math.min(1, 1 - distance))
 }
 
 // ── 远端 Embedding ─────────────────────────────────────────────────────────────
@@ -588,6 +586,18 @@ export function extractSearchQuery(task: string): string {
   return source.slice(0, 300).trim()
 }
 
+/**
+ * 生成候选文章面板使用的检索文本。
+ * 写作模板可能长期不变，因此同时加入素材摘要，让不同文章即使复用同一模板也能形成不同查询。
+ */
+export function buildCandidateSearchQuery(task: string, materials = ""): string {
+  const taskQuery = extractSearchQuery(task) || task.trim()
+  const materialsQuery = extractSearchQuery(materials) || materials.trim().slice(0, 300)
+
+  if (!materialsQuery || taskQuery.includes(materialsQuery)) return taskQuery
+  return `${taskQuery}\n${materialsQuery}`.slice(0, 600).trim()
+}
+
 // ── 关键词全文检索 ─────────────────────────────────────────────────────────────
 
 const CHUNK_STORE_FILE = "chunk_store.json"
@@ -633,8 +643,9 @@ function keywordSearch(query: string, chunks: ChunkStoreItem[], topK: number): S
     }
     // 命中率（主权重）+ 出现频次加权（辅助权重）
     const hitRate = hits / kwLower.length
-    const freqBonus = Math.min(totalOccurrences / 10, 0.3)
-    const score = hitRate * 0.7 + freqBonus
+    // 词频只能放大已经覆盖到的关键词，避免“信息”等单个常见词重复出现就拿到高分。
+    const freqBonus = Math.min(totalOccurrences / Math.max(kwLower.length * 3, 1), 0.15) * hitRate
+    const score = hitRate * 0.85 + freqBonus
     return { chunk, score }
   })
 
@@ -659,7 +670,7 @@ interface VectorResult {
   source: string
   type: string
   dir: string
-  score: number  // L2 距离（越小越相似）
+  score: number  // 余弦距离（越小越相似）
 }
 
 interface MergedResult {
@@ -667,7 +678,7 @@ interface MergedResult {
   source: string
   type: string
   dir: string
-  score: number      // L2 距离
+  score: number      // 余弦距离
   sim: number        // 余弦相似度 [0, 1]
   kwScore: number    // 关键词得分 [0, 1]
   finalScore: number // 综合得分 [0, 1]
@@ -679,8 +690,7 @@ function mergeResults(vectorResults: VectorResult[], kwResults: SearchResult[], 
 
   for (const r of vectorResults) {
     const key = r.content.slice(0, 100)
-    // 使用正确的 L2 → 余弦相似度转换公式
-    const sim = l2ToCosine(r.score)
+    const sim = cosineDistanceToSimilarity(r.score)
     merged.set(key, {
       ...r,
       sim,
@@ -711,7 +721,7 @@ function mergeResults(vectorResults: VectorResult[], kwResults: SearchResult[], 
   return Array.from(merged.values())
     .filter((r) => {
       if (r.hasVector) {
-        // 有向量结果：用 L2 距离阈值过滤
+        // 有向量结果：用余弦距离阈值过滤
         return r.score < threshold
       }
       // 纯关键词结果：要求关键词得分足够高
@@ -727,9 +737,10 @@ interface RetrieveOptions {
   aiConfig?: AIConfig
   userId?: string
   scoreThreshold?: number
+  types?: string[]
 }
 
-export async function retrieveRelevant(query: string, { topK = DEFAULT_TOP_K, aiConfig = {}, userId, scoreThreshold }: RetrieveOptions = {}): Promise<SearchResult[]> {
+export async function retrieveRelevant(query: string, { topK = DEFAULT_TOP_K, aiConfig = {}, userId, scoreThreshold, types }: RetrieveOptions = {}): Promise<SearchResult[]> {
   const threshold = scoreThreshold ?? DEFAULT_SCORE_THRESHOLD
   const cfg = { ...SERVER_AI_CONFIG as unknown as AIConfig, ...aiConfig }
   const indexDir = getUserIndexDir(userId)
@@ -769,7 +780,11 @@ export async function retrieveRelevant(query: string, { topK = DEFAULT_TOP_K, ai
 
   try {
     const vectorStore = await HNSWLib.load(indexDir, embeddings)
-    const vectorRaw = await vectorStore.similaritySearchWithScore(query, topK * 3)
+    // 候选文章面板只检索正文，避免每篇都相似的任务模板和素材说明挤占结果。
+    const typeFilter = types?.length
+      ? (doc: Document) => types.includes(String(doc.metadata.type))
+      : undefined
+    const vectorRaw = await vectorStore.similaritySearchWithScore(query, topK * 3, typeFilter)
     const vectorResults: VectorResult[] = vectorRaw.map(([doc, score]) => ({
       content: doc.pageContent,
       source: doc.metadata.source as string,
@@ -778,7 +793,7 @@ export async function retrieveRelevant(query: string, { topK = DEFAULT_TOP_K, ai
       score: parseFloat(score.toFixed(4)),
     }))
 
-    const chunks = loadChunkStore(indexDir)
+    const chunks = loadChunkStore(indexDir).filter((chunk) => !types?.length || types.includes(chunk.metadata.type))
     const kwResults = keywordSearch(query, chunks, topK)
 
     const merged = mergeResults(vectorResults, kwResults, threshold)
@@ -786,7 +801,7 @@ export async function retrieveRelevant(query: string, { topK = DEFAULT_TOP_K, ai
 
     // 日志：输出 top-3 的详细信息，方便调试
     const topDetails = results.slice(0, 3).map((r) =>
-      `  → dir=${r.dir} L2=${r.score.toFixed(3)} cos=${(r.sim * 100).toFixed(0)}% kw=${r.kwScore.toFixed(2)} final=${(r.finalScore * 100).toFixed(0)}%`
+      `  → dir=${r.dir} cosineDistance=${r.score.toFixed(3)} cos=${(r.sim * 100).toFixed(0)}% kw=${r.kwScore.toFixed(2)} final=${(r.finalScore * 100).toFixed(0)}%`
     ).join("\n")
 
     logger.debug(
@@ -809,6 +824,52 @@ export async function retrieveRelevant(query: string, { topK = DEFAULT_TOP_K, ai
     logger.error("RAG", "检索失败", { error: (e as Error).message })
     return []
   }
+}
+
+export interface AggregatedArticleCandidate {
+  dir: string
+  score: number
+  sim: number
+  finalScore: number
+  types: Set<string>
+  snippets: string[]
+}
+
+/**
+ * 将 chunk 结果聚合成文章候选。
+ * 排名使用向量与关键词的综合分，而不是某个 chunk 的最高向量相似度，避免通用段落长期霸榜。
+ */
+export function aggregateArticleCandidates(results: SearchResult[]): AggregatedArticleCandidate[] {
+  const dirMap = new Map<string, AggregatedArticleCandidate>()
+
+  for (const result of results) {
+    if (result.type !== "article") continue
+
+    const rankScore = result.finalScore ?? result.sim ?? 0
+    const entry = dirMap.get(result.dir)
+    if (!entry) {
+      dirMap.set(result.dir, {
+        dir: result.dir,
+        score: result.score,
+        sim: result.sim ?? 0,
+        finalScore: rankScore,
+        types: new Set([result.type]),
+        snippets: [result.content],
+      })
+      continue
+    }
+
+    if (rankScore > entry.finalScore) {
+      entry.score = result.score
+      entry.sim = result.sim ?? 0
+      entry.finalScore = rankScore
+    }
+    entry.types.add(result.type)
+    if (entry.snippets.length < 3) entry.snippets.push(result.content)
+  }
+
+  return Array.from(dirMap.values())
+    .sort((a, b) => b.finalScore - a.finalScore || b.sim - a.sim)
 }
 
 // ── 格式化为 prompt 片段 ───────────────────────────────────────────────────────

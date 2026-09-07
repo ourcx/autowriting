@@ -24,6 +24,7 @@
     "typecheck": "tsc --noEmit",
     "typecheck:changed": "node scripts/typecheck-changed.mjs",
     "test:xiumi": "node --import tsx scripts/test-xiumi-reference.ts",
+    "test:rag": "node --import tsx scripts/test-rag-ranking.ts",
     "test:canvas": "node --import tsx scripts/test-canvas-design.ts",
     "smoke": "node scripts/smoke.mjs",
     "test:deploy": "node scripts/test-deploy-release.mjs",
