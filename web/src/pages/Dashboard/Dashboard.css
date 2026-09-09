@@ -432,17 +432,23 @@
   background: var(--color-hairline);
 }
 
-.dash-article-dot[data-status='generated'] {
+.dash-article-dot[data-status='generated'],
+.dash-article-dot[data-status='review'],
+.dash-article-dot[data-status='ready'] {
   background: #a4d4c5;
   box-shadow: 0 0 0 2px rgba(164, 212, 197, 0.25);
 }
 
-.dash-article-dot[data-status='published'] {
+.dash-article-dot[data-status='published'],
+.dash-article-dot[data-status='wechat_draft'] {
   background: #2d6a4f;
   box-shadow: 0 0 0 2px rgba(45, 106, 79, 0.2);
 }
 
-.dash-article-dot[data-status='draft'] {
+.dash-article-dot[data-status='draft'],
+.dash-article-dot[data-status='brief'],
+.dash-article-dot[data-status='materials'],
+.dash-article-dot[data-status='drafting'] {
   background: #d4c5a4;
 }
 

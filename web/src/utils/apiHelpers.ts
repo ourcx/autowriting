@@ -12,6 +12,7 @@ import {
   type WechatBlockDocument,
 } from '../../shared/wechatBlockDsl'
 import type { CanvasDesignTemplateId } from '../../shared/canvasDesignTemplates'
+import type { ArticleWorkflow, ArticleWorkflowEvent, ArticleWorkflowStage } from '../../shared/articleWorkflow'
 
 export interface CanvasDesignInput {
   templateId: CanvasDesignTemplateId
@@ -86,8 +87,9 @@ export async function saveArticle(articleId: string, data: {
   title?: string
   articleToutiao?: string
   xiaohongshuTitle?: string
-}): Promise<void> {
-  await axios.post(`/api/articles/${articleId}`, data)
+}): Promise<{ workflow?: ArticleWorkflow }> {
+  const response = await axios.post(`/api/articles/${articleId}`, data)
+  return response.data as { workflow?: ArticleWorkflow }
 }
 
 // ── 生成文章 ──
@@ -115,6 +117,7 @@ export async function fetchArticle(articleId: string) {
     title: string
     articleToutiao: string
     xiaohongshuTitle: string
+    workflow: ArticleWorkflow
   }
 }
 
@@ -125,9 +128,22 @@ export async function fetchArticleList() {
     id: string
     date: string
     title: string
-    status: 'draft' | 'generated' | 'published'
+    status: ArticleWorkflowStage
     createdAt: string
   }>
+}
+
+export async function recordArticleWorkflowEvent(
+  articleId: string,
+  event: ArticleWorkflowEvent,
+): Promise<ArticleWorkflow> {
+  const response = await axios.post(`/api/articles/${articleId}/workflow`, { event })
+  return response.data as ArticleWorkflow
+}
+
+export async function fetchArticleWorkflowMetrics(): Promise<{ sampleSize: number; medianMinutes: number | null }> {
+  const response = await axios.get('/api/articles/workflow-metrics')
+  return response.data as { sampleSize: number; medianMinutes: number | null }
 }
 
 export async function generateCanvasDocument(

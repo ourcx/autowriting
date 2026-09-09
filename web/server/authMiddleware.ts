@@ -16,8 +16,10 @@ import type { AuthedRequest } from "./types.ts"
 const AGENT_ROUTE_ALLOWLIST = [
   { method: "GET", path: /^\/api\/agent\/status$/ },
   { method: "GET", path: /^\/api\/articles$/ },
+  { method: "GET", path: /^\/api\/articles\/workflow-metrics$/ },
   { method: "GET", path: /^\/api\/articles\/[^/]+$/ },
   { method: "POST", path: /^\/api\/articles\/[^/]+$/ },
+  { method: "POST", path: /^\/api\/articles\/[^/]+\/workflow$/ },
   { method: "POST", path: /^\/api\/articles\/[^/]+\/generate$/ },
   { method: "DELETE", path: /^\/api\/articles\/[^/]+$/ },
   { method: "POST", path: /^\/api\/toutiao\/publish$/ },

@@ -14,7 +14,13 @@ import fs from 'fs'
 import path from 'path'
 import axios from 'axios'
 import { DRAFTS_DIR, SERVER_AI_CONFIG, getWritingGuideContent } from '../config.js'
-import { ArticleContentConflictError, getArticleSidecarPath, writeArticleSafely } from '../articleStorage.js'
+import {
+  ArticleContentConflictError,
+  getArticleSidecarPath,
+  readArticleWorkflow,
+  recordArticleWorkflowEvent,
+  writeArticleSafely,
+} from '../articleStorage.js'
 import { ensureDir, buildLLMRequest, callLLMWithRetry } from '../utils'
 import { retrieveRelevant, formatRetrievedContext, formatExampleContext, extractSearchQuery } from '../rag.js'
 import { saveAnalysis, getLatestAnalysis, listAnalyses, recordTokenUsage, getEffectivePrompt, getSetting } from '../db.js'
@@ -73,6 +79,31 @@ function getArticlePath(articleId, type, userId) {
   }[type]
 }
 
+function readText(filePath) {
+  return filePath && fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : ''
+}
+
+function getArticleCreatedAt(...paths) {
+  const times = paths
+    .filter(filePath => filePath && fs.existsSync(filePath))
+    .map(filePath => fs.statSync(filePath).birthtimeMs || fs.statSync(filePath).ctimeMs)
+    .filter(Number.isFinite)
+  return new Date(times.length ? Math.min(...times) : Date.now()).toISOString()
+}
+
+function getWorkflow(articlePath, taskPath, materialsPath) {
+  const content = {
+    task: readText(taskPath),
+    materials: readText(materialsPath),
+    article: readText(articlePath),
+  }
+  return readArticleWorkflow(
+    articlePath,
+    content,
+    getArticleCreatedAt(taskPath, materialsPath, articlePath),
+  )
+}
+
 // ── 工具：扫描某个 drafts 目录，返回文章列表 ─────────────────────────────────
 function scanArticlesInDir(draftsDir) {
   if (!fs.existsSync(draftsDir)) return []
@@ -109,7 +140,11 @@ function scanArticlesInDir(draftsDir) {
         }
       }
       if (!title) title = `文章 ${articleId}`
-      articleMap.set(articleId, { id: articleId, date: dateDir, title, status: 'draft', createdAt: new Date().toISOString() })
+      const taskPath = path.join(promptDir, 'task.md')
+      const materialsPath = path.join(promptDir, 'materials.md')
+      const articlePath = path.join(rawDir, 'article_raw.md')
+      const workflow = getWorkflow(articlePath, taskPath, materialsPath)
+      articleMap.set(articleId, { id: articleId, date: dateDir, title, status: workflow.currentStage, createdAt: workflow.createdAt })
       continue
     }
 
@@ -124,7 +159,6 @@ function scanArticlesInDir(draftsDir) {
       const titlePath   = path.join(draftsDir, dateDir, `title${taskFile.replace('task.md', '')}.txt`)
 
       let title = ''
-      let status = 'draft'
       if (fs.existsSync(titlePath)) {
         title = fs.readFileSync(titlePath, 'utf-8').trim()
       } else if (fs.existsSync(articlePath)) {
@@ -135,9 +169,10 @@ function scanArticlesInDir(draftsDir) {
         if (match) title = match[1].trim()
       }
       if (!title) title = `文章 ${articleId}`
-      if (fs.existsSync(articlePath)) status = 'generated'
       if (!articleMap.has(articleId)) {
-        articleMap.set(articleId, { id: articleId, date: dateDir, title, status, createdAt: new Date().toISOString() })
+        const materialsPath = path.join(promptDir, taskFile.replace('task', 'materials'))
+        const workflow = getWorkflow(articlePath, taskPath, materialsPath)
+        articleMap.set(articleId, { id: articleId, date: dateDir, title, status: workflow.currentStage, createdAt: workflow.createdAt })
       }
     }
   }
@@ -154,6 +189,31 @@ router.get('/', (req, res) => {
   } catch (error) {
     console.error('Error fetching articles:', error)
     res.status(500).json({ error: error.message })
+  }
+})
+
+router.get('/workflow-metrics', (req, res) => {
+  try {
+    const articles = scanArticlesInDir(getUserDraftsDir(req.user.id))
+    const durations = articles.flatMap(article => {
+      const taskPath = getArticlePath(article.id, 'task', req.user.id)
+      const materialsPath = getArticlePath(article.id, 'materials', req.user.id)
+      const articlePath = getArticlePath(article.id, 'article', req.user.id)
+      const workflow = getWorkflow(articlePath, taskPath, materialsPath)
+      if (!workflow.wechatDraftAt) return []
+      const duration = new Date(workflow.wechatDraftAt).getTime() - new Date(workflow.createdAt).getTime()
+      return Number.isFinite(duration) && duration >= 0 ? [Math.round(duration / 60000)] : []
+    }).sort((a, b) => a - b)
+    const middle = Math.floor(durations.length / 2)
+    const medianMinutes = durations.length === 0
+      ? null
+      : durations.length % 2
+        ? durations[middle]
+        : Math.round((durations[middle - 1] + durations[middle]) / 2)
+    res.json({ sampleSize: durations.length, medianMinutes })
+  } catch (error) {
+    logger.error('ARTICLES', '统计文章发布耗时失败', { error: error.message, userId: req.user.id })
+    res.status(500).json({ error: '统计文章发布耗时失败' })
   }
 })
 
@@ -175,13 +235,19 @@ router.get('/:articleId', (req, res) => {
     ensureDir(path.dirname(materialsPath))
     ensureDir(path.dirname(articlePath))
 
+    const task = readText(taskPath)
+    const materials = readText(materialsPath)
+    const article = readText(articlePath)
+    const workflow = readArticleWorkflow(articlePath, { task, materials, article }, getArticleCreatedAt(taskPath, materialsPath, articlePath))
+
     res.json({
-      task:           fs.existsSync(taskPath)      ? fs.readFileSync(taskPath,      'utf-8') : '',
-      materials:      fs.existsSync(materialsPath) ? fs.readFileSync(materialsPath, 'utf-8') : '',
-      article:        fs.existsSync(articlePath)   ? fs.readFileSync(articlePath,   'utf-8') : '',
-      title:          fs.existsSync(titlePath)     ? fs.readFileSync(titlePath,     'utf-8') : '',
+      task,
+      materials,
+      article,
+      title:          readText(titlePath),
       articleToutiao: toutiaoPath && fs.existsSync(toutiaoPath) ? fs.readFileSync(toutiaoPath, 'utf-8') : '',
       xiaohongshuTitle: xiaohongshuTitlePath && fs.existsSync(xiaohongshuTitlePath) ? fs.readFileSync(xiaohongshuTitlePath, 'utf-8') : '',
+      workflow,
     })
   } catch (error) {
     console.error('Error fetching article:', error)
@@ -203,6 +269,7 @@ router.post('/:articleId', (req, res) => {
     const titlePath     = getArticlePath(articleId, 'title',     uid)
     const toutiaoPath   = articlePath ? getArticleSidecarPath(articlePath, 'article_toutiao') : null
     const xiaohongshuTitlePath = articlePath ? getArticleSidecarPath(articlePath, 'xiaohongshu_title', 'txt') : null
+    const existingArticle = readText(articlePath)
 
     ensureDir(path.dirname(taskPath))
     ensureDir(path.dirname(materialsPath))
@@ -214,6 +281,18 @@ router.post('/:articleId', (req, res) => {
     if (title !== undefined)          fs.writeFileSync(titlePath,     title ?? '',          'utf-8')
     if (articleToutiao !== undefined && toutiaoPath) fs.writeFileSync(toutiaoPath, articleToutiao ?? '', 'utf-8')
     if (xiaohongshuTitle !== undefined && xiaohongshuTitlePath) fs.writeFileSync(xiaohongshuTitlePath, xiaohongshuTitle ?? '', 'utf-8')
+
+    if (article !== undefined && String(article ?? '').trim().length > 100 && String(article ?? '') !== existingArticle) {
+      recordArticleWorkflowEvent({
+        articlePath,
+        content: {
+          task: readText(taskPath),
+          materials: readText(materialsPath),
+          article: readText(articlePath),
+        },
+        event: 'generated',
+      })
+    }
 
     // 文章内容有更新时，异步触发增量 RAG 索引（不阻塞响应）
     // 但要先做「内容指纹判重」：仅当 article/materials 真的变了才触发，
@@ -230,7 +309,14 @@ router.post('/:articleId', (req, res) => {
       }
     }
 
-    res.json({ success: true })
+    res.json({
+      success: true,
+      workflow: readArticleWorkflow(articlePath, {
+        task: readText(taskPath),
+        materials: readText(materialsPath),
+        article: readText(articlePath),
+      }, getArticleCreatedAt(taskPath, materialsPath, articlePath)),
+    })
   } catch (error) {
     if (error instanceof ArticleContentConflictError) {
       logger.warn('ARTICLES', '已阻止空内容覆盖公众号正文', {
@@ -241,6 +327,35 @@ router.post('/:articleId', (req, res) => {
       console.error('Error saving article:', error)
     }
     res.status(error instanceof ArticleContentConflictError ? 409 : 500).json({ error: error.message })
+  }
+})
+
+// ── POST /api/articles/:articleId/workflow（记录关键生产节点）───────────────
+
+router.post('/:articleId/workflow', (req, res) => {
+  try {
+    const event = req.body?.event
+    const allowedEvents = new Set(['generated', 'reviewed', 'wechat_draft_opened', 'wechat_draft_pushed'])
+    if (!allowedEvents.has(event)) return res.status(400).json({ error: '不支持的工作流事件' })
+
+    const { articleId } = req.params
+    const uid = req.user.id
+    const taskPath = getArticlePath(articleId, 'task', uid)
+    const materialsPath = getArticlePath(articleId, 'materials', uid)
+    const articlePath = getArticlePath(articleId, 'article', uid)
+    const workflow = recordArticleWorkflowEvent({
+      articlePath,
+      content: {
+        task: readText(taskPath),
+        materials: readText(materialsPath),
+        article: readText(articlePath),
+      },
+      event,
+    })
+    res.json(workflow)
+  } catch (error) {
+    logger.error('ARTICLES', '记录文章工作流失败', { error: error.message, articleId: req.params.articleId })
+    res.status(500).json({ error: '记录文章进度失败' })
   }
 })
 
@@ -315,6 +430,7 @@ ${materials}
     const article = response.data.choices[0].message.content
     const articlePath = getArticlePath(articleId, 'article', req.user.id)
     writeArticleSafely({ articlePath, articleId, userId: req.user.id, content: article })
+    recordArticleWorkflowEvent({ articlePath, content: { task, materials, article }, event: 'generated' })
 
     // 记录 token 使用
     const usage = response.data.usage
@@ -525,6 +641,7 @@ ${materials}
         const articlePath = getArticlePath(articleId, 'article', req.user.id)
         if (platformKey === 'wechat') {
           writeArticleSafely({ articlePath, articleId, userId: req.user.id, content: fullContent })
+          recordArticleWorkflowEvent({ articlePath, content: { task, materials, article: fullContent }, event: 'generated' })
         } else {
           const toutiaoPath = getArticleSidecarPath(articlePath, 'article_toutiao')
           ensureDir(path.dirname(toutiaoPath))
@@ -793,7 +910,19 @@ uiBlocks 字段说明（必须根据实际问题选择，不要强行凑数）�
     const fullResult = { ...result, ragCount: similarArticles.length }
 
     // ── 6. 保存 + token 用量 ──────────────────────────────────────────────────
-    try { saveAnalysis(articleId, fullResult) } catch (e) { console.warn('[Analyze] 保存失败:', e.message) }
+    try {
+      saveAnalysis(articleId, fullResult)
+      const articlePath = getArticlePath(articleId, 'article', req.user.id)
+      recordArticleWorkflowEvent({
+        articlePath,
+        content: {
+          task: req.body.task || '',
+          materials: readText(getArticlePath(articleId, 'materials', req.user.id)),
+          article: req.body.article || readText(articlePath),
+        },
+        event: 'reviewed',
+      })
+    } catch (e) { console.warn('[Analyze] 保存失败:', e.message) }
 
     if (inputTokens || outputTokens) {
       recordTokenUsage({
@@ -1212,6 +1341,7 @@ router.delete('/:articleId', (req, res) => {
       path.join(rawDir,    `article_raw${suffix}.md`),
       path.join(rawDir,    `article_toutiao${suffix}.md`),
       path.join(rawDir,    `xiaohongshu_title${suffix}.txt`),
+      path.join(rawDir,    `article_workflow${suffix}.json`),
       path.join(userDir, dateDir, `title${suffix}.txt`),
     ]) {
       if (fs.existsSync(fp)) fs.unlinkSync(fp)

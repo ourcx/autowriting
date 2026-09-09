@@ -13,6 +13,7 @@ interface ContentStatsProps {
   articleId?: string
   task?: string
   onArticleChange?: (content: string) => void
+  onReviewCompleted?: () => void
 }
 
 interface ScoreMap {
@@ -131,7 +132,14 @@ const WRONG_ELLIP  = '...'       // 应该用 ……
 
 interface CliqueFound { word: string; reason: string; count: number }
 
-function runChecks(text: string, title?: string) {
+interface TaskRuleCheck {
+  label: string
+  passed: boolean
+  required: boolean
+  detail: string
+}
+
+function runChecks(text: string, title?: string, task = '') {
   // 统计每个套话出现次数
   const foundCliches: CliqueFound[] = AI_CLICHES
     .map(c => {
@@ -150,6 +158,49 @@ function runChecks(text: string, title?: string) {
   const hasFirstPerson = text.includes('我')
   const hasHeadings    = /^#{1,6}\s/m.test(text)
   const titleLen       = (title || '').replace(/^#+\s*/, '').length
+  const rangeMatch = task.match(/(\d{3,5})\s*(?:-|—|~|至|到)\s*(\d{3,5})\s*字/)
+  const minWords = rangeMatch ? Number(rangeMatch[1]) : 1500
+  const maxWords = rangeMatch ? Number(rangeMatch[2]) : 2500
+  const forbidFirstPerson = /(?:禁止|不要)(?:使用)?(?:第一人称|[「“"]我[」”"])/.test(task)
+  const requireFirstPerson = !forbidFirstPerson && /(?:使用|采用|保持|以).{0,8}第一人称|第一人称.{0,8}(?:写|叙述)/.test(task)
+  const taskRules: TaskRuleCheck[] = []
+
+  if (forbidFirstPerson) {
+    taskRules.push({
+      label: '任务要求：禁止第一人称',
+      passed: !hasFirstPerson,
+      required: true,
+      detail: hasFirstPerson ? '正文出现了「我」，与本篇任务要求冲突' : '正文未使用第一人称「我」',
+    })
+  } else if (requireFirstPerson) {
+    taskRules.push({
+      label: '任务要求：使用第一人称',
+      passed: hasFirstPerson,
+      required: true,
+      detail: hasFirstPerson ? '正文已使用第一人称「我」' : '正文没有出现第一人称「我」',
+    })
+  }
+
+  const forbiddenTerms = [...task.matchAll(/(?:不要|禁止)(?:提到|出现|使用)\s*[「“"]?([^，。；\n「」”"]{1,12})/g)]
+    .map(match => match[1].trim())
+    .filter(term => term && !/第一人称|我$/.test(term))
+  for (const term of [...new Set(forbiddenTerms)]) {
+    taskRules.push({
+      label: `任务要求：不出现「${term}」`,
+      passed: !text.includes(term),
+      required: true,
+      detail: text.includes(term) ? `正文仍出现「${term}」` : `正文未出现「${term}」`,
+    })
+  }
+  if (/(?:不要|禁止)(?:生成|使用)?\s*emoji/i.test(task)) {
+    const hasEmoji = /\p{Extended_Pictographic}/u.test(text)
+    taskRules.push({
+      label: '任务要求：不使用 emoji',
+      passed: !hasEmoji,
+      required: true,
+      detail: hasEmoji ? '正文仍包含 emoji' : '正文未使用 emoji',
+    })
+  }
 
   return {
     foundCliches,
@@ -161,7 +212,9 @@ function runChecks(text: string, title?: string) {
     hasFirstPerson,
     hasHeadings,
     titleLenOk: titleLen === 0 || (titleLen >= 10 && titleLen <= 20),
-    wordCountOk: wordCount >= 1500 && wordCount <= 2500,
+    wordCountOk: wordCount >= minWords && wordCount <= maxWords,
+    wordRange: { min: minWords, max: maxWords, fromTask: Boolean(rangeMatch) },
+    taskRules,
   }
 }
 
@@ -444,7 +497,7 @@ function DynamicUIBlocks({
 
 // ── 主组件 ────────────────────────────────────────────────────────────────────
 
-export default function ContentStats({ content, title, articleId, task, onArticleChange }: ContentStatsProps) {
+export default function ContentStats({ content, title, articleId, task, onArticleChange, onReviewCompleted }: ContentStatsProps) {
   const wordCount   = content.replace(/[#*`[\]()]/g, '').trim().length
   const readingTime = Math.ceil(wordCount / 200)
   const headings    = content.split('\n').reduce<Array<{ level: number; title: string }>>((acc, line) => {
@@ -483,7 +536,7 @@ export default function ContentStats({ content, title, articleId, task, onArticl
       .catch(() => {})
   }, [articleId])
 
-  const checks = runChecks(content, title)
+  const checks = runChecks(content, title, task)
 
   // 自动滚动到底部
   const scrollDeaiToBottom = () => {
@@ -644,6 +697,7 @@ export default function ContentStats({ content, title, articleId, task, onArticl
               setResult(payload as unknown as AnalysisResult)
               setAnalyzeProgress('')
               setSaved(true)
+              onReviewCompleted?.()
               setTimeout(() => setSaved(false), 3000)
             } else if (evt === 'error') {
               throw new Error(payload.message as string)
@@ -680,9 +734,9 @@ export default function ContentStats({ content, title, articleId, task, onArticl
     !checks.hasWrongDash,
     !checks.hasWrongEllip,
     checks.hasData,
-    checks.hasFirstPerson,
     checks.wordCountOk,
     checks.hasHeadings,
+    ...checks.taskRules.map(rule => rule.passed),
   ]
   const passCount = checkItems.filter(Boolean).length
 
@@ -816,27 +870,27 @@ export default function ContentStats({ content, title, articleId, task, onArticl
                       {checks.hasData ? '包含具体数据或案例' : '建议补充具体数据（如「节省了 2 小时」）'}
                     </span>
                   </div>
-                  <div className={`checklist-item ${checks.hasFirstPerson ? 'pass' : 'check'}`}>
-                    <span className={`ci-icon ${checks.hasFirstPerson ? 'pass' : 'check'}`}>
-                      {checks.hasFirstPerson ? <CheckCircle2 size={14} /> : <Circle size={14} />}
-                    </span>
-                    <span className="ci-text">
-                      {checks.hasFirstPerson ? '使用了第一人称「我」' : '建议用「我」而非「我们」增加真实感'}
-                    </span>
-                  </div>
                   <div className={`checklist-item ${checks.wordCountOk ? 'pass' : 'check'}`}>
                     <span className={`ci-icon ${checks.wordCountOk ? 'pass' : 'check'}`}>
                       {checks.wordCountOk ? <CheckCircle2 size={14} /> : <Circle size={14} />}
                     </span>
                     <span className="ci-text">
                       字数{checks.wordCountOk
-                        ? `在建议范围（1500-2500 字）`
-                        : wordCount < 1500
-                          ? `${wordCount} 字，建议增加到 1500 字以上`
-                          : `${wordCount} 字，已超出 2500 字建议上限`
+                        ? `在${checks.wordRange.fromTask ? '任务要求' : '建议'}范围（${checks.wordRange.min}-${checks.wordRange.max} 字）`
+                        : wordCount < checks.wordRange.min
+                          ? `${wordCount} 字，需增加到 ${checks.wordRange.min} 字以上`
+                          : `${wordCount} 字，已超出 ${checks.wordRange.max} 字上限`
                       }
                     </span>
                   </div>
+                  {checks.taskRules.map(rule => (
+                    <div key={rule.label} className={`checklist-item ${rule.passed ? 'pass' : 'fail'}`}>
+                      <span className={`ci-icon ${rule.passed ? 'pass' : 'fail'}`}>
+                        {rule.passed ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                      </span>
+                      <span className="ci-text">{rule.label} — {rule.detail}</span>
+                    </div>
+                  ))}
                   <div className={`checklist-item ${checks.hasHeadings ? 'pass' : 'check'}`}>
                     <span className={`ci-icon ${checks.hasHeadings ? 'pass' : 'check'}`}>
                       {checks.hasHeadings ? <CheckCircle2 size={14} /> : <Circle size={14} />}

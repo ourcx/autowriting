@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { toast } from '../../components/Toast/Toast'
 // @ts-ignore
 import { useParams, useNavigate } from 'react-router-dom'
-import { Zap, Save, Edit3, Palette, Settings, AlertTriangle, Plus, Trash2, Pencil, Sparkles, LayoutList, CheckCircle, ChevronRight, GripVertical } from 'lucide-react'
+import { Zap, Save, Edit3, Palette, Settings, AlertTriangle, Plus, Trash2, Pencil, Sparkles, LayoutList, CheckCircle, ChevronRight, GripVertical, Send } from 'lucide-react'
 import { useAIReadiness, fetchServerStatus } from '../../store/useConfigStore'
-import { fetchArticle, saveArticle } from '../../utils/apiHelpers'
+import { fetchArticle, recordArticleWorkflowEvent, saveArticle } from '../../utils/apiHelpers'
 import {
   ArticleData,
   createEmptyArticleData,
@@ -16,6 +16,7 @@ import CoverGenerator from '../../components/CoverGenerator/CoverGenerator'
 import ImageLibrary from '../../components/ImageLibrary/ImageLibrary'
 import MarkdownEditor from '../../components/MarkdownEditor/MarkdownEditor'
 import ContentStats from '../../components/ContentStats/ContentStats'
+import WeChatRenderer from '../../components/WeChatRenderer/WeChatRenderer'
 import GenerateModal from '../../components/GenerateModal/GenerateModal'
 import MaterialsCollector from '../../components/MaterialsCollector/MaterialsCollector'
 import TaskTemplateModal from '../../components/TaskTemplateModal/TaskTemplateModal'
@@ -26,18 +27,21 @@ import {
   deleteCustomTaskTemplate,
 } from '../../utils/taskTemplateStore'
 import './ArticleEditor.css'
+import {
+  normalizeArticleWorkflow,
+  type ArticleWorkflow,
+  type ArticleWorkflowEvent,
+} from '../../../shared/articleWorkflow'
 
-type TabId = 'task' | 'materials' | 'article' | 'toutiao' | 'xiaohongshu' | 'analysis' | 'cover' | 'library'
+type TabId = 'task' | 'materials' | 'article' | 'toutiao' | 'xiaohongshu' | 'analysis' | 'publish' | 'cover' | 'library'
 
 // 流程步骤定义（cover 的 check 在组件内动态注入）
 const BASE_FLOW_STEPS: { id: TabId; label: string; check: (d: ArticleData) => boolean }[] = [
-  { id: 'task',      label: '任务要求', check: d => d.task.trim().length >= 20 },
-  { id: 'materials', label: '素材采集', check: d => d.materials.trim().length >= 30 },
-  { id: 'article',   label: '公众号',   check: d => d.article.trim().length > 100 },
-  { id: 'toutiao',   label: '今日头条', check: d => d.articleToutiao.trim().length > 100 },
-  { id: 'xiaohongshu', label: '小红书', check: d => d.article.trim().length > 100 && d.xiaohongshuTitle.trim().length >= 2 },
-  { id: 'cover',     label: '生成封面', check: () => false }, // 由组件内 hasCover 覆盖
-  { id: 'analysis',  label: '内容分析', check: () => false },
+  { id: 'task',      label: '任务', check: d => d.task.trim().length >= 20 },
+  { id: 'materials', label: '素材', check: d => d.materials.trim().length >= 30 },
+  { id: 'article',   label: '写作', check: d => d.article.trim().length > 100 },
+  { id: 'analysis',  label: '审核', check: () => false },
+  { id: 'publish',   label: '发布', check: () => false },
 ]
 
 export default function ArticleEditor() {
@@ -55,6 +59,7 @@ export default function ArticleEditor() {
   const [editingTitle, setEditingTitle] = useState(false)
   // 封面是否已存在（从 localStorage 读取，CoverGenerator 生成/粘贴后更新）
   const [hasCover, setHasCover] = useState(false)
+  const [workflow, setWorkflow] = useState<ArticleWorkflow>(() => normalizeArticleWorkflow(null, createEmptyArticleData()))
 
   // articleId 确定后同步检查封面状态（刷新后也能正确勾选）
   useEffect(() => {
@@ -113,10 +118,14 @@ export default function ArticleEditor() {
       setLoading(true)
       setLoadError(null)
       if (isLocalArticle) {
-        setData(loadLocalData())
+        const localData = loadLocalData()
+        setData(localData)
+        const stored = localStorage.getItem(`article_workflow_${articleId}`)
+        setWorkflow(normalizeArticleWorkflow(stored ? JSON.parse(stored) : null, localData))
       } else {
         const d = await fetchArticle(articleId)
         setData(normalizeArticleData(d))
+        setWorkflow(normalizeArticleWorkflow(d.workflow, d))
       }
     } catch (err) {
       console.error('加载文章失败', err)
@@ -135,7 +144,8 @@ export default function ArticleEditor() {
         saveLocalData(data)
         toast.success('已保存到本地')
       } else {
-        await saveArticle(articleId, data)
+        const result = await saveArticle(articleId, data)
+        if (result.workflow) setWorkflow(result.workflow)
         toast.success('保存成功')
       }
       return true
@@ -148,6 +158,26 @@ export default function ArticleEditor() {
     }
   }, [articleId, data, isLocalArticle, loadError, loading, saveLocalData])
 
+  const handleWorkflowEvent = useCallback(async (event: ArticleWorkflowEvent) => {
+    try {
+      if (isLocalArticle) {
+        const now = new Date().toISOString()
+        const next = { ...workflow, updatedAt: now }
+        if (event === 'generated' && !next.firstGeneratedAt) next.firstGeneratedAt = now
+        if (event === 'reviewed') next.lastReviewedAt = now
+        if (event === 'wechat_draft_opened') next.wechatDraftOpenedAt = now
+        if (event === 'wechat_draft_pushed') next.wechatDraftAt = now
+        const normalized = normalizeArticleWorkflow(next, data, next.createdAt)
+        localStorage.setItem(`article_workflow_${articleId}`, JSON.stringify(normalized))
+        setWorkflow(normalized)
+        return
+      }
+      setWorkflow(await recordArticleWorkflowEvent(articleId, event))
+    } catch {
+      toast.warn('正文操作已完成，但文章进度记录失败')
+    }
+  }, [articleId, data, isLocalArticle, workflow])
+
   const handlePreview = useCallback(async () => {
     if (!data.article.trim()) return
     const saved = await handleSave()
@@ -155,8 +185,9 @@ export default function ArticleEditor() {
       toast.error('保存成功后才能进入预览，原文未被修改')
       return
     }
-    navigate(`/preview/${articleId}`)
-  }, [articleId, data.article, handleSave, navigate])
+    setActiveTab('publish')
+    void handleWorkflowEvent('wechat_draft_opened')
+  }, [data.article, handleSave, handleWorkflowEvent])
 
   function handleGenerate() {
     if (!apiKeyReady) {
@@ -273,9 +304,22 @@ export default function ArticleEditor() {
       : platforms === 'toutiao' ? '今日头条文章已生成'
       : '公众号 + 今日头条两篇文章已生成'
     toast.success(msg)
+    void handleWorkflowEvent('generated')
   }
 
   const articleTitle = data.title || data.article.split('\n')[0]?.replace(/^#+\s*/, '') || `文章 ${articleId}`
+  const reviewDone = Boolean(workflow.lastReviewedAt)
+  const publishDone = Boolean(workflow.wechatDraftAt)
+
+  const nextAction = data.task.trim().length < 20
+    ? { label: '下一步：完善任务', action: () => setActiveTab('task') }
+    : data.materials.trim().length < 30
+      ? { label: '下一步：收集素材', action: () => setActiveTab('materials') }
+      : data.article.trim().length <= 100
+        ? { label: '下一步：生成文章', action: handleGenerate }
+        : !reviewDone
+          ? { label: '下一步：审核内容', action: () => setActiveTab('analysis') }
+          : { label: publishDone ? '查看微信草稿' : '下一步：预览并推送', action: () => void handlePreview() }
 
   if (loading) {
     return (
@@ -376,9 +420,10 @@ export default function ArticleEditor() {
             <button
               className="btn btn-success"
               onClick={() => void handlePreview()}
-              title="发布预览 (Cmd+P)"
+              title="在当前工作台预览并推送公众号草稿 (Cmd+P)"
             >
-              发布预览
+              <Send size={18} />
+              预览并推送
             </button>
           )}
         </div>}
@@ -390,7 +435,11 @@ export default function ArticleEditor() {
         {/* ── 流程进度条 ── */}
         <div className="editor-flow-bar">
           {BASE_FLOW_STEPS.map((step, idx) => {
-            const done = step.id === 'cover' ? hasCover : step.check(data)
+            const done = step.id === 'analysis'
+              ? reviewDone
+              : step.id === 'publish'
+                ? publishDone
+                : step.check(data)
             const isActive = activeTab === step.id
             return (
               <button
@@ -408,6 +457,25 @@ export default function ArticleEditor() {
           })}
           {/* 其余 Tab 以普通样式显示 */}
           <div className="flow-extra-tabs">
+            <span className="flow-extra-label">平台与素材</span>
+            <button
+              className={`tab tab-extra ${activeTab === 'toutiao' ? 'active' : ''}`}
+              onClick={() => setActiveTab('toutiao')}
+            >
+              头条
+            </button>
+            <button
+              className={`tab tab-extra ${activeTab === 'xiaohongshu' ? 'active' : ''}`}
+              onClick={() => setActiveTab('xiaohongshu')}
+            >
+              小红书
+            </button>
+            <button
+              className={`tab tab-extra ${activeTab === 'cover' ? 'active' : ''}`}
+              onClick={() => setActiveTab('cover')}
+            >
+              {hasCover ? '封面 ✓' : '封面'}
+            </button>
             <button
               className={`tab tab-extra ${activeTab === 'library' ? 'active' : ''}`}
               onClick={() => setActiveTab('library')}
@@ -415,6 +483,10 @@ export default function ArticleEditor() {
               图片库
             </button>
           </div>
+          <button className="flow-next-action" onClick={nextAction.action}>
+            {nextAction.label}
+            <ChevronRight size={14} />
+          </button>
         </div>
 
         <div className="editor-tabs" style={{ display: 'none' }}>
@@ -636,7 +708,31 @@ export default function ArticleEditor() {
                 articleId={isLocalArticle ? articleId.slice(6) : articleId}
                 task={data.task}
                 onArticleChange={value => setData(prev => ({ ...prev, article: value }))}
+                onReviewCompleted={() => void handleWorkflowEvent('reviewed')}
               />
+            </div>
+          )}
+
+          {activeTab === 'publish' && (
+            <div className="editor-panel editor-panel--publish">
+              <div className="publish-workbench-head">
+                <div>
+                  <h3>公众号预览与推送</h3>
+                  <p>选择样式、封面并推送草稿都在当前文章内完成。</p>
+                </div>
+                <button className="btn btn-secondary btn-small" onClick={() => navigate(`/preview/${articleId}`)}>
+                  打开独立预览
+                </button>
+              </div>
+              <div className="publish-workbench-body">
+                <WeChatRenderer
+                  content={data.article}
+                  title={articleTitle}
+                  articleId={articleId}
+                  platformMode="wechat"
+                  onDraftPushed={() => void handleWorkflowEvent('wechat_draft_pushed')}
+                />
+              </div>
             </div>
           )}
 

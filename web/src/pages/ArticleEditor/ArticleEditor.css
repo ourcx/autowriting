@@ -876,6 +876,73 @@
   padding-left: 8px;
 }
 
+.flow-extra-label {
+  margin: 0 4px 0 2px;
+  color: var(--color-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.flow-next-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  margin-left: 10px;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: var(--rounded-md);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.flow-next-action:hover {
+  background: var(--color-primary-active);
+}
+
+.editor-panel--publish {
+  gap: 12px;
+  overflow: hidden;
+}
+
+.publish-workbench-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex: 0 0 auto;
+}
+
+.publish-workbench-head h3 {
+  margin: 0 0 4px;
+  color: var(--color-ink);
+  font-size: 16px;
+}
+
+.publish-workbench-head p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.publish-workbench-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-lg);
+  background: var(--color-canvas);
+}
+
+.publish-workbench-body > .wr-root {
+  height: 100%;
+}
+
 .tab-extra {
   font-size: 12px;
   padding: 6px 10px;
@@ -1002,6 +1069,15 @@
 
   .editor-content {
     padding: var(--spacing-md);
+  }
+
+  .flow-extra-label {
+    display: none;
+  }
+
+  .flow-next-action {
+    position: sticky;
+    right: 8px;
   }
 
   .panel-header {

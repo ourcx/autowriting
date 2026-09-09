@@ -19,6 +19,7 @@ interface WeChatRendererProps {
   title?: string
   articleId?: string
   platformMode?: PlatformMode
+  onDraftPushed?: () => void
 }
 
 // ── 复制到公众号：getComputedStyle 内联所有样式（等价于 juice，无需额外依赖）──
@@ -239,7 +240,7 @@ function hasWxCreds(): boolean {
   } catch { return false }
 }
 
-export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, articleId, platformMode = 'wechat' }) => {
+export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, articleId, platformMode = 'wechat', onDraftPushed }) => {
   const navigate = useNavigate()
 
   // 从服务端加载模板，初始用内置副本保证无白屏
@@ -711,6 +712,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
         return
       }
       setPushDone(true)
+      onDraftPushed?.()
       if (Array.isArray(d.failed_images) && d.failed_images.length > 0) {
         toast.warn(`有 ${d.failed_images.length} 张正文图片未能转存到微信，发布后可能仍不显示`, { duration: 5000 })
       } else if ((d.rewritten_images ?? 0) > 0) {
@@ -729,7 +731,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
     } finally {
       setPushing(false)
     }
-  }, [html, editedCss, fontSize, title, content, selectedCoverImage])
+  }, [html, editedCss, fontSize, title, content, selectedCoverImage, onDraftPushed, navigate, wxBound])
 
   // 空状态
   if (!content?.trim()) {

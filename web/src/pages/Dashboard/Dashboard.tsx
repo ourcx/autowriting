@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Plus, Calendar, FileText, Trash2, ArrowRight, RefreshCw, Zap, Server, HardDrive, AlertTriangle, Upload } from 'lucide-react'
-import { fetchArticleList, deleteArticle } from '../../utils/apiHelpers'
+import { fetchArticleList, fetchArticleWorkflowMetrics, deleteArticle } from '../../utils/apiHelpers'
 import { showConfirm, toast } from '../../components/Toast/Toast'
 import './Dashboard.css'
 
@@ -37,7 +37,7 @@ interface Article {
   id: string
   date: string
   title: string
-  status: 'draft' | 'generated' | 'published'
+  status: 'brief' | 'materials' | 'drafting' | 'review' | 'ready' | 'wechat_draft' | 'draft' | 'generated' | 'published'
   createdAt: string
 }
 
@@ -47,9 +47,15 @@ interface DashboardProps {
 }
 
 const STATUS_META: Record<string, { label: string; className: string }> = {
-  draft:     { label: '草稿',  className: 'status-draft' },
-  generated: { label: '已生成', className: 'status-generated' },
-  published: { label: '已发布', className: 'status-published' },
+  brief:         { label: '补充任务', className: 'status-draft' },
+  materials:     { label: '收集素材', className: 'status-draft' },
+  drafting:      { label: '待写作', className: 'status-draft' },
+  review:        { label: '待审核', className: 'status-generated' },
+  ready:         { label: '待发布', className: 'status-generated' },
+  wechat_draft:  { label: '微信草稿', className: 'status-published' },
+  draft:         { label: '草稿', className: 'status-draft' },
+  generated:     { label: '待审核', className: 'status-generated' },
+  published:     { label: '已发布', className: 'status-published' },
 }
 
 // 存储位置类型
@@ -95,12 +101,18 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
   const [creating, setCreating] = useState(false)
   const [storageMode, setStorageMode] = useState<StorageMode>('server')
   const [migrating, setMigrating] = useState(false)
+  const [workflowMetrics, setWorkflowMetrics] = useState<{ sampleSize: number; medianMinutes: number | null }>({ sampleSize: 0, medianMinutes: null })
   const titleRef = useRef<HTMLInputElement>(null)
 
   async function loadArticles() {
     try {
       setLoading(true)
-      setArticles(await fetchArticleList())
+      const [nextArticles, nextMetrics] = await Promise.all([
+        fetchArticleList(),
+        fetchArticleWorkflowMetrics().catch(() => ({ sampleSize: 0, medianMinutes: null })),
+      ])
+      setArticles(nextArticles)
+      setWorkflowMetrics(nextMetrics)
     } catch (e) {
       console.error('加载文章失败', e)
     } finally {
@@ -184,8 +196,8 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
 
   const stats = {
     total: articles.length,
-    generated: articles.filter(a => a.status === 'generated' || a.status === 'published').length,
-    draft: articles.filter(a => a.status === 'draft').length,
+    generated: articles.filter(a => ['review', 'ready', 'wechat_draft', 'generated', 'published'].includes(a.status)).length,
+    draft: articles.filter(a => ['brief', 'materials', 'drafting', 'draft'].includes(a.status)).length,
   }
 
   // 合并列表（服务端在前，本地在后，并标记来源）
@@ -273,6 +285,17 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
           <div className="dash-stat">
             <span className="dash-stat-num">{stats.draft}</span>
             <span className="dash-stat-label">草稿</span>
+          </div>
+          <div className="dash-stat-divider" />
+          <div className="dash-stat" title={`已统计 ${workflowMetrics.sampleSize} 篇推送到微信草稿的文章`}>
+            <span className="dash-stat-num">
+              {workflowMetrics.medianMinutes === null ? '—' : workflowMetrics.medianMinutes < 60
+                ? workflowMetrics.medianMinutes
+                : (workflowMetrics.medianMinutes / 60).toFixed(1)}
+            </span>
+            <span className="dash-stat-label">
+              {workflowMetrics.medianMinutes !== null && workflowMetrics.medianMinutes < 60 ? '分钟中位耗时' : '小时中位耗时'}
+            </span>
           </div>
         </div>
 

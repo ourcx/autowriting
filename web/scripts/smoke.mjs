@@ -248,6 +248,32 @@ cases.push({
     if (!readResponse.ok) throw new Error(`读取失败 status=${readResponse.status}`)
     const article = await readResponse.json()
     if (article.title !== 'Agent Smoke') throw new Error('Agent 读取内容与写入内容不一致')
+    if (article.workflow?.currentStage !== 'brief') throw new Error('新文章应从任务阶段开始')
+
+    const workflowResponse = await fetch(`${BASE}/api/articles/${articleId}/workflow`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ event: 'wechat_draft_opened' }),
+    })
+    if (!workflowResponse.ok) throw new Error(`记录工作流失败 status=${workflowResponse.status}`)
+    const workflow = await workflowResponse.json()
+    if (!workflow.wechatDraftOpenedAt) throw new Error('工作流未记录公众号预览时间')
+
+    const pushedResponse = await fetch(`${BASE}/api/articles/${articleId}/workflow`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ event: 'wechat_draft_pushed' }),
+    })
+    if (!pushedResponse.ok) throw new Error(`记录微信草稿失败 status=${pushedResponse.status}`)
+    const pushedWorkflow = await pushedResponse.json()
+    if (pushedWorkflow.currentStage !== 'wechat_draft') throw new Error('推送后文章应进入微信草稿阶段')
+
+    const metricsResponse = await fetch(`${BASE}/api/articles/workflow-metrics`, {
+      headers: { 'X-Agent-API-Key': SMOKE_AGENT_API_KEY },
+    })
+    if (!metricsResponse.ok) throw new Error(`读取工作流指标失败 status=${metricsResponse.status}`)
+    const metrics = await metricsResponse.json()
+    if (metrics.sampleSize < 1 || metrics.medianMinutes === null) throw new Error('工作流指标未纳入完成样本')
 
     const deleteResponse = await fetch(`${BASE}/api/articles/${articleId}`, {
       method: 'DELETE',
