@@ -6,26 +6,32 @@ export async function smokeArticleStream(base, token) {
   const delay = Number(process.env.SMOKE_STREAM_DELAY_MS || 16_000)
   assert.ok(Number.isFinite(delay) && delay >= 16_000 && delay <= 90_000)
   let calls = 0
+  const modelRequests = []
   let proxyTimedOut = false
   const content = '# 流式生成回归\n\n这是隔离环境中的测试正文，用于确认公众号和今日头条在模型长时间没有输出时仍能完成生成。'
   const timers = new Set()
   const model = createServer((req, res) => {
-    req.resume()
     const call = ++calls
-    const timer = setTimeout(() => {
-      timers.delete(timer)
-      res.writeHead(200, { 'Content-Type': 'text/event-stream' })
-      const splitAt = content.indexOf('用于确认')
-      const firstContent = content.slice(0, splitAt)
-      const finalContent = content.slice(splitAt)
-      res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: firstContent } }] })}\n\n`)
-      const finalEvent = Buffer.from(`data: ${JSON.stringify({ choices: [{ delta: { content: finalContent } }] })}`)
-      const chineseStart = finalEvent.indexOf(Buffer.from('用'))
-      // 故意把一个三字节中文字符拆到两个网络分片，并让最后一个 SSE 事件没有换行。
-      res.write(finalEvent.subarray(0, chineseStart + 1))
-      setImmediate(() => res.end(finalEvent.subarray(chineseStart + 1)))
-    }, call === 1 ? delay : 16_000)
-    timers.add(timer)
+    let body = ''
+    req.setEncoding('utf8')
+    req.on('data', chunk => { body += chunk })
+    req.on('end', () => {
+      modelRequests.push(JSON.parse(body))
+      const timer = setTimeout(() => {
+        timers.delete(timer)
+        res.writeHead(200, { 'Content-Type': 'text/event-stream' })
+        const splitAt = content.indexOf('用于确认')
+        const firstContent = content.slice(0, splitAt)
+        const finalContent = content.slice(splitAt)
+        res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: firstContent } }] })}\n\n`)
+        const finalEvent = Buffer.from(`data: ${JSON.stringify({ choices: [{ delta: { content: finalContent } }] })}`)
+        const chineseStart = finalEvent.indexOf(Buffer.from('用'))
+        // 故意把一个三字节中文字符拆到两个网络分片，并让最后一个 SSE 事件没有换行。
+        res.write(finalEvent.subarray(0, chineseStart + 1))
+        setImmediate(() => res.end(finalEvent.subarray(chineseStart + 1)))
+      }, call === 1 ? delay : 16_000)
+      timers.add(timer)
+    })
   })
   // 代理空闲 20 秒就断连，比线上的约 60 秒更严格；收到心跳应不断重置空闲计时。
   const proxy = createServer((req, res) => {
@@ -51,7 +57,7 @@ export async function smokeArticleStream(base, token) {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
         task: '验证长时间思考后生成文章', materials: '仅用于本地隔离验收的测试素材',
-        selectedRagContext: '本地测试上下文', platforms: 'both',
+        selectedRagContext: '本地测试上下文', referenceArticleIds: ['reference-smoke'], platforms: 'both',
         aiConfig: { articleProvider: 'openai-compat', articleApiKey: 'smoke-only', articleModel: 'smoke-model', articleBaseUrl: `http://127.0.0.1:${model.address().port}/v1` },
       }),
       signal: AbortSignal.timeout(delay + 40_000),
@@ -60,6 +66,9 @@ export async function smokeArticleStream(base, token) {
     const text = await response.text()
     assert.equal(proxyTimedOut, false, '生成期间代理不应因空闲而断连')
     assert.equal(calls, 2, '公众号和头条应各调用一次模型')
+    assert.match(modelRequests[0].messages[1].content, /目标读者：Smoke 读者/, '账号写作档案应注入公众号提示词')
+    assert.match(modelRequests[1].messages[1].content, /# 公众号事实与观点母稿/, '头条版本应从公众号母稿改写')
+    assert.match(modelRequests[1].messages[1].content, /流式生成回归/, '头条提示词应包含刚生成的公众号母稿')
     assert.ok((text.match(/: heartbeat/g) || []).length >= 3, '等待两平台正文时应持续收到心跳')
     const done = text.split('\n\n').filter(event => event.startsWith('event: done\n')).map(event => JSON.parse(event.split('\ndata: ')[1]))
     assert.deepEqual(done.map(event => event.platform), ['wechat', 'toutiao'])
@@ -69,6 +78,8 @@ export async function smokeArticleStream(base, token) {
     const article = await saved.json()
     assert.equal(article.article, content)
     assert.equal(article.articleToutiao, content)
+    assert.deepEqual(article.workflow.generationContext.referenceArticleIds, ['reference-smoke'])
+    assert.ok(article.workflow.generationContext.promptIds.length >= 1, '工作流应记录生成提示词')
   } finally {
     timers.forEach(clearTimeout)
     for (const server of [proxy, model]) {

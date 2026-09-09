@@ -8,6 +8,7 @@
  */
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { X, CheckCircle, AlertCircle, FileText, Eye, EyeOff, Zap } from 'lucide-react'
+import { fetchCreatorWritingProfile } from '../../utils/apiHelpers'
 import './GenerateModal.css'
 
 // ── 类型 ─────────────────────────────────────────────────────────────────────
@@ -33,6 +34,7 @@ interface Props {
   articleId:  string
   task:       string
   materials:  string
+  sourceArticle?: string
   aiConfig:   Record<string, unknown>
   onComplete: (article: string, articleToutiao: string, platforms: 'both' | 'wechat' | 'toutiao') => void
   onClose:    () => void
@@ -48,7 +50,7 @@ function simColor(sim: number) {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export default function GenerateModal({ articleId, task, materials, aiConfig, onComplete, onClose }: Props) {
+export default function GenerateModal({ articleId, task, materials, sourceArticle = '', aiConfig, onComplete, onClose }: Props) {
   const [phase,        setPhase]       = useState<Phase>('pick')
   const [statusMsg,    setStatusMsg]   = useState('')
   // 平台选择：默认仅公众号（双平台会触发 2 次完整 LLM 调用，让用户显式勾选）
@@ -94,6 +96,11 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
 
   useEffect(() => {
     fetchCandidates()
+    fetchCreatorWritingProfile().then(profile => {
+      const hasWechat = profile.defaultPlatforms.includes('wechat')
+      const hasToutiao = profile.defaultPlatforms.includes('toutiao')
+      setPlatforms(hasWechat && hasToutiao ? 'both' : hasToutiao ? 'toutiao' : 'wechat')
+    }).catch(() => {})
   }, [])
 
   // 自动滚动到底部
@@ -225,7 +232,9 @@ export default function GenerateModal({ articleId, task, materials, aiConfig, on
         headers: { 'Content-Type': 'application/json', ...authHeader },
         body:    JSON.stringify({
           task, materials, aiConfig,
+          sourceArticle: sourceArticle || undefined,
           selectedRagContext: selectedRagContext || undefined,
+          referenceArticleIds: [...selected],
           platforms,
         }),
         signal,

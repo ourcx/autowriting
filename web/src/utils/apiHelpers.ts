@@ -13,6 +13,10 @@ import {
 } from '../../shared/wechatBlockDsl'
 import type { CanvasDesignTemplateId } from '../../shared/canvasDesignTemplates'
 import type { ArticleWorkflow, ArticleWorkflowEvent, ArticleWorkflowStage } from '../../shared/articleWorkflow'
+import {
+  normalizeCreatorWritingProfile,
+  type CreatorWritingProfile,
+} from '../../shared/contentProduction'
 
 export interface CanvasDesignInput {
   templateId: CanvasDesignTemplateId
@@ -136,14 +140,56 @@ export async function fetchArticleList() {
 export async function recordArticleWorkflowEvent(
   articleId: string,
   event: ArticleWorkflowEvent,
+  metadata?: {
+    platforms?: Array<'wechat' | 'toutiao'>
+    referenceArticleIds?: string[]
+    promptIds?: string[]
+    templateId?: string
+  },
 ): Promise<ArticleWorkflow> {
-  const response = await axios.post(`/api/articles/${articleId}/workflow`, { event })
+  const response = await axios.post(`/api/articles/${articleId}/workflow`, { event, metadata })
   return response.data as ArticleWorkflow
+}
+
+export interface ProductionInsights {
+  sampleSize: number
+  topArticles: Array<{
+    articleId: string
+    title: string
+    platform: 'wechat' | 'toutiao' | 'xiaohongshu'
+    composite: number
+    views: number | null
+    characters: number
+    templateId: string | null
+    promptIds: string[]
+    referenceArticleIds: string[]
+  }>
+  patterns: {
+    bestPlatform: { platform: 'wechat' | 'toutiao' | 'xiaohongshu'; average: number } | null
+    averageTitleCharacters: number | null
+    averageArticleCharacters: number | null
+  }
+  generationUsesPerformanceExamples: boolean
+}
+
+export async function fetchProductionInsights(): Promise<ProductionInsights> {
+  const response = await axios.get('/api/articles/production-insights')
+  return response.data as ProductionInsights
 }
 
 export async function fetchArticleWorkflowMetrics(): Promise<{ sampleSize: number; medianMinutes: number | null }> {
   const response = await axios.get('/api/articles/workflow-metrics')
   return response.data as { sampleSize: number; medianMinutes: number | null }
+}
+
+export async function fetchCreatorWritingProfile(): Promise<CreatorWritingProfile> {
+  const response = await axios.get('/api/creator-profile')
+  return normalizeCreatorWritingProfile(response.data)
+}
+
+export async function saveCreatorWritingProfile(profile: CreatorWritingProfile): Promise<CreatorWritingProfile> {
+  const response = await axios.put('/api/creator-profile', profile)
+  return normalizeCreatorWritingProfile(response.data)
 }
 
 export async function generateCanvasDocument(

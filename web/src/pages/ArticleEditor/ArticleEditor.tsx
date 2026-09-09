@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { toast } from '../../components/Toast/Toast'
 // @ts-ignore
 import { useParams, useNavigate } from 'react-router-dom'
-import { Zap, Save, Edit3, Palette, Settings, AlertTriangle, Plus, Trash2, Pencil, Sparkles, LayoutList, CheckCircle, ChevronRight, GripVertical, Send } from 'lucide-react'
+import { Zap, Save, Edit3, Palette, Settings, AlertTriangle, Plus, Trash2, Pencil, Sparkles, LayoutList, CheckCircle, ChevronRight, GripVertical, Send, User } from 'lucide-react'
 import { useAIReadiness, fetchServerStatus } from '../../store/useConfigStore'
 import { fetchArticle, recordArticleWorkflowEvent, saveArticle } from '../../utils/apiHelpers'
 import {
@@ -21,6 +21,7 @@ import GenerateModal from '../../components/GenerateModal/GenerateModal'
 import MaterialsCollector from '../../components/MaterialsCollector/MaterialsCollector'
 import TaskTemplateModal from '../../components/TaskTemplateModal/TaskTemplateModal'
 import PageHeader from '../../components/PageHeader/PageHeader'
+import ProductionGuidance, { PlatformVersionSummary } from '../../components/ProductionGuidance/ProductionGuidance'
 import {
   TaskTemplate,
   loadAllTaskTemplates,
@@ -158,21 +159,30 @@ export default function ArticleEditor() {
     }
   }, [articleId, data, isLocalArticle, loadError, loading, saveLocalData])
 
-  const handleWorkflowEvent = useCallback(async (event: ArticleWorkflowEvent) => {
+  const handleWorkflowEvent = useCallback(async (event: ArticleWorkflowEvent, metadata?: { templateId?: string }) => {
     try {
       if (isLocalArticle) {
         const now = new Date().toISOString()
         const next = { ...workflow, updatedAt: now }
         if (event === 'generated' && !next.firstGeneratedAt) next.firstGeneratedAt = now
+        if (event === 'generated') {
+          delete next.lastReviewedAt
+          delete next.wechatDraftOpenedAt
+          delete next.wechatDraftAt
+          delete next.publishContext
+        }
         if (event === 'reviewed') next.lastReviewedAt = now
         if (event === 'wechat_draft_opened') next.wechatDraftOpenedAt = now
-        if (event === 'wechat_draft_pushed') next.wechatDraftAt = now
+        if (event === 'wechat_draft_pushed') {
+          next.wechatDraftAt = now
+          if (metadata?.templateId) next.publishContext = { templateId: metadata.templateId }
+        }
         const normalized = normalizeArticleWorkflow(next, data, next.createdAt)
         localStorage.setItem(`article_workflow_${articleId}`, JSON.stringify(normalized))
         setWorkflow(normalized)
         return
       }
-      setWorkflow(await recordArticleWorkflowEvent(articleId, event))
+      setWorkflow(await recordArticleWorkflowEvent(articleId, event, metadata))
     } catch {
       toast.warn('正文操作已完成，但文章进度记录失败')
     }
@@ -388,6 +398,14 @@ export default function ArticleEditor() {
         </div>}
         onBack={() => navigate('/')}
         actions={<div className="header-actions">
+          <button
+            className="btn btn-ghost"
+            onClick={() => navigate('/account')}
+            title="设置账号受众、语气和禁用表达"
+          >
+            <User size={16} />
+            写作档案
+          </button>
           <button
             className="btn btn-ghost"
             onClick={() => navigate('/settings')}
@@ -649,7 +667,7 @@ export default function ArticleEditor() {
 
           {activeTab === 'article' && (
             <div className="editor-panel">
-              <div className="editor-platform-label editor-platform-label--wechat">公众号版本</div>
+              <div className="editor-platform-label editor-platform-label--wechat">公众号母稿 · 统一事实与观点</div>
               <MarkdownEditor
                 value={data.article}
                 onChange={value => setData(prev => ({ ...prev, article: value }))}
@@ -663,6 +681,7 @@ export default function ArticleEditor() {
           {activeTab === 'toutiao' && (
             <div className="editor-panel">
               <div className="editor-platform-label editor-platform-label--toutiao">今日头条版本</div>
+              <PlatformVersionSummary source={data.article} target={data.articleToutiao} platform="toutiao" />
               <MarkdownEditor
                 value={data.articleToutiao}
                 onChange={value => setData(prev => ({ ...prev, articleToutiao: value }))}
@@ -702,6 +721,7 @@ export default function ArticleEditor() {
 
           {activeTab === 'analysis' && (
             <div className="editor-panel">
+              <ProductionGuidance article={data.article} materials={data.materials} articleToutiao={data.articleToutiao} workflow={workflow} />
               <ContentStats
                 title={articleTitle}
                 content={data.article}
@@ -730,7 +750,7 @@ export default function ArticleEditor() {
                   title={articleTitle}
                   articleId={articleId}
                   platformMode="wechat"
-                  onDraftPushed={() => void handleWorkflowEvent('wechat_draft_pushed')}
+                  onDraftPushed={context => void handleWorkflowEvent('wechat_draft_pushed', context)}
                 />
               </div>
             </div>
@@ -760,6 +780,7 @@ export default function ArticleEditor() {
           articleId={isLocalArticle ? articleId.slice(6) : articleId}
           task={data.task}
           materials={data.materials}
+          sourceArticle={data.article}
           aiConfig={aiConfig as unknown as Record<string, unknown>}
           onComplete={handleGenerateComplete}
           onClose={() => setShowGenerateModal(false)}

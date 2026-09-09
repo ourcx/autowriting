@@ -16,6 +16,14 @@ export interface ArticleWorkflow {
   lastReviewedAt?: string
   wechatDraftOpenedAt?: string
   wechatDraftAt?: string
+  generationContext?: {
+    platforms: Array<"wechat" | "toutiao">
+    referenceArticleIds: string[]
+    promptIds: string[]
+  }
+  publishContext?: {
+    templateId: string
+  }
 }
 
 export interface ArticleWorkflowContent {
@@ -51,6 +59,26 @@ export function normalizeArticleWorkflow(
     ...(text("lastReviewedAt") ? { lastReviewedAt: text("lastReviewedAt") } : {}),
     ...(text("wechatDraftOpenedAt") ? { wechatDraftOpenedAt: text("wechatDraftOpenedAt") } : {}),
     ...(text("wechatDraftAt") ? { wechatDraftAt: text("wechatDraftAt") } : {}),
+  }
+  if (source.generationContext && typeof source.generationContext === "object") {
+    const context = source.generationContext as Record<string, unknown>
+    workflow.generationContext = {
+      platforms: Array.isArray(context.platforms)
+        ? context.platforms.filter((item): item is "wechat" | "toutiao" => item === "wechat" || item === "toutiao").slice(0, 2)
+        : [],
+      referenceArticleIds: Array.isArray(context.referenceArticleIds)
+        ? context.referenceArticleIds.filter((item): item is string => typeof item === "string").map(item => item.slice(0, 160)).slice(0, 8)
+        : [],
+      promptIds: Array.isArray(context.promptIds)
+        ? context.promptIds.filter((item): item is string => typeof item === "string").map(item => item.slice(0, 100)).slice(0, 4)
+        : [],
+    }
+  }
+  if (source.publishContext && typeof source.publishContext === "object") {
+    const templateId = (source.publishContext as Record<string, unknown>).templateId
+    if (typeof templateId === "string" && templateId.trim()) {
+      workflow.publishContext = { templateId: templateId.trim().slice(0, 100) }
+    }
   }
   workflow.currentStage = inferArticleWorkflowStage(content, workflow)
   return workflow

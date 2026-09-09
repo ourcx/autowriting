@@ -6,9 +6,16 @@ import {
 } from "lucide-react"
 import PageHeader from "../../components/PageHeader/PageHeader"
 import {
-  extractErrorMessage, fetchToutiaoAccount, fetchWechatAccount,
+  extractErrorMessage, fetchCreatorWritingProfile, fetchToutiaoAccount, fetchWechatAccount,
+  saveCreatorWritingProfile,
   ToutiaoAccount, WechatAccount,
 } from "../../utils/apiHelpers"
+import { toast } from "../../components/Toast/Toast"
+import {
+  EMPTY_CREATOR_WRITING_PROFILE,
+  type CreatorWritingProfile,
+  type PublishingPlatform,
+} from "../../../shared/contentProduction"
 import {
   clearToutiaoCookies, clearWechatCredentials, getWechatHeaders,
   hasToutiaoCookies, loadToutiaoCookies, loadWechatCredentials,
@@ -47,6 +54,9 @@ export default function AccountPage() {
   const [bindingToutiao, setBindingToutiao] = useState(false)
   const [xiaohongshuCookies, setXiaohongshuCookies] = useState("")
   const [xiaohongshuError, setXiaohongshuError] = useState("")
+  const [writingProfile, setWritingProfile] = useState<CreatorWritingProfile>(EMPTY_CREATOR_WRITING_PROFILE)
+  const [profileLoading, setProfileLoading] = useState(true)
+  const [profileSaving, setProfileSaving] = useState(false)
 
   const refreshWechat = useCallback(async () => {
     if (!loadWechatCredentials()) return
@@ -81,6 +91,38 @@ export default function AccountPage() {
     if (wechatBound) void refreshWechat()
     if (toutiaoBound) void refreshToutiao()
   }, [refreshToutiao, refreshWechat, toutiaoBound, wechatBound])
+
+  useEffect(() => {
+    fetchCreatorWritingProfile()
+      .then(setWritingProfile)
+      .catch(error => toast.error(extractErrorMessage(error, "写作档案加载失败")))
+      .finally(() => setProfileLoading(false))
+  }, [])
+
+  function updateProfile<K extends keyof CreatorWritingProfile>(field: K, value: CreatorWritingProfile[K]) {
+    setWritingProfile(previous => ({ ...previous, [field]: value }))
+  }
+
+  function toggleDefaultPlatform(platform: PublishingPlatform) {
+    setWritingProfile(previous => {
+      const selected = previous.defaultPlatforms.includes(platform)
+        ? previous.defaultPlatforms.filter(item => item !== platform)
+        : [...previous.defaultPlatforms, platform]
+      return { ...previous, defaultPlatforms: selected.length ? selected : ["wechat"] }
+    })
+  }
+
+  async function saveWritingProfile() {
+    setProfileSaving(true)
+    try {
+      setWritingProfile(await saveCreatorWritingProfile(writingProfile))
+      toast.success("账号写作档案已保存，之后生成文章会自动使用")
+    } catch (error) {
+      toast.error(extractErrorMessage(error, "写作档案保存失败"))
+    } finally {
+      setProfileSaving(false)
+    }
+  }
 
   async function bindWechat(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -192,6 +234,33 @@ export default function AccountPage() {
             <span>内容平台</span>
           </div>
         </div>
+
+        <section className="ap-writing-profile" aria-label="账号写作档案">
+          <div className="ap-writing-profile-head">
+            <div>
+              <p className="ap-eyebrow">WRITING PROFILE</p>
+              <h2>账号写作档案</h2>
+              <p>设置一次，生成公众号和平台版本时自动使用；单篇任务要求仍然优先。</p>
+            </div>
+            <button className="ap-btn ap-btn--dark" onClick={() => void saveWritingProfile()} disabled={profileLoading || profileSaving}>
+              {profileSaving ? "保存中…" : "保存写作档案"}
+            </button>
+          </div>
+          <div className="ap-writing-profile-grid">
+            <label><span>目标读者</span><input value={writingProfile.audience} onChange={event => updateProfile("audience", event.target.value)} placeholder="如：广州大学城学生和年轻教师" /></label>
+            <label><span>内容立场</span><input value={writingProfile.stance} onChange={event => updateProfile("stance", event.target.value)} placeholder="如：实用、克制，明确区分事实和观点" /></label>
+            <label><span>常用语气</span><input value={writingProfile.tone} onChange={event => updateProfile("tone", event.target.value)} placeholder="如：像熟悉校园的学长，直接但不油腻" /></label>
+            <label><span>视觉倾向</span><input value={writingProfile.visualStyle} onChange={event => updateProfile("visualStyle", event.target.value)} placeholder="如：阅读型、少装饰、青绿色" /></label>
+            <label className="ap-writing-profile-wide"><span>常用结构</span><textarea value={writingProfile.preferredStructure} onChange={event => updateProfile("preferredStructure", event.target.value)} rows={2} placeholder="如：场景开头 → 背景解释 → 分步建议 → 风险提醒 → 结论" /></label>
+            <label className="ap-writing-profile-wide"><span>禁用表达</span><input value={writingProfile.bannedPhrases.join("、")} onChange={event => updateProfile("bannedPhrases", event.target.value.split(/[，,、]/).map(item => item.trim()).filter(Boolean))} placeholder="用顿号分隔，如：众所周知、赋能、闭眼冲" /></label>
+          </div>
+          <div className="ap-platform-defaults">
+            <span>默认平台</span>
+            {([['wechat', '公众号'], ['toutiao', '今日头条'], ['xiaohongshu', '小红书']] as Array<[PublishingPlatform, string]>).map(([platform, label]) => (
+              <button key={platform} className={writingProfile.defaultPlatforms.includes(platform) ? "active" : ""} onClick={() => toggleDefaultPlatform(platform)}>{label}</button>
+            ))}
+          </div>
+        </section>
 
         <div className="ap-grid">
           <article className="ap-card ap-card--wechat">

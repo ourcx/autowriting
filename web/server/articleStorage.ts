@@ -46,6 +46,12 @@ export function recordArticleWorkflowEvent(input: {
   content: ArticleWorkflowContent
   event: ArticleWorkflowEvent
   at?: string
+  metadata?: {
+    platforms?: Array<"wechat" | "toutiao">
+    referenceArticleIds?: string[]
+    promptIds?: string[]
+    templateId?: string
+  }
 }): ArticleWorkflow {
   const now = input.at || new Date().toISOString()
   const workflow = readArticleWorkflow(input.articlePath, input.content, now)
@@ -54,23 +60,34 @@ export function recordArticleWorkflowEvent(input: {
     delete workflow.lastReviewedAt
     delete workflow.wechatDraftOpenedAt
     delete workflow.wechatDraftAt
+    delete workflow.publishContext
+    if (input.metadata) {
+      workflow.generationContext = {
+        platforms: input.metadata.platforms || workflow.generationContext?.platforms || [],
+        referenceArticleIds: input.metadata.referenceArticleIds || workflow.generationContext?.referenceArticleIds || [],
+        promptIds: input.metadata.promptIds || workflow.generationContext?.promptIds || [],
+      }
+    }
   }
   if (input.event === "reviewed") workflow.lastReviewedAt = now
   if (input.event === "wechat_draft_opened") workflow.wechatDraftOpenedAt = now
-  if (input.event === "wechat_draft_pushed") workflow.wechatDraftAt = now
+  if (input.event === "wechat_draft_pushed") {
+    workflow.wechatDraftAt = now
+    if (input.metadata?.templateId) workflow.publishContext = { templateId: input.metadata.templateId }
+  }
   workflow.updatedAt = now
-  workflow.currentStage = normalizeArticleWorkflow(workflow, input.content, workflow.createdAt).currentStage
+  const normalized = normalizeArticleWorkflow(workflow, input.content, workflow.createdAt)
 
   const workflowPath = getArticleSidecarPath(input.articlePath, "article_workflow", "json")
   fs.mkdirSync(path.dirname(workflowPath), { recursive: true })
   const tempPath = `${workflowPath}.${process.pid}.${Date.now()}.tmp`
   try {
-    fs.writeFileSync(tempPath, JSON.stringify(workflow, null, 2), "utf8")
+    fs.writeFileSync(tempPath, JSON.stringify(normalized, null, 2), "utf8")
     fs.renameSync(tempPath, workflowPath)
   } finally {
     if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath)
   }
-  return workflow
+  return normalized
 }
 
 export function writeArticleSafely(input: {

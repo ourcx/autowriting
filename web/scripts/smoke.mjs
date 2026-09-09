@@ -319,6 +319,63 @@ cases.push({
   },
 })
 cases.push({
+  name: '账号写作档案应按当前用户读写',
+  run: async () => {
+    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+    const profile = {
+      audience: 'Smoke 读者',
+      stance: '区分事实与观点',
+      tone: '直接',
+      bannedPhrases: ['赋能'],
+      preferredStructure: '结论先行',
+      defaultPlatforms: ['wechat', 'toutiao'],
+      visualStyle: '少装饰',
+    }
+    const saveResponse = await fetch(`${BASE}/api/creator-profile`, {
+      method: 'PUT', headers, body: JSON.stringify(profile),
+    })
+    if (!saveResponse.ok) throw new Error(`保存失败 status=${saveResponse.status}`)
+    const readResponse = await fetch(`${BASE}/api/creator-profile`, { headers })
+    if (!readResponse.ok) throw new Error(`读取失败 status=${readResponse.status}`)
+    const stored = await readResponse.json()
+    if (stored.audience !== profile.audience || stored.defaultPlatforms.length !== 2) {
+      throw new Error('写作档案读写内容不一致')
+    }
+
+    const otherUser = { username: `smoke_profile_other_${Date.now()}`, password: 'smoke_pw_9999' }
+    await fetch(`${BASE}/api/auth/register`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(otherUser),
+    })
+    const loginResponse = await fetch(`${BASE}/api/auth/login`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(otherUser),
+    })
+    const otherToken = (await loginResponse.json()).token
+    const otherProfile = await (await fetch(`${BASE}/api/creator-profile`, {
+      headers: { Authorization: `Bearer ${otherToken}` },
+    })).json()
+    if (otherProfile.audience) throw new Error('写作档案跨用户泄漏')
+  },
+})
+cases.push({
+  name: '创作反馈接口应返回可解释统计结构',
+  run: async () => {
+    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+    const scoreResponse = await fetch(`${BASE}/api/scores/feedback-smoke`, {
+      method: 'POST', headers, body: JSON.stringify({ title: '高表现 Smoke 文章', platform: 'wechat', views: 12000, composite: 88 }),
+    })
+    if (!scoreResponse.ok) throw new Error(`评分保存失败 status=${scoreResponse.status}`)
+    const response = await fetch(`${BASE}/api/articles/production-insights`, {
+      headers,
+    })
+    if (!response.ok) throw new Error(`status=${response.status}`)
+    const data = await response.json()
+    if (!Array.isArray(data.topArticles) || typeof data.patterns !== 'object' || data.topArticles[0]?.title !== '高表现 Smoke 文章') {
+      throw new Error('创作反馈结构不完整')
+    }
+    await fetch(`${BASE}/api/scores/feedback-smoke/wechat`, { method: 'DELETE', headers })
+  },
+})
+cases.push({
   name: '秀米导入拒绝任意主机与编辑器链接',
   run: async () => {
     for (const url of ['http://127.0.0.1/', 'https://v.xiumi.us.evil.test/board/v5/x/123', 'https://xiumi.us/studio/v5']) {

@@ -23,7 +23,8 @@ import {
 } from '../articleStorage.js'
 import { ensureDir, buildLLMRequest, callLLMWithRetry } from '../utils'
 import { retrieveRelevant, formatRetrievedContext, formatExampleContext, extractSearchQuery } from '../rag.js'
-import { saveAnalysis, getLatestAnalysis, listAnalyses, recordTokenUsage, getEffectivePrompt, getSetting } from '../db.js'
+import { saveAnalysis, getLatestAnalysis, listAnalyses, recordTokenUsage, getEffectivePrompt, getSetting, listArticleScores } from '../db.js'
+import { formatCreatorProfileForPrompt, normalizeCreatorWritingProfile } from '../../shared/contentProduction.ts'
 import { authMiddleware } from '../authMiddleware.js'
 import { logger } from '../logger.js'
 import { startSseHeartbeat } from '../sseHeartbeat.js'
@@ -217,6 +218,58 @@ router.get('/workflow-metrics', (req, res) => {
   }
 })
 
+router.get('/production-insights', (req, res) => {
+  try {
+    const scores = listArticleScores(req.user.id)
+      .filter(score => typeof score.composite === 'number')
+      .sort((a, b) => (b.composite || 0) - (a.composite || 0))
+    const topScores = scores.slice(0, 5)
+    const enriched = topScores.map(score => {
+      const articlePath = getArticlePath(score.articleId, 'article', req.user.id)
+      const taskPath = getArticlePath(score.articleId, 'task', req.user.id)
+      const materialsPath = getArticlePath(score.articleId, 'materials', req.user.id)
+      const article = readText(articlePath)
+      const workflow = getWorkflow(articlePath, taskPath, materialsPath)
+      return {
+        articleId: score.articleId,
+        title: score.title,
+        platform: score.platform,
+        composite: score.composite,
+        views: score.views,
+        characters: Array.from(article.replace(/\s/g, '')).length,
+        templateId: workflow.publishContext?.templateId || null,
+        promptIds: workflow.generationContext?.promptIds || [],
+        referenceArticleIds: workflow.generationContext?.referenceArticleIds || [],
+      }
+    })
+    const platformGroups = new Map()
+    for (const score of scores) {
+      const group = platformGroups.get(score.platform) || []
+      group.push(score.composite || 0)
+      platformGroups.set(score.platform, group)
+    }
+    const bestPlatform = [...platformGroups.entries()]
+      .map(([platform, values]) => ({ platform, average: Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) }))
+      .sort((a, b) => b.average - a.average)[0] || null
+    const averageTitleCharacters = enriched.length
+      ? Math.round(enriched.reduce((sum, item) => sum + Array.from(item.title).length, 0) / enriched.length)
+      : null
+    const withContent = enriched.filter(item => item.characters > 0)
+    const averageArticleCharacters = withContent.length
+      ? Math.round(withContent.reduce((sum, item) => sum + item.characters, 0) / withContent.length)
+      : null
+    res.json({
+      sampleSize: scores.length,
+      topArticles: enriched,
+      patterns: { bestPlatform, averageTitleCharacters, averageArticleCharacters },
+      generationUsesPerformanceExamples: scores.length > 0,
+    })
+  } catch (error) {
+    logger.error('ARTICLES', '读取创作反馈失败', { error: error.message, userId: req.user.id })
+    res.status(500).json({ error: '读取创作反馈失败' })
+  }
+})
+
 // ── GET /api/articles/:articleId ──────────────────────────────────────────────
 
 router.get('/:articleId', (req, res) => {
@@ -351,6 +404,7 @@ router.post('/:articleId/workflow', (req, res) => {
         article: readText(articlePath),
       },
       event,
+      metadata: req.body?.metadata,
     })
     res.json(workflow)
   } catch (error) {
@@ -364,7 +418,7 @@ router.post('/:articleId/workflow', (req, res) => {
 router.post('/:articleId/generate', async (req, res) => {
   try {
     const { articleId } = req.params
-    const { task, materials, aiConfig } = req.body
+    const { task, materials, aiConfig, referenceArticleIds = [] } = req.body
 
     if (!task || !materials) {
       return res.status(400).json({ error: '任务和素材不能为空' })
@@ -382,6 +436,9 @@ router.post('/:articleId/generate', async (req, res) => {
     // 写作规范：仅在用户配置了「写作规范.md」时注入，没配置就不发，节省 token
     const writingGuide = getWritingGuideContent()
     const writingGuideSection = writingGuide ? `\n# 写作规范（必须严格遵守）\n${writingGuide}\n` : ''
+    const creatorProfileSection = formatCreatorProfileForPrompt(normalizeCreatorWritingProfile(
+      getSetting(`creator_writing_profile:${req.user.id}`),
+    ))
 
     // 从数据库读取文章生成提示词（支持用户自定义覆盖）
     const generatePromptData = getEffectivePrompt('prompt-article-generate')
@@ -400,7 +457,7 @@ router.post('/:articleId/generate', async (req, res) => {
     const globalMemoryGen = getSetting('global_memory')
     const globalMemorySectionGen = globalMemoryGen ? `\n# 全局背景信息（永久记忆）\n${globalMemoryGen}\n` : ''
 
-    const userPrompt = `${writingGuideSection}${globalMemorySectionGen}
+    const userPrompt = `${writingGuideSection}${creatorProfileSection}${globalMemorySectionGen}
 # 当前时间
 ${currentDateTimeGen}
 
@@ -430,7 +487,16 @@ ${materials}
     const article = response.data.choices[0].message.content
     const articlePath = getArticlePath(articleId, 'article', req.user.id)
     writeArticleSafely({ articlePath, articleId, userId: req.user.id, content: article })
-    recordArticleWorkflowEvent({ articlePath, content: { task, materials, article }, event: 'generated' })
+    recordArticleWorkflowEvent({
+      articlePath,
+      content: { task, materials, article },
+      event: 'generated',
+      metadata: {
+        platforms: ['wechat'],
+        referenceArticleIds,
+        promptIds: generatePromptData?.id ? [generatePromptData.id] : [],
+      },
+    })
 
     // 记录 token 使用
     const usage = response.data.usage
@@ -460,7 +526,7 @@ router.post('/:articleId/generate/stream', async (req, res) => {
   // selectedRagContext: 前端手动选择后由 /api/rag/context 返回的格式化字符串
   // 若提供则跳过自动 RAG 检索，直接使用
   // platforms: 'both' | 'wechat' | 'toutiao'，控制生成哪些平台
-  const { task, materials, aiConfig, selectedRagContext, platforms = 'both' } = req.body
+  const { task, materials, sourceArticle = '', aiConfig, selectedRagContext, referenceArticleIds = [], platforms = 'both' } = req.body
 
   // SSE 响应头
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
@@ -554,6 +620,9 @@ router.post('/:articleId/generate/stream', async (req, res) => {
     // 写作规范：仅在用户配置了「写作规范.md」时注入，否则跳过整段
     const writingGuide = getWritingGuideContent()
     const writingGuideSection = writingGuide ? `\n# 写作规范（必须严格遵守）\n${writingGuide}\n` : ''
+    const creatorProfileSection = formatCreatorProfileForPrompt(normalizeCreatorWritingProfile(
+      getSetting(`creator_writing_profile:${req.user.id}`),
+    ))
 
     // 从数据库读取文章生成提示词（支持用户自定义覆盖），用作 system 消息
     const streamGeneratePromptData = getEffectivePrompt('prompt-article-generate')
@@ -577,7 +646,7 @@ router.post('/:articleId/generate/stream', async (req, res) => {
     const globalMemorySection = globalMemory ? `\n# 全局背景信息（永久记忆）\n${globalMemory}\n` : ''
 
     // ── 公众号 prompt ──────────────────────────────────────────────────────────
-    const wechatPrompt = `${writingGuideSection}${ragSection}${exampleSection ? '\n' + exampleSection + '\n' : ''}${globalMemorySection}
+    const wechatPrompt = `${writingGuideSection}${creatorProfileSection}${ragSection}${exampleSection ? '\n' + exampleSection + '\n' : ''}${globalMemorySection}
 # 当前时间
 ${currentDateTime}
 
@@ -592,19 +661,22 @@ ${materials}
 现在请直接输出完整的文章内容（纯 Markdown，只有 1 个 H1，所有 H2 带 emoji）：`
 
     // ── 今日头条 prompt（注入评分示例，不注入 RAG / 写作规范，平台风格不同）─
-    const toutiaoPrompt = `${exampleSection ? exampleSection + '\n\n' : ''}${globalMemorySection}
+    const buildToutiaoPrompt = motherDraft => `${creatorProfileSection}${exampleSection ? exampleSection + '\n\n' : ''}${globalMemorySection}
 # 当前时间
 ${currentDateTime}
 
 # 本次任务要求
 ${task}
 
+# 公众号事实与观点母稿
+${motherDraft || '暂无母稿，请严格依据任务和素材生成，不补充未经素材支持的事实。'}
+
 # 素材参考
 ${materials}
 
 ---
 
-现在请直接输出完整的今日头条文章内容（纯 Markdown，只有 1 个 H1，H2 可带 emoji，标题要有吸引力）：`
+请把母稿改写成完整的今日头条版本。可以调整标题、开头、段落节奏和表达，但不得新增母稿与素材之外的数字、人物、时间或判断。输出纯 Markdown，只有 1 个 H1，H2 可带 emoji：`
 
     // ── 3. 构造请求参数（统一函数）──────────────────────────────────────────
     const { url, model, headers } = buildLLMRequest(cfg)
@@ -641,7 +713,16 @@ ${materials}
         const articlePath = getArticlePath(articleId, 'article', req.user.id)
         if (platformKey === 'wechat') {
           writeArticleSafely({ articlePath, articleId, userId: req.user.id, content: fullContent })
-          recordArticleWorkflowEvent({ articlePath, content: { task, materials, article: fullContent }, event: 'generated' })
+          recordArticleWorkflowEvent({
+            articlePath,
+            content: { task, materials, article: fullContent },
+            event: 'generated',
+            metadata: {
+              platforms: platforms === 'both' ? ['wechat', 'toutiao'] : ['wechat'],
+              referenceArticleIds,
+              promptIds: [streamGeneratePromptData?.id, platforms === 'both' ? toutiaoPromptData?.id : null].filter(Boolean),
+            },
+          })
         } else {
           const toutiaoPath = getArticleSidecarPath(articlePath, 'article_toutiao')
           ensureDir(path.dirname(toutiaoPath))
@@ -665,11 +746,11 @@ ${materials}
       await streamPlatform(wechatPrompt, streamGenerateInstruction, 'wechat', true)
     } else if (platforms === 'toutiao') {
       // 只生成今日头条
-      await streamPlatform(toutiaoPrompt, toutiaoInstruction, 'toutiao', true)
+      await streamPlatform(buildToutiaoPrompt(sourceArticle), toutiaoInstruction, 'toutiao', true)
     } else {
       // 两者都生成：先公众号，再今日头条
       await streamPlatform(wechatPrompt, streamGenerateInstruction, 'wechat', false)
-      await streamPlatform(toutiaoPrompt, toutiaoInstruction, 'toutiao', true)
+      await streamPlatform(buildToutiaoPrompt(fullText), toutiaoInstruction, 'toutiao', true)
     }
 
   } catch (error) {
