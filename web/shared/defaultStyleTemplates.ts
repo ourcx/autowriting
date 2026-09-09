@@ -1131,3 +1131,94 @@ export const CSS_ROSE_EDITION = `${readingStyle("#965569", "#fffafa", "#59474e")
 #wemd blockquote { border: 0; background: #f5e8ed; border-radius: 4px; }
 #wemd hr { width: 48px; margin: 36px auto; border-top: 2px solid #cda8b4; }
 `
+
+// 新模板单独补齐高优先级的表格、引文和代码规则，避免改变旧模板的既有效果。
+function editionStyle(primary: string, surface: string, ink: string): string {
+  return `${readingStyle(primary, surface, ink)}
+#wemd, #wemd * { box-sizing: border-box; }
+#wemd { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }
+#wemd h5, #wemd h6, #wemd em, #wemd del { color: ${ink}; }
+#wemd h1 .content, #wemd h2 .content, #wemd h3 .content { color: inherit; font-size: inherit; }
+#wemd blockquote p, #wemd .multiquote-1 p, #wemd .multiquote-2 p, #wemd .multiquote-3 p { color: ${ink}; }
+#wemd .multiquote-2, #wemd .multiquote-3 { box-shadow: none; }
+#wemd table tr th { color: #ffffff; background: ${primary}; border-color: ${primary}; padding: 10px; font-size: 14px; }
+#wemd table tr td { color: ${ink}; border-color: #deded8; padding: 10px; font-size: 14px; }
+#wemd pre code { background: transparent; }
+#wemd figcaption, #wemd .footnote-item p { color: ${ink}; }
+#wemd .footnote-ref, #wemd .footnote-word, #wemd .task-list-status { color: ${primary}; }
+#wemd .table-container, #wemd pre { max-width: 100%; }
+`
+}
+
+export const CSS_SEASALT = `${editionStyle("#176b78", "#f7fcfc", "#344d53")}
+#wemd h1 { padding: 28px 0; border-top: 1px solid #99c9cf; border-bottom: 4px solid #176b78; font-weight: 800; }
+#wemd h2 { padding-bottom: 10px; border-bottom: 1px solid #99c9cf; letter-spacing: 1px; }
+#wemd blockquote, #wemd .multiquote-1 { background: #e7f4f4; border-left: 0; border-top: 2px solid #176b78; }
+#wemd img { border-radius: 12px 12px 0 0; }
+#wemd hr { width: 60px; margin: 40px auto; border-color: #99c9cf; }
+`
+
+export const CSS_WISTERIA = `${editionStyle("#685084", "#fdfbff", "#484151")}
+#wemd h1 { max-width: 10em; margin: 30px auto 48px; text-align: center; font-family: "Songti SC", SimSun, serif; font-size: 30px; letter-spacing: 2px; }
+#wemd h2 { padding: 10px 0 10px 16px; border-left: 3px solid #b7a1cc; }
+#wemd blockquote, #wemd .multiquote-1 { padding: 24px 18px; border: 1px solid #d9cce5; border-radius: 18px 0 18px 0; background: #f3edf8; }
+#wemd strong { text-decoration: underline; text-decoration-color: #cdb9df; text-underline-offset: 4px; }
+#wemd hr { width: 32px; margin: 40px auto; border-top: 3px solid #b7a1cc; }
+`
+
+export const CSS_VERMILION = `${editionStyle("#a0322b", "#fffdf8", "#443a34")}
+#wemd { font-family: "Songti SC", SimSun, serif; }
+#wemd h1 { margin: 24px 0 42px; padding: 20px 0; border-top: 5px solid #a0322b; border-bottom: 1px solid #a0322b; font-size: 30px; letter-spacing: 2px; }
+#wemd h2 { border-left: 0; border-bottom: 3px double #bf9080; padding-bottom: 12px; }
+#wemd blockquote, #wemd .multiquote-1 { background: transparent; border: 0; border-top: 1px solid #bf9080; border-bottom: 1px solid #bf9080; }
+#wemd img { padding: 5px; border: 1px solid #bf9080; border-radius: 0; }
+#wemd hr { width: 24px; margin: 42px auto; border-top: 5px solid #a0322b; }
+`
+
+export const CSS_LEMON = `${editionStyle("#53601d", "#fffff8", "#41472e")}
+#wemd h1 { padding: 22px 18px; background: #f1f5b8; border-radius: 0 28px 0 0; font-size: 28px; }
+#wemd h2 { padding: 8px 0; border-bottom: 6px solid #e0e994; }
+#wemd h3 { padding-left: 12px; border-left: 3px solid #899844; }
+#wemd blockquote, #wemd .multiquote-1 { background: #f6f8df; border-left: 0; border-radius: 0 16px 16px 16px; }
+#wemd mark { background: #e6ef9e; color: #41472e; }
+#wemd hr { border-top: 2px dashed #b5c276; }
+`
+
+export const CSS_COFFEE = `${editionStyle("#76513b", "#fcf8f2", "#50453c")}
+#wemd { font-family: "Songti SC", Georgia, SimSun, serif; }
+#wemd h1 { text-align: center; margin: 30px 0 48px; padding-bottom: 28px; border-bottom: 1px solid #b8a18d; letter-spacing: 2px; }
+#wemd h2 { padding: 10px 14px; background: #ece2d5; border-left: 3px solid #76513b; font-size: 19px; }
+#wemd blockquote, #wemd .multiquote-1 { background: transparent; border: 0; border-left: 1px solid #b8a18d; font-style: italic; }
+#wemd img { padding: 8px; border: 1px solid #d9c9b6; background: #fffdf9; }
+#wemd hr { width: 80px; margin: 42px auto; border-top: 3px double #b8a18d; }
+`
+
+export const CSS_CELADON = `${editionStyle("#376b62", "#fbfdfb", "#3f504a")}
+#wemd { font-family: "Songti SC", SimSun, serif; }
+#wemd h1 { margin: 36px 0 54px; padding: 0 0 0 20px; border-left: 2px solid #376b62; font-size: 29px; letter-spacing: 3px; }
+#wemd h2 { text-align: right; padding: 12px 0; border-bottom: 1px solid #b2c9bc; letter-spacing: 2px; }
+#wemd p { margin-bottom: 26px; line-height: 2; }
+#wemd blockquote, #wemd .multiquote-1 { background: #eef4ef; border: 0; padding: 26px 20px; }
+#wemd blockquote p { text-align: center; }
+#wemd hr { width: 36px; margin: 48px auto; border-top: 2px solid #b2c9bc; }
+`
+
+export const CSS_CITY_MAGAZINE = `${editionStyle("#25364a", "#ffffff", "#353c45")}
+#wemd h1 { font-size: 34px; font-weight: 900; line-height: 1.35; margin: 20px 0 48px; padding-bottom: 24px; border-bottom: 8px solid #25364a; }
+#wemd h2 { padding: 14px 0; border-top: 1px solid #25364a; border-bottom: 1px solid #25364a; font-size: 22px; }
+#wemd h3 { color: #b0442b; letter-spacing: 1px; }
+#wemd blockquote, #wemd .multiquote-1 { border: 0; border-left: 4px solid #b0442b; background: #f5f5f3; }
+#wemd strong, #wemd a { color: #b0442b; }
+#wemd img { border-radius: 0; }
+#wemd figcaption { text-align: left; border-bottom: 1px solid #cdd2d8; padding: 10px 0; }
+`
+
+export const CSS_RESEARCH_BRIEF = `${editionStyle("#285e8a", "#ffffff", "#374553")}
+#wemd { border-top: 6px solid #285e8a; }
+#wemd h1 { font-size: 28px; padding: 12px 0 24px; border-bottom: 1px solid #b9cddd; }
+#wemd h2 { padding: 12px 14px; background: #edf3f8; border-left: 4px solid #285e8a; font-size: 19px; }
+#wemd h3 { padding-bottom: 8px; border-bottom: 1px dashed #b9cddd; }
+#wemd blockquote, #wemd .multiquote-1 { background: #f5f8fa; border: 1px solid #b9cddd; }
+#wemd ol > li { padding-bottom: 8px; border-bottom: 1px solid #e0e8ee; }
+#wemd hr { border-color: #b9cddd; }
+`

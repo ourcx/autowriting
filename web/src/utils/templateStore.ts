@@ -5,6 +5,8 @@ import { readStyleTemplates, writeStyleTemplate, removeStyleTemplate } from "./a
  */
 
 import {
+  CSS_SEASALT, CSS_WISTERIA, CSS_VERMILION, CSS_LEMON,
+  CSS_COFFEE, CSS_CELADON, CSS_CITY_MAGAZINE, CSS_RESEARCH_BRIEF,
   CSS_MOSS_JOURNAL, CSS_CREAM_LETTER, CSS_BLUE_COLUMN, CSS_ROSE_EDITION,
   CSS_BEST_PRACTICE,
   CSS_EASTERN_LETTER,
@@ -903,6 +905,14 @@ export const CSS_AURORA = `/* ====== 极光紫 ====== */
 // ── 内置模板列表（前端本地副本，用于离线 fallback） ──────────────────────────
 
 export const BUILTIN_TEMPLATES: TemplateItem[] = [
+  { id: "seasalt", name: "海盐日记", desc: "清透蓝绿与开阔留白，适合海边旅行和生活记录", accentColor: "#176b78", css: CSS_SEASALT, isBuiltin: true, createdAt: 0, updatedAt: 0 },
+  { id: "wisteria", name: "紫藤诗页", desc: "淡紫折角引文与宋体刊头，适合散文和阅读随笔", accentColor: "#685084", css: CSS_WISTERIA, isBuiltin: true, createdAt: 0, updatedAt: 0 },
+  { id: "vermilion", name: "朱砂文录", desc: "朱红双线与暖白纸面，适合文化、历史和节日专题", accentColor: "#a0322b", css: CSS_VERMILION, isBuiltin: true, createdAt: 0, updatedAt: 0 },
+  { id: "lemon", name: "柠檬小报", desc: "明亮黄绿与轻快章节，适合校园、活动和灵感清单", accentColor: "#53601d", css: CSS_LEMON, isBuiltin: true, createdAt: 0, updatedAt: 0 },
+  { id: "coffee", name: "咖啡札记", desc: "暖棕纸感与相片细框，适合探店和日常随笔", accentColor: "#76513b", css: CSS_COFFEE, isBuiltin: true, createdAt: 0, updatedAt: 0 },
+  { id: "celadon", name: "青瓷雅集", desc: "青瓷绿与疏朗宋体，适合艺术、茶事和人文长文", accentColor: "#376b62", css: CSS_CELADON, isBuiltin: true, createdAt: 0, updatedAt: 0 },
+  { id: "city-magazine", name: "城市杂志", desc: "大字刊头与砖红点睛，适合城市观察和人物专访", accentColor: "#25364a", css: CSS_CITY_MAGAZINE, isBuiltin: true, createdAt: 0, updatedAt: 0 },
+  { id: "research-brief", name: "研究简报", desc: "蓝灰章节与规整表格，适合行业分析和知识科普", accentColor: "#285e8a", css: CSS_RESEARCH_BRIEF, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: 'moss-journal', name: '青苔手记', desc: '自然绿与细侧线，适合日常、旅行和成长记录', accentColor: '#466650', css: CSS_MOSS_JOURNAL, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: 'cream-letter', name: '奶油来信', desc: '暖纸色与信笺边框，适合书信和人文故事', accentColor: '#976140', css: CSS_CREAM_LETTER, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: 'blue-column', name: '蓝调专栏', desc: '深蓝栏目标题与清晰层级，适合观点和知识分享', accentColor: '#284e70', css: CSS_BLUE_COLUMN, isBuiltin: true, createdAt: 0, updatedAt: 0 },

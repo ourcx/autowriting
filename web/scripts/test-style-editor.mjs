@@ -38,6 +38,24 @@ try {
  })
  await page.goto('http://127.0.0.1:5173/styles')
  await page.locator('#wemd h1').waitFor()
+ const editions = ['海盐日记', '紫藤诗页', '朱砂文录', '柠檬小报', '咖啡札记', '青瓷雅集', '城市杂志', '研究简报']
+ assert.equal(await page.locator('.se-tmpl-item').count(), 22)
+ for (const name of editions) {
+  await page.locator('.se-tmpl-item').filter({ hasText: name }).click()
+  await page.waitForFunction(name => document.querySelector('.se-header-name')?.textContent === name, name)
+  assert.equal(await page.locator('.se-css-textarea').getAttribute('readonly'), '')
+  for (const mode of ['文章预览', '组件总览']) {
+   await page.getByRole('button', { name: mode, exact: true }).click()
+   for (const width of ['手机宽度', '宽屏预览']) {
+    await page.getByRole('button', { name: width, exact: true }).click()
+    const size = await page.locator('#wemd').evaluate(el => ({ width: el.clientWidth, scroll: el.scrollWidth }))
+    assert.ok(size.scroll <= size.width + 1, name + mode + width + '不能横向溢出')
+   }
+  }
+  await page.getByRole('button', { name: '文章预览', exact: true }).click()
+  await page.getByRole('button', { name: '手机宽度', exact: true }).click()
+  await page.locator('.se-preview-card').screenshot({ path: path.join(output, `${name}.png`) })
+ }
  for (const name of ['青苔手记', '奶油来信', '蓝调专栏', '玫瑰刊物']) {
   await page.locator('.se-tmpl-item').filter({ hasText: name }).click()
   const colors = { '青苔手记': 'rgb(56, 68, 59)', '奶油来信': 'rgb(85, 75, 64)', '蓝调专栏': 'rgb(57, 70, 82)', '玫瑰刊物': 'rgb(89, 71, 78)' }
