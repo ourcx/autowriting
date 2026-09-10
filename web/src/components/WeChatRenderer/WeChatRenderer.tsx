@@ -271,6 +271,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
   const [xhsPushDone, setXhsPushDone] = useState(false)
   const [xhsSummary, setXhsSummary] = useState('')
   const [xhsFinalTitle, setXhsFinalTitle] = useState(title ?? '')
+  const previousTitle = useRef(title ?? '')
   const [xhsTopics, setXhsTopics] = useState<string[]>([])
   const [xhsTemplateName, setXhsTemplateName] = useState(XIAOHONGSHU_TEMPLATES[0])
   const [xhsCoverType, setXhsCoverType] = useState<'with_image' | 'without_image'>('with_image')
@@ -339,8 +340,12 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
   }, [])
 
   useEffect(() => {
-    if (!xhsFinalTitle) setXhsFinalTitle(title ?? '')
-  }, [title, xhsFinalTitle])
+    const previous = previousTitle.current
+    const next = title ?? ''
+    // Follow platform titles unless the user has already customized the publish title.
+    setXhsFinalTitle(current => !current || current === previous ? next : current)
+    previousTitle.current = next
+  }, [title])
 
   useEffect(() => {
     fetchAllTemplates().then(all => {

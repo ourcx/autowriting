@@ -1,27 +1,29 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import DashboardPage from './pages/DashboardPage/DashboardPage'
-import ArticleEditor from './pages/ArticleEditor/ArticleEditor'
-import WeChatPreview from './pages/WeChatPreview/WeChatPreview'
-import WeChatDrafts from './pages/WeChatDrafts/WeChatDrafts'
-import WeChatMaterials from './pages/WeChatMaterials/WeChatMaterials'
-import StyleEditor from './pages/StyleEditor/StyleEditor'
-import AISettings from './pages/AISettings/AISettings'
-import RagPage from './pages/RagPage/RagPage'
-import TokenUsagePage from './pages/TokenUsagePage/TokenUsagePage'
 import LoginPage from './pages/LoginPage/LoginPage'
-import RegisterPage from './pages/RegisterPage/RegisterPage'
-import AdminPage from './pages/AdminPage/AdminPage'
-import MonitoringPage from './pages/MonitoringPage/MonitoringPage'
-import PromptsPage from './pages/PromptsPage/PromptsPage'
-import CronPage from './pages/CronPage/CronPage'
-import ArticleScorePage from './pages/ArticleScorePage/ArticleScorePage'
-import AccountPage from './pages/AccountPage/AccountPage'
-import CanvasStudio from './pages/CanvasStudio/CanvasStudio'
 import PrivateRoute from './components/PrivateRoute/PrivateRoute'
 import ToastProvider from './components/Toast/Toast'
 import { syncAIConfigFromServer } from './utils/aiConfig'
 import { initAuth } from './store/useAuth'
+
+// Keep the landing workspace light; editors and administrative tools load on entry.
+const ArticleEditor = lazy(() => import('./pages/ArticleEditor/ArticleEditor'))
+const WeChatPreview = lazy(() => import('./pages/WeChatPreview/WeChatPreview'))
+const WeChatDrafts = lazy(() => import('./pages/WeChatDrafts/WeChatDrafts'))
+const WeChatMaterials = lazy(() => import('./pages/WeChatMaterials/WeChatMaterials'))
+const StyleEditor = lazy(() => import('./pages/StyleEditor/StyleEditor'))
+const AISettings = lazy(() => import('./pages/AISettings/AISettings'))
+const RagPage = lazy(() => import('./pages/RagPage/RagPage'))
+const TokenUsagePage = lazy(() => import('./pages/TokenUsagePage/TokenUsagePage'))
+const RegisterPage = lazy(() => import('./pages/RegisterPage/RegisterPage'))
+const AdminPage = lazy(() => import('./pages/AdminPage/AdminPage'))
+const MonitoringPage = lazy(() => import('./pages/MonitoringPage/MonitoringPage'))
+const PromptsPage = lazy(() => import('./pages/PromptsPage/PromptsPage'))
+const CronPage = lazy(() => import('./pages/CronPage/CronPage'))
+const ArticleScorePage = lazy(() => import('./pages/ArticleScorePage/ArticleScorePage'))
+const AccountPage = lazy(() => import('./pages/AccountPage/AccountPage'))
+const CanvasStudio = lazy(() => import('./pages/CanvasStudio/CanvasStudio'))
 
 export default function App() {
   useEffect(() => {
@@ -34,6 +36,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <ToastProvider />
+      <Suspense fallback={<div className="route-loading" role="status">正在打开工作区...</div>}>
       <Routes>
         {/* 公开路由 */}
         <Route path="/login" element={<LoginPage />} />
@@ -62,6 +65,7 @@ export default function App() {
         {/* 404 兜底 */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   )
 }

@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { toast } from '../../components/Toast/Toast'
-// @ts-ignore
-import { useParams, useNavigate } from 'react-router-dom'
-import { Zap, Save, Edit3, Palette, Settings, AlertTriangle, Plus, Trash2, Pencil, Sparkles, LayoutList, CheckCircle, ChevronRight, GripVertical, Send, User } from 'lucide-react'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { Zap, Save, Edit3, Palette, Settings, AlertTriangle, Plus, Trash2, Pencil, Sparkles, LayoutList, CheckCircle, ChevronRight, GripVertical, Send, User, ExternalLink, Newspaper, BookOpen, MessageCircle } from 'lucide-react'
 import { useAIReadiness, fetchServerStatus } from '../../store/useConfigStore'
 import { fetchArticle, recordArticleWorkflowEvent, saveArticle } from '../../utils/apiHelpers'
 import {
@@ -28,13 +27,20 @@ import {
   deleteCustomTaskTemplate,
 } from '../../utils/taskTemplateStore'
 import './ArticleEditor.css'
+import { resolveEditorTab, resolvePublishPlatform, type EditorTab, type PublishPlatform } from '../../utils/articleNavigation'
 import {
   normalizeArticleWorkflow,
   type ArticleWorkflow,
   type ArticleWorkflowEvent,
 } from '../../../shared/articleWorkflow'
 
-type TabId = 'task' | 'materials' | 'article' | 'toutiao' | 'xiaohongshu' | 'analysis' | 'publish' | 'cover' | 'library'
+type TabId = EditorTab
+
+const PUBLISH_PLATFORMS = [
+  { id: 'wechat', label: '公众号', icon: MessageCircle },
+  { id: 'toutiao', label: '今日头条', icon: Newspaper },
+  { id: 'xiaohongshu', label: '小红书', icon: BookOpen },
+] as const
 
 // 流程步骤定义（cover 的 check 在组件内动态注入）
 const BASE_FLOW_STEPS: { id: TabId; label: string; check: (d: ArticleData) => boolean }[] = [
@@ -48,6 +54,7 @@ const BASE_FLOW_STEPS: { id: TabId; label: string; check: (d: ArticleData) => bo
 export default function ArticleEditor() {
   const { articleId = '' } = useParams<{ articleId: string }>()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const [data, setData] = useState<ArticleData>(createEmptyArticleData)
   const [loading, setLoading] = useState(true)
@@ -55,12 +62,30 @@ export default function ArticleEditor() {
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
   const [generateError, setGenerateError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<TabId>('task')
   const [showGenerateModal, setShowGenerateModal] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
   // 封面是否已存在（从 localStorage 读取，CoverGenerator 生成/粘贴后更新）
   const [hasCover, setHasCover] = useState(false)
   const [workflow, setWorkflow] = useState<ArticleWorkflow>(() => normalizeArticleWorkflow(null, createEmptyArticleData()))
+  // URL records the workspace, not production progress. Refreshing never marks a step complete.
+  const activeTab = resolveEditorTab(searchParams.get('tab'), workflow.currentStage)
+  const publishPlatform = resolvePublishPlatform(searchParams.get('platform'))
+  const setActiveTab = (tab: TabId) => {
+    setSearchParams(previous => {
+      const next = new URLSearchParams(previous)
+      next.set('tab', tab)
+      return next
+    }, { replace: true })
+  }
+  const selectPublishPlatform = (platform: PublishPlatform) => {
+    setSearchParams({ tab: 'publish', platform }, { replace: true })
+  }
+  useEffect(() => {
+    if (loading || loadError || searchParams.has('tab')) return
+    const next = new URLSearchParams(searchParams)
+    next.set('tab', resolveEditorTab(null, workflow.currentStage))
+    setSearchParams(next, { replace: true })
+  }, [loading, loadError, searchParams, setSearchParams, workflow.currentStage])
 
   // articleId 确定后同步检查封面状态（刷新后也能正确勾选）
   useEffect(() => {
@@ -188,16 +213,17 @@ export default function ArticleEditor() {
     }
   }, [articleId, data, isLocalArticle, workflow])
 
-  const handlePreview = useCallback(async () => {
-    if (!data.article.trim()) return
+  const handlePreview = useCallback(async (platform: PublishPlatform = 'wechat') => {
+    const content = platform === 'toutiao' ? data.articleToutiao : data.article
+    if (!content.trim()) return
     const saved = await handleSave()
     if (!saved) {
       toast.error('保存成功后才能进入预览，原文未被修改')
       return
     }
-    setActiveTab('publish')
-    void handleWorkflowEvent('wechat_draft_opened')
-  }, [data.article, handleSave, handleWorkflowEvent])
+    setSearchParams({ tab: 'publish', platform }, { replace: true })
+    if (platform === 'wechat') void handleWorkflowEvent('wechat_draft_opened')
+  }, [data.article, data.articleToutiao, handleSave, handleWorkflowEvent, setSearchParams])
 
   function handleGenerate() {
     if (!apiKeyReady) {
@@ -321,15 +347,20 @@ export default function ArticleEditor() {
   const reviewDone = Boolean(workflow.lastReviewedAt)
   const publishDone = Boolean(workflow.wechatDraftAt)
 
-  const nextAction = data.task.trim().length < 20
-    ? { label: '下一步：完善任务', action: () => setActiveTab('task') }
-    : data.materials.trim().length < 30
-      ? { label: '下一步：收集素材', action: () => setActiveTab('materials') }
-      : data.article.trim().length <= 100
-        ? { label: '下一步：生成文章', action: handleGenerate }
-        : !reviewDone
-          ? { label: '下一步：审核内容', action: () => setActiveTab('analysis') }
-          : { label: publishDone ? '查看微信草稿' : '下一步：预览并推送', action: () => void handlePreview() }
+  const nextAction = publishDone
+    ? { label: '查看微信草稿', action: () => navigate('/drafts') }
+    : reviewDone && data.article.trim().length > 0
+      ? { label: '下一步：预览并推送', action: () => void handlePreview() }
+      : data.article.trim().length > 100
+        ? { label: '下一步：审核内容', action: () => setActiveTab('analysis') }
+        : data.task.trim().length < 20
+          ? { label: '下一步：完善任务', action: () => setActiveTab('task') }
+          : data.materials.trim().length < 30
+            ? { label: '下一步：收集素材', action: () => setActiveTab('materials') }
+            : { label: '下一步：生成文章', action: handleGenerate }
+
+  const publishContent = publishPlatform === 'toutiao' ? data.articleToutiao : data.article
+  const publishTitle = publishPlatform === 'xiaohongshu' ? data.xiaohongshuTitle || articleTitle : articleTitle
 
   if (loading) {
     return (
@@ -391,7 +422,7 @@ export default function ArticleEditor() {
             />
           ) : (
             <h2 onClick={() => setEditingTitle(true)}>
-              {articleTitle}
+              <span>{articleTitle}</span>
               <Edit3 size={16} className="edit-icon" />
             </h2>
           )}
@@ -402,34 +433,33 @@ export default function ArticleEditor() {
             className="btn btn-ghost"
             onClick={() => navigate('/account')}
             title="设置账号受众、语气和禁用表达"
+            aria-label="写作档案"
           >
             <User size={16} />
-            写作档案
           </button>
           <button
             className="btn btn-ghost"
             onClick={() => navigate('/settings')}
             title="AI 模型和 API Key 配置"
+            aria-label="AI 配置"
           >
             <Settings size={16} />
-            AI 配置
           </button>
           <button
             className="btn btn-ghost"
             onClick={() => navigate('/styles')}
             title="管理 CSS 样式模板"
+            aria-label="管理样式"
           >
             <Palette size={16} />
-            管理样式
           </button>
-          <button className="btn btn-secondary" onClick={() => void handleSave()} disabled={saving || loading}>
+          <button className="btn btn-secondary" title={saving ? '保存中' : '保存'} aria-label={saving ? '保存中' : '保存'} onClick={() => void handleSave()} disabled={saving || loading}>
             <Save size={20} />
-            {saving ? '保存中...' : '保存'}
           </button>
           <button
             className="btn btn-primary"
             onClick={handleGenerate}
-            disabled={!data.task || !data.materials}
+            disabled={!data.task.trim() || !data.materials.trim() || saving}
           >
             <Zap size={20} />
             生成文章
@@ -439,6 +469,7 @@ export default function ArticleEditor() {
               className="btn btn-success"
               onClick={() => void handlePreview()}
               title="在当前工作台预览并推送公众号草稿 (Cmd+P)"
+              disabled={saving}
             >
               <Send size={18} />
               预览并推送
@@ -463,7 +494,9 @@ export default function ArticleEditor() {
               <button
                 key={step.id}
                 className={`flow-step ${isActive ? 'flow-step--active' : ''} ${done ? 'flow-step--done' : ''}`}
-                onClick={() => setActiveTab(step.id)}
+                aria-current={isActive ? 'step' : undefined}
+                onClick={() => step.id === 'publish' ? void handlePreview() : setActiveTab(step.id)}
+                disabled={step.id === 'publish' && (!data.article.trim() || saving)}
               >
                 <span className="flow-step-num">
                   {done ? <CheckCircle size={13} /> : idx + 1}
@@ -501,7 +534,7 @@ export default function ArticleEditor() {
               图片库
             </button>
           </div>
-          <button className="flow-next-action" onClick={nextAction.action}>
+          <button className="flow-next-action" onClick={nextAction.action} disabled={saving}>
             {nextAction.label}
             <ChevronRight size={14} />
           </button>
@@ -680,7 +713,12 @@ export default function ArticleEditor() {
 
           {activeTab === 'toutiao' && (
             <div className="editor-panel">
-              <div className="editor-platform-label editor-platform-label--toutiao">今日头条版本</div>
+              <div className="platform-edit-head">
+                <div className="editor-platform-label editor-platform-label--toutiao">今日头条版本</div>
+                <button className="btn btn-primary" disabled={!data.articleToutiao.trim() || saving} onClick={() => void handlePreview('toutiao')}>
+                  <Send size={16} />预览并发布头条
+                </button>
+              </div>
               <PlatformVersionSummary source={data.article} target={data.articleToutiao} platform="toutiao" />
               <MarkdownEditor
                 value={data.articleToutiao}
@@ -694,7 +732,12 @@ export default function ArticleEditor() {
 
           {activeTab === 'xiaohongshu' && (
             <div className="editor-panel editor-panel--xiaohongshu">
-              <div className="editor-platform-label editor-platform-label--xiaohongshu">小红书长文</div>
+              <div className="platform-edit-head">
+                <div className="editor-platform-label editor-platform-label--xiaohongshu">小红书长文</div>
+                <button className="btn btn-primary" disabled={!data.article.trim() || saving} onClick={() => void handlePreview('xiaohongshu')}>
+                  <Send size={16} />预览并发布小红书
+                </button>
+              </div>
               <div className="xiaohongshu-title-card">
                 <div>
                   <h3>复用公众号正文</h3>
@@ -737,21 +780,41 @@ export default function ArticleEditor() {
             <div className="editor-panel editor-panel--publish">
               <div className="publish-workbench-head">
                 <div>
-                  <h3>公众号预览与推送</h3>
-                  <p>选择样式、封面并推送草稿都在当前文章内完成。</p>
+                  <h3>{publishPlatform === 'wechat' ? '公众号预览与推送' : `${publishPlatform === 'toutiao' ? '今日头条' : '小红书'}预览与发布`}</h3>
+                  {publishDone && <p><CheckCircle size={13} /> 已推送微信草稿</p>}
                 </div>
-                <button className="btn btn-secondary btn-small" onClick={() => navigate(`/preview/${articleId}`)}>
-                  打开独立预览
+                <button className="btn btn-secondary btn-small" onClick={async () => {
+                  if (await handleSave()) navigate(`/preview/${encodeURIComponent(articleId)}?platform=${publishPlatform}`)
+                }} disabled={saving} title="打开独立预览" aria-label="打开独立预览">
+                  <ExternalLink size={16} />
                 </button>
               </div>
+              <div className="publish-platforms" role="group" aria-label="发布平台">
+                {PUBLISH_PLATFORMS.map(platform => (
+                  <button key={platform.id} className={`publish-platform publish-platform--${platform.id}`} aria-pressed={publishPlatform === platform.id} onClick={() => selectPublishPlatform(platform.id)}>
+                    <platform.icon size={18} />
+                    <strong>{platform.label}</strong>
+                    <span>{platform.id === 'wechat' && publishDone ? '已推送草稿' : (platform.id === 'toutiao' ? data.articleToutiao : data.article).trim() ? '正文已就绪' : '待补正文'}</span>
+                  </button>
+                ))}
+              </div>
               <div className="publish-workbench-body">
-                <WeChatRenderer
-                  content={data.article}
-                  title={articleTitle}
+                {publishContent.trim() ? <WeChatRenderer
+                  content={publishContent}
+                  title={publishTitle}
                   articleId={articleId}
-                  platformMode="wechat"
+                  platformMode={publishPlatform}
                   onDraftPushed={context => void handleWorkflowEvent('wechat_draft_pushed', context)}
-                />
+                /> : <div className="publish-empty">
+                  <BookOpen size={28} />
+                  <h3>{publishPlatform === 'toutiao' ? '今日头条版本尚未生成' : '尚未添加正文'}</h3>
+                  <button className="btn btn-primary" onClick={() => setActiveTab(publishPlatform === 'toutiao' ? 'toutiao' : 'article')}>
+                    <Edit3 size={16} />去编辑正文
+                  </button>
+                  <button className="btn btn-secondary" onClick={handleGenerate} disabled={!data.task.trim() || !data.materials.trim()}>
+                    <Zap size={16} />生成文章
+                  </button>
+                </div>}
               </div>
             </div>
           )}

@@ -82,6 +82,15 @@ html, body, #root {
    width: 100%;
 }
 
+.route-loading {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  background: var(--color-canvas);
+  color: var(--color-muted);
+  font-size: 14px;
+}
+
 /* ── 统一返回按钮样式 ── */
 .wd-back-btn {
    display: flex;

@@ -1,31 +1,22 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings, Palette, AlertTriangle, Database, BookOpen, LogOut, Shield, Zap, Clock, Star, Image, User, Shapes } from 'lucide-react'
+import { Settings, Palette, AlertTriangle, Database, BookOpen, LogOut, Shield, Zap, Clock, Star, Image, User, Shapes, Menu } from 'lucide-react'
 import Dashboard from '../Dashboard/Dashboard'
 import OnboardingGuide from '../../components/OnboardingGuide/OnboardingGuide'
 import PageHeader from '../../components/PageHeader/PageHeader'
 import { useAIReadiness, fetchServerStatus } from '../../store/useConfigStore'
 import { useAuth, logout } from '../../store/useAuth'
 import './DashboardPage.css'
+import { articleEditorUrl } from '../../utils/articleNavigation'
 
 export default function DashboardPage() {
   const navigate = useNavigate()
   const { articleReady: apiKeyReady } = useAIReadiness()
   const { user, isAdmin } = useAuth()
-  const [wxBound, setWxBound] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
 
   useEffect(() => {
     fetchServerStatus()
-    // 从 localStorage 检查公众号凭据是否存在（不走服务器）
-    try {
-      const raw = localStorage.getItem('wechat_credentials')
-      if (raw) {
-        const { appId, appSecret } = JSON.parse(raw)
-        setWxBound(!!(appId && appSecret))
-      }
-    } catch { /* ignore */ }
-
     // 检查是否需要显示引导（首次访问）
     const hasSeenOnboarding = localStorage.getItem('onboarding-completed')
     if (!hasSeenOnboarding) {
@@ -55,18 +46,21 @@ export default function DashboardPage() {
               配置 AI Key
             </button>
           )}
-          {wxBound && (
-            <button className="dp-nav-btn" onClick={() => navigate('/drafts')}>
+            <button className="dp-nav-btn dp-nav-btn--primary" onClick={() => navigate('/drafts')}>
               <BookOpen size={14} />
-              草稿箱
+              微信草稿
             </button>
-          )}
-          {wxBound && (
+          <button className="dp-nav-btn" onClick={() => navigate('/canvas')}>
+            <Shapes size={14} />
+            画布
+          </button>
+          <details className="dp-tools">
+            <summary className="dp-nav-btn"><Menu size={16} />工具与设置</summary>
+            <div className="dp-tools-menu">
             <button className="dp-nav-btn" onClick={() => navigate('/wechat/materials')}>
               <Image size={14} />
               素材库
             </button>
-          )}
           <button className="dp-nav-btn" onClick={() => navigate('/rag')}>
             <Database size={14} />
             知识库
@@ -95,10 +89,6 @@ export default function DashboardPage() {
             <Palette size={14} />
             样式
           </button>
-          <button className="dp-nav-btn" onClick={() => navigate('/canvas')}>
-            <Shapes size={14} />
-            画布
-          </button>
           {isAdmin && (
             <button className="dp-nav-btn" onClick={() => navigate('/admin')}>
               <Shield size={14} />
@@ -112,14 +102,17 @@ export default function DashboardPage() {
             <LogOut size={14} />
             登出
           </button>
+            </div>
+          </details>
         </nav>}
       />
 
       {/* ── 主体内容（占满剩余高度） ── */}
       <div className="dp-body">
         <Dashboard
-          onCreateArticle={id => navigate(`/editor/${id}`)}
-          onEditArticle={id => navigate(`/editor/${id}`)}
+          onCreateArticle={id => navigate(articleEditorUrl(id))}
+          onEditArticle={id => navigate(articleEditorUrl(id))}
+          onPublishArticle={(id, platform) => navigate(articleEditorUrl(id, platform))}
         />
       </div>
 

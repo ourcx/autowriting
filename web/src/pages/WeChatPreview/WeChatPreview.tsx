@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { AlertTriangle, Palette, Shapes } from 'lucide-react'
 import WeChatRenderer from '../../components/WeChatRenderer/WeChatRenderer'
 import PageHeader from '../../components/PageHeader/PageHeader'
@@ -11,8 +11,7 @@ import {
   normalizeArticleData,
 } from '../../utils/articleData'
 import './WeChatPreview.css'
-
-type PlatformMode = 'wechat' | 'toutiao' | 'xiaohongshu'
+import { articleEditorUrl, resolvePublishPlatform, type PublishPlatform } from '../../utils/articleNavigation'
 
 export default function WeChatPreview() {
   const { articleId } = useParams<{ articleId: string }>()
@@ -20,7 +19,10 @@ export default function WeChatPreview() {
   const [data, setData] = useState<ArticleData>(createEmptyArticleData)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [platformMode, setPlatformMode] = useState<PlatformMode>('wechat')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const platformMode = resolvePublishPlatform(searchParams.get('platform'))
+  const setPlatformMode = (platform: PublishPlatform) => setSearchParams({ platform }, { replace: true })
+  const returnToEditor = () => navigate(articleEditorUrl(articleId || '', platformMode))
 
   useEffect(() => {
     if (!articleId) return
@@ -63,7 +65,7 @@ export default function WeChatPreview() {
             <span className="preview-nav-label">发布预览</span>
             <span className="preview-nav-article">{title}</span>
           </div>}
-        onBack={() => navigate(-1)}
+        onBack={returnToEditor}
         actions={<>
           <button
             className="preview-nav-styles-btn"
@@ -122,13 +124,12 @@ export default function WeChatPreview() {
           <div className="preview-empty-toutiao">
             <AlertTriangle size={24} />
             <p>{loadError}</p>
-            <button onClick={() => navigate(-1)}>返回编辑器</button>
+            <button onClick={returnToEditor}>返回编辑器</button>
           </div>
         ) : platformMode === 'toutiao' && !data.articleToutiao ? (
           <div className="preview-empty-toutiao">
             <p>今日头条版本尚未生成</p>
-            <span>点击「生成文章」后会同时生成公众号和今日头条两个版本</span>
-            <button onClick={() => navigate(-1)}>返回编辑器生成</button>
+            <button onClick={() => navigate(`${articleEditorUrl(articleId || '')}?tab=toutiao`)}>返回编辑器生成</button>
           </div>
         ) : (
           <WeChatRenderer content={activeContent} title={title} articleId={articleId} platformMode={platformMode} />

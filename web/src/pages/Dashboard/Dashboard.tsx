@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Calendar, FileText, Trash2, ArrowRight, RefreshCw, Zap, Server, HardDrive, AlertTriangle, Upload } from 'lucide-react'
+import { Plus, Calendar, FileText, Trash2, ArrowRight, RefreshCw, Zap, Server, HardDrive, AlertTriangle, Upload, Search, MessageCircle, Newspaper, BookOpen, X } from 'lucide-react'
 import { fetchArticleList, fetchArticleWorkflowMetrics, deleteArticle } from '../../utils/apiHelpers'
 import { showConfirm, toast } from '../../components/Toast/Toast'
 import './Dashboard.css'
+import type { PublishPlatform } from '../../utils/articleNavigation'
 
 // ── 本地文章（localStorage）工具 ─────────────────────────────────────────────
 const LOCAL_ARTICLES_KEY = 'local_articles'
@@ -44,6 +45,7 @@ interface Article {
 interface DashboardProps {
   onCreateArticle: (articleId: string) => void
   onEditArticle?: (articleId: string) => void
+  onPublishArticle: (articleId: string, platform: PublishPlatform) => void
 }
 
 const STATUS_META: Record<string, { label: string; className: string }> = {
@@ -93,7 +95,7 @@ async function migrateLocalToServer(articles: Article[]): Promise<{ ok: number; 
   return { ok, fail }
 }
 
-export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardProps) {
+export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArticle }: DashboardProps) {
   const [articles, setArticles] = useState<Article[]>([])
   const [localArticles, setLocalArticles] = useState<Article[]>([])
   const [loading, setLoading] = useState(true)
@@ -101,20 +103,22 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
   const [creating, setCreating] = useState(false)
   const [storageMode, setStorageMode] = useState<StorageMode>('server')
   const [migrating, setMigrating] = useState(false)
+  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState<'all' | 'writing' | 'review' | 'ready' | 'done'>('all')
+  const [loadError, setLoadError] = useState(false)
   const [workflowMetrics, setWorkflowMetrics] = useState<{ sampleSize: number; medianMinutes: number | null }>({ sampleSize: 0, medianMinutes: null })
   const titleRef = useRef<HTMLInputElement>(null)
 
   async function loadArticles() {
     try {
       setLoading(true)
-      const [nextArticles, nextMetrics] = await Promise.all([
-        fetchArticleList(),
-        fetchArticleWorkflowMetrics().catch(() => ({ sampleSize: 0, medianMinutes: null })),
-      ])
-      setArticles(nextArticles)
-      setWorkflowMetrics(nextMetrics)
+      setLoadError(false)
+      // Metrics are supplementary; their latency must not block the user's article list.
+      void fetchArticleWorkflowMetrics().then(setWorkflowMetrics).catch(() => {})
+      setArticles(await fetchArticleList())
     } catch (e) {
       console.error('加载文章失败', e)
+      setLoadError(true)
     } finally {
       setLoading(false)
     }
@@ -142,6 +146,11 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
   }
 
   const handleCreate = () => {
+    if (creating) return
+    if (!newDate) {
+      toast.warn('请选择文章日期')
+      return
+    }
     const dateStr = newDate.replace(/-/g, '')
     const title = titleRef.current?.value.trim() || ''
     const slug = title ? title.replace(/[^\w\u4e00-\u9fff]/g, '').substring(0, 20) : ''
@@ -194,24 +203,40 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
     })
   }
 
-  const stats = {
-    total: articles.length,
-    generated: articles.filter(a => ['review', 'ready', 'wechat_draft', 'generated', 'published'].includes(a.status)).length,
-    draft: articles.filter(a => ['brief', 'materials', 'drafting', 'draft'].includes(a.status)).length,
-  }
-
   // 合并列表（服务端在前，本地在后，并标记来源）
   const allArticles = [
     ...articles.map(a => ({ ...a, _local: false })),
     ...localArticles.map(a => ({ ...a, _local: true })),
   ]
+  const filters = [
+    { id: 'all', label: '全部', statuses: null },
+    { id: 'writing', label: '写作中', statuses: ['brief', 'materials', 'drafting', 'draft'] },
+    { id: 'review', label: '待审核', statuses: ['review', 'generated'] },
+    { id: 'ready', label: '待推送', statuses: ['ready'] },
+    { id: 'done', label: '已推送 / 发布', statuses: ['wechat_draft', 'published'] },
+  ] as const
+  const matchesFilter = (article: Article, id: typeof filter) => {
+    const statuses: readonly string[] | null = filters.find(item => item.id === id)?.statuses || null
+    return !statuses || statuses.includes(article.status)
+  }
+  const visibleArticles = allArticles.filter(article =>
+    matchesFilter(article, filter) && `${article.title} ${article.date}`.toLowerCase().includes(query.trim().toLowerCase()),
+  )
+  const resumeArticle = allArticles.find(article => article.status === 'ready')
+    || allArticles.find(article => ['review', 'generated'].includes(article.status))
+    || allArticles.find(article => !['wechat_draft', 'published'].includes(article.status))
+  const stats = {
+    total: allArticles.length,
+    generated: allArticles.filter(a => ['review', 'ready', 'wechat_draft', 'generated', 'published'].includes(a.status)).length,
+    draft: allArticles.filter(a => ['brief', 'materials', 'drafting', 'draft'].includes(a.status)).length,
+  }
 
   function renderArticleList(list: typeof allArticles, empty: string) {
     if (list.length === 0) return (
       <div className="dash-empty">
         <div className="dash-empty-icon"><FileText size={32} /></div>
         <p>{empty}</p>
-        <span>从左边创建第一篇开始</span>
+        {(query || filter !== 'all') && <button className="dash-text-btn" onClick={() => { setQuery(''); setFilter('all') }}>清除筛选</button>}
       </div>
     )
     return (
@@ -226,9 +251,8 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
             <li
               key={article.id}
               className="dash-article-item"
-              onClick={() => onEditArticle?.(article.id)}
             >
-              <div className="dash-article-left">
+              <button className="dash-article-left" onClick={() => onEditArticle?.(article.id)} aria-label={`继续编辑：${article.title || '未命名文章'}`}>
                 <div className="dash-article-dot" data-status={article.status} />
                 <div>
                   <p className="dash-article-title">
@@ -248,13 +272,20 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
                     )}
                   </div>
                 </div>
-              </div>
+              </button>
               <div className="dash-article-right">
-                <ArrowRight size={15} className="dash-article-arrow" />
+                {['review', 'ready', 'wechat_draft', 'generated', 'published'].includes(article.status) && (
+                  <div className="dash-platform-actions">
+                    <button title="公众号预览与推送" aria-label={`公众号：${article.title}`} onClick={() => onPublishArticle(article.id, 'wechat')}><MessageCircle size={16} /></button>
+                    <button title="今日头条预览与发布" aria-label={`今日头条：${article.title}`} onClick={() => onPublishArticle(article.id, 'toutiao')}><Newspaper size={16} /></button>
+                    <button title="小红书预览与发布" aria-label={`小红书：${article.title}`} onClick={() => onPublishArticle(article.id, 'xiaohongshu')}><BookOpen size={16} /></button>
+                  </div>
+                )}
                 <button
                   className="dash-delete-btn"
                   onClick={e => handleDelete(article.id, e)}
                   title="删除"
+                  aria-label={`删除：${article.title}`}
                 >
                   <Trash2 size={13} />
                 </button>
@@ -273,7 +304,7 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
         {/* 统计数字 */}
         <div className="dash-stats">
           <div className="dash-stat">
-            <span className="dash-stat-num">{stats.total}</span>
+            <span className="dash-stat-num">{loadError ? '—' : stats.total}</span>
             <span className="dash-stat-label">篇文章</span>
           </div>
           <div className="dash-stat-divider" />
@@ -294,7 +325,7 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
                 : (workflowMetrics.medianMinutes / 60).toFixed(1)}
             </span>
             <span className="dash-stat-label">
-              {workflowMetrics.medianMinutes !== null && workflowMetrics.medianMinutes < 60 ? '分钟中位耗时' : '小时中位耗时'}
+              {workflowMetrics.medianMinutes === null ? '暂无耗时样本' : workflowMetrics.medianMinutes < 60 ? '分钟 / 微信草稿' : '小时 / 微信草稿'}
             </span>
           </div>
         </div>
@@ -328,25 +359,27 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
 
           <div className="dash-create-fields">
             <div className="dash-field">
-              <label>
+              <label htmlFor="article-date">
                 <Calendar size={12} />
                 日期
               </label>
               <input
                 type="date"
+                id="article-date"
                 className="dash-input"
                 value={newDate}
                 onChange={e => setNewDate(e.target.value)}
               />
             </div>
             <div className="dash-field">
-              <label>
+              <label htmlFor="article-title">
                 <FileText size={12} />
                 标题
                 <span className="dash-optional">可选</span>
               </label>
               <input
                 ref={titleRef}
+                id="article-title"
                 type="text"
                 className="dash-input"
                 placeholder="留空则自动用日期命名"
@@ -374,16 +407,22 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
             )}
           </button>
 
-          <p className="dash-create-hint">
-            {storageMode === 'local'
-              ? '本地模式：数据仅存浏览器，换设备后不可见'
-              : '创建后进入编辑器，填写任务要求和素材，一键生成文章'}
-          </p>
+          {storageMode === 'local' && <p className="dash-create-hint">数据仅存此浏览器，清除缓存后会丢失。</p>}
         </div>
       </aside>
 
       {/* ── 右栏：文章列表 ───────────────────────────── */}
       <main className="dash-main">
+        <div className="dash-workspace-heading">
+          <div><span className="dash-eyebrow">Dashy</span><h1>创作工作台</h1></div>
+          <button className="dash-text-btn" onClick={() => titleRef.current?.focus()}><Plus size={16} />新建文章</button>
+        </div>
+        {!loading && !loadError && resumeArticle && (
+          <section className="dash-resume" aria-label="继续创作">
+            <div><span>{STATUS_META[resumeArticle.status]?.label || '继续创作'}</span><h2>{resumeArticle.title || '未命名文章'}</h2></div>
+            <button onClick={() => onEditArticle?.(resumeArticle.id)}>继续处理<ArrowRight size={16} /></button>
+          </section>
+        )}
         {/* 本地存储警告横幅 */}
         {localArticles.length > 0 && (
           <div className="dash-local-warning">
@@ -404,6 +443,11 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
 
         <div className="dash-list-header">
           <h3>文章列表</h3>
+          <label className="dash-search">
+            <Search size={16} />
+            <input aria-label="搜索文章" value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索标题或日期" />
+            {query && <button title="清除搜索" aria-label="清除搜索" onClick={() => setQuery('')}><X size={14} /></button>}
+          </label>
           <button
             className="dash-refresh-btn"
             onClick={loadArticles}
@@ -413,14 +457,21 @@ export default function Dashboard({ onCreateArticle, onEditArticle }: DashboardP
             <RefreshCw size={15} className={loading ? 'dash-spin' : ''} />
           </button>
         </div>
+        <div className="dash-filters" role="group" aria-label="文章进度筛选">
+          {filters.map(item => <button key={item.id} aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}>
+            {item.label}<span>{allArticles.filter(article => matchesFilter(article, item.id)).length}</span>
+          </button>)}
+        </div>
 
-        {loading ? (
+        {loadError ? (
+          <div className="dash-empty" role="alert"><AlertTriangle size={24} /><p>文章列表加载失败</p><button className="dash-text-btn" onClick={() => void loadArticles()}>重新加载</button></div>
+        ) : loading ? (
           <div className="dash-loading">
             <RefreshCw size={20} className="dash-spin" />
             <span>加载中...</span>
           </div>
         ) : (
-          renderArticleList(allArticles, '还没有文章')
+          renderArticleList(visibleArticles, allArticles.length ? '没有匹配的文章' : '还没有文章')
         )}
       </main>
     </div>
