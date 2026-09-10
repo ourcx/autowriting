@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * 封面路由：单张生成、批量生成、历史管理、缓存统计
  * POST   /api/generate-cover

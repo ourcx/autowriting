@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * AI 样式生成路由
  * POST /api/generate-style

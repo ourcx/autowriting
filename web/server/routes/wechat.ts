@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * 微信公众号路由
  * 凭据（appId/appSecret）由前端存在浏览器 localStorage，

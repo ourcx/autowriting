@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * 管理员路由（仅 admin 角色可访问）
  * GET    /api/admin/users                    → 用户列表（含文章数）

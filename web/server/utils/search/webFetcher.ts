@@ -344,7 +344,6 @@ async function readBounded(resp: globalThis.Response): Promise<string> {
 
   const decoder = new TextDecoder()
   let total = 0
-  let result = ""
   const chunks: Uint8Array[] = []
 
   try {
@@ -371,7 +370,7 @@ async function readBounded(resp: globalThis.Response): Promise<string> {
     if (offset >= MAX_BODY_BYTES) break
   }
 
-  result = decoder.decode(merged, { stream: false })
+  const result = decoder.decode(merged, { stream: false })
 
   // 尝试从 Content-Type 按字符集解码
   try {

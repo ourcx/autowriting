@@ -163,17 +163,11 @@ export async function generateSearchPlan(topic: string, aiConfig: AIConfig): Pro
   } catch (err: unknown) {
     const e = err as Error
     logger.error("SEARCH", "生成搜索计划失败", { error: e.message })
-    throw new Error(`生成搜索计划失败: ${e.message}`)
+    throw Object.assign(new Error(`生成搜索计划失败: ${e.message}`), { cause: err })
   }
 }
 
 // ── 2. 执行搜索（统一入口） ────────────────────────────────────────────────────
-
-interface SearchOptions {
-  count?: number
-  freshness?: string
-  mkt?: string
-}
 
 /**
  * 通过 Provider 执行单次搜索

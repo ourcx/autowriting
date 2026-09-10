@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * 文章评分路由
  * GET    /api/scores                    列出当前用户所有评分

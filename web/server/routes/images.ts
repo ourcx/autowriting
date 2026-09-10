@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * 图片库路由（存储已迁移至 SQLite）
  * GET    /api/images

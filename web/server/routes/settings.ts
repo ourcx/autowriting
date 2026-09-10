@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * 配置路由（存储在 SQLite settings 表）
  * GET    /api/settings                获取所有配置

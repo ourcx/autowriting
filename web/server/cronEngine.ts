@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Cron 任务执行引擎
  * 负责：
@@ -26,6 +25,7 @@ import {
   formatMaterialsAsMarkdown,
 } from './utils/index.ts'
 import { nowDay } from './utils'
+import type { AIConfig, MaterialsDataset } from './types.ts'
 // 调度实例 Map<jobId, ScheduledTask>
 const _scheduledTasks = new Map()
 
@@ -108,7 +108,7 @@ async function fetchTrending(job, aiConfig) {
   }
 
   const { url, model, headers } = buildLLMRequest(aiConfig)
-  const today = nnowDay()
+  const today = nowDay()
 
   let resp
   try {
@@ -146,7 +146,7 @@ async function fetchTrending(job, aiConfig) {
 
 // ── 步骤 2：生成文章 ─────────────────────────────────────────────────────────
 
-async function generateArticle(topic: string, aiConfig: any, materialsDataset: any = null) {
+async function generateArticle(topic: string, aiConfig: AIConfig, materialsDataset: MaterialsDataset | null = null) {
   // 写作规范：可选注入，没配置就跳过整段
   const writingGuide = getWritingGuideContent()
   const writingGuideSection = writingGuide ? `# 写作规范（必须严格遵守）\n${writingGuide}\n\n` : ''

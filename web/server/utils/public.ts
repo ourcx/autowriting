@@ -38,8 +38,8 @@ interface LLMRequest {
  */
 export function buildLLMRequest(cfg: AIConfig): LLMRequest {
   const headers: Record<string, string> = { "Content-Type": "application/json" }
-  let url = ""
-  let model = ""
+  let url: string
+  let model: string
 
   if (cfg.articleProvider === "maas") {
     url = `${cfg.maasBaseUrl}/chat/completions`
@@ -79,7 +79,7 @@ export async function callLLMWithRetry(
       if (status && status >= 400 && status < 500) throw err
       if (i < maxRetries - 1) {
         const delay = Math.min(1000 * Math.pow(2, i), 8000)
-        console.warn(`[LLM] 第 ${i + 1} 次请求失败，${delay}ms 后重试:`, axiosErr.message)
+        logger.warn("LLM", "请求失败，等待重试", { attempt: i + 1, delayMs: delay, error: axiosErr.message })
         await new Promise((r) => setTimeout(r, delay))
       }
     }
@@ -225,6 +225,7 @@ export function loadHistory(): ReturnType<typeof listCoverHistory> {
 
 export function saveHistory(_history: unknown[]): void {
   // 已由 SQLite 管理，保留签名兼容旧调用
+  void _history
 }
 
 export function addToHistory(
@@ -277,7 +278,7 @@ export function generatePrompt(title: string, content: string, style: string, co
   }
   const styleDesc = stylePrompts[style] || stylePrompts.modern
   const colorDesc = colorNames[color] || "vibrant accent color"
-  const preview = (content || "").substring(0, 80).replace(/[#*\[\]`]/g, "").trim()
+  const preview = (content || "").substring(0, 80).replace(/[#*[\]`]/g, "").trim()
   const themeHint = preview ? `Article topic: ${preview}. ` : ""
   return `Create a high-quality WeChat public account article cover image.
 

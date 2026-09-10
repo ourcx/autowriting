@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * 今日头条自动推送路由
  *
@@ -413,7 +412,8 @@ router.post('/publish', async (req, res) => {
   const cookies = parseCookies(req)
   if (!cookies) return res.status(401).json({ error: '未提供今日头条 Cookie，请先在设置中配置' })
 
-  let { title, content, coverImageUrl } = req.body
+  let { title } = req.body
+  const { content, coverImageUrl } = req.body
   if (!title?.trim() || !content?.trim()) return res.status(400).json({ error: '标题和内容不能为空' })
 
   title = title.trim()
@@ -457,7 +457,6 @@ router.post('/publish', async (req, res) => {
 
     // ── 监听头条内部 API 请求，捕获 CSRF token 和草稿 ID ─────────────────
     let csrfToken = ''
-    let capturedPublishData = null
 
     // 拦截所有请求，提取 CSRF token
     page.on('request', request => {

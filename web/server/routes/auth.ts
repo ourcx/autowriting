@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * 认证路由
  * POST /api/auth/register  → 注册新用户

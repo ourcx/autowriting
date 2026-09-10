@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * 微信发布路由（存储已迁移至 SQLite）
  * POST   /api/publish/draft

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * CSS 模板路由（存储在 SQLite style_templates 表）
  * GET    /api/templates           列出所有模板（内置 + 自定义）
