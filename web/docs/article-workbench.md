@@ -41,7 +41,9 @@ node web/scripts/test-article-workbench.mjs
 
 ## 首页到发布的路径
 
-首页按现有生产阶段提供“继续处理”，优先展示待推送、待审核文章；文章列表支持标题或日期搜索、进度筛选，以及公众号、今日头条、小红书发布工作台直达入口。耗时统计独立加载，失败或变慢不会阻断文章列表。微信草稿入口常驻，其他管理功能收进“工具与设置”。
+首页按现有生产阶段提供“继续处理”，优先展示待推送、待审核文章；文章列表支持标题或日期搜索、进度筛选，以及公众号、今日头条、小红书发布工作台直达入口。耗时统计独立加载，失败或变慢不会阻断文章列表。导航按创作工具、设计、账户与配置分组，所有入口直接可见，不放入折叠菜单。
+
+首页页头、侧栏和列表统一白底，移除大面积拼色。“继续处理”使用单行布局。桌面导航与筛选为 32px，发布平台切换为 36px，以细下划线表示选中状态；颜色仅用于少量图标和状态点。浏览器回归额外检查入口可见性、背景一致性和 tab 高度。
 
 编辑器首次打开按 `currentStage` 进入对应步骤，随后以 `?tab=` 保留当前工作区。发布平台使用 `?tab=publish&platform=wechat|toutiao|xiaohongshu`；这些参数只影响页面选择，不代表审核或发布完成。非法参数回退到有效步骤及公众号平台。
 
@@ -58,6 +60,8 @@ node web/scripts/test-article-workbench.mjs
 - `WORKBENCH_URL=http://127.0.0.1:5174 node web/scripts/test-article-workbench.mjs` 通过。覆盖首页续接、搜索筛选、平台直达、刷新、保存失败拦截、独立预览返回、无头条正文、新文章、列表失败重试及账号档案。截图和几何检查覆盖 1440px、768px、390px，不调用真实模型或发布接口。
 - `SMOKE_PORT=3017 pnpm --dir web smoke` 通过，29 pass / 0 fail。数据、草稿、日志使用临时目录并自动清理。
 - 定向 ESLint、`arch`、`typecheck:changed`、`test:production`、`test:canvas`、`test:xiumi`、`build` 通过。
-- `verify` 在全量 lint 阶段被 30 个原有错误阻断；已逐文件比较 `HEAD`，错误数一致。全量 `tsc` 剩余两个原有未使用导入错误，位于 `AnimatedLoader.tsx` 和 `SuccessAnimation.tsx`。
+- 初次验收时，`verify` 被 30 个原有 lint 错误阻断；后续修复后，完整 `verify` 已通过，lint 为 0 errors、354 warnings。全量前端 `tsc` 仍有两个原有未使用导入错误，位于 `AnimatedLoader.tsx` 和 `SuccessAnimation.tsx`。
+- 后端 lint 修复移除了 16 处 `@ts-nocheck`，没有降低检查规则。单独运行 `tsc -p tsconfig.server.json` 仍有 450 条类型错误；基线代码在同样移除屏蔽后为 451 条。默认 `verify` 不包含后端全量类型检查，不代表后端类型问题已清零。
+- `node --import tsx scripts/test-server-utilities.mjs`（在 `web/` 下执行）通过，覆盖请求构造、5xx 重试、4xx 不重试、搜索计划错误原因保留和提示词清理；全部请求指向本地测试服务，数据使用临时目录并清理。
 
 回滚只需撤销本轮前端、浏览器测试及本文档的变更，无数据迁移；保留原有文章、账号配置和发布记录。新增的 URL 查询参数即使退回旧版本也不会改变文章文件。

@@ -414,7 +414,7 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
       {/* ── 右栏：文章列表 ───────────────────────────── */}
       <main className="dash-main">
         <div className="dash-workspace-heading">
-          <div><span className="dash-eyebrow">Dashy</span><h1>创作工作台</h1></div>
+          <h1>创作工作台</h1>
           <button className="dash-text-btn" onClick={() => titleRef.current?.focus()}><Plus size={16} />新建文章</button>
         </div>
         {!loading && !loadError && resumeArticle && (

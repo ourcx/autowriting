@@ -108,6 +108,17 @@ try {
   await page.getByRole('heading', { name: '创作工作台' }).waitFor()
   await page.getByRole('button', { name: '继续编辑：工作台验收文章' }).waitFor()
   assert.equal(requestedModules.some(path => /\/pages\/ArticleEditor\/|\/assets\/ArticleEditor-/.test(path)), false, 'home must not eagerly load the editor')
+  for (const label of ['微信草稿', '知识库', '提示词', '定时任务', '文章评分', '素材库', '样式', '画布', 'AI 配置']) {
+    assert.equal(await page.getByRole('navigation', { name: '工作台导航' }).getByRole('button', { name: label, exact: true }).isVisible(), true, `${label} must remain directly visible`)
+  }
+  assert.equal(await page.locator('.dp-nav details').count(), 0)
+  assert.equal(await page.evaluate(() => {
+    const surfaces = ['.dp-root .page-header', '.dash-sidebar', '.dash-main'].map(selector => getComputedStyle(document.querySelector(selector)).backgroundColor)
+    return new Set(surfaces).size === 1
+  }), true, 'home surfaces must share one background')
+  assert.equal(await page.locator('.dash-filters button').evaluateAll(buttons => buttons.every(button => button.getBoundingClientRect().height <= 36)), true)
+  assert.equal(await page.locator('.dp-nav-btn').evaluateAll(buttons => buttons.every(button => button.getBoundingClientRect().height <= 36)), true)
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
   await page.getByRole('button', { name: '继续处理', exact: true }).click()
   await page.getByRole('heading', { name: '公众号预览与推送' }).waitFor()
   assert.equal(new URL(page.url()).pathname, '/editor/ready-test')
@@ -151,6 +162,8 @@ try {
   for (const label of ['任务', '素材', '写作', '审核', '发布']) {
     assert.equal(await page.locator('.flow-step').filter({ hasText: label }).count(), 1)
   }
+  assert.equal(await page.locator('.publish-platform').evaluateAll(buttons => buttons.every(button => button.getBoundingClientRect().height <= 36)), true)
+  assert.equal(await page.locator('.flow-step').evaluateAll(buttons => buttons.every(button => button.getBoundingClientRect().height <= 36)), true)
   await page.locator('.toast-error .toast-close').first().click()
   await page.locator('.toast-error .toast-close').first().click()
   await page.locator('.toast-success').waitFor({ state: 'hidden' })
@@ -176,6 +189,7 @@ try {
     await page.goto(`${baseUrl}/`)
     await page.getByRole('button', { name: '小红书：工作台验收文章', exact: true }).waitFor()
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
+    assert.equal(await page.getByRole('group', { name: '设计', exact: true }).getByRole('button', { name: '样式', exact: true }).isVisible(), true)
     await page.screenshot({ path: join(screenshots, `dashboard-${width}.png`), fullPage: true })
     await page.getByRole('button', { name: '小红书：工作台验收文章', exact: true }).click()
     await page.getByRole('heading', { name: '小红书预览与发布' }).waitFor()
