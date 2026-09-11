@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100dvh;
-  background: var(--color-on-primary);
+  background: var(--color-canvas);
   overflow: hidden;
 }
 
@@ -12,26 +12,32 @@
   height: auto;
   padding: 10px 24px;
   gap: 20px;
-  background: var(--color-on-primary);
+  background: var(--color-canvas);
   backdrop-filter: none;
 }
 
 .dp-root .page-header__identity { flex: 0 0 auto; }
 .dp-root .page-header__actions { flex: 1; min-width: 0; max-width: none; overflow: visible; }
 .dp-logo { display: flex; align-items: center; gap: 8px; cursor: pointer; }
-.dp-logo-mark { display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--rounded-xs); background: var(--color-primary); color: var(--color-on-primary); font-size: 14px; font-weight: 600; }
+.dp-logo-mark { display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--rounded-xs); background: var(--color-brand-teal); color: var(--color-brand-ochre); font-size: 14px; font-weight: 600; }
 .dp-logo span { font-size: 15px; font-weight: 600; letter-spacing: 0; }
 .dp-nav { display: flex; justify-content: flex-end; align-items: center; gap: 12px; width: 100%; min-width: 0; }
 .dp-nav-group { display: flex; align-items: center; gap: 2px; }
 .dp-nav-group + .dp-nav-group { border-left: 1px solid var(--color-hairline); padding-left: 12px; }
 .dp-nav-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 8px; border: 0; border-radius: var(--rounded-xs); background: transparent; color: var(--color-body); font: inherit; font-size: 12px; white-space: nowrap; cursor: pointer; }
 .dp-nav-btn svg { flex-shrink: 0; color: var(--color-muted); }
-.dp-nav-btn:hover { background: var(--color-hairline-soft); color: var(--color-ink); }
+.dp-nav-btn { transition: background-color 160ms ease, color 160ms ease; }
+.dp-nav-btn:hover { background: var(--color-surface-card); color: var(--color-brand-teal); }
+.dp-nav-btn:active { background: var(--color-surface-strong); }
+.dp-nav-btn:hover svg { color: currentColor; }
 .dp-nav-btn--icon { width: 32px; padding: 0; }
 .dp-nav-btn--warn svg { color: var(--color-warning); }
 .dp-nav-user { max-width: 72px; overflow: hidden; text-overflow: ellipsis; }
 .dp-body { flex: 1; min-height: 0; overflow: hidden; }
 .dp-root button:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.dp-root .page-header { border-bottom-color: var(--color-surface-strong); }
+.dp-nav-group + .dp-nav-group { border-left-color: var(--color-surface-strong); }
+.dp-nav-group[aria-label="设计"] .dp-nav-btn svg { color: var(--color-brand-teal); }
 
 @media (max-width: 1200px) {
   .dp-root .page-header { flex-wrap: wrap; gap: 8px; }
@@ -48,4 +54,8 @@
   .dp-nav-group + .dp-nav-group { border-left: 0; padding-left: 0; }
   .dp-nav-btn { height: 36px; }
   .dp-nav-group:not(:last-child) .dp-nav-btn svg { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dp-nav-btn { transition: none; }
 }

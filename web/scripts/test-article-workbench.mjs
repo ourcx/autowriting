@@ -116,6 +116,18 @@ try {
     const surfaces = ['.dp-root .page-header', '.dash-sidebar', '.dash-main'].map(selector => getComputedStyle(document.querySelector(selector)).backgroundColor)
     return new Set(surfaces).size === 1
   }), true, 'home surfaces must share one background')
+  assert.equal(await page.locator('.dp-root').evaluate(element => getComputedStyle(element).backgroundColor), 'rgb(255, 250, 240)')
+  assert.equal(await page.locator('.dash-article-list').evaluate(element => getComputedStyle(element).animationName), 'none', 'reduced motion must disable list entry animation')
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  const firstRow = page.locator('.dash-article-item').first()
+  const rowBeforeHover = await firstRow.boundingBox()
+  await firstRow.hover()
+  await firstRow.evaluate(element => Promise.all(element.getAnimations().map(animation => animation.finished)))
+  assert.deepEqual(await firstRow.boundingBox(), rowBeforeHover, 'hover must not move or resize article rows')
+  assert.equal(await firstRow.evaluate(element => getComputedStyle(element).backgroundColor), 'rgb(250, 245, 232)')
+  assert.notEqual(await firstRow.evaluate(element => getComputedStyle(element).transitionDuration), '0s')
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  assert.equal(await firstRow.evaluate(element => getComputedStyle(element).transitionDuration), '0s')
   assert.equal(await page.locator('.dash-filters button').evaluateAll(buttons => buttons.every(button => button.getBoundingClientRect().height <= 36)), true)
   assert.equal(await page.locator('.dp-nav-btn').evaluateAll(buttons => buttons.every(button => button.getBoundingClientRect().height <= 36)), true)
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
@@ -164,6 +176,11 @@ try {
   }
   assert.equal(await page.locator('.publish-platform').evaluateAll(buttons => buttons.every(button => button.getBoundingClientRect().height <= 36)), true)
   assert.equal(await page.locator('.flow-step').evaluateAll(buttons => buttons.every(button => button.getBoundingClientRect().height <= 36)), true)
+  for (const selector of ['.editor', '.editor > .page-header', '.editor-content', '.editor-flow-bar', '.wr-toolbar', '.wr-sidebar']) {
+    assert.equal(await page.locator(selector).evaluate(element => getComputedStyle(element).backgroundColor), 'rgb(255, 250, 240)', `${selector} must use the warm canvas`)
+  }
+  assert.equal(await page.locator('.wr-preview').evaluate(element => getComputedStyle(element).backgroundColor), 'rgb(250, 245, 232)')
+  assert.equal(await page.locator('.editor-panel').evaluate(element => getComputedStyle(element).animationName), 'none')
   await page.locator('.toast-error .toast-close').first().click()
   await page.locator('.toast-error .toast-close').first().click()
   await page.locator('.toast-success').waitFor({ state: 'hidden' })
@@ -189,6 +206,7 @@ try {
     await page.goto(`${baseUrl}/`)
     await page.getByRole('button', { name: '小红书：工作台验收文章', exact: true }).waitFor()
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
+    assert.equal(await page.locator('.dp-root').evaluate(element => getComputedStyle(element).backgroundColor), 'rgb(255, 250, 240)')
     assert.equal(await page.getByRole('group', { name: '设计', exact: true }).getByRole('button', { name: '样式', exact: true }).isVisible(), true)
     await page.screenshot({ path: join(screenshots, `dashboard-${width}.png`), fullPage: true })
     await page.getByRole('button', { name: '小红书：工作台验收文章', exact: true }).click()
