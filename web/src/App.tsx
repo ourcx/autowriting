@@ -25,6 +25,9 @@ const ArticleScorePage = lazy(() => import('./pages/ArticleScorePage/ArticleScor
 const AccountPage = lazy(() => import('./pages/AccountPage/AccountPage'))
 const CanvasStudio = lazy(() => import('./pages/CanvasStudio/CanvasStudio'))
 
+
+
+
 export default function App() {
   useEffect(() => {
     // 先恢复登录态，再同步 AI 配置
