@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { AlertCircle, CheckCircle, Copy, FileText, RefreshCw, Square, X, Zap } from "lucide-react"
+import { AlertCircle, Check, CheckCircle, ChevronDown, Copy, FileText, RefreshCw, Search, Square, X, Zap } from "lucide-react"
 import {
   createGenerationCandidates, extractErrorMessage, fetchGenerationCandidates,
   fetchJson, streamGenerationCandidate,
@@ -17,7 +17,13 @@ interface Props {
   onClose: () => void
 }
 
-interface ReferenceArticle { dir: string; title: string; snippet: string }
+interface ReferenceArticle {
+  dir: string
+  title: string
+  snippet: string
+  sim: number
+  types?: string[]
+}
 const STATUS = { queued: "排队中", generating: "生成中", complete: "已完成", interrupted: "已中断" }
 
 export default function GenerateModal({ articleId, task, materials, sourceArticle = "", aiConfig, onComplete, onClose }: Props) {
@@ -101,7 +107,11 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ query: task, materials, topK: 8, aiConfig }),
       })
-      if (mounted.current && !controller.signal.aborted) setReferences(result.candidates || [])
+      if (mounted.current && !controller.signal.aborted) {
+        const candidates = result.candidates || []
+        setReferences(candidates)
+        setSelected(candidates.slice(0, 2).map(candidate => candidate.dir))
+      }
     } catch (cause) {
       if (!controller.signal.aborted && mounted.current) setReferenceError(extractErrorMessage(cause))
     } finally { if (mounted.current) setReferencesLoading(false) }
@@ -190,6 +200,11 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
     try { await navigator.clipboard.writeText(content) }
     catch { setError("复制失败，请选中正文后手动复制") }
   }
+  const toggleReference = (dir: string) => {
+    if (busy) return
+    setSelected(previous => previous.includes(dir) ? previous.filter(id => id !== dir) : [...previous, dir])
+  }
+  const similarityTone = (sim: number) => sim >= 80 ? "high" : sim >= 60 ? "medium" : "low"
 
   return <div className="gm-overlay">
     <section className="gm-modal gc-modal" role="dialog" aria-modal="true" aria-label="生成候选稿">
@@ -204,12 +219,47 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
         <button className="gm-btn-primary" disabled={busy || loading || applying} onClick={() => void start()}><Zap size={14} />{busy ? "生成中" : "开始生成"}</button>
       </div>
       <details className="gc-references">
-        <summary>往期参考 · 已选 {selected.length} 篇</summary>
-        <button className="gm-btn-secondary" disabled={referencesLoading || busy} onClick={() => void loadReferences()}><RefreshCw size={13} />{referencesLoading ? "检索中" : "检索往期文章"}</button>
-        {referenceError && <p role="alert">{referenceError}</p>}
-        {references.map(reference => <label key={reference.dir} title={reference.snippet}>
-          <input type="checkbox" disabled={busy} checked={selected.includes(reference.dir)} onChange={event => setSelected(previous => event.target.checked ? [...previous, reference.dir] : previous.filter(id => id !== reference.dir))} />{reference.title}
-        </label>)}
+        <summary>
+          <span className="gc-reference-summary"><ChevronDown size={15} /><strong>往期参考</strong><span>已选 {selected.length} 篇</span></span>
+          {references.length > 0 && <span className="gc-reference-total">{references.length} 篇相关</span>}
+        </summary>
+        <div className="gc-reference-body">
+          <div className="gc-reference-actions">
+            <div><strong>参考文章</strong><span>只影响本次生成，不会修改原文</span></div>
+            <button className="gc-reference-search" disabled={referencesLoading || busy} onClick={() => void loadReferences()}>
+              {referencesLoading ? <RefreshCw size={14} className="gm-spinner" /> : <Search size={14} />}
+              {referencesLoading ? "检索中" : references.length ? "重新检索" : "检索往期文章"}
+            </button>
+          </div>
+          {referenceError && <div className="gc-reference-error" role="alert"><AlertCircle size={14} />{referenceError}</div>}
+          {!referencesLoading && !referenceError && references.length === 0 && (
+            <div className="gc-reference-empty">按需检索，不会阻塞直接生成</div>
+          )}
+          {references.length > 0 && <div className="gc-reference-grid">
+            {references.map(reference => {
+              const checked = selected.includes(reference.dir)
+              const tone = similarityTone(reference.sim)
+              return <button
+                type="button"
+                key={reference.dir}
+                className={`gc-reference-card gc-reference-card--${tone} ${checked ? "gc-reference-card--selected" : ""}`}
+                aria-pressed={checked}
+                disabled={busy}
+                onClick={() => toggleReference(reference.dir)}
+              >
+                <span className="gc-reference-check">{checked && <Check size={13} />}</span>
+                <span className="gc-reference-content">
+                  <strong>{reference.title}</strong>
+                  <span className="gc-reference-meta">
+                    <span title={reference.dir}>{reference.dir}</span>
+                    <em>{reference.sim}% 相似</em>
+                  </span>
+                  <span className="gc-reference-snippet">{reference.snippet || "暂无摘要"}</span>
+                </span>
+              </button>
+            })}
+          </div>}
+        </div>
       </details>
       {error && <div className="gc-error" role="alert"><AlertCircle size={16} />{error}</div>}
       <div className="gc-toolbar">

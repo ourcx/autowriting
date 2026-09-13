@@ -17,6 +17,7 @@ try {
   let article = '# 原有正文\n\n原文不应被候选稿替换。'
   let failSave = false
   let prematureEof = false
+  let referenceCalls = 0
   page.on('pageerror', error => errors.push(error.message))
   await page.addInitScript(() => localStorage.setItem('auth_token', 'candidate-ui-fixture'))
   await page.route('**/api/**', async route => {
@@ -61,12 +62,30 @@ try {
       }
       return route.fulfill({ json: { title: '候选验收', task: '写一篇完整文章，依据给定素材展开，不要表情符号。', materials: '测试素材说明，包含足够的背景内容供写作使用，不增加额外事实。', article, articleToutiao: '', workflow: {} } })
     }
-    if (pathname === '/api/rag/candidates') throw new Error('References must not block default generation')
+    if (pathname === '/api/rag/candidates') {
+      referenceCalls++
+      return route.fulfill({ json: { candidates: [
+        { dir: '20260901-campus', title: '广州高校就业数据为什么突然受关注', snippet: '梳理近三年高校就业数据、行业变化和毕业生选择。', sim: 92, types: ['article'] },
+        { dir: '20260820-career', title: '大学生求职真正卡住的环节', snippet: '从简历、实习和岗位匹配三个方面分析求职难点。', sim: 78, types: ['article'] },
+        { dir: '20260718-data', title: '如何看懂一份就业质量报告', snippet: '解释就业率、升学率与统计口径之间的区别。', sim: 55, types: ['article'] },
+      ] } })
+    }
     return route.fulfill({ json: {} })
   })
   await page.goto(`${base}/editor/fixture?tab=task`)
   await page.getByRole('button', { name: '生成文章', exact: true }).click()
   await page.getByRole('dialog', { name: '生成候选稿' }).waitFor()
+  await page.getByText('往期参考', { exact: true }).click()
+  const referenceSearch = page.getByRole('button', { name: '检索往期文章', exact: true })
+  await referenceSearch.click()
+  await page.getByText('3 篇相关', { exact: true }).waitFor()
+  assert.equal(referenceCalls, 1)
+  assert.equal(await page.locator('.gc-reference-card').count(), 3)
+  assert.equal(await page.locator('.gc-reference-card[aria-pressed="true"]').count(), 2)
+  assert.equal(await page.locator('.gc-references input[type="checkbox"]').count(), 0)
+  const searchBox = await page.getByRole('button', { name: '重新检索', exact: true }).boundingBox()
+  assert.ok(searchBox.height <= 34 && searchBox.width < 150)
+  await page.screenshot({ path: join(screenshots, 'references-desktop.png'), fullPage: true })
   await page.getByLabel('候选数量').selectOption('3')
   await page.getByRole('button', { name: '开始生成', exact: true }).click()
   await page.getByText('2 篇已完成', { exact: true }).waitFor()
@@ -92,7 +111,13 @@ try {
   await page.getByText('3 篇已完成', { exact: true }).waitFor()
   assert.equal(calls.length, 4, 'reopening must not regenerate completed candidates')
   await page.setViewportSize({ width: 390, height: 844 })
+  await page.getByText('往期参考', { exact: true }).click()
+  await page.getByRole('button', { name: '检索往期文章', exact: true }).click()
+  await page.getByText('3 篇相关', { exact: true }).waitFor()
+  assert.equal(await page.locator('.gc-reference-grid').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length), 1)
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
+  await page.screenshot({ path: join(screenshots, 'references-mobile.png'), fullPage: true })
+  await page.getByText('往期参考', { exact: true }).click()
   await page.screenshot({ path: join(screenshots, 'candidates-mobile.png'), fullPage: true })
   prematureEof = true
   await page.getByRole('button', { name: '开始生成', exact: true }).click()
