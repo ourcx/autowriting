@@ -30,6 +30,8 @@ import { logger } from '../logger.js'
 import { startSseHeartbeat } from '../sseHeartbeat.js'
 import { consumeOpenAiContentStream } from '../utils/openAiStream.js'
 import { triggerBuildIndex } from './rag.js'
+import { CandidateError, createCandidates, listCandidates, parseCandidateInput, readCandidate, saveCandidate } from '../generationCandidates.ts'
+import { streamCandidate } from '../utils/candidateGeneration.ts'
 
 const router = Router()
 
@@ -46,6 +48,30 @@ function hashContent(article = '', materials = '') {
 
 // 所有文章路由都需要登录
 router.use(authMiddleware)
+
+router.get('/:articleId/candidates', (req, res) => {
+  try { res.json(listCandidates(req.user.id, String(req.params.articleId))) }
+  catch { res.status(500).json({ error: '候选稿读取失败，请重试' }) }
+})
+
+router.post('/:articleId/candidates', (req, res) => {
+  try {
+    res.status(201).json(createCandidates(req.user.id, String(req.params.articleId), parseCandidateInput(req.body)))
+  } catch (error) {
+    res.status(error instanceof CandidateError ? error.statusCode : 500).json({
+      error: error instanceof CandidateError ? error.message : '候选稿创建失败',
+    })
+  }
+})
+
+router.post('/:articleId/candidates/:candidateId/stream', async (req, res) => {
+  try { await streamCandidate(req.user.id, String(req.params.articleId), String(req.params.candidateId), req.body?.aiConfig, res) }
+  catch (error) {
+    if (!res.headersSent) res.status(error instanceof CandidateError ? error.statusCode : 500).json({
+      error: error instanceof CandidateError ? error.message : '候选稿生成失败',
+    })
+  }
+})
 
 // ── 工具：根据 userId + articleId 解析各类文件路径 ───────────────────────────
 // 用户文章存在 DRAFTS_DIR/{userId}/ 子目录下，实现多用户隔离
@@ -539,25 +565,39 @@ router.post('/:articleId/generate/stream', async (req, res) => {
 
   // 工具：向客户端发送一个 SSE 事件
   const send = (event, data) => {
-    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+    if (!res.destroyed && !res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
   }
 
   // 已生成内容（用于中断时恢复）
+  const generationController = new AbortController()
   let fullText = ''
   let fullTextToutiao = ''
+  let partialSaved = false
 
-  // 中断时将已生成内容持久化到磁盘
+  // Legacy callers also preserve interrupted output separately, never overwriting the mother draft.
   const savePartial = () => {
-    if (fullText.length < 50) return
+    if (partialSaved || (!fullText && !fullTextToutiao)) return
+    partialSaved = true
     try {
-      const articlePath = getArticlePath(articleId, 'article', req.user.id)
-      writeArticleSafely({ articlePath, articleId, userId: req.user.id, content: fullText })
+      for (const platform of ['wechat', 'toutiao'] as const) {
+        const content = platform === 'wechat' ? fullText : fullTextToutiao
+        if (!content) continue
+        const [created] = createCandidates(req.user.id, articleId, {
+          task, materials, sourceArticle, selectedRagContext: selectedRagContext || '',
+          referenceArticleIds, platform, count: 1,
+        })
+        const stored = readCandidate(req.user.id, articleId, created.id)
+        saveCandidate(req.user.id, articleId, { ...stored, content, status: 'interrupted', message: '旧生成连接中断，已保留内容' })
+      }
     } catch (e) {
-      console.warn('[Stream] 中断时保存部分内容失败:', e.message)
+      logger.warn('GENERATION', '中断内容保存失败', { articleId })
     }
   }
   res.once('close', () => {
-    if (!res.writableEnded) savePartial()
+    if (!res.writableEnded) {
+      generationController.abort()
+      savePartial()
+    }
   })
 
   try {
@@ -581,7 +621,7 @@ router.post('/:articleId/generate/stream', async (req, res) => {
     // 优先使用前端手动选择的参考文章；若未选择，自动检索并注入相关内容
     let ragSection = ''
     let autoRagCount = 0
-    if (selectedRagContext) {
+    if (typeof selectedRagContext === 'string') {
       ragSection = `\n\n${selectedRagContext}\n`
       send('status', { step: 'rag', message: `已注入 ${selectedRagContext.split('###').length - 1} 篇往期文章` })
     } else {
@@ -658,7 +698,7 @@ ${materials}
 
 ---
 
-现在请直接输出完整的文章内容（纯 Markdown，只有 1 个 H1，所有 H2 带 emoji）：`
+现在请直接输出完整的文章内容（纯 Markdown，只有 1 个 H1，不使用 emoji 或表情包）：`
 
     // ── 今日头条 prompt（注入评分示例，不注入 RAG / 写作规范，平台风格不同）─
     const buildToutiaoPrompt = motherDraft => `${creatorProfileSection}${exampleSection ? exampleSection + '\n\n' : ''}${globalMemorySection}
@@ -676,7 +716,7 @@ ${materials}
 
 ---
 
-请把母稿改写成完整的今日头条版本。可以调整标题、开头、段落节奏和表达，但不得新增母稿与素材之外的数字、人物、时间或判断。输出纯 Markdown，只有 1 个 H1，H2 可带 emoji：`
+请把母稿改写成完整的今日头条版本。可以调整标题、开头、段落节奏和表达，但不得新增母稿与素材之外的数字、人物、时间或判断。输出纯 Markdown，只有 1 个 H1，不使用 emoji 或表情包：`
 
     // ── 3. 构造请求参数（统一函数）──────────────────────────────────────────
     const { url, model, headers } = buildLLMRequest(cfg)
@@ -696,10 +736,10 @@ ${materials}
             { role: 'user',   content: prompt },
           ],
           temperature: 0.9,
-          max_tokens: 4096,
+          max_tokens: 8192,
           stream: true,
         },
-        { headers, responseType: 'stream' }
+        { headers, responseType: 'stream', timeout: 120000, signal: generationController.signal }
       )
 
       const fullContent = await consumeOpenAiContentStream(res2.data, content => {
@@ -709,7 +749,7 @@ ${materials}
       })
 
       // 两个平台分别持久化；只有完整消费上游流后才发送 done。
-      try {
+      {
         const articlePath = getArticlePath(articleId, 'article', req.user.id)
         if (platformKey === 'wechat') {
           writeArticleSafely({ articlePath, articleId, userId: req.user.id, content: fullContent })
@@ -728,8 +768,6 @@ ${materials}
           ensureDir(path.dirname(toutiaoPath))
           fs.writeFileSync(toutiaoPath, fullContent, 'utf-8')
         }
-      } catch (e) {
-        console.error(`[Stream] 写入${platformKey}文章失败:`, e.message)
       }
       recordTokenUsage({
         articleId, userId: req.user.id, operation: 'generate', model,
@@ -754,7 +792,7 @@ ${materials}
     }
 
   } catch (error) {
-    console.error('[Stream] 生成失败:', error.response?.data || error.message)
+    logger.warn('GENERATION', '文章流式生成失败', { articleId, characters: fullText.length + fullTextToutiao.length })
     savePartial()
     const msg = error.response?.data?.error?.message || error.message
     send('error', { message: msg })

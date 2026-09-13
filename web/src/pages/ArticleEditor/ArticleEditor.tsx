@@ -319,17 +319,12 @@ export default function ArticleEditor() {
     setRefiningMaterials(false)
   }
 
-  const handleGenerateComplete = (article: string, articleToutiao: string, platforms: 'both' | 'wechat' | 'toutiao') => {
-    setData(prev => {
-      const next = {
-        ...prev,
-        ...(article ? { article } : {}),
-        ...(articleToutiao ? { articleToutiao } : {}),
-      }
-      // 本地模式下生成完成后自动存到 localStorage
-      if (isLocalArticle) saveLocalData(next)
-      return next
-    })
+  const handleGenerateComplete = async (article: string, articleToutiao: string, platforms: 'both' | 'wechat' | 'toutiao') => {
+    const next = { ...data, ...(article ? { article } : {}), ...(articleToutiao ? { articleToutiao } : {}) }
+    // Candidate generation never writes the mother draft. Persist selection before closing the dialog.
+    if (isLocalArticle) saveLocalData(next)
+    else await saveArticle(articleId, next)
+    setData(next)
     // 跳转到对应 tab
     if (platforms === 'toutiao') {
       setActiveTab('toutiao')
@@ -340,7 +335,7 @@ export default function ArticleEditor() {
       : platforms === 'toutiao' ? '今日头条文章已生成'
       : '公众号 + 今日头条两篇文章已生成'
     toast.success(msg)
-    void handleWorkflowEvent('generated')
+    if (platforms !== 'toutiao') void handleWorkflowEvent('generated')
   }
 
   const articleTitle = data.title || data.article.split('\n')[0]?.replace(/^#+\s*/, '') || `文章 ${articleId}`
@@ -840,7 +835,7 @@ export default function ArticleEditor() {
 
       {showGenerateModal && (
         <GenerateModal
-          articleId={isLocalArticle ? articleId.slice(6) : articleId}
+          articleId={articleId}
           task={data.task}
           materials={data.materials}
           sourceArticle={data.article}

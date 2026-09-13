@@ -1,773 +1,248 @@
-/**
- * GenerateModal — 流式生成弹窗（Clay 设计风格）
- *
- * 三阶段 UI：
- *   1. pick     — 查询 RAG 候选文章，用户手动勾选要注入的往期文章
- *   2. generate — AI 流式输出（公众号 + 今日头条双平台并行展示）
- *   3. done     — 完成（应用按钮）
- */
-import { useEffect, useRef, useState, useCallback } from 'react'
-import { X, CheckCircle, AlertCircle, FileText, Eye, EyeOff, Zap } from 'lucide-react'
-import { fetchCreatorWritingProfile } from '../../utils/apiHelpers'
-import './GenerateModal.css'
-
-// ── 类型 ─────────────────────────────────────────────────────────────────────
-
-interface RagCandidate {
-  dir:     string
-  title:   string
-  score:   number
-  sim:     number
-  types:   string[]
-  snippet: string
-}
-
-interface ContextArticle {
-  dir:     string
-  title:   string
-  content: string
-}
-
-type Phase = 'pick' | 'generate' | 'done' | 'error'
+import { useEffect, useRef, useState } from "react"
+import { AlertCircle, CheckCircle, Copy, FileText, RefreshCw, Square, X, Zap } from "lucide-react"
+import {
+  createGenerationCandidates, extractErrorMessage, fetchGenerationCandidates,
+  fetchJson, streamGenerationCandidate,
+} from "../../utils/apiHelpers"
+import type { CandidatePlatform, GenerationCandidate } from "../../../shared/generationCandidate"
+import "./GenerateModal.css"
 
 interface Props {
-  articleId:  string
-  task:       string
-  materials:  string
+  articleId: string
+  task: string
+  materials: string
   sourceArticle?: string
-  aiConfig:   Record<string, unknown>
-  onComplete: (article: string, articleToutiao: string, platforms: 'both' | 'wechat' | 'toutiao') => void
-  onClose:    () => void
+  aiConfig: Record<string, unknown>
+  onComplete: (article: string, articleToutiao: string, platforms: "both" | "wechat" | "toutiao") => void | Promise<void>
+  onClose: () => void
 }
 
-// ── 颜色映射（按相似度） ──────────────────────────────────────────────────────
+interface ReferenceArticle { dir: string; title: string; snippet: string }
+const STATUS = { queued: "排队中", generating: "生成中", complete: "已完成", interrupted: "已中断" }
 
-function simColor(sim: number) {
-  if (sim >= 80) return 'peach'
-  if (sim >= 60) return 'lavender'
-  return 'ochre'
-}
+export default function GenerateModal({ articleId, task, materials, sourceArticle = "", aiConfig, onComplete, onClose }: Props) {
+  const [platform, setPlatform] = useState<CandidatePlatform>("wechat")
+  const [count, setCount] = useState(1)
+  const [rows, setRows] = useState<GenerationCandidate[]>([])
+  const [activeId, setActiveId] = useState("")
+  const [comparing, setComparing] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [applying, setApplying] = useState(false)
+  const [error, setError] = useState("")
+  const [references, setReferences] = useState<ReferenceArticle[]>([])
+  const [selected, setSelected] = useState<string[]>([])
+  const [referencesLoading, setReferencesLoading] = useState(false)
+  const [referenceError, setReferenceError] = useState("")
+  const [loading, setLoading] = useState(true)
+  const controllers = useRef(new Map<string, AbortController>())
+  const stopped = useRef(false)
+  const starting = useRef(false)
+  const mounted = useRef(true)
+  const referencesController = useRef<AbortController | null>(null)
+  const preparationController = useRef<AbortController | null>(null)
+  const [now, setNow] = useState(Date.now())
+  const active = rows.find(row => row.id === activeId)
+  const busy = creating || rows.some(row => row.status === "generating")
 
-// ═══════════════════════════════════════════════════════════════════════════════
-
-export default function GenerateModal({ articleId, task, materials, sourceArticle = '', aiConfig, onComplete, onClose }: Props) {
-  const [phase,        setPhase]       = useState<Phase>('pick')
-  const [statusMsg,    setStatusMsg]   = useState('')
-  // 平台选择：默认仅公众号（双平台会触发 2 次完整 LLM 调用，让用户显式勾选）
-  const [platforms,    setPlatforms]   = useState<'both' | 'wechat' | 'toutiao'>('wechat')
-  // 公众号流式文本
-  const [streamTextWechat,   setStreamTextWechat]  = useState('')
-  // 今日头条流式文本
-  const [streamTextToutiao,  setStreamTextToutiao] = useState('')
-  // 当前激活的平台 tab（生成阶段）
-  const [activeTab,    setActiveTab]   = useState<'wechat' | 'toutiao'>('wechat')
-  // 哪个平台已完成
-  const [wechatDone,   setWechatDone]  = useState(false)
-  const [toutiaoDone,  setToutiaoDone] = useState(false)
-  const [errorMsg,     setErrorMsg]    = useState('')
-
-  // ── RAG 候选 & 选择 ────────────────────────────────────────────────────────
-  const [candidates,   setCandidates]  = useState<RagCandidate[]>([])
-  const [loadingCands, setLoadingCands]= useState(true)
-  const [candsError,   setCandsError]  = useState('')
-  const [selected,     setSelected]    = useState<Set<string>>(new Set())
-
-  // ── 上下文预览 ─────────────────────────────────────────────────────────────
-  const [previewDir,    setPreviewDir]    = useState<string | null>(null)
-  const [previewData,   setPreviewData]   = useState<ContextArticle | null>(null)
-  const [loadingPreview, setLoadingPreview] = useState(false)
-  const [previewError,  setPreviewError]  = useState(false)
-  const [showContextPanel,  setShowContextPanel]  = useState(false)
-  const [loadingCtxPanel,   setLoadingCtxPanel]   = useState(false)
-  const [ctxPanelError,     setCtxPanelError]     = useState(false)
-  const [contextArticles, setContextArticles]   = useState<ContextArticle[]>([])
-  const [ragContext,   setRagContext]  = useState<string>('')
-
-  const streamRefWechat   = useRef<HTMLDivElement>(null)
-  const streamRefToutiao  = useRef<HTMLDivElement>(null)
-  const fullTextWechat    = useRef('')
-  const fullTextToutiao   = useRef('')
-  const abortRef   = useRef<AbortController | null>(null)
-
-  const token = localStorage.getItem('auth_token')
-  const authHeader: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {}
-
-  // ── 1. 挂载时查询候选文章 ─────────────────────────────────────────────────
-
-  useEffect(() => {
-    fetchCandidates()
-    fetchCreatorWritingProfile().then(profile => {
-      const hasWechat = profile.defaultPlatforms.includes('wechat')
-      const hasToutiao = profile.defaultPlatforms.includes('toutiao')
-      setPlatforms(hasWechat && hasToutiao ? 'both' : hasToutiao ? 'toutiao' : 'wechat')
-    }).catch(() => {})
-  }, [])
-
-  // 自动滚动到底部
-  useEffect(() => {
-    if (streamRefWechat.current) {
-      streamRefWechat.current.scrollTop = streamRefWechat.current.scrollHeight
-    }
-  }, [streamTextWechat])
-
-  useEffect(() => {
-    if (streamRefToutiao.current) {
-      streamRefToutiao.current.scrollTop = streamRefToutiao.current.scrollHeight
-    }
-  }, [streamTextToutiao])
-
-  // 公众号完成后自动切到今日头条 tab（仅在两者都生成时）
-  useEffect(() => {
-    if (wechatDone && !toutiaoDone && platforms !== 'wechat') {
-      setActiveTab('toutiao')
-    }
-  }, [wechatDone, toutiaoDone, platforms])
-
-  async function fetchCandidates() {
-    setLoadingCands(true)
-    setCandsError('')
+  const update = (id: string, patch: Partial<GenerationCandidate>) => {
+    if (mounted.current) setRows(previous => previous.map(row => row.id === id ? { ...row, ...patch } : row))
+  }
+  const reload = async () => {
+    setLoading(true)
+    setError("")
     try {
-      const resp = await fetch('/api/rag/candidates', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeader },
-        body:    JSON.stringify({ query: task, materials, topK: 8, aiConfig }),
-      })
-      const data = await resp.json()
-      if (!resp.ok) throw new Error(data.error || '查询失败')
-      setCandidates(data.candidates || [])
-      const topDirs = (data.candidates || []).slice(0, 2).map((c: RagCandidate) => c.dir)
-      setSelected(new Set(topDirs))
-    } catch (e: unknown) {
-      setCandsError((e as Error).message || '查询候选文章失败')
+      const candidates = await fetchGenerationCandidates(articleId)
+      if (!mounted.current) return
+      setRows(candidates)
+      setActiveId(previous => candidates.some(row => row.id === previous) ? previous : candidates[0]?.id || "")
+    } catch (cause) {
+      if (mounted.current) setError(extractErrorMessage(cause))
+    } finally { if (mounted.current) setLoading(false) }
+  }
+  useEffect(() => {
+    mounted.current = true
+    void reload()
+    const running = controllers.current
+    return () => {
+      mounted.current = false
+      stopped.current = true
+      running.forEach(controller => controller.abort())
+      referencesController.current?.abort()
+      preparationController.current?.abort()
     }
-    setLoadingCands(false)
+  }, [articleId])
+  useEffect(() => {
+    if (!busy) return
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [busy])
+  useEffect(() => {
+    if (!busy || creating) return
+    // A dialog reopened during cancellation may see the server's last active checkpoint.
+    const timer = setInterval(() => {
+      if (controllers.current.size) return
+      void fetchGenerationCandidates(articleId).then(candidates => {
+        if (mounted.current) setRows(candidates)
+      }).catch(() => {})
+    }, 3000)
+    return () => clearInterval(timer)
+  }, [articleId, busy, creating])
+
+  const loadReferences = async () => {
+    const controller = new AbortController()
+    referencesController.current?.abort()
+    referencesController.current = controller
+    setReferencesLoading(true)
+    setReferenceError("")
+    try {
+      const token = localStorage.getItem("auth_token")
+      const result = await fetchJson<{ candidates: ReferenceArticle[] }>("/api/rag/candidates", {
+        method: "POST", signal: controller.signal,
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ query: task, materials, topK: 8, aiConfig }),
+      })
+      if (mounted.current && !controller.signal.aborted) setReferences(result.candidates || [])
+    } catch (cause) {
+      if (!controller.signal.aborted && mounted.current) setReferenceError(extractErrorMessage(cause))
+    } finally { if (mounted.current) setReferencesLoading(false) }
   }
 
-  // ── 预览单篇文章内容 ──────────────────────────────────────────────────────
-
-  const fetchPreview = useCallback(async (dir: string) => {
-    if (previewDir === dir) { setPreviewDir(null); setPreviewData(null); return }
-    setPreviewDir(dir)
-    setPreviewData(null)
-    setPreviewError(false)
-    setLoadingPreview(true)
+  const run = async (candidate: GenerationCandidate) => {
+    if (controllers.current.has(candidate.id)) return
+    const controller = new AbortController()
+    controllers.current.set(candidate.id, controller)
+    update(candidate.id, { status: "generating", finishedAt: undefined, message: "等待模型输出" })
     try {
-      const resp = await fetch('/api/rag/context', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeader },
-        body:    JSON.stringify({ dirs: [dir] }),
+      await streamGenerationCandidate(articleId, candidate.id, aiConfig, controller.signal, event => {
+        if (event.candidate) update(candidate.id, event.candidate)
+        if (event.event === "chunk" && event.text && mounted.current) {
+          setRows(previous => previous.map(row => row.id === candidate.id
+            ? { ...row, content: row.content + event.text, firstChunkAt: row.firstChunkAt || new Date().toISOString(), message: "正在写作" } : row))
+        }
+        if (event.event === "error") update(candidate.id, { status: "interrupted", message: event.message || "生成中断" })
       })
-      const data = await resp.json()
-      const article = data.articles?.[0] || null
-      setPreviewData(article)
-      if (!article) setPreviewError(true)
-    } catch {
-      setPreviewData(null)
-      setPreviewError(true)
-    }
-    setLoadingPreview(false)
-  }, [previewDir])
-
-  // ── 加载选中文章的完整上下文 ──────────────────────────────────────────────
-
-  async function loadSelectedContext() {
-    const dirs = [...selected]
-    if (dirs.length === 0) {
-      setContextArticles([])
-      setRagContext('')
-      setShowContextPanel(false)
-      return
-    }
-    setLoadingCtxPanel(true)
-    setCtxPanelError(false)
-    setShowContextPanel(true)
-    try {
-      const resp = await fetch('/api/rag/context', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeader },
-        body:    JSON.stringify({ dirs }),
-      })
-      const data = await resp.json()
-      if (!resp.ok) throw new Error(data.error || '加载失败')
-      setContextArticles(data.articles || [])
-      setRagContext(data.context || '')
-      if (!data.context) setCtxPanelError(true)
-    } catch {
-      setCtxPanelError(true)
-    }
-    setLoadingCtxPanel(false)
+    } catch (cause) {
+      update(candidate.id, { status: "interrupted", finishedAt: new Date().toISOString(), message: controller.signal.aborted ? "已停止，可继续生成" : extractErrorMessage(cause) })
+    } finally { controllers.current.delete(candidate.id) }
   }
 
-  // ── 用户点击「开始生成」 ──────────────────────────────────────────────────
-
-  const handleStartGenerate = async () => {
-    let ctxString = ''
-    if (selected.size > 0) {
-      try {
-        const resp = await fetch('/api/rag/context', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json', ...authHeader },
-          body:    JSON.stringify({ dirs: [...selected] }),
+  const start = async () => {
+    if (starting.current || busy || loading) return
+    starting.current = true
+    stopped.current = false
+    setCreating(true)
+    setError("")
+    const preparation = new AbortController()
+    preparationController.current = preparation
+    const preparationTimeout = setTimeout(() => preparation.abort(), 20000)
+    try {
+      let selectedRagContext = ""
+      if (selected.length) {
+        const token = localStorage.getItem("auth_token")
+        const context = await fetchJson<{ context: string }>("/api/rag/context", {
+          method: "POST", signal: preparation.signal,
+          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          body: JSON.stringify({ dirs: selected }),
         })
-        const data = await resp.json()
-        ctxString = data.context || ''
-        setContextArticles(data.articles || [])
-      } catch { /**/ }
-    }
-    setRagContext(ctxString)
-    setPhase('generate')
-    // 初始 tab：只生成今日头条时直接显示今日头条
-    setActiveTab(platforms === 'toutiao' ? 'toutiao' : 'wechat')
-    const ctrl = new AbortController()
-    abortRef.current = ctrl
-    startStream(ctrl.signal, ctxString)
-  }
-
-  // ── 流式生成（双平台） ────────────────────────────────────────────────────
-
-  async function startStream(signal: AbortSignal, selectedRagContext: string) {
-    try {
-      const resp = await fetch(`/api/articles/${articleId}/generate/stream`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeader },
-        body:    JSON.stringify({
-          task, materials, aiConfig,
-          sourceArticle: sourceArticle || undefined,
-          selectedRagContext: selectedRagContext || undefined,
-          referenceArticleIds: [...selected],
-          platforms,
-        }),
-        signal,
+        selectedRagContext = context.context || ""
+      }
+      if (stopped.current || !mounted.current) return
+      const created = await createGenerationCandidates(articleId, {
+        task, materials, sourceArticle, platform, count, selectedRagContext, referenceArticleIds: selected,
       })
-
-      if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`)
-
-      const reader  = resp.body.getReader()
-      const decoder = new TextDecoder('utf-8')
-      let   lineBuf = ''
-      let   curEvent = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        lineBuf += decoder.decode(value, { stream: true })
-        const lines = lineBuf.split('\n')
-        lineBuf = lines.pop() ?? ''
-
-        for (const line of lines) {
-          const trimmed = line.trim()
-          if (!trimmed) { curEvent = ''; continue }
-          if (trimmed.startsWith('event:')) { curEvent = trimmed.slice(6).trim(); continue }
-          if (trimmed.startsWith('data:')) {
-            try {
-              const payload = JSON.parse(trimmed.slice(5).trim()) as Record<string, unknown>
-              dispatch(curEvent || inferEvent(payload), payload)
-            } catch { /* ignore */ }
-          }
+      if (stopped.current || !mounted.current) return
+      setRows(previous => [...created, ...previous])
+      setActiveId(created[0].id)
+      clearTimeout(preparationTimeout)
+      let next = 0
+      const worker = async () => {
+        while (!stopped.current && next < created.length) {
+          const row = created[next++]
+          await run(row)
         }
       }
-    } catch (e: unknown) {
-      if ((e as Error).name === 'AbortError') return
-      setPhase('error')
-      setErrorMsg((e as Error).message || '生成失败')
+      await Promise.all([worker(), worker()])
+    } catch (cause) { if (mounted.current) setError(extractErrorMessage(cause)) }
+    finally {
+      clearTimeout(preparationTimeout)
+      starting.current = false
+      if (mounted.current) setCreating(false)
     }
   }
-
-  function inferEvent(p: Record<string, unknown>): string {
-    if (p.step     !== undefined) return 'status'
-    if (p.docs     !== undefined) return 'rag'
-    if (p.text     !== undefined) return 'chunk'
-    if (p.article  !== undefined) return 'done'
-    if (p.message  !== undefined) return 'error'
-    return ''
+  const stop = () => {
+    stopped.current = true
+    preparationController.current?.abort()
+    controllers.current.forEach(controller => controller.abort())
+  }
+  const close = () => { stop(); onClose() }
+  const apply = async (candidate: GenerationCandidate) => {
+    if (candidate.status !== "complete" || applying) return
+    setApplying(true)
+    setError("")
+    try {
+      await onComplete(candidate.platform === "wechat" ? candidate.content : "", candidate.platform === "toutiao" ? candidate.content : "", candidate.platform)
+      stop()
+      onClose()
+    } catch (cause) { setError(extractErrorMessage(cause, "选用失败，候选稿仍保留")) }
+    finally { if (mounted.current) setApplying(false) }
+  }
+  const copy = async (content: string) => {
+    try { await navigator.clipboard.writeText(content) }
+    catch { setError("复制失败，请选中正文后手动复制") }
   }
 
-  function dispatch(event: string, payload: Record<string, unknown>) {
-    const platform = payload.platform as string | undefined
-    switch (event) {
-      case 'status':
-        setStatusMsg(payload.message as string)
-        // 切换到正在生成的平台 tab
-        if (platform === 'toutiao') setActiveTab('toutiao')
-        else if (platform === 'wechat') setActiveTab('wechat')
-        break
-      case 'chunk': {
-        const t = payload.text as string
-        if (platform === 'toutiao') {
-          fullTextToutiao.current += t
-          setStreamTextToutiao(fullTextToutiao.current)
-        } else {
-          fullTextWechat.current += t
-          setStreamTextWechat(fullTextWechat.current)
-        }
-        break
-      }
-      case 'done':
-        if (platform === 'toutiao') {
-          setToutiaoDone(true)
-          setPhase('done')
-        } else {
-          setWechatDone(true)
-          // 只生成公众号时，公众号完成即进入 done
-          if (platforms === 'wechat') setPhase('done')
-        }
-        break
-      case 'error':
-        setPhase('error')
-        setErrorMsg(payload.message as string)
-        break
-    }
-  }
-
-  const handleApply = () => {
-    onComplete(fullTextWechat.current, fullTextToutiao.current, platforms)
-    onClose()
-  }
-  const handleClose = () => { abortRef.current?.abort(); onClose() }
-
-  const toggleSelect = (dir: string) => {
-    setSelected(prev => {
-      const next = new Set(prev)
-      if (next.has(dir)) next.delete(dir)
-      else               next.add(dir)
-      return next
-    })
-  }
-
-  // 根据选择的平台判断是否全部完成
-  const bothDone = platforms === 'wechat' ? wechatDone
-    : platforms === 'toutiao' ? toutiaoDone
-    : wechatDone && toutiaoDone
-
-  // ── 渲染 ──────────────────────────────────────────────────────────────────
-
-  return (
-    <div className="gm-overlay" onClick={e => { if (e.target === e.currentTarget) handleClose() }}>
-      <div className="gm-modal">
-
-        {/* ── Header ── */}
-        <div className="gm-header">
-          <div className="gm-header-left">
-            <span className="gm-title">AI 生成文章</span>
-            {phase === 'pick' && (
-              <span className="gm-pill gm-pill-rag">选择参考</span>
-            )}
-            {phase === 'generate' && !bothDone && (
-              <span className="gm-pill gm-pill-generate">生成中</span>
-            )}
-            {phase === 'done' && (
-              <span className="gm-pill gm-pill-done">已完成</span>
-            )}
-          </div>
-          <button className="gm-icon-btn" onClick={handleClose} title="关闭">
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* ══════════════════════════════════════════════════════
-            阶段 1：RAG 选择面板
-        ══════════════════════════════════════════════════════ */}
-        {phase === 'pick' && (
-          <div className="gm-pick-body">
-
-            {/* 左：候选文章列表 */}
-            <div className="gm-pick-left">
-              <div className="gm-section-label">
-                往期相关文章
-                {candidates.length > 0 && (
-                  <span className="gm-count">{candidates.length}</span>
-                )}
-              </div>
-
-              {loadingCands && (
-                <div className="gm-searching">
-                  <span className="gm-spinner" />
-                  <span>正在向量检索...</span>
-                </div>
-              )}
-
-              {!loadingCands && candsError && (
-                <div className="gm-no-rag">
-                  <AlertCircle size={14} />
-                  {candsError}
-                  <span>（如未建立索引可直接跳过）</span>
-                </div>
-              )}
-
-              {!loadingCands && !candsError && candidates.length === 0 && (
-                <div className="gm-no-rag">
-                  未找到相关往期文章
-                  <span>（可先在知识库页面建立向量索引）</span>
-                </div>
-              )}
-
-              {!loadingCands && candidates.length > 0 && (
-                <div className="gm-cand-list">
-                  {candidates.map(c => {
-                    const checked = selected.has(c.dir)
-                    const color   = simColor(c.sim)
-                    const isPreviewing = previewDir === c.dir
-                    return (
-                      <div
-                        key={c.dir}
-                        className={`gm-cand-card gm-cand-card--${color} ${checked ? 'gm-cand-card--selected' : ''}`}
-                      >
-                        <div className="gm-cand-row">
-                          <label className="gm-cand-check">
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => toggleSelect(c.dir)}
-                            />
-                            <span className="gm-cand-checkmark" />
-                          </label>
-                          <div className="gm-cand-info" onClick={() => toggleSelect(c.dir)}>
-                            <div className="gm-cand-title">{c.title}</div>
-                            <div className="gm-cand-meta">
-                              <span className="gm-cand-dir">{c.dir}</span>
-                              <span className={`gm-cand-sim gm-cand-sim--${color}`}>{c.sim}% 相似</span>
-                            </div>
-                            <p className="gm-cand-snippet">{c.snippet}</p>
-                          </div>
-                          <button
-                            className={`gm-cand-preview-btn ${isPreviewing ? 'gm-cand-preview-btn--active' : ''}`}
-                            title={isPreviewing ? '收起预览' : '预览全文'}
-                            onClick={() => fetchPreview(c.dir)}
-                          >
-                            {isPreviewing ? <EyeOff size={13} /> : <Eye size={13} />}
-                          </button>
-                        </div>
-
-                        {/* 内联预览区 */}
-                        {isPreviewing && (
-                          <div className="gm-cand-preview">
-                            {loadingPreview ? (
-                              <div className="gm-searching">
-                                <span className="gm-spinner gm-spinner-sm" /> 读取中...
-                              </div>
-                            ) : previewData ? (
-                              <>
-                                <pre className="gm-cand-preview-text">{previewData.content.slice(0, 800)}{previewData.content.length > 800 ? '\n…（截断，完整内容将注入 AI）' : ''}</pre>
-                              </>
-                            ) : previewError ? (
-                              <div className="gm-cand-preview-err">
-                                读取内容失败——服务端可能需要重启以加载最新代码，或该文章暂无内容
-                              </div>
-                            ) : null}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* 右：上下文可视化面板 */}
-            <div className="gm-pick-right">
-              <div className="gm-section-label">
-                将注入的上下文
-                {selected.size > 0 && <span className="gm-count">{selected.size} 篇</span>}
-                {selected.size > 0 && (
-                    <button
-                      className="gm-ctx-refresh-btn"
-                      onClick={() => loadSelectedContext()}
-                      title="预览将注入 AI 的上下文内容"
-                      disabled={loadingCtxPanel}
-                    >
-                      {loadingCtxPanel
-                        ? <><span className="gm-spinner gm-spinner-sm" /> 加载中</>
-                        : <><Eye size={12} /> 预览</>}
-                    </button>
-                  )}
-              </div>
-
-              {/* 平台选择 */}
-              <div className="gm-platform-selector">
-                <span className="gm-platform-selector-label">生成平台</span>
-                <div className="gm-platform-selector-btns">
-                  <button
-                    className={`gm-platform-selector-btn ${platforms === 'wechat' ? 'gm-platform-selector-btn--active' : ''}`}
-                    onClick={() => setPlatforms('wechat')}
-                  >
-                    <span className="gm-platform-badge gm-platform-badge--wechat">仅公众号</span>
-                  </button>
-                  <button
-                    className={`gm-platform-selector-btn ${platforms === 'toutiao' ? 'gm-platform-selector-btn--active' : ''}`}
-                    onClick={() => setPlatforms('toutiao')}
-                  >
-                    <span className="gm-platform-badge gm-platform-badge--toutiao">仅今日头条</span>
-                  </button>
-                  <button
-                    className={`gm-platform-selector-btn ${platforms === 'both' ? 'gm-platform-selector-btn--active' : ''}`}
-                    onClick={() => setPlatforms('both')}
-                    title="将串行调用 2 次大模型，Token 消耗约为单平台的 2 倍"
-                  >
-                    <span className="gm-platform-badge gm-platform-badge--wechat">公众号</span>
-                    <span>+</span>
-                    <span className="gm-platform-badge gm-platform-badge--toutiao">今日头条</span>
-                    <span style={{
-                      marginLeft: 4,
-                      padding: '2px 6px',
-                      background: '#fee2e2',
-                      color: '#b91c1c',
-                      borderRadius: 6,
-                      fontSize: 11,
-                      fontWeight: 600,
-                    }}>2× Token</span>
-                  </button>
-                </div>
-                {platforms === 'both' && (
-                  <div style={{
-                    marginTop: 8,
-                    padding: '8px 12px',
-                    background: '#fffbeb',
-                    border: '1px solid #fde68a',
-                    borderRadius: 8,
-                    color: '#92400e',
-                    fontSize: 12,
-                    lineHeight: 1.5,
-                  }}>
-                    已选「双平台」：将串行调用 2 次大模型，Token 消耗约为单平台的 2 倍，生成耗时也会翻倍。
-                  </div>
-                )}
-              </div>
-
-              {selected.size === 0 ? (
-                <div className="gm-ctx-empty">
-                  <FileText size={28} className="gm-ctx-empty-icon" />
-                  <p>左侧勾选往期文章，AI 会把它们作为风格和结构参考注入到公众号 prompt 中</p>
-                  <p className="gm-ctx-hint">今日头条文章不注入往期参考，直接按平台风格生成</p>
-                </div>
-              ) : (
-                <div className="gm-ctx-selected">
-                  {candidates
-                    .filter(c => selected.has(c.dir))
-                    .map(c => (
-                      <div key={c.dir} className="gm-ctx-item">
-                        <div className="gm-ctx-item-title">{c.title}</div>
-                        <div className="gm-ctx-item-meta">{c.dir} · {c.sim}% 相似</div>
-                      </div>
-                    ))}
-
-                  {showContextPanel && (
-                    <div className="gm-ctx-panel">
-                      <div className="gm-ctx-panel-head">
-                        <span>将注入 AI 的完整上下文</span>
-                        <button onClick={() => setShowContextPanel(false)}><X size={12} /></button>
-                      </div>
-                      {loadingCtxPanel ? (
-                        <div className="gm-ctx-panel-loading">
-                          <span className="gm-spinner gm-spinner-sm" /> 读取文章内容...
-                        </div>
-                      ) : ctxPanelError || !ragContext ? (
-                        <div className="gm-ctx-panel-empty">
-                          读取文章内容失败，请确认已建立 RAG 索引，或服务端已重启
-                        </div>
-                      ) : (
-                        <pre className="gm-ctx-panel-text">{ragContext}</pre>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-          </div>
-        )}
-
-        {/* ══════════════════════════════════════════════════════
-            阶段 2/3：双平台流式生成区
-        ══════════════════════════════════════════════════════ */}
-        {(phase === 'generate' || phase === 'done' || phase === 'error') && (
-          <div className="gm-body">
-
-            {/* 左：已选参考文章（只读） */}
-            <div className="gm-left">
-              <div className="gm-section-label">
-                参考往期内容
-                {selected.size > 0 && <span className="gm-count">{selected.size}</span>}
-              </div>
-
-              {selected.size === 0 && (
-                <div className="gm-no-rag">
-                  本次未使用往期文章参考
-                </div>
-              )}
-
-              {contextArticles.length > 0 && (
-                <div className="gm-rag-list">
-                  {contextArticles.map((a, i) => (
-                    <div key={i} className={`gm-rag-card gm-rag-card-${simColor(candidates.find(c => c.dir === a.dir)?.sim ?? 70)}`}>
-                      <div className="gm-rag-card-header">
-                        <span className="gm-rag-type-badge">
-                          <FileText size={13} />
-                          往期文章
-                        </span>
-                        <span className="gm-rag-dir">{a.dir}</span>
-                      </div>
-                      <p className="gm-rag-snippet">{a.title}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {selected.size > 0 && contextArticles.length === 0 && (
-                <div className="gm-searching">
-                  <span className="gm-spinner gm-spinner-sm" />
-                  <span>加载中...</span>
-                </div>
-              )}
-
-              {/* 生成进度状态 */}
-              <div className="gm-gen-progress">
-                {platforms !== 'toutiao' && (
-                  <div className={`gm-gen-progress-item ${wechatDone ? 'gm-gen-progress-item--done' : (phase === 'generate' && !wechatDone ? 'gm-gen-progress-item--active' : '')}`}>
-                    <span className="gm-platform-badge gm-platform-badge--wechat">公众号</span>
-                    {wechatDone
-                      ? <CheckCircle size={13} className="gm-icon-ok" />
-                      : (phase === 'generate' && !wechatDone ? <span className="gm-spinner gm-spinner-sm" /> : null)
-                    }
-                  </div>
-                )}
-                {platforms !== 'wechat' && (
-                  <div className={`gm-gen-progress-item ${toutiaoDone ? 'gm-gen-progress-item--done' : (phase === 'generate' && (platforms === 'toutiao' || wechatDone) && !toutiaoDone ? 'gm-gen-progress-item--active' : '')}`}>
-                    <span className="gm-platform-badge gm-platform-badge--toutiao">今日头条</span>
-                    {toutiaoDone
-                      ? <CheckCircle size={13} className="gm-icon-ok" />
-                      : ((platforms === 'toutiao' || wechatDone) && !toutiaoDone ? <span className="gm-spinner gm-spinner-sm" /> : null)
-                    }
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* 右：双平台流式输出区 */}
-            <div className="gm-right">
-              {/* 平台切换 Tab（只在两者都生成时显示） */}
-              {platforms === 'both' && (
-                <div className="gm-platform-tabs">
-                  <button
-                    className={`gm-platform-tab ${activeTab === 'wechat' ? 'gm-platform-tab--active' : ''}`}
-                    onClick={() => setActiveTab('wechat')}
-                  >
-                    <span className="gm-platform-badge gm-platform-badge--wechat">公众号</span>
-                    {wechatDone && <CheckCircle size={12} className="gm-icon-ok" />}
-                    {!wechatDone && phase === 'generate' && <span className="gm-spinner gm-spinner-sm" />}
-                  </button>
-                  <button
-                    className={`gm-platform-tab ${activeTab === 'toutiao' ? 'gm-platform-tab--active' : ''}`}
-                    onClick={() => setActiveTab('toutiao')}
-                  >
-                    <span className="gm-platform-badge gm-platform-badge--toutiao">今日头条</span>
-                    {toutiaoDone && <CheckCircle size={12} className="gm-icon-ok" />}
-                    {!toutiaoDone && wechatDone && phase === 'generate' && <span className="gm-spinner gm-spinner-sm" />}
-                  </button>
-                  <div className="gm-section-label" style={{ marginLeft: 'auto' }}>
-                    {phase === 'generate' && <span className="gm-spinner gm-spinner-sm" />}
-                    {phase === 'done'     && <CheckCircle size={13} className="gm-icon-ok" />}
-                    {phase === 'error'    && <AlertCircle size={13} className="gm-icon-err" />}
-                  </div>
-                </div>
-              )}
-
-              {/* 公众号内容（单平台时无 tab，直接显示） */}
-              {platforms !== 'toutiao' && (
-                <div
-                  className="gm-stream"
-                  ref={streamRefWechat}
-                  style={{ display: platforms === 'wechat' || activeTab === 'wechat' ? 'block' : 'none' }}
-                >
-                  {phase === 'error' ? (
-                    <div className="gm-error-msg">
-                      <AlertCircle size={16} />
-                      {errorMsg}
-                    </div>
-                  ) : streamTextWechat ? (
-                    <pre className="gm-stream-text">{streamTextWechat}</pre>
-                  ) : (
-                    <div className="gm-stream-empty">
-                      <span className="gm-spinner" />
-                      <p>{statusMsg || 'AI 正在生成公众号文章...'}</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* 今日头条内容（单平台时无 tab，直接显示） */}
-              {platforms !== 'wechat' && (
-                <div
-                  className="gm-stream"
-                  ref={streamRefToutiao}
-                  style={{ display: platforms === 'toutiao' || activeTab === 'toutiao' ? 'block' : 'none' }}
-                >
-                  {phase === 'error' ? (
-                    <div className="gm-error-msg">
-                      <AlertCircle size={16} />
-                      {errorMsg}
-                    </div>
-                  ) : streamTextToutiao ? (
-                    <pre className="gm-stream-text">{streamTextToutiao}</pre>
-                  ) : wechatDone || platforms === 'toutiao' ? (
-                    <div className="gm-stream-empty">
-                      <span className="gm-spinner" />
-                      <p>AI 正在生成今日头条文章...</p>
-                    </div>
-                  ) : (
-                    <div className="gm-stream-empty gm-stream-empty--waiting">
-                      <p>公众号文章生成完成后，将自动开始生成今日头条版本</p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-          </div>
-        )}
-
-        {/* ── Footer ── */}
-        <div className="gm-footer">
-          <div className="gm-footer-left">
-            {phase === 'pick' && !loadingCands && (
-              <span className="gm-footer-note">
-                {selected.size > 0
-                  ? `已选 ${selected.size} 篇作为公众号参考`
-                  : '不选则跳过往期参考，直接生成'}
-              </span>
-            )}
-            {phase === 'done' && (
-              <span className="gm-footer-note">
-                {platforms === 'wechat' ? '公众号文章已生成完毕'
-                  : platforms === 'toutiao' ? '今日头条文章已生成完毕'
-                  : '公众号 + 今日头条两篇文章已生成完毕'}
-                {contextArticles.length > 0 && `，参考了 ${contextArticles.length} 篇往期文章`}
-              </span>
-            )}
-          </div>
-          <div className="gm-footer-actions">
-            <button className="gm-btn-secondary" onClick={handleClose}>
-              {phase === 'done' ? '关闭' : '取消'}
-            </button>
-            {phase === 'pick' && (
-              <button
-                className="gm-btn-primary"
-                onClick={handleStartGenerate}
-                disabled={loadingCands}
-              >
-                <Zap size={14} />
-                {selected.size > 0 ? `注入 ${selected.size} 篇 · 开始生成` : '直接生成'}
-              </button>
-            )}
-            {phase === 'done' && (
-              <button className="gm-btn-primary" onClick={handleApply}>
-                应用到编辑器
-              </button>
-            )}
-          </div>
-        </div>
-
+  return <div className="gm-overlay">
+    <section className="gm-modal gc-modal" role="dialog" aria-modal="true" aria-label="生成候选稿">
+      <header className="gm-header">
+        <div className="gm-header-left"><strong className="gm-title">生成候选稿</strong><span className="gm-footer-note">{rows.filter(row => row.status === "complete").length} 篇已完成</span></div>
+        <button className="gm-icon-btn" onClick={close} title="关闭并保留候选稿" aria-label="关闭生成窗口"><X size={18} /></button>
+      </header>
+      <div className="gc-settings">
+        <label>生成平台<select value={platform} disabled={busy} onChange={event => setPlatform(event.target.value as CandidatePlatform)}><option value="wechat">公众号母稿</option><option value="toutiao">今日头条版本</option></select></label>
+        <label>候选数量<select value={count} disabled={busy} onChange={event => setCount(Number(event.target.value))}><option value={1}>1 篇</option><option value={2}>2 篇</option><option value={3}>3 篇</option></select></label>
+        <span className="gc-cost">最多两篇并发 · {count} 次模型生成{count > 1 ? "，费用按实际用量增加" : ""}</span>
+        <button className="gm-btn-primary" disabled={busy || loading || applying} onClick={() => void start()}><Zap size={14} />{busy ? "生成中" : "开始生成"}</button>
       </div>
-    </div>
-  )
+      <details className="gc-references">
+        <summary>往期参考 · 已选 {selected.length} 篇</summary>
+        <button className="gm-btn-secondary" disabled={referencesLoading || busy} onClick={() => void loadReferences()}><RefreshCw size={13} />{referencesLoading ? "检索中" : "检索往期文章"}</button>
+        {referenceError && <p role="alert">{referenceError}</p>}
+        {references.map(reference => <label key={reference.dir} title={reference.snippet}>
+          <input type="checkbox" disabled={busy} checked={selected.includes(reference.dir)} onChange={event => setSelected(previous => event.target.checked ? [...previous, reference.dir] : previous.filter(id => id !== reference.dir))} />{reference.title}
+        </label>)}
+      </details>
+      {error && <div className="gc-error" role="alert"><AlertCircle size={16} />{error}</div>}
+      <div className="gc-toolbar">
+        <span>{busy ? "候选稿生成中" : loading ? "正在读取候选稿" : "候选稿"}</span>
+        <div>
+          <button className="gm-btn-secondary" disabled={busy || loading} onClick={() => void reload()} title="刷新候选稿"><RefreshCw size={14} /></button>
+          <button className="gm-btn-secondary" aria-pressed={comparing} onClick={() => setComparing(value => !value)}>对比全文</button>
+          {busy && <button className="gm-btn-secondary" onClick={stop}><Square size={12} />停止生成</button>}
+        </div>
+      </div>
+      <div className={`gc-workspace ${comparing ? "gc-workspace--compare" : ""}`}>
+        <nav className="gc-list" aria-label="候选稿列表">
+          {rows.map(row => <button key={row.id} className={row.id === activeId ? "gc-row gc-row--active" : "gc-row"} onClick={() => setActiveId(row.id)}>
+            <strong>{row.content.match(/^#\s+(.+)$/m)?.[1] || row.label}</strong>
+            <span>{row.platform === "wechat" ? "公众号" : "头条"} · {STATUS[row.status]} · {row.content.length} 字</span>
+            <small>{new Date(row.createdAt).toLocaleTimeString()} · {Math.max(0, Math.round(((row.finishedAt ? Date.parse(row.finishedAt) : now) - Date.parse(row.createdAt)) / 1000))} 秒</small>
+          </button>)}
+        </nav>
+        <div className="gc-drafts">
+          {(comparing ? rows.filter(row => row.batchId === active?.batchId) : active ? [active] : []).map(row => <article className="gc-draft" key={row.id}>
+            <header><strong>{row.label}</strong><span>{STATUS[row.status]}</span>
+              <button className="gm-icon-btn" title="复制正文" aria-label={`复制${row.label}`} disabled={!row.content} onClick={() => void copy(row.content)}><Copy size={15} /></button>
+            </header>
+            <p className={row.status === "interrupted" ? "gc-error" : "gc-message"}>{row.message}</p>
+            <pre>{row.content || "等待正文输出"}</pre>
+            <footer>
+              {(row.status === "interrupted" || row.status === "queued") && <button className="gm-btn-secondary" disabled={busy || applying} onClick={() => { stopped.current = false; void run(row) }}><RefreshCw size={14} />{row.content ? "继续生成" : "重试生成"}</button>}
+              <button className="gm-btn-primary" disabled={row.status !== "complete" || applying} onClick={() => void apply(row)}><CheckCircle size={14} />{applying ? "保存中" : "选用此稿"}</button>
+            </footer>
+          </article>)}
+          {!active && <div className="gc-empty"><FileText size={30} /><span>{loading ? "读取中" : "暂无候选稿"}</span></div>}
+        </div>
+      </div>
+    </section>
+  </div>
 }

@@ -11,6 +11,7 @@
 
 import { spawn } from 'node:child_process'
 import { smokeArticleStream } from './smoke-article-stream.mjs'
+import { smokeCandidates } from './smoke-candidates.mjs'
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve, dirname, join } from 'node:path'
@@ -604,6 +605,10 @@ cases.push({
 cases.push({
   name: '普通文章双平台生成在模型静默期间应持续保活并保存完整正文',
   run: () => smokeArticleStream(BASE, token),
+})
+cases.push({
+  name: '候选稿并发上限、断点续写、原文保护与用户隔离',
+  run: () => smokeCandidates(BASE, token),
 })
 
 ;(async () => {

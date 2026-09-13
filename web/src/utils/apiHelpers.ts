@@ -13,6 +13,7 @@ import {
 } from '../../shared/wechatBlockDsl'
 import type { CanvasDesignTemplateId } from '../../shared/canvasDesignTemplates'
 import type { ArticleWorkflow, ArticleWorkflowEvent, ArticleWorkflowStage } from '../../shared/articleWorkflow'
+import type { CandidateInput, CandidateEvent, GenerationCandidate } from '../../shared/generationCandidate'
 import {
   normalizeCreatorWritingProfile,
   type CreatorWritingProfile,
@@ -185,6 +186,69 @@ export async function fetchArticleWorkflowMetrics(): Promise<{ sampleSize: numbe
 export async function fetchCreatorWritingProfile(): Promise<CreatorWritingProfile> {
   const response = await axios.get('/api/creator-profile')
   return normalizeCreatorWritingProfile(response.data)
+}
+
+export async function fetchGenerationCandidates(articleId: string): Promise<GenerationCandidate[]> {
+  return (await axios.get<GenerationCandidate[]>(`/api/articles/${encodeURIComponent(articleId)}/candidates`)).data
+}
+
+export async function createGenerationCandidates(articleId: string, input: CandidateInput): Promise<GenerationCandidate[]> {
+  return (await axios.post<GenerationCandidate[]>(`/api/articles/${encodeURIComponent(articleId)}/candidates`, input)).data
+}
+
+export async function streamGenerationCandidate(
+  articleId: string, candidateId: string, aiConfig: Record<string, unknown>,
+  signal: AbortSignal, onEvent: (event: CandidateEvent) => void,
+): Promise<void> {
+  const token = localStorage.getItem("auth_token")
+  const response = await fetch(`/api/articles/${encodeURIComponent(articleId)}/candidates/${encodeURIComponent(candidateId)}/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify({ aiConfig }), signal,
+  })
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({})) as { error?: string }
+    throw new Error(body.error || `HTTP ${response.status}`)
+  }
+  if (!response.body) throw new Error("浏览器不支持流式响应")
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
+  let terminal = false
+  const consume = (block: string) => {
+    const event = block.match(/^event:\s*(.+)$/m)?.[1]?.trim()
+    const data = block.split("\n").filter(line => line.startsWith("data:")).map(line => line.slice(5).trim()).join("\n")
+    if (!event || !data) return
+    if (!["candidate", "chunk", "status", "done", "error"].includes(event)) return
+    const payload = JSON.parse(data) as Omit<CandidateEvent, "event">
+    onEvent({ ...payload, event: event as CandidateEvent["event"] })
+    if (event === "done" || event === "error") terminal = true
+  }
+  try {
+    while (!terminal) {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => { void reader.cancel(); reject(new Error("连接长时间没有响应，请重新加载候选稿")) }, 45000)
+      })
+      const { done, value } = await Promise.race([reader.read(), timeout]).finally(() => clearTimeout(timer))
+      buffer += decoder.decode(value, { stream: !done })
+      buffer = buffer.replace(/\r\n/g, "\n")
+      let boundary = buffer.indexOf("\n\n")
+      while (boundary >= 0) {
+        consume(buffer.slice(0, boundary))
+        buffer = buffer.slice(boundary + 2)
+        boundary = buffer.indexOf("\n\n")
+      }
+      if (done) {
+        if (buffer.trim()) consume(buffer)
+        break
+      }
+    }
+    if (!terminal) throw new Error("生成连接中断，已收到的内容仍保留，请重新加载或继续生成")
+  } finally {
+    await reader.cancel().catch(() => {})
+    reader.releaseLock()
+  }
 }
 
 export async function saveCreatorWritingProfile(profile: CreatorWritingProfile): Promise<CreatorWritingProfile> {
