@@ -18,6 +18,7 @@ import {
   maskApiKey,
 } from '../utils'
 import { deleteCoverHistory, clearCoverHistory, getCoverCacheCount } from '../db.js'
+import { mapWithConcurrency } from '../utils/concurrency.ts'
 
 const router = Router()
 
@@ -173,20 +174,16 @@ router.post('/generate-covers-batch', async (req, res) => {
     if (!Array.isArray(covers) || covers.length === 0) return res.status(400).json({ error: '封面列表不能为空' })
     if (covers.length > 10) return res.status(400).json({ error: '单次最多生成 10 个封面' })
 
-    const results = []
-    const errors  = []
-
-    for (let i = 0; i < covers.length; i++) {
+    const outcomes = await mapWithConcurrency(covers, 3, async (cover, i) => {
       try {
-        const { title, content, style, color } = covers[i]
-        if (!title) { errors.push({ index: i, error: '标题不能为空' }); continue }
+        const { title, content, style, color } = cover
+        if (!title) return { error: { index: i, error: '标题不能为空' } }
 
         const cacheKey = generateCacheKey(title, style, color)
         const cached   = getCachedImage(cacheKey)
         if (cached) {
           const h = addToHistory(title, style, color, provider, cached.imageUrl, cacheKey)
-          results.push({ index: i, title, imageUrl: cached.imageUrl, cached: true, historyId: h.id })
-          continue
+          return { result: { index: i, title, imageUrl: cached.imageUrl, cached: true, historyId: h.id } }
         }
 
         if (provider === 'local') {
@@ -194,8 +191,7 @@ router.post('/generate-covers-batch', async (req, res) => {
           const imageUrl    = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
           cacheImage(cacheKey, imageUrl, { title, style, color, provider: 'local' })
           const h = addToHistory(title, style, color, provider, imageUrl, cacheKey)
-          results.push({ index: i, title, imageUrl, cached: false, historyId: h.id })
-          continue
+          return { result: { index: i, title, imageUrl, cached: false, historyId: h.id } }
         }
 
         if (provider === 'openai') {
@@ -205,20 +201,23 @@ router.post('/generate-covers-batch', async (req, res) => {
             cacheImage(cacheKey, imageUrl, { title, style, color, provider: 'openai' })
             const h = addToHistory(title, style, color, provider, imageUrl, cacheKey)
             addImageToLibrary(imageUrl, title, 'cover', [style, color], 'openai')
-            results.push({ index: i, title, imageUrl, cached: false, historyId: h.id })
+            return { result: { index: i, title, imageUrl, cached: false, historyId: h.id } }
           } catch (e) {
             console.error(`OpenAI DALL-E error for ${title}:`, e.message)
             const svg      = generatePlaceholderCover(title, style, color)
             const imageUrl = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
             cacheImage(cacheKey, imageUrl, { title, style, color, provider: 'local' })
             const h = addToHistory(title, style, color, provider, imageUrl, cacheKey)
-            results.push({ index: i, title, imageUrl, cached: false, historyId: h.id, warning: 'OpenAI DALL-E 生成失败，已使用本地模式' })
+            return { result: { index: i, title, imageUrl, cached: false, historyId: h.id, warning: 'OpenAI DALL-E 生成失败，已使用本地模式' } }
           }
         }
+        return { error: { index: i, error: `批量生成暂不支持服务商：${provider}` } }
       } catch (e) {
-        errors.push({ index: i, error: e.message })
+        return { error: { index: i, error: e.message } }
       }
-    }
+    })
+    const results = outcomes.flatMap(outcome => outcome.result ? [outcome.result] : [])
+    const errors = outcomes.flatMap(outcome => outcome.error ? [outcome.error] : [])
 
     res.json({ success: true, results, errors: errors.length > 0 ? errors : undefined, total: covers.length, succeeded: results.length, failed: errors.length })
   } catch (error) {

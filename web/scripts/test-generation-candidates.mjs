@@ -89,7 +89,7 @@ try {
   await page.getByLabel('候选数量').selectOption('3')
   await page.getByRole('button', { name: '开始生成', exact: true }).click()
   await page.getByText('2 篇已完成', { exact: true }).waitFor()
-  assert.equal(maxActive, 2)
+  assert.equal(maxActive, 3)
   assert.equal(calls.length, 3)
   assert.equal(article, '# 原有正文\n\n原文不应被候选稿替换。')
   await page.getByRole('button', { name: '对比全文', exact: true }).click()

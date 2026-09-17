@@ -12,7 +12,6 @@ import path from 'path'
 import {
   aggregateArticleCandidates,
   buildCandidateSearchQuery,
-  buildIndex,
   retrieveRelevant,
   getIndexStatus,
   extractSearchQuery,
@@ -20,6 +19,7 @@ import {
 import { SERVER_AI_CONFIG, DRAFTS_DIR } from '../config.js'
 import { authMiddleware } from '../authMiddleware.js'
 import { logger } from '../logger.js'
+import { buildIndexInWorker } from '../ragIndexWorker.ts'
 
 const router = Router()
 
@@ -91,7 +91,7 @@ export async function triggerBuildIndex(aiConfig, userId, { force = false } = {}
   setImmediate(async () => {
     try {
       state.progress = '扫描文章...'
-      const result = await buildIndex(aiConfig, userId)
+      const result = await buildIndexInWorker(aiConfig, userId)
       state.result = result
       state.progress = `完成（${result.indexed} 篇 / ${result.chunks} 段）`
     } catch (err) {

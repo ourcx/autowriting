@@ -7,6 +7,7 @@
  */
 import fs from "fs"
 import path from "path"
+import crypto from "node:crypto"
 import { HNSWLib } from "@langchain/community/vectorstores/hnswlib"
 import { Embeddings } from "@langchain/core/embeddings"
 import { Document } from "@langchain/core/documents"
@@ -14,6 +15,7 @@ import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters"
 import { DATA_DIR, DRAFTS_DIR, SERVER_AI_CONFIG } from "./config.ts"
 import type { AIConfig, SearchResult, ArticleScore } from "./types.ts"
 import { logger } from "./logger.ts"
+import { replaceDirectoryAtomically } from "./utils/atomicDirectory.ts"
 
 // ── 本地向量模型默认配置 ───────────────────────────────────────────────────────
 const LOCAL_EMBED_MODEL = "Xenova/multilingual-e5-small"
@@ -29,7 +31,7 @@ const KEYWORD_WEIGHT = 0.25
 
 const INDEX_DIR = path.join(DATA_DIR, "rag_index")
 
-function getUserIndexDir(userId?: string): string {
+export function getUserIndexDir(userId?: string): string {
   return userId
     ? path.join(DATA_DIR, "rag_index_users", String(userId))
     : INDEX_DIR
@@ -437,7 +439,11 @@ function collectDocs(userId?: string): RawDoc[] {
 
 // ── 构建/更新索引 ─────────────────────────────────────────────────────────────
 
-export async function buildIndex(aiConfig: AIConfig = {}, userId?: string) {
+export async function buildIndex(
+  aiConfig: AIConfig = {},
+  userId?: string,
+  options: { atomic?: boolean } = {},
+) {
   const { embeddings, mode, model } = await resolveEmbeddings(aiConfig)
 
   const rawDocs = collectDocs(userId)
@@ -451,34 +457,41 @@ export async function buildIndex(aiConfig: AIConfig = {}, userId?: string) {
     }
   }
 
-  const indexDir = getUserIndexDir(userId)
-  fs.mkdirSync(indexDir, { recursive: true })
-  const vectorStore = await HNSWLib.fromDocuments(langchainDocs, embeddings)
-  await vectorStore.save(indexDir)
-
-  saveChunkStore(indexDir, langchainDocs)
-
+  const finalIndexDir = getUserIndexDir(userId)
+  const indexDir = options.atomic ? `${finalIndexDir}.staging-${crypto.randomUUID()}` : finalIndexDir
   let dims: number | string = "?"
-  if (mode === "local" && (_localEmbeddings?._dims)) {
-    dims = _localEmbeddings._dims
-  } else {
-    try {
-      const sample = await embeddings.embedQuery("维度探测")
-      dims = sample.length
-    } catch { /* 忽略 */ }
+  try {
+    fs.mkdirSync(indexDir, { recursive: true })
+    const vectorStore = await HNSWLib.fromDocuments(langchainDocs, embeddings)
+    await vectorStore.save(indexDir)
+
+    saveChunkStore(indexDir, langchainDocs)
+
+    if (mode === "local" && (_localEmbeddings?._dims)) {
+      dims = _localEmbeddings._dims
+    } else {
+      try {
+        const sample = await embeddings.embedQuery("维度探测")
+        dims = sample.length
+      } catch { /* 忽略 */ }
+    }
+
+    const embedKey = mode === "local" ? `local:${model}` : getEmbeddingKey({ ...SERVER_AI_CONFIG as unknown as AIConfig, ...aiConfig })
+
+    saveIndexMeta(indexDir, {
+      embedKey,
+      embedMode: mode,
+      model,
+      dimensions: typeof dims === "number" ? dims : undefined,
+      builtAt: new Date().toISOString(),
+      chunks: langchainDocs.length,
+      docs: rawDocs.length,
+    })
+    if (options.atomic) replaceDirectoryAtomically(indexDir, finalIndexDir)
+  } catch (error) {
+    if (options.atomic && fs.existsSync(indexDir)) fs.rmSync(indexDir, { recursive: true, force: true })
+    throw error
   }
-
-  const embedKey = mode === "local" ? `local:${model}` : getEmbeddingKey({ ...SERVER_AI_CONFIG as unknown as AIConfig, ...aiConfig })
-
-  saveIndexMeta(indexDir, {
-    embedKey,
-    embedMode: mode,
-    model,
-    dimensions: typeof dims === "number" ? dims : undefined,
-    builtAt: new Date().toISOString(),
-    chunks: langchainDocs.length,
-    docs: rawDocs.length,
-  })
 
   logger.info("RAG", `索引构建完成：${rawDocs.length} 篇 / ${langchainDocs.length} chunks / 维度 ${dims} / 模型 ${model}`)
 
