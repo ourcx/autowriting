@@ -60,6 +60,34 @@ export interface XiaohongshuPublishRecord {
   publishedAt: string | null
 }
 
+export type WechatCollectorProvider = "tikhub" | "dajiala"
+export type WechatCollectorSort = "default" | "latest" | "hot"
+export type WechatCollectorTimeRange = "all" | "day" | "week" | "half_year"
+
+export interface WechatCollectorSearchResult {
+  title: string
+  snippet: string
+  url: string
+  source: string
+  publishedAt: string
+  provider: WechatCollectorProvider
+}
+
+export interface WechatCollectorSearchResponse {
+  results: WechatCollectorSearchResult[]
+  cursor: string
+  hasMore: boolean
+  total: number | null
+}
+
+export interface MaterialSearchResult {
+  title: string
+  snippet: string
+  url: string
+  source: string
+  engine?: string
+}
+
 // ── 从 axios/fetch 错误中提取可读的错误信息 ──
 export function extractErrorMessage(err: unknown, fallback = '请求失败，请稍后重试'): string {
   if (err instanceof AxiosError) {
@@ -136,6 +164,76 @@ export async function fetchArticleList() {
     status: ArticleWorkflowStage
     createdAt: string
   }>
+}
+
+export async function searchWechatArticles(input: {
+  provider: WechatCollectorProvider
+  query: string
+  sort: WechatCollectorSort
+  publishTime: WechatCollectorTimeRange
+  cursor?: string
+  page?: number
+}): Promise<WechatCollectorSearchResponse> {
+  const response = await axios.post<WechatCollectorSearchResponse>('/api/materials/wechat-search', input)
+  return response.data
+}
+
+export async function fetchWechatArticle(input: {
+  provider: WechatCollectorProvider
+  url: string
+}): Promise<{
+  title: string
+  content: string
+  url: string
+  source: string
+  publishedAt: string
+}> {
+  const response = await axios.post('/api/materials/wechat-article', input)
+  return response.data as {
+    title: string
+    content: string
+    url: string
+    source: string
+    publishedAt: string
+  }
+}
+
+export async function fetchMaterialUrl(url: string, jinaApiKey: string): Promise<{
+  content: string
+  url: string
+  method: string
+}> {
+  const response = await axios.post('/api/materials/fetch-url', { url, jinaApiKey })
+  return response.data as { content: string; url: string; method: string }
+}
+
+export async function searchMaterials(input: {
+  query: string
+  provider: AIConfig['searchProvider']
+  engine: string
+  num: number
+  searxngUrl?: string
+  apiKey?: string
+  glmApiKey?: string
+}): Promise<{ results: MaterialSearchResult[] }> {
+  const response = await axios.post('/api/materials/search', input)
+  return response.data as { results: MaterialSearchResult[] }
+}
+
+export async function fetchMaterialUrls(urls: string[], jinaApiKey: string): Promise<{
+  results: Array<{ url: string; content: string; ok: boolean; error?: string }>
+}> {
+  const response = await axios.post('/api/materials/fetch-url-batch', { urls, jinaApiKey })
+  return response.data as {
+    results: Array<{ url: string; content: string; ok: boolean; error?: string }>
+  }
+}
+
+export async function appendArticleMaterials(articleId: string, content: string): Promise<void> {
+  await axios.post(`/api/materials/${encodeURIComponent(articleId)}/save`, {
+    content,
+    mode: 'append',
+  })
 }
 
 export async function recordArticleWorkflowEvent(

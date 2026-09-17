@@ -413,6 +413,7 @@
   background: var(--color-surface-soft, #faf5e8);
   cursor: pointer;
   text-align: left;
+  text-decoration: none;
   transition: border-color 0.12s, background 0.12s, transform 0.1s;
 }
 

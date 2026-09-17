@@ -129,6 +129,17 @@ cases.push({
   },
 })
 cases.push({
+  name: '未登录不得调用公众号采集',
+  run: async () => {
+    const r = await fetch(`${BASE}/api/materials/wechat-search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: 'tikhub', query: '测试' }),
+    })
+    if (![401, 403].includes(r.status)) throw new Error(`status=${r.status}`)
+  },
+})
+cases.push({
   name: '未知 API 应返回 JSON 404，不得回退前端页面',
   run: async () => {
     const r = await fetch(`${BASE}/api/does-not-exist`)
@@ -317,6 +328,17 @@ cases.push({
     smokeUserId = j.user?.id
     if (!token) throw new Error('响应中没有 token')
     if (!smokeUserId) throw new Error('响应中没有用户 ID')
+  },
+})
+cases.push({
+  name: '公众号采集应拒绝未知服务商',
+  run: async () => {
+    const r = await fetch(`${BASE}/api/materials/wechat-search`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: 'unknown', query: '测试' }),
+    })
+    if (r.status !== 400) throw new Error(`期望 400，实际 ${r.status}`)
   },
 })
 cases.push({

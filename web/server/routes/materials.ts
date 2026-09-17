@@ -4,6 +4,8 @@
  * POST /api/materials/fetch-url        - Jina Reader 解析 URL，返回 Markdown 正文
  * POST /api/materials/fetch-url-batch  - 批量 Jina Reader 读取全文（并发上限 3）
  * POST /api/materials/search           - Serper/Bing/SearXNG 搜索，返回标题+摘要+URL 列表
+ * POST /api/materials/wechat-search    - 通过付费服务搜索公众号文章
+ * POST /api/materials/wechat-article   - 通过付费服务读取公众号正文
  * POST /api/materials/:articleId/save  - 追加素材片段到 materials.md
  * GET  /api/materials/:articleId       - 读取当前 materials.md 内容
  */
@@ -14,6 +16,13 @@ import { DRAFTS_DIR } from '../config.js'
 import { logger } from '../logger.js'
 import { authMiddleware } from '../authMiddleware.js'
 import { webFetch } from '../utils/search/webFetcher.js'
+import {
+  fetchWechatArticle,
+  searchWechatArticles,
+  type WechatCollectorProvider,
+  type WechatCollectorSort,
+  type WechatCollectorTimeRange,
+} from '../utils/wechatCollector.js'
 
 const router = Router()
 
@@ -140,6 +149,65 @@ router.post('/fetch-url-batch', async (req, res) => {
   }
 
   res.json({ results })
+})
+
+// ── POST /api/materials/wechat-search ────────────────────────────────────────
+// 通过已配置的付费服务搜索公开公众号文章，付费密钥只保留在服务端环境变量中。
+router.post('/wechat-search', async (req, res) => {
+  const query = typeof req.body?.query === 'string' ? req.body.query.trim() : ''
+  const provider = req.body?.provider as WechatCollectorProvider
+  const sort = req.body?.sort as WechatCollectorSort | undefined
+  const publishTime = req.body?.publishTime as WechatCollectorTimeRange | undefined
+  const cursor = typeof req.body?.cursor === 'string' ? req.body.cursor : ''
+  const page = Number(req.body?.page) || 1
+
+  if (!query) return res.status(400).json({ error: '请输入公众号文章关键词' })
+  if (query.length > 100) return res.status(400).json({ error: '搜索关键词不能超过 100 个字符' })
+  if (provider !== 'tikhub' && provider !== 'dajiala') {
+    return res.status(400).json({ error: '公众号采集服务商无效' })
+  }
+  if (sort && !['default', 'latest', 'hot'].includes(sort)) {
+    return res.status(400).json({ error: '排序方式无效' })
+  }
+  if (publishTime && !['all', 'day', 'week', 'half_year'].includes(publishTime)) {
+    return res.status(400).json({ error: '发布时间范围无效' })
+  }
+
+  try {
+    const result = await searchWechatArticles({
+      provider,
+      query,
+      sort,
+      publishTime,
+      cursor,
+      page,
+    })
+    res.json(result)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '公众号文章搜索失败'
+    logger.error('MATERIALS', '公众号文章搜索失败', { provider, error: message })
+    res.status(502).json({ error: message })
+  }
+})
+
+// ── POST /api/materials/wechat-article ───────────────────────────────────────
+// 使用搜索时选择的付费服务读取正文，避免将服务商密钥暴露给浏览器。
+router.post('/wechat-article', async (req, res) => {
+  const provider = req.body?.provider as WechatCollectorProvider
+  const url = typeof req.body?.url === 'string' ? req.body.url.trim() : ''
+  if (provider !== 'tikhub' && provider !== 'dajiala') {
+    return res.status(400).json({ error: '公众号采集服务商无效' })
+  }
+  if (!url) return res.status(400).json({ error: '缺少公众号文章链接' })
+
+  try {
+    const result = await fetchWechatArticle(provider, url)
+    res.json(result)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '公众号文章读取失败'
+    logger.error('MATERIALS', '公众号文章读取失败', { provider, error: message })
+    res.status(502).json({ error: message })
+  }
 })
 
 // ── POST /api/materials/search ────────────────────────────────────────────────

@@ -86,6 +86,7 @@
   border-bottom: 1px solid var(--color-hairline);
   background: var(--color-surface-soft);
   flex-shrink: 0;
+  overflow-x: auto;
 }
 
 .mc-mode-tab {
@@ -104,6 +105,8 @@
   position: relative;
   bottom: -1px;
   border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .mc-mode-tab:hover {
@@ -133,6 +136,81 @@
   gap: 7px;
 }
 
+.mc-wechat-search {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.mc-provider-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border: 1px solid var(--color-hairline);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.mc-provider-option {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 0;
+  background: var(--color-surface-soft);
+  color: var(--color-body);
+  cursor: pointer;
+  text-align: left;
+}
+
+.mc-provider-option + .mc-provider-option {
+  border-left: 1px solid var(--color-hairline);
+}
+
+.mc-provider-option span,
+.mc-provider-option small {
+  display: block;
+}
+
+.mc-provider-option span {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mc-provider-option small {
+  margin-top: 2px;
+  color: var(--color-muted);
+  font-size: 10px;
+}
+
+.mc-provider-option--active {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.mc-provider-option--active small {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.mc-wechat-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mc-select {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--color-hairline);
+  border-radius: 7px;
+  background: var(--color-canvas);
+  color: var(--color-body);
+  font-size: 12px;
+}
+
+.mc-select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
 /* 搜索状态提示条 */
 .mc-search-tip {
   display: flex;
@@ -160,6 +238,12 @@
   background: #eff6ff;
   color: #1d4ed8;
   border: 1px solid #bfdbfe;
+}
+
+.mc-search-tip--paid {
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
 }
 
 .mc-search-row,
@@ -404,6 +488,7 @@
 
 /* 不同来源颜色 */
 .mc-item--search .mc-item-type-badge { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+.mc-item--wechat .mc-item-type-badge { background: #ecfdf5; border-color: #a7f3d0; color: #047857; }
 .mc-item--url    .mc-item-type-badge { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
 .mc-item--paste  .mc-item-type-badge { background: #faf5ff; border-color: #e9d5ff; color: #7c3aed; }
 
@@ -636,4 +721,25 @@
   font-size: 11px;
   font-weight: 600;
   border: 1px solid #bbf7d0;
+}
+
+@media (max-width: 720px) {
+  .mc-mode-tabs {
+    gap: 2px;
+    padding-inline: 8px;
+  }
+
+  .mc-mode-tab {
+    gap: 4px;
+    padding-inline: 7px;
+    font-size: 12px;
+  }
+
+  .mc-search-row {
+    align-items: stretch;
+  }
+
+  .mc-search-row .mc-btn {
+    padding-inline: 10px;
+  }
 }

@@ -17,6 +17,10 @@ export interface ServerConfigStatus {
   coverReady: boolean
   dalleReady: boolean
   stabilityReady: boolean
+  wechatCollectorReady: {
+    tikhub: boolean
+    dajiala: boolean
+  }
 }
 
 // ── Store 状态 ──

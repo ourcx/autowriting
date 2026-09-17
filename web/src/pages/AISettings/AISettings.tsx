@@ -185,6 +185,17 @@ export default function AISettings() {
       section: 'search' as Section,
     },
     {
+      label: '公众号采集',
+      local: false,
+      server: Boolean(
+        serverStatus?.wechatCollectorReady?.tikhub
+        || serverStatus?.wechatCollectorReady?.dajiala
+      ),
+      serverNote: '服务端',
+      color: 'teal',
+      section: 'search' as Section,
+    },
+    {
       label: '图床',
       local: localCdn,
       server: false,
@@ -642,6 +653,43 @@ export default function AISettings() {
                     </div>
                   </>
                 )}
+              </div>
+
+              <div className="as-card">
+                <div className="as-card-label-row">
+                  <span className="as-card-section-label">公众号文章采集</span>
+                  <span className="as-card-tag as-card-tag--teal">付费服务</span>
+                </div>
+                <p className="as-card-desc">
+                  在“素材采集”中按关键词搜索公众号文章，并通过同一服务读取正文。密钥仅从服务端环境变量读取。
+                </p>
+                <div className="as-provider-grid">
+                  <a
+                    className={`as-provider-tile${serverStatus?.wechatCollectorReady?.tikhub ? ' as-provider-tile--active' : ''}`}
+                    href="https://user.tikhub.io/dashboard/api"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <span className="as-pt-name">TikHub</span>
+                    <span className="as-pt-desc">
+                      {serverStatus?.wechatCollectorReady?.tikhub ? 'TIKHUB_API_KEY 已配置' : '设置 TIKHUB_API_KEY'}
+                    </span>
+                  </a>
+                  <a
+                    className={`as-provider-tile${serverStatus?.wechatCollectorReady?.dajiala ? ' as-provider-tile--active' : ''}`}
+                    href="https://www.dajiala.com/main/interface?actnav=0"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <span className="as-pt-name">极致了数据</span>
+                    <span className="as-pt-desc">
+                      {serverStatus?.wechatCollectorReady?.dajiala ? 'DAJIALA_API_KEY 已配置' : '设置 DAJIALA_API_KEY'}
+                    </span>
+                  </a>
+                </div>
+                <p className="as-hint">
+                  修改环境变量后需要重启后端。平台不会把密钥返回给浏览器或写入日志。
+                </p>
               </div>
 
               {/* Jina Reader 配置 */}

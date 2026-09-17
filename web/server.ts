@@ -121,6 +121,10 @@ app.get("/api/config/status", (_req, res) => {
     openaiReady: hasOpenaiKey, coverProvider: (SERVER_AI_CONFIG.coverProvider as string) || "local",
     coverReady: !!(hasCoverKey || hasStabilityKey || hasSiliconflowKey || (SERVER_AI_CONFIG.coverProvider === "local")),
     dalleReady: hasCoverKey, stabilityReady: hasStabilityKey, siliconflowReady: hasSiliconflowKey,
+    wechatCollectorReady: {
+      tikhub: !!SERVER_AI_CONFIG.tikhubApiKey,
+      dajiala: !!SERVER_AI_CONFIG.dajialaApiKey,
+    },
   })
 })
 

@@ -1,32 +1,37 @@
 /**
  * MaterialsCollector — 素材采集面板
- * 三种模式：搜索引擎（Serper/Bing/SearXNG）/ URL 解析（Jina）/ 手动粘贴
+ * 四种模式：网页搜索 / 公众号采集 / URL 解析 / 手动粘贴
  * 搜索结果支持「读取全文」（单条 & 批量），采集后一键追加到 materials.md
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Link, Search, ClipboardPaste, Plus, Check,
   Loader2, ExternalLink, ChevronDown, ChevronUp, AlertCircle,
-  Calendar, X, BookOpen, Globe,
+  Calendar, X, BookOpen, Globe, MessageCircle,
 } from 'lucide-react'
 import { toast } from '../Toast/Toast'
+import {
+  appendArticleMaterials,
+  fetchMaterialUrl,
+  fetchMaterialUrls,
+  fetchWechatArticle,
+  searchMaterials,
+  searchWechatArticles,
+  type MaterialSearchResult,
+  type WechatCollectorProvider,
+  type WechatCollectorSort,
+  type WechatCollectorTimeRange,
+} from '../../utils/apiHelpers'
 import './MaterialsCollector.css'
-
-interface SearchResult {
-  title:   string
-  snippet: string
-  url:     string
-  source:  string
-  engine?: string
-}
 
 interface CollectedItem {
   id:           string
-  type:         'url' | 'search' | 'paste'
+  type:         'url' | 'search' | 'wechat' | 'paste'
   title:        string
   content:      string
   url?:         string
   source?:      string
+  provider?:    WechatCollectorProvider
   selected:     boolean
   expanded:     boolean
   dateTag:      string    // 可选时间标签，格式 YYYY-MM-DD 或空字符串
@@ -42,6 +47,10 @@ interface Props {
   searxngUrl?:    string
   glmApiKey?:     string
   jinaApiKey?:    string
+  wechatCollectorReady?: {
+    tikhub: boolean
+    dajiala: boolean
+  }
   onSaved?:       () => void
 }
 
@@ -67,11 +76,18 @@ export default function MaterialsCollector({
   searxngUrl,
   glmApiKey,
   jinaApiKey,
+  wechatCollectorReady = { tikhub: false, dajiala: false },
   onSaved,
 }: Props) {
-  const [mode, setMode]               = useState<'url' | 'search' | 'paste'>('search')
+  const [mode, setMode]               = useState<'url' | 'search' | 'wechat' | 'paste'>('search')
   const [urlInput, setUrlInput]       = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [wechatQuery, setWechatQuery] = useState('')
+  const [wechatProvider, setWechatProvider] = useState<WechatCollectorProvider>(
+    wechatCollectorReady.dajiala && !wechatCollectorReady.tikhub ? 'dajiala' : 'tikhub'
+  )
+  const [wechatSort, setWechatSort] = useState<WechatCollectorSort>('default')
+  const [wechatPublishTime, setWechatPublishTime] = useState<WechatCollectorTimeRange>('all')
   const [pasteText, setPasteText]     = useState('')
   const [pasteTitle, setPasteTitle]   = useState('')
   const [loading, setLoading]         = useState(false)
@@ -84,19 +100,13 @@ export default function MaterialsCollector({
 
   // 是否可以使用搜索（SearXNG 不需要 key）
   const canSearch = searchProvider === 'searxng' || !!searchApiKey
+  const canSearchWechat = wechatCollectorReady[wechatProvider]
 
-  // ── 工具：带鉴权的 fetch ───────────────────────────────────────────────────
-  function authFetch(url: string, options: RequestInit = {}) {
-    const token = localStorage.getItem('auth_token')
-    return fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        ...(options.headers as Record<string, string> || {}),
-      },
-    })
-  }
+  useEffect(() => {
+    if (wechatCollectorReady[wechatProvider]) return
+    if (wechatCollectorReady.tikhub) setWechatProvider('tikhub')
+    else if (wechatCollectorReady.dajiala) setWechatProvider('dajiala')
+  }, [wechatCollectorReady, wechatProvider])
 
   // ── URL 解析 ──────────────────────────────────────────────────────────────
   async function handleFetchUrl() {
@@ -108,12 +118,7 @@ export default function MaterialsCollector({
     }
     setLoading(true)
     try {
-      const res  = await authFetch('/api/materials/fetch-url', {
-        method:  'POST',
-        body:    JSON.stringify({ url, jinaApiKey: jinaApiKey || '' }),
-      })
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
+      const data = await fetchMaterialUrl(url, jinaApiKey || '')
 
       const hostname = new URL(url).hostname
       const firstLine = data.content.split('\n').find((l: string) => l.trim()) || hostname
@@ -165,14 +170,17 @@ export default function MaterialsCollector({
         body.apiKey = searchApiKey
       }
 
-      const res  = await authFetch('/api/materials/search', {
-        method:  'POST',
-        body:    JSON.stringify(body),
+      const data = await searchMaterials(body as {
+        query: string
+        provider: Props['searchProvider']
+        engine: string
+        num: number
+        searxngUrl?: string
+        apiKey?: string
+        glmApiKey?: string
       })
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
 
-      const results: SearchResult[] = data.results || []
+      const results: MaterialSearchResult[] = data.results || []
       if (results.length === 0) {
         toast.warn('没有搜索到相关结果')
         return
@@ -199,26 +207,95 @@ export default function MaterialsCollector({
     }
   }
 
+  // ── 公众号文章搜索 ────────────────────────────────────────────────────────
+  async function handleWechatSearch() {
+    const query = wechatQuery.trim()
+    if (!query) return
+    if (!canSearchWechat) {
+      const envName = wechatProvider === 'tikhub' ? 'TIKHUB_API_KEY' : 'DAJIALA_API_KEY'
+      toast.error(`服务端未配置 ${envName}`)
+      return
+    }
+
+    setLoading(true)
+    try {
+      const data = await searchWechatArticles({
+        provider: wechatProvider,
+        query,
+        sort: wechatSort,
+        publishTime: wechatPublishTime,
+      })
+      const existingUrls = new Set(items.map(item => item.url).filter(Boolean))
+      const newItems: CollectedItem[] = data.results
+        .filter(result => !existingUrls.has(result.url))
+        .map(result => ({
+          id: nextId(),
+          type: 'wechat',
+          title: result.title,
+          content: result.snippet,
+          url: result.url,
+          source: result.source,
+          provider: result.provider,
+          selected: false,
+          expanded: false,
+          dateTag: result.publishedAt ? result.publishedAt.slice(0, 10) : defaultDateTag,
+          fullFetched: false,
+        }))
+
+      if (newItems.length === 0) {
+        toast.warn(data.results.length ? '搜索结果已在当前列表中' : '没有搜索到公众号文章')
+        return
+      }
+      setItems(prev => [...newItems, ...prev])
+      toast.success(`找到 ${newItems.length} 篇公众号文章`)
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : '公众号文章搜索失败')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // ── 单条读取全文 ─────────────────────────────────────────────────────────
   async function handleFetchFullText(id: string, url: string) {
     // 标记 fetching
     setItems(prev => prev.map(it => it.id === id ? { ...it, fetching: true } : it))
     try {
-      const res  = await authFetch('/api/materials/fetch-url', {
-        method:  'POST',
-        body:    JSON.stringify({ url, jinaApiKey: jinaApiKey || '' }),
-      })
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
+      const target = items.find(item => item.id === id)
+      let articleData: {
+        title: string
+        content: string
+        source: string
+        publishedAt: string
+      }
+      if (target?.type === 'wechat' && target.provider) {
+        articleData = await fetchWechatArticle({ provider: target.provider, url })
+      } else {
+        const data = await fetchMaterialUrl(url, jinaApiKey || '')
+        articleData = {
+          title: target?.title || '',
+          content: data.content,
+          source: target?.source || '',
+          publishedAt: '',
+        }
+      }
 
       // 用全文替换摘要，并自动勾选
       setItems(prev => prev.map(it =>
         it.id === id
-          ? { ...it, content: data.content, fetching: false, fullFetched: true, selected: true, expanded: false }
+          ? {
+              ...it,
+              title: articleData.title || it.title,
+              content: articleData.content,
+              source: articleData.source || it.source,
+              dateTag: articleData.publishedAt ? articleData.publishedAt.slice(0, 10) : it.dateTag,
+              fetching: false,
+              fullFetched: true,
+              selected: true,
+              expanded: false,
+            }
           : it
       ))
-      const methodTip = data.method === 'direct' ? '（直接抓取，部分动态页面内容可能不完整）' : ''
-      toast.success(`全文读取成功${methodTip}`)
+      toast.success('全文读取成功')
     } catch (e: unknown) {
       setItems(prev => prev.map(it => it.id === id ? { ...it, fetching: false } : it))
       const msg = (e as Error).message
@@ -244,11 +321,8 @@ export default function MaterialsCollector({
     ))
 
     try {
-      const res  = await authFetch('/api/materials/fetch-url-batch', {
-        method:  'POST',
-        body:    JSON.stringify({ urls: targets.map(t => t.url), jinaApiKey: jinaApiKey || '' }),
-      })
-      const data = await res.json()
+      const urls = targets.flatMap(target => target.url ? [target.url] : [])
+      const data = await fetchMaterialUrls(urls, jinaApiKey || '')
       const results: { url: string; content: string; ok: boolean; error?: string }[] = data.results || []
 
       // 按 url 匹配，更新内容
@@ -335,7 +409,7 @@ export default function MaterialsCollector({
       for (const item of selected) {
         const key = item.dateTag || '__no_date__'
         if (!groups.has(key)) groups.set(key, [])
-        groups.get(key)!.push(item)
+        groups.get(key)?.push(item)
       }
 
       // 生成最终素材文本
@@ -347,7 +421,7 @@ export default function MaterialsCollector({
         .sort()
 
       for (const dateKey of dateKeys) {
-        const groupItems = groups.get(dateKey)!
+        const groupItems = groups.get(dateKey) || []
         parts.push(`\n## 📅 ${formatDateTag(dateKey)}`)
         for (const it of groupItems) {
           const header = it.url
@@ -359,7 +433,7 @@ export default function MaterialsCollector({
 
       // 再输出无时间标签的
       if (groups.has('__no_date__')) {
-        const noDateItems = groups.get('__no_date__')!
+        const noDateItems = groups.get('__no_date__') || []
         for (const it of noDateItems) {
           const header = it.url
             ? `### ${it.title}\n> 来源：${it.source || it.url}  \n> URL：${it.url}`
@@ -370,12 +444,7 @@ export default function MaterialsCollector({
 
       const content = parts.join('\n\n')
 
-      const res  = await authFetch(`/api/materials/${articleId}/save`, {
-        method:  'POST',
-        body:    JSON.stringify({ content, mode: 'append' }),
-      })
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
+      await appendArticleMaterials(articleId, content)
 
       // 移除已保存的条目
       setItems(prev => prev.filter(it => !it.selected))
@@ -420,6 +489,7 @@ export default function MaterialsCollector({
       <div className="mc-mode-tabs">
         {([
           ['search', <Search size={13} />,         '搜索采集'],
+          ['wechat', <MessageCircle size={13} />,  '公众号采集'],
           ['url',    <Link size={13} />,            'URL 解析'],
           ['paste',  <ClipboardPaste size={13} />,  '手动粘贴'],
         ] as [typeof mode, React.ReactNode, string][]).map(([id, icon, label]) => (
@@ -480,6 +550,81 @@ export default function MaterialsCollector({
                 搜索结果仅含摘要，点击「读全文」可获取完整正文
               </div>
             )}
+          </div>
+        )}
+
+        {mode === 'wechat' && (
+          <div className="mc-wechat-search">
+            <div className="mc-provider-toggle" aria-label="公众号采集服务商">
+              {([
+                ['tikhub', 'TikHub', '$0.01 / 次'],
+                ['dajiala', '极致了数据', '约 ¥0.5 / 次'],
+              ] as Array<[WechatCollectorProvider, string, string]>).map(([provider, label, price]) => (
+                <button
+                  key={provider}
+                  type="button"
+                  className={`mc-provider-option${wechatProvider === provider ? ' mc-provider-option--active' : ''}`}
+                  onClick={() => setWechatProvider(provider)}
+                >
+                  <span>{label}</span>
+                  <small>{wechatCollectorReady[provider] ? price : '未配置'}</small>
+                </button>
+              ))}
+            </div>
+
+            <div className="mc-wechat-filters">
+              <select
+                className="mc-select"
+                aria-label="公众号文章排序"
+                value={wechatSort}
+                onChange={event => setWechatSort(event.target.value as WechatCollectorSort)}
+              >
+                <option value="default">相关度</option>
+                <option value="latest">最新发布</option>
+                <option value="hot">热度优先</option>
+              </select>
+              <select
+                className="mc-select"
+                aria-label="公众号文章发布时间"
+                value={wechatPublishTime}
+                onChange={event => setWechatPublishTime(event.target.value as WechatCollectorTimeRange)}
+              >
+                <option value="all">不限时间</option>
+                <option value="day">最近一天</option>
+                <option value="week">最近七天</option>
+                <option value="half_year">最近半年</option>
+              </select>
+            </div>
+
+            <div className="mc-search-row">
+              <input
+                className="mc-input"
+                placeholder="输入主题、机构或文章关键词"
+                value={wechatQuery}
+                onChange={event => setWechatQuery(event.target.value)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter' && !loading && canSearchWechat) void handleWechatSearch()
+                }}
+                disabled={loading || !canSearchWechat}
+                maxLength={100}
+              />
+              <button
+                type="button"
+                className="mc-btn mc-btn--primary"
+                onClick={() => void handleWechatSearch()}
+                disabled={loading || !wechatQuery.trim() || !canSearchWechat}
+              >
+                {loading ? <Loader2 size={14} className="mc-spin" /> : <Search size={14} />}
+                {loading ? '搜索中...' : '搜索公众号'}
+              </button>
+            </div>
+
+            <div className={`mc-search-tip${canSearchWechat ? ' mc-search-tip--paid' : ' mc-search-tip--warn'}`}>
+              {canSearchWechat ? <BookOpen size={12} /> : <AlertCircle size={12} />}
+              {canSearchWechat
+                ? `搜索会产生服务商费用；读取单篇正文${wechatProvider === 'tikhub' ? '约 $0.01' : '约 ¥0.045'}`
+                : `请在服务端环境变量中配置 ${wechatProvider === 'tikhub' ? 'TIKHUB_API_KEY' : 'DAJIALA_API_KEY'}`}
+            </div>
           </div>
         )}
 
@@ -571,7 +716,7 @@ export default function MaterialsCollector({
             {items.map(item => (
               <div
                 key={item.id}
-                className={`mc-item${item.selected ? ' mc-item--selected' : ''} mc-item--${item.type}${item.fullFetched && item.type === 'search' ? ' mc-item--full' : ''}`}
+                className={`mc-item${item.selected ? ' mc-item--selected' : ''} mc-item--${item.type}${item.fullFetched && (item.type === 'search' || item.type === 'wechat') ? ' mc-item--full' : ''}`}
               >
                 <div className="mc-item-header">
                   <label className="mc-item-check">
@@ -583,11 +728,12 @@ export default function MaterialsCollector({
                     <span className={`mc-item-type-badge mc-badge--${item.type}`}>
                       {item.type === 'url'    && <Link size={11} />}
                       {item.type === 'search' && <Search size={11} />}
+                      {item.type === 'wechat' && <MessageCircle size={11} />}
                       {item.type === 'paste'  && <ClipboardPaste size={11} />}
                       {item.source || (item.type === 'paste' ? '粘贴' : item.type)}
                     </span>
                     {/* 全文标记 */}
-                    {item.type === 'search' && item.fullFetched && (
+                    {(item.type === 'search' || item.type === 'wechat') && item.fullFetched && (
                       <span className="mc-full-badge">全文</span>
                     )}
                     <span className="mc-item-title">{item.title}</span>
@@ -618,19 +764,19 @@ export default function MaterialsCollector({
                       )}
                     </div>
 
-                    {/* 读取全文按钮（仅 search 类型且未读全文时显示） */}
-                    {item.type === 'search' && !item.fullFetched && item.url && (
+                    {/* 搜索结果先展示摘要，确认后再读取全文；公众号服务会产生单篇费用。 */}
+                    {(item.type === 'search' || item.type === 'wechat') && !item.fullFetched && item.url && (
                       <button
                         className="mc-fetch-btn"
-                        onClick={() => handleFetchFullText(item.id, item.url!)}
+                        onClick={() => item.url && handleFetchFullText(item.id, item.url)}
                         disabled={item.fetching}
-                        title="用 Jina Reader 读取完整正文"
+                        title={item.type === 'wechat' ? '通过付费服务读取完整正文' : '用 Jina Reader 读取完整正文'}
                       >
                         {item.fetching
                           ? <Loader2 size={12} className="mc-spin" />
                           : <BookOpen size={12} />
                         }
-                        {item.fetching ? '读取中' : '读全文'}
+                        {item.fetching ? '读取中' : item.type === 'wechat' ? '读取正文' : '读全文'}
                       </button>
                     )}
 
@@ -690,6 +836,17 @@ export default function MaterialsCollector({
               <p>输入关键词搜索，获取摘要后可点击「读全文」获取完整内容</p>
               {searchProvider === 'searxng' && (
                 <span className="mc-empty-badge">SearXNG 免费搜索已启用</span>
+              )}
+            </div>
+          )}
+          {mode === 'wechat' && (
+            <div className="mc-empty-inner">
+              <MessageCircle size={28} className="mc-empty-icon" />
+              <p>搜索公开公众号文章，确认摘要后再按需读取正文</p>
+              {canSearchWechat && (
+                <span className="mc-empty-badge">
+                  {wechatProvider === 'tikhub' ? 'TikHub 已启用' : '极致了数据已启用'}
+                </span>
               )}
             </div>
           )}

@@ -116,7 +116,11 @@ export default function ArticleEditor() {
   }, [reloadTemplates])
 
   // 从 store 读取配置就绪状态（本地 + 服务端综合判断）
-  const { localConfig: aiConfig, articleReady: apiKeyReady } = useAIReadiness()
+  const {
+    localConfig: aiConfig,
+    articleReady: apiKeyReady,
+    serverStatus,
+  } = useAIReadiness()
 
   // 首次挂载时拉一次服务端状态
   useEffect(() => { fetchServerStatus() }, [])
@@ -628,6 +632,7 @@ export default function ArticleEditor() {
                   searxngUrl={aiConfig.searxngUrl || ''}
                   glmApiKey={aiConfig.glmApiKey || aiConfig.articleApiKey || ''}
                   jinaApiKey={aiConfig.jinaApiKey || ''}
+                  wechatCollectorReady={serverStatus?.wechatCollectorReady}
                   onSaved={fetchArticleData}
                 />
               </div>

@@ -195,4 +195,8 @@ export const SERVER_AI_CONFIG = {
   searchEngine: process.env.SEARCH_ENGINE || 'bing',
   searxngUrl: process.env.SEARXNG_URL || '',
   jinaApiKey: process.env.JINA_API_KEY || '',
+
+  // 公众号文章采集。密钥仅保存在服务端，避免付费凭证进入浏览器或接口响应。
+  tikhubApiKey: process.env.TIKHUB_API_KEY || '',
+  dajialaApiKey: process.env.DAJIALA_API_KEY || '',
 }
