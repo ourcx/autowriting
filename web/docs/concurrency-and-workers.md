@@ -29,6 +29,8 @@ HTTP 主线程
 
 只保留一个 worker，是为了复用已经加载的本地模型，并避免多个索引任务同时占用大量内存。worker 内还有 Promise 队列，即使以后主线程同时提交多个任务，也会逐个执行。
 
+Worker 显式使用 `--import tsx` 加载 TypeScript。不能依赖 `process.execArgv`：通过 `tsx server.ts` 启动时，父进程的参数里未必包含 TypeScript loader，直接创建 `.ts` Worker 会报 `Unknown file extension ".ts"`。
+
 ## 索引为什么要原子替换
 
 新索引先写到 `rag_index_users/<user>.staging-<uuid>`。全部文件写完后，旧索引先改名为备份目录，新索引再改名到正式目录。成功后删除备份；替换失败则恢复旧目录。这样 worker 崩溃或构建失败时，线上检索仍能使用上一版完整索引。
