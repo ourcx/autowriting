@@ -164,14 +164,7 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
       setRows(previous => [...created, ...previous])
       setActiveId(created[0].id)
       clearTimeout(preparationTimeout)
-      let next = 0
-      const worker = async () => {
-        while (!stopped.current && next < created.length) {
-          const row = created[next++]
-          await run(row)
-        }
-      }
-      await Promise.all([worker(), worker()])
+      await Promise.all(created.map(candidate => run(candidate)))
     } catch (cause) { if (mounted.current) setError(extractErrorMessage(cause)) }
     finally {
       clearTimeout(preparationTimeout)
@@ -215,7 +208,7 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
       <div className="gc-settings">
         <label>生成平台<select value={platform} disabled={busy} onChange={event => setPlatform(event.target.value as CandidatePlatform)}><option value="wechat">公众号母稿</option><option value="toutiao">今日头条版本</option></select></label>
         <label>候选数量<select value={count} disabled={busy} onChange={event => setCount(Number(event.target.value))}><option value={1}>1 篇</option><option value={2}>2 篇</option><option value={3}>3 篇</option></select></label>
-        <span className="gc-cost">最多两篇并发 · {count} 次模型生成{count > 1 ? "，费用按实际用量增加" : ""}</span>
+        <span className="gc-cost">所选候选稿同时生成 · {count} 次模型调用{count > 1 ? "，费用按实际用量增加" : ""}</span>
         <button className="gm-btn-primary" disabled={busy || loading || applying} onClick={() => void start()}><Zap size={14} />{busy ? "生成中" : "开始生成"}</button>
       </div>
       <details className="gc-references">

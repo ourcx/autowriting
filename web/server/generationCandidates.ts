@@ -103,10 +103,14 @@ export function createCandidates(userId: string, articleId: string, input: Candi
 const running = new Set<string>()
 const perUser = new Map<string, number>()
 let totalRunning = 0
+const MAX_CONCURRENT_PER_USER = 3
+const MAX_CONCURRENT_TOTAL = 8
 
 export function acquireCandidate(userId: string, id: string): () => void {
   if (running.has(id)) throw new CandidateError("这篇候选稿正在生成", 409)
-  if ((perUser.get(userId) || 0) >= 2 || totalRunning >= 8) throw new CandidateError("生成任务较多，请稍后重试", 429)
+  if ((perUser.get(userId) || 0) >= MAX_CONCURRENT_PER_USER || totalRunning >= MAX_CONCURRENT_TOTAL) {
+    throw new CandidateError("生成任务较多，请稍后重试", 429)
+  }
   running.add(id)
   perUser.set(userId, (perUser.get(userId) || 0) + 1)
   totalRunning += 1

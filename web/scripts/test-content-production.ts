@@ -5,6 +5,7 @@ import {
   formatCreatorProfileForPrompt,
   normalizeCreatorWritingProfile,
 } from "../shared/contentProduction.ts"
+import { acquireCandidate, CandidateError } from "../server/generationCandidates.ts"
 
 const profile = normalizeCreatorWritingProfile({
   audience: "大学生",
@@ -31,5 +32,19 @@ const audit = auditArticleSources(
 assert.equal(audit.sources.length, 1)
 assert.equal(audit.claims.length, 2)
 assert.equal(audit.unsupportedCount, 1)
+
+const releaseCandidates = [
+  acquireCandidate("concurrency-test-user", "candidate-1"),
+  acquireCandidate("concurrency-test-user", "candidate-2"),
+  acquireCandidate("concurrency-test-user", "candidate-3"),
+]
+try {
+  assert.throws(
+    () => acquireCandidate("concurrency-test-user", "candidate-4"),
+    (error: unknown) => error instanceof CandidateError && error.statusCode === 429,
+  )
+} finally {
+  releaseCandidates.forEach(release => release())
+}
 
 console.log("账号写作档案、平台版本对比与事实来源检查通过")
