@@ -1147,7 +1147,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                 {xhsPushing ? '同步发布中...' : xhsPushDone ? '已同步发布！' : '一键发布长文'}
               </button>
               <a
-                href="https://creator.xiaohongshu.com/publish/publish?from=menu&target=article"
+                href="https://creator.xiaohongshu.com/publish/publish?from=menu&target=video"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="wr-xhs-action wr-xhs-action--open"

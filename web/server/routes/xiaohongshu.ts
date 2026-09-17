@@ -23,7 +23,7 @@ import { authMiddleware } from "../authMiddleware.ts"
 const router = Router()
 router.use(authMiddleware)
 
-const XIAOHONGSHU_PUBLISH_URL = "https://creator.xiaohongshu.com/publish/publish?from=menu&target=article"
+const XIAOHONGSHU_PUBLISH_URL = "https://creator.xiaohongshu.com/publish/publish?from=menu&target=video"
 const TITLE_SAFETY_MAX_LENGTH = 500
 const CONTENT_MAX_LENGTH = 1000
 const ARTICLE_CONTENT_MAX_LENGTH = 10000
@@ -31,11 +31,17 @@ const MAX_IMAGES = 9
 // 同一 tab 会同时渲染埋点覆盖层（button-hp-installed）和真实 Vue 节点。
 // 覆盖层带 aria-hidden，真正的可点击节点带 data-hp-bound。
 const IMAGE_NOTE_TAB = ".creator-tab[data-hp-bound]:has-text('上传图文')"
+const ARTICLE_TAB_SELECTORS = [
+  ".creator-tab[data-hp-bound]:has-text('写长文')",
+  ".creator-tab:not([aria-hidden='true']):has-text('写长文')",
+  "[role='tab']:has-text('写长文')",
+]
 const ARTICLE_EDITOR = ".tiptap.ProseMirror[contenteditable='true']"
 const ARTICLE_TITLE = ".rich-editor-title textarea.d-text:not(.d-textarea-shadow)"
 const ARTICLE_SUMMARY = "[data-dom-type='summary']"
 const ARTICLE_FINAL_TITLE = 'input[placeholder*="填写标题"]'
 const KEEP_XIAOHONGSHU_BROWSER_OPEN_ON_FAILURE = process.env.XIAOHONGSHU_KEEP_BROWSER_OPEN !== "false"
+const XIAOHONGSHU_HEADLESS = process.env.XIAOHONGSHU_HEADLESS !== "false"
 
 function parseCookies(rawCookies: unknown): Cookie[] | null {
   try {
@@ -376,6 +382,50 @@ async function setCoverSetting(page: import("playwright").Page, label: string, e
   if (checked !== enabled) await checkbox.click()
 }
 
+async function enterLongArticleEditor(page: import("playwright").Page): Promise<void> {
+  if (await waitForAnySelector(page, [ARTICLE_EDITOR], 1500)) {
+    logger.info("XIAOHONGSHU", "已直达小红书新长文编辑器")
+    return
+  }
+
+  const articleTab = await findFirstVisible(page, ARTICLE_TAB_SELECTORS)
+  if (!articleTab) {
+    await logPageState(page, "统一发布页未找到写长文入口")
+    await captureFailureArtifacts(page, "统一发布页未找到写长文入口")
+    throw new Error("未找到小红书“写长文”入口，平台页面可能已更新")
+  }
+
+  logger.info("XIAOHONGSHU", "从统一发布页切换到写长文", { url: page.url() })
+  await articleTab.click({ force: true })
+
+  if (await waitForAnySelector(page, [ARTICLE_EDITOR], 5000)) {
+    logger.info("XIAOHONGSHU", "写长文入口已打开编辑器")
+    return
+  }
+
+  const newCreation = await findFirstVisible(page, [
+    'button.ce-btn.bg-red:has-text("新的创作")',
+    'button.new-btn:has-text("新的创作")',
+    'button:has-text("新的创作")',
+    'button:has-text("新建创作")',
+    '[role="button"]:has-text("新的创作")',
+    '[role="button"]:has-text("新建创作")',
+  ])
+  if (!newCreation) {
+    await logPageState(page, "写长文首页未找到新的创作")
+    await captureFailureArtifacts(page, "写长文首页未找到新的创作")
+    throw new Error("已进入小红书长文首页，但未找到“新的创作”按钮，请检查平台页面状态")
+  }
+
+  await newCreation.click({ force: true })
+  if (!await waitForAnySelector(page, [ARTICLE_EDITOR], 30000)) {
+    await logPageState(page, "新的创作后未进入编辑器")
+    await captureFailureArtifacts(page, "新的创作后无编辑器")
+    throw new Error("点击“新的创作”后未进入长文编辑器，请检查平台页面状态")
+  }
+  logger.info("XIAOHONGSHU", "新的创作已打开长文编辑器")
+}
+
 async function applyLongArticleLayout(page: import("playwright").Page): Promise<void> {
   const nextStepSelectors = [
     '.footer-new button.submit:has-text("下一步")',
@@ -668,12 +718,12 @@ async function publishNote(input: {
     original: boolean
   }
 }): Promise<string | null> {
-  logger.info("XIAOHONGSHU", "启动可见浏览器调试发布流程", {
-    headless: true,
+  logger.info("XIAOHONGSHU", "启动浏览器发布流程", {
+    headless: XIAOHONGSHU_HEADLESS,
     viewport: "1440x960",
   })
   const browser = await chromium.launch({
-    headless: true,
+    headless: XIAOHONGSHU_HEADLESS,
     args: [
       "--no-sandbox",
       "--disable-dev-shm-usage",
@@ -729,33 +779,7 @@ async function publishNote(input: {
     }
 
     if (input.contentType === "article") {
-      const directEditorReady = await waitForAnySelector(page, [ARTICLE_EDITOR], 4000)
-      if (!directEditorReady) {
-        logger.info("XIAOHONGSHU", "直达长文页落在首页，准备进入新的创作")
-        const newCreation = await findFirstVisible(page, [
-          'button.ce-btn.bg-red:has-text("新的创作")',
-          'button.new-btn:has-text("新的创作")',
-          'button:has-text("新的创作")',
-          'button:has-text("新建创作")',
-          '[role="button"]:has-text("新的创作")',
-          '[role="button"]:has-text("新建创作")',
-        ])
-        if (!newCreation) {
-          await logPageState(page, "长文首页未找到新的创作")
-          await captureFailureArtifacts(page, "长文首页未找到新的创作")
-          throw new Error("已进入小红书长文首页，但未找到“新的创作”按钮，请检查平台页面状态")
-        }
-        await newCreation.click({ force: true })
-        const editorAfterCreation = await waitForAnySelector(page, [ARTICLE_EDITOR], 30000)
-        if (!editorAfterCreation) {
-          await logPageState(page, "新的创作后未进入编辑器")
-          await captureFailureArtifacts(page, "新的创作后无编辑器")
-          throw new Error("点击“新的创作”后未进入长文编辑器，请检查平台页面状态")
-        }
-        logger.info("XIAOHONGSHU", "新的创作已打开长文编辑器")
-      } else {
-        logger.info("XIAOHONGSHU", "已直达小红书新长文编辑器")
-      }
+      await enterLongArticleEditor(page)
 
       await fillLongArticle(page, {
         title: input.title,
@@ -841,7 +865,7 @@ async function publishNote(input: {
     }
     throw error
   } finally {
-    if (!completed && KEEP_XIAOHONGSHU_BROWSER_OPEN_ON_FAILURE) {
+    if (!completed && !XIAOHONGSHU_HEADLESS && KEEP_XIAOHONGSHU_BROWSER_OPEN_ON_FAILURE) {
       logger.warn("XIAOHONGSHU", "发布失败，保留可见浏览器窗口供人工检查", {
         closeHint: "关闭 Chromium 窗口后可继续下一次发布；如需失败后自动关闭，设置 XIAOHONGSHU_KEEP_BROWSER_OPEN=false",
       })

@@ -191,6 +191,10 @@ try {
   assert.equal(new URL(page.url()).pathname, '/editor/workbench-test')
   assert.equal(new URL(page.url()).searchParams.get('platform'), 'xiaohongshu')
   assert.equal(await page.locator('input').evaluateAll(inputs => inputs.some(input => input.value === '小红书独立标题')), true)
+  assert.equal(
+    await page.getByRole('link', { name: '平台预览', exact: true }).getAttribute('href'),
+    'https://creator.xiaohongshu.com/publish/publish?from=menu&target=video',
+  )
   await page.getByRole('button', { name: '打开独立预览', exact: true }).click()
   await page.waitForURL('**/preview/workbench-test?platform=xiaohongshu')
   await page.getByRole('button', { name: '返回', exact: true }).click()
