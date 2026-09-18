@@ -89,6 +89,7 @@ app.use(securityHeaders)
 app.use(corsMiddleware)
 app.use("/api", noStoreApiResponses, apiRateLimiter, expensiveOperationRateLimiter)
 app.use([
+  "/api/articles",
   "/api/images/upload-base64",
   "/api/generate-cover",
   "/api/generate-covers-batch",
