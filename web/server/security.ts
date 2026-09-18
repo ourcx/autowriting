@@ -1,6 +1,7 @@
 import cors, { type CorsOptions, type CorsOptionsDelegate } from "cors"
+import helmet from "helmet"
 import { ipKeyGenerator, rateLimit } from "express-rate-limit"
-import type { ErrorRequestHandler, Request } from "express"
+import type { ErrorRequestHandler, Request, RequestHandler } from "express"
 import { logger } from "./logger.ts"
 
 const DEFAULT_JSON_LIMIT = "1mb"
@@ -8,6 +9,9 @@ const LARGE_JSON_LIMIT = "30mb"
 const URL_ENCODED_LIMIT = "1mb"
 const LOGIN_WINDOW_MS = 15 * 60 * 1000
 const LOGIN_MAX_FAILURES = 5
+const API_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000
+const API_RATE_LIMIT_MAX = 300
+const EXPENSIVE_RATE_LIMIT_MAX = 30
 
 function parsePositiveInteger(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(value || "", 10)
@@ -60,6 +64,74 @@ const corsOptionsDelegate: CorsOptionsDelegate<Request> = (req, callback) => {
 }
 
 export const corsMiddleware = cors(corsOptionsDelegate)
+
+export const securityHeaders = [
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+    strictTransportSecurity: process.env.NODE_ENV === "production"
+      ? { maxAge: 31_536_000, includeSubDomains: true }
+      : false,
+  }),
+  helmet.contentSecurityPolicy({
+    reportOnly: true,
+    directives: {
+      defaultSrc: ["'self'"],
+      baseUri: ["'self'"],
+      connectSrc: ["'self'", "https:", "http://127.0.0.1:*", "http://localhost:*"],
+      fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
+      formAction: ["'self'"],
+      frameAncestors: ["'self'"],
+      imgSrc: ["'self'", "data:", "blob:", "https:"],
+      objectSrc: ["'none'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      upgradeInsecureRequests: process.env.NODE_ENV === "production" ? [] : null,
+    },
+  }),
+  ((_req, res, next) => {
+    res.removeHeader("Server")
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
+    next()
+  }) satisfies RequestHandler,
+]
+
+export const apiRateLimiter = rateLimit({
+  windowMs: parsePositiveInteger(process.env.API_RATE_LIMIT_WINDOW_MS, API_RATE_LIMIT_WINDOW_MS),
+  limit: parsePositiveInteger(process.env.API_RATE_LIMIT_MAX, API_RATE_LIMIT_MAX),
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  skip: (req) => req.method === "OPTIONS",
+  handler(_req, res) {
+    res.status(429).json({ error: "请求过于频繁，请稍后再试" })
+  },
+})
+
+const EXPENSIVE_OPERATION_PATHS = [
+  /^\/articles\/[^/]+\/(?:generate|generate-candidates|candidates)/,
+  /^\/canvas\/(?:generate|generate-blocks|regenerate)/,
+  /^\/(?:generate-cover|generate-covers-batch)/,
+  /^\/rag\/(?:index|search|candidates)/,
+  /^\/(?:publish|toutiao|xiaohongshu)\//,
+]
+
+export const expensiveOperationRateLimiter = rateLimit({
+  windowMs: parsePositiveInteger(process.env.EXPENSIVE_RATE_LIMIT_WINDOW_MS, API_RATE_LIMIT_WINDOW_MS),
+  limit: parsePositiveInteger(process.env.EXPENSIVE_RATE_LIMIT_MAX, EXPENSIVE_RATE_LIMIT_MAX),
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  skip: (req) => req.method === "GET" || !EXPENSIVE_OPERATION_PATHS.some((pattern) => pattern.test(req.path)),
+  handler(_req, res) {
+    res.status(429).json({ error: "当前操作过于频繁，请稍后再试" })
+  },
+})
+
+export const noStoreApiResponses: RequestHandler = (_req, res, next) => {
+  res.setHeader("Cache-Control", "no-store")
+  res.setHeader("Pragma", "no-cache")
+  res.setHeader("Expires", "0")
+  next()
+}
 
 export const loginRateLimiter = rateLimit({
   windowMs: parsePositiveInteger(process.env.LOGIN_RATE_LIMIT_WINDOW_MS, LOGIN_WINDOW_MS),

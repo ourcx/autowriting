@@ -8,8 +8,10 @@
  */
 import { Router } from 'express'
 import { listTemplates, upsertTemplate, deleteTemplate, getTemplate } from '../db.js'
+import { authMiddleware } from '../authMiddleware.ts'
 
 const router = Router()
+router.use(authMiddleware)
 
 // GET /api/templates
 router.get('/', (req, res) => {

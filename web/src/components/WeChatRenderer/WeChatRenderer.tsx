@@ -10,6 +10,7 @@ import { ImageLibrary } from '../ImageLibrary/ImageLibrary'
 import { generateXiaohongshuArticleMetadata, publishXiaohongshuNote } from '../../utils/apiHelpers'
 import { hasXiaohongshuCookies, loadXiaohongshuCookies } from '../../utils/accountBindings'
 import { loadAIConfig } from '../../utils/aiConfig'
+import { sanitizeHtml } from '../../utils/sanitizeHtml'
 import './WeChatRenderer.css'
 
 type PlatformMode = 'wechat' | 'toutiao' | 'xiaohongshu'
@@ -923,7 +924,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                 <div
                   id="wemd"
                   ref={previewRef}
-                  dangerouslySetInnerHTML={{ __html: html }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }}
                 />
               </div>
             </div>
@@ -1098,7 +1099,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                 <div className="wr-tt-body">
                   <div
                     className="wr-tt-md-render"
-                    dangerouslySetInnerHTML={{ __html: html }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }}
                   />
                 </div>
                 <div className="wr-tt-md-source">
@@ -1236,7 +1237,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                   {xhsShowSummary && xhsSummary && <p>{xhsSummary}</p>}
                   <footer>{xhsShowAuthor ? '当前账号' : ''}{xhsShowAuthor && xhsShowReadingTime ? ' · ' : ''}{xhsShowReadingTime ? `${charCount.toLocaleString()} 字` : ''}</footer>
                 </div>
-                <div className="wr-xhs-card-content" dangerouslySetInnerHTML={{ __html: html }} />
+                <div className="wr-xhs-card-content" dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }} />
               </article>
             </div>
           </div>

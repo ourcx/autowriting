@@ -8,8 +8,9 @@
 import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
-import { findUserByUsername, findUserById, createUser } from '../db.js'
+import { findUserByUsername, findUserById, createUser, revokeUserTokens, updateUserPassword } from '../db.js'
 import { authMiddleware } from '../authMiddleware.js'
+import { authSchemas, validateBody } from '../validation.ts'
 
 export const JWT_SECRET = process.env.JWT_SECRET || 'autowriting-jwt-secret-change-me'
 const JWT_EXPIRES = '30d'
@@ -17,7 +18,7 @@ const JWT_EXPIRES = '30d'
 const router = Router()
 
 // ── POST /api/auth/register ──────────────────────────────────────────────────
-router.post('/register', (req, res) => {
+router.post('/register', validateBody(authSchemas.register), (req, res) => {
   const { username, password } = req.body
   if (!username || !password) {
     return res.status(400).json({ error: '用户名和密码不能为空' })
@@ -41,12 +42,12 @@ router.post('/register', (req, res) => {
   const hash = bcrypt.hashSync(password, 10)
   createUser(id, username, hash)
 
-  const token = jwt.sign({ id, username, role: 'user' }, JWT_SECRET, { expiresIn: JWT_EXPIRES })
+  const token = jwt.sign({ id, username, role: 'user', tokenVersion: 0 }, JWT_SECRET, { expiresIn: JWT_EXPIRES, algorithm: 'HS256' })
   res.json({ token, user: { id, username, role: 'user' } })
 })
 
 // ── POST /api/auth/login ─────────────────────────────────────────────────────
-router.post('/login', (req, res) => {
+router.post('/login', validateBody(authSchemas.login), (req, res) => {
   const { username, password } = req.body
   if (!username || !password) {
     return res.status(400).json({ error: '用户名和密码不能为空' })
@@ -64,9 +65,9 @@ router.post('/login', (req, res) => {
   }
 
   const token = jwt.sign(
-    { id: user.id, username: user.username, role: user.role },
+    { id: user.id, username: user.username, role: user.role, tokenVersion: user.token_version },
     JWT_SECRET,
-    { expiresIn: JWT_EXPIRES },
+    { expiresIn: JWT_EXPIRES, algorithm: 'HS256' },
   )
   res.json({ token, user: { id: user.id, username: user.username, role: user.role } })
 })
@@ -80,7 +81,7 @@ router.get('/me', authMiddleware, (req, res) => {
 })
 
 // ── POST /api/auth/change-password ───────────────────────────────────────────
-router.post('/change-password', authMiddleware, (req, res) => {
+router.post('/change-password', authMiddleware, validateBody(authSchemas.changePassword), async (req, res) => {
   const { oldPassword, newPassword } = req.body
   if (!oldPassword || !newPassword) {
     return res.status(400).json({ error: '原密码和新密码不能为空' })
@@ -95,10 +96,13 @@ router.post('/change-password', authMiddleware, (req, res) => {
   }
 
   const hash = bcrypt.hashSync(newPassword, 10)
-  import('../db.js').then(({ updateUserPassword }) => {
-    updateUserPassword(user.id, hash)
-    res.json({ success: true })
-  })
+  updateUserPassword(user.id, hash)
+  res.json({ success: true })
+})
+
+router.post('/logout', authMiddleware, (req, res) => {
+  revokeUserTokens(req.user.id)
+  res.json({ success: true })
 })
 
 export default router

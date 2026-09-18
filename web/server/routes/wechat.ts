@@ -18,8 +18,10 @@ import multer from 'multer'
 import sharp from 'sharp'
 import zlib from 'zlib'
 import { logger } from '../logger.js'
+import { authMiddleware } from '../authMiddleware.ts'
 
 const router = Router()
+router.use(authMiddleware)
 const WECHAT = 'WECHAT'
 const wechatUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } })
 const WECHAT_MATERIAL_TYPES = new Set(['image', 'voice', 'video', 'news'])

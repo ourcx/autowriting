@@ -33,13 +33,18 @@ import { BUILTIN_TEMPLATES_DATA } from "./server/builtinTemplates.ts"
 import { seedBuiltinPrompts } from "./server/seedPrompts.ts"
 import { cleanupXiaohongshuDebugArtifacts } from "./server/utils/public.ts"
 import {
+  apiRateLimiter,
   corsMiddleware,
   errorHandler,
+  expensiveOperationRateLimiter,
   loginRateLimiter,
+  noStoreApiResponses,
   requestBodyLimits,
+  securityHeaders,
 } from "./server/security.ts"
 
 const app = express()
+app.disable("x-powered-by")
 
 const CACHE_TTL_DAYS = 7
 const CLEANUP_HOUR = 2
@@ -78,7 +83,9 @@ try {
 }
 scheduleCleanup()
 
+app.use(securityHeaders)
 app.use(corsMiddleware)
+app.use("/api", noStoreApiResponses, apiRateLimiter, expensiveOperationRateLimiter)
 app.use([
   "/api/images/upload-base64",
   "/api/generate-cover",

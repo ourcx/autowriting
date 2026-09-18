@@ -334,6 +334,7 @@ export interface DbUserRow {
   password_hash: string
   role: string
   disabled: number
+  token_version: number
   created_at: string
 }
 

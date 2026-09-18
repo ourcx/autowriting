@@ -8,7 +8,7 @@ import jwt from "jsonwebtoken"
 import { timingSafeEqual } from "node:crypto"
 import type { Response, NextFunction } from "express"
 import { AGENT_API_KEY, AGENT_USERNAME } from "./config.ts"
-import { findUserByUsername } from "./db.ts"
+import { findUserById, findUserByUsername } from "./db.ts"
 import { logger } from "./logger.ts"
 import { JWT_SECRET } from "./routes/auth.ts"
 import type { AuthedRequest } from "./types.ts"
@@ -80,9 +80,19 @@ export function authMiddleware(req: AuthedRequest, res: Response, next: NextFunc
 
   const token = authHeader.slice(7)
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as { id: string; username: string; role: "admin" | "user" }
+    const payload = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] }) as {
+      id: string
+      username: string
+      role: "admin" | "user"
+      tokenVersion?: number
+    }
+    const user = findUserById(payload.id)
+    if (!user || user.disabled || (payload.tokenVersion ?? 0) !== user.token_version) {
+      res.status(401).json({ error: "Token 已失效，请重新登录" })
+      return
+    }
     req.authType = "jwt"
-    req.user = { id: payload.id, username: payload.username, role: payload.role }
+    req.user = { id: user.id, username: user.username, role: user.role as "admin" | "user" }
     next()
   } catch {
     res.status(401).json({ error: "Token 无效或已过期，请重新登录" })

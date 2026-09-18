@@ -21,6 +21,7 @@ interface AuthState {
 }
 
 const TOKEN_KEY = 'auth_token'
+let logoutRequestInFlight = false
 
 // ── 内部状态 ──
 let state: AuthState = {
@@ -79,6 +80,15 @@ export async function register(username: string, password: string): Promise<void
 
 // ── 登出 ──
 export function logout() {
+  const token = state.token || localStorage.getItem(TOKEN_KEY)
+  if (token && !logoutRequestInFlight) {
+    logoutRequestInFlight = true
+    void axios.post('/api/auth/logout', undefined, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).catch(() => {}).finally(() => {
+      logoutRequestInFlight = false
+    })
+  }
   localStorage.removeItem(TOKEN_KEY)
   setState({ token: null, user: null })
 }

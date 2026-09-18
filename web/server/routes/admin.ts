@@ -14,6 +14,7 @@ import bcrypt from 'bcryptjs'
 import fs from 'fs'
 import { DRAFTS_DIR } from '../config.js'
 import { adminMiddleware } from '../authMiddleware.js'
+import { adminSchemas, validateBody } from '../validation.ts'
 import {
   listUsers, setUserDisabled, findUserById,
   createUser, findUserByUsername, updateUserPassword, deleteUser,
@@ -118,7 +119,7 @@ router.get('/users', (_req, res) => {
 
 // ── POST /api/admin/users（创建用户）─────────────────────────────────────────
 
-router.post('/users', async (req, res) => {
+router.post('/users', validateBody(adminSchemas.createUser), async (req, res) => {
   try {
     const { username, password, role = 'user' } = req.body
     if (!username || !password) {
@@ -151,7 +152,7 @@ router.post('/users', async (req, res) => {
 
 // ── PATCH /api/admin/users/:id/disable ───────────────────────────────────────
 
-router.patch('/users/:id/disable', (req, res) => {
+router.patch('/users/:id/disable', validateBody(adminSchemas.setDisabled), (req, res) => {
   try {
     const { id } = req.params
     const { disabled } = req.body
@@ -177,7 +178,7 @@ router.patch('/users/:id/disable', (req, res) => {
 
 // ── PATCH /api/admin/users/:id/reset-password（重置密码）─────────────────────
 
-router.patch('/users/:id/reset-password', async (req, res) => {
+router.patch('/users/:id/reset-password', validateBody(adminSchemas.resetPassword), async (req, res) => {
   try {
     const { id } = req.params
     const { password } = req.body

@@ -7,8 +7,10 @@
  */
 import { Router } from 'express'
 import { addPublishHistory, listPublishHistory, deletePublishHistory, getPublishById } from '../db.js'
+import { authMiddleware } from '../authMiddleware.ts'
 
 const router = Router()
+router.use(authMiddleware)
 
 // POST /api/publish/draft
 router.post('/draft', (req, res) => {

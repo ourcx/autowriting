@@ -32,6 +32,7 @@ import {
   PREVIEW_COMPONENTS_MARKDOWN,
 } from '../../utils/templateStore'
 import { renderWechatMarkdown } from '../../utils/wechatMarkdown'
+import { sanitizeHtml } from '../../utils/sanitizeHtml'
 import { DEFAULT_WECHAT_TEMPLATE_ID } from '../../../shared/defaultStyleTemplates'
 import './StyleEditor.css'
 
@@ -578,7 +579,7 @@ export default function StyleEditor() {
             <div className={`se-preview-card se-preview-card--${previewViewport}`}>
               <div
                 id="wemd"
-                dangerouslySetInnerHTML={{ __html: previewHtml }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewHtml) }}
               />
             </div>
           </div>

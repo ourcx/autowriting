@@ -100,6 +100,11 @@ cases.push({
   run: async () => {
     const r = await fetch(`${BASE}/health`)
     if (!r.ok) throw new Error(`status=${r.status}`)
+    if (r.headers.has('x-powered-by') || r.headers.has('server')) throw new Error('响应泄露了服务端技术栈')
+    if (r.headers.get('x-frame-options') !== 'SAMEORIGIN') throw new Error('缺少 SAMEORIGIN 点击劫持保护')
+    if (r.headers.get('x-content-type-options') !== 'nosniff') throw new Error('缺少 nosniff')
+    if (!r.headers.has('content-security-policy-report-only')) throw new Error('缺少 Report-Only CSP')
+    if (!r.headers.get('strict-transport-security')?.includes('max-age=31536000')) throw new Error('缺少 HSTS')
   },
 })
 
@@ -200,6 +205,8 @@ cases.push({
   name: '未授权访问 /api/articles 应被拒（401/403）',
   run: async () => {
     const r = await fetch(`${BASE}/api/articles`)
+    if (r.headers.get('cache-control') !== 'no-store') throw new Error('API 响应缺少 no-store')
+    if (r.headers.get('pragma') !== 'no-cache') throw new Error('API 响应缺少 Pragma: no-cache')
     if (r.status !== 401 && r.status !== 403) {
       throw new Error(`期望 401/403，实际 ${r.status}`)
     }
@@ -212,6 +219,15 @@ cases.push({
     const r = await fetch(`${BASE}/api/admin/users`)
     if (r.status !== 401 && r.status !== 403) {
       throw new Error(`期望 401/403，实际 ${r.status}`)
+    }
+  },
+})
+cases.push({
+  name: '历史公共业务路由现在必须登录',
+  run: async () => {
+    for (const path of ['/api/images', '/api/prompts/list', '/api/templates', '/api/publish/history', '/api/cover-history', '/api/wechat/status']) {
+      const r = await fetch(`${BASE}${path}`)
+      if (![401, 403].includes(r.status)) throw new Error(`${path} 期望 401/403，实际 ${r.status}`)
     }
   },
 })
@@ -376,6 +392,17 @@ cases.push({
   },
 })
 cases.push({
+  name: '认证接口应拒绝额外字段',
+  run: async () => {
+    const r = await fetch(`${BASE}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...smokeUser, unexpected: true }),
+    })
+    if (r.status !== 400) throw new Error(`期望 400，实际 ${r.status}`)
+  },
+})
+cases.push({
   name: '同一用户名连续登录失败应触发限流',
   run: async () => {
     const username = `missing_${Date.now()}`
@@ -402,6 +429,19 @@ cases.push({
       body: JSON.stringify({ provider: 'unknown', query: '测试' }),
     })
     if (r.status !== 400) throw new Error(`期望 400，实际 ${r.status}`)
+  },
+})
+cases.push({
+  name: '自定义搜索服务不得指向内网地址',
+  run: async () => {
+    const r = await fetch(`${BASE}/api/materials/search`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: 'test', provider: 'searxng', searxngUrl: 'http://127.0.0.1' }),
+    })
+    if (r.status !== 400) throw new Error(`期望 400，实际 status=${r.status}`)
+    const body = await r.json()
+    if (!body.error?.includes('不允许访问')) throw new Error(`安全拦截信息不正确：${JSON.stringify(body)}`)
   },
 })
 cases.push({
@@ -694,6 +734,64 @@ cases.push({
 cases.push({
   name: '候选稿并发上限、断点续写、原文保护与用户隔离',
   run: () => smokeCandidates(BASE, token),
+})
+cases.push({
+  name: '修改密码后原 Token 应立即失效',
+  run: async () => {
+    const newPassword = 'smoke_pw_changed_9999'
+    const changeResponse = await fetch(`${BASE}/api/auth/change-password`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ oldPassword: smokeUser.password, newPassword }),
+    })
+    if (!changeResponse.ok) throw new Error(`修改密码失败 status=${changeResponse.status}`)
+
+    const staleResponse = await fetch(`${BASE}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+    if (staleResponse.status !== 401) throw new Error(`修改密码后旧 Token 期望 401，实际 ${staleResponse.status}`)
+
+    const loginResponse = await fetch(`${BASE}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: smokeUser.username, password: newPassword }),
+    })
+    if (!loginResponse.ok) throw new Error(`新密码登录失败 status=${loginResponse.status}`)
+    token = (await loginResponse.json()).token
+  },
+})
+cases.push({
+  name: '登出后原 Token 应立即失效',
+  run: async () => {
+    const logoutResponse = await fetch(`${BASE}/api/auth/logout`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!logoutResponse.ok) throw new Error(`登出失败 status=${logoutResponse.status}`)
+
+    const meResponse = await fetch(`${BASE}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (meResponse.status !== 401) throw new Error(`登出后期望 401，实际 ${meResponse.status}`)
+  },
+})
+cases.push({
+  name: '高成本写接口应使用独立限流',
+  run: async () => {
+    let limited = false
+    for (let attempt = 1; attempt <= 31; attempt++) {
+      const r = await fetch(`${BASE}/api/generate-cover`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'rate-limit-smoke' }),
+      })
+      if (r.status === 429) {
+        if (!r.headers.has('retry-after')) throw new Error('高成本接口 429 响应缺少 Retry-After')
+        limited = true
+        break
+      }
+      if (r.status !== 401) throw new Error(`限流前期望 401，实际 ${r.status}`)
+    }
+    if (!limited) throw new Error('31 次请求内未触发高成本接口限流')
+  },
 })
 
 ;(async () => {

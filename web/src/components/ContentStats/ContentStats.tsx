@@ -5,6 +5,7 @@ import {
   ChevronDown, ChevronRight, Circle, Wand2, X,
 } from 'lucide-react'
 import { loadAIConfig } from '../../utils/aiConfig'
+import { sanitizeHtml } from '../../utils/sanitizeHtml'
 import './ContentStats.css'
 
 interface ContentStatsProps {
@@ -478,7 +479,7 @@ function DynamicUIBlocks({
                   )}
                   <div
                     className="clay-html-content"
-                    dangerouslySetInnerHTML={{ __html: block.html }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.html) }}
                   />
                 </div>
               )

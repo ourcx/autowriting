@@ -6,8 +6,10 @@ import { Router } from 'express'
 import { SERVER_AI_CONFIG } from '../config.js'
 import { buildLLMRequest, callLLMWithRetry } from '../utils'
 import { recordTokenUsage, getEffectivePrompt } from '../db.js'
+import { authMiddleware } from '../authMiddleware.ts'
 
 const router = Router()
+router.use('/generate-style', authMiddleware)
 
 // 内置 system prompt（当数据库中没有自定义版本时使用）
 const BUILTIN_STYLE_SYSTEM_PROMPT = `你是一名专业的微信公众号 CSS 设计师，专门为微信公众号文章设计高质量排版样式。

@@ -9,8 +9,10 @@ import {
   updatePromptContent, deletePrompt, recordPromptUsage,
   listPromptVersions, getPromptVersion, getEffectivePrompt, db,
 } from '../db.js'
+import { authMiddleware } from '../authMiddleware.ts'
 
 const router = express.Router()
+router.use(authMiddleware)
 
 // ── 获取所有提示词 ────────────────────────────────────────────────────────────
 

@@ -15,6 +15,7 @@
  */
 
 import { logger } from "../../logger.ts"
+import { assertPublicHttpUrl, fetchPublicUrl } from "../networkPolicy.ts"
 
 // ── 常量 ────────────────────────────────────────────────────────────────────────
 
@@ -262,6 +263,13 @@ export async function webFetch(url: string, options: FetchOptions = {}): Promise
     logger.warn("WEB-FETCH", "安全检查未通过", { url, reason: securityErr })
     return `[安全拦截] ${securityErr}`
   }
+  try {
+    await assertPublicHttpUrl(url)
+  } catch (error: unknown) {
+    const reason = error instanceof Error ? error.message : "URL 安全检查失败"
+    logger.warn("WEB-FETCH", "安全检查未通过", { url, reason })
+    return `[安全拦截] ${reason}`
+  }
 
   // 2. 频率限制
   const rateErr = checkRateLimit()
@@ -272,7 +280,7 @@ export async function webFetch(url: string, options: FetchOptions = {}): Promise
 
   // 3. HTTP 请求
   try {
-    const resp = await fetch(url, {
+    const resp = await fetchPublicUrl(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (compatible; autowriting-web-fetch/1.0)",
         "Accept": "text/html,application/xhtml+xml,*/*",

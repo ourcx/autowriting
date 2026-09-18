@@ -9,6 +9,7 @@
 import { Router } from 'express'
 import { getSetting, setSetting, getAllSettings, getTokenUsageSummary } from '../db.js'
 import { authMiddleware } from '../authMiddleware.js'
+import { settingsSchemas, validateBody } from '../validation.ts'
 
 const router = Router()
 
@@ -44,7 +45,7 @@ router.get('/:key', authMiddleware, (req, res) => {
 })
 
 // POST /api/settings（批量写入，body 为 key:value 对象）
-router.post('/', authMiddleware, (req, res) => {
+router.post('/', authMiddleware, validateBody(settingsSchemas.updateMany), (req, res) => {
   try {
     const entries = Object.entries(req.body)
     if (entries.length === 0) return res.status(400).json({ error: '请求体不能为空' })
@@ -58,7 +59,7 @@ router.post('/', authMiddleware, (req, res) => {
 })
 
 // PUT /api/settings/:key
-router.put('/:key', authMiddleware, (req, res) => {
+router.put('/:key', authMiddleware, validateBody(settingsSchemas.updateOne), (req, res) => {
   try {
     const { value } = req.body
     if (value === undefined) return res.status(400).json({ error: 'value 不能为空' })

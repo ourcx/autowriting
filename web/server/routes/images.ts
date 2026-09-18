@@ -23,8 +23,16 @@ import fs from 'fs'
 import path from 'path'
 import { randomUUID } from 'crypto'
 import https from 'https'
+import { authMiddleware } from '../authMiddleware.ts'
 
 const router = Router()
+router.use((req, res, next) => {
+  if (req.method === 'GET' && req.path.startsWith('/uploads/')) {
+    next()
+    return
+  }
+  authMiddleware(req, res, next)
+})
 
 // 上传目录
 const UPLOAD_DIR = path.join(DATA_DIR, 'uploads')

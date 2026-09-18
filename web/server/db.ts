@@ -66,6 +66,7 @@ db.exec(`
     password_hash TEXT NOT NULL,
     role         TEXT NOT NULL DEFAULT 'user',
     disabled     INTEGER NOT NULL DEFAULT 0,
+    token_version INTEGER NOT NULL DEFAULT 0,
     created_at   TEXT NOT NULL
   );
 
@@ -286,6 +287,12 @@ function createIndexes(): void {
 
 function addMissingColumns(): void {
   try {
+    const usersInfo = db.prepare("PRAGMA table_info(users)").all() as Array<{ name: string }>
+    if (!usersInfo.some((col) => col.name === "token_version")) {
+      db.exec("ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0")
+      console.log("[DB] 添加 users.token_version 列")
+    }
+
     const coverHistoryInfo = db.prepare("PRAGMA table_info(cover_history)").all() as Array<{ name: string }>
     if (!coverHistoryInfo.some((col) => col.name === "user_id")) {
       db.exec("ALTER TABLE cover_history ADD COLUMN user_id TEXT")
@@ -508,7 +515,7 @@ export function findUserByUsername(username: string): DbUserRow | null {
 }
 
 export function findUserById(id: string): DbUserRow | null {
-  return (db.prepare("SELECT id, username, role, disabled, created_at FROM users WHERE id = ?").get(id) as DbUserRow) || null
+  return (db.prepare("SELECT id, username, role, disabled, token_version, created_at FROM users WHERE id = ?").get(id) as DbUserRow) || null
 }
 
 export function createUser(id: string, username: string, passwordHash: string, role = "user"): void {
@@ -519,15 +526,19 @@ export function createUser(id: string, username: string, passwordHash: string, r
 }
 
 export function listUsers(): DbUserRow[] {
-  return db.prepare("SELECT id, username, role, disabled, created_at FROM users ORDER BY created_at ASC").all() as DbUserRow[]
+  return db.prepare("SELECT id, username, role, disabled, token_version, created_at FROM users ORDER BY created_at ASC").all() as DbUserRow[]
 }
 
 export function setUserDisabled(id: string, disabled: boolean): void {
-  db.prepare("UPDATE users SET disabled=? WHERE id=?").run(disabled ? 1 : 0, id)
+  db.prepare("UPDATE users SET disabled=?, token_version=token_version+1 WHERE id=?").run(disabled ? 1 : 0, id)
 }
 
 export function updateUserPassword(id: string, passwordHash: string): void {
-  db.prepare("UPDATE users SET password_hash=? WHERE id=?").run(passwordHash, id)
+  db.prepare("UPDATE users SET password_hash=?, token_version=token_version+1 WHERE id=?").run(passwordHash, id)
+}
+
+export function revokeUserTokens(id: string): void {
+  db.prepare("UPDATE users SET token_version=token_version+1 WHERE id=?").run(id)
 }
 
 export function deleteUser(id: string): void {

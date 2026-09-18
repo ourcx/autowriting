@@ -19,8 +19,16 @@ import {
 } from '../utils'
 import { deleteCoverHistory, clearCoverHistory, getCoverCacheCount } from '../db.js'
 import { mapWithConcurrency } from '../utils/concurrency.ts'
+import { authMiddleware } from '../authMiddleware.ts'
 
 const router = Router()
+router.use([
+  '/generate-cover',
+  '/generate-covers-batch',
+  '/cover-history',
+  '/cover-history/:id',
+  '/cache-stats',
+], authMiddleware)
 
 // ── POST /api/generate-cover ──────────────────────────────────────────────────
 

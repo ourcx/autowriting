@@ -16,6 +16,7 @@ import { DRAFTS_DIR } from '../config.js'
 import { logger } from '../logger.js'
 import { authMiddleware } from '../authMiddleware.js'
 import { webFetch } from '../utils/search/webFetcher.js'
+import { assertPublicHttpUrl } from '../utils/networkPolicy.ts'
 import {
   fetchWechatArticle,
   searchWechatArticles,
@@ -223,6 +224,12 @@ router.post('/search', async (req, res) => {
       // SearXNG — 开源聚合搜索引擎，无需 API Key，可用公共实例
       // searx.be 限制了程序访问，改用 paulgo.io（稳定、支持 JSON API）
       const baseUrl = (searxngUrl || 'https://paulgo.io').replace(/\/$/, '')
+      try {
+        await assertPublicHttpUrl(baseUrl)
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : '搜索服务地址不合法'
+        return res.status(400).json({ error: message })
+      }
       const params = new URLSearchParams({
         q:       query,
         format:  'json',
