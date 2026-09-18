@@ -581,6 +581,24 @@ export async function uploadLocalImage(file: File): Promise<{
   return response.data as { id: string; url: string; originalName: string }
 }
 
+export async function uploadBase64Image(input: {
+  data: string
+  mimeType: string
+  originalName: string
+  articleId?: string
+}): Promise<{ id: string; url: string; originalName: string }> {
+  const response = await axios.post("/api/images/upload-base64", input)
+  return response.data as { id: string; url: string; originalName: string }
+}
+
+export async function generateCoverImage(input: Record<string, unknown>): Promise<{
+  imageUrl: string
+  warning?: string
+}> {
+  const response = await axios.post("/api/generate-cover", input)
+  return response.data as { imageUrl: string; warning?: string }
+}
+
 // ── 通用 JSON 请求（给 fetch 场景收口错误处理） ──
 export async function fetchJson<T = any>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init)

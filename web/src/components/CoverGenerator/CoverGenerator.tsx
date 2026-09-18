@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from '../Toast/Toast'
 import './CoverGenerator.css'
 import { loadAIConfig } from '../../utils/aiConfig'
+import { generateCoverImage, uploadBase64Image } from '../../utils/apiHelpers'
 
 interface CoverGeneratorProps {
   title: string
@@ -188,27 +189,16 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
         body.baseImageUrl = generatedImage
       }
 
-      const res = await fetch('/api/generate-cover', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(body),
-      })
-
-      const data = await res.json().catch(() => ({})) as Record<string, string>
+      const data = await generateCoverImage(body)
 
       // ── 响应诊断日志 ──────────────────────────────────────────────────────
       console.group('[CoverGenerator] 服务端响应')
-      console.log('status     :', res.status)
       console.log('imageUrl前80:', data.imageUrl?.slice(0, 80))
       console.log('是SVG兜底   :', data.imageUrl?.startsWith('data:image/svg'))
       if (data.warning) console.warn('warning:', data.warning)
-      if (data.error)   console.error('error:', data.error)
       console.groupEnd()
       // ──────────────────────────────────────────────────────────────────────
 
-      if (!res.ok) {
-        throw new Error(data.error || `请求失败 (${res.status})`)
-      }
       if (!data.imageUrl) {
         throw new Error('服务端未返回图片 URL')
       }
@@ -236,19 +226,11 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
     if (!generatedImage) return
     setIsSavingToLibrary(true)
     try {
-      const response = await fetch('/api/images/upload-base64', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          data: generatedImage,
-          mimeType: 'image/png',
-          originalName: `cover-${title}-${Date.now()}.png`,
-        }),
+      await uploadBase64Image({
+        data: generatedImage,
+        mimeType: 'image/png',
+        originalName: `cover-${title}-${Date.now()}.png`,
       })
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || '保存失败')
-      }
       toast.success('已保存到图片库')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '保存到图片库失败')
@@ -268,7 +250,7 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
     onCoverGenerated?.(dataUrl)
   }, [articleId, onCoverGenerated])
 
-  // 将 File 对象读成 base64 data URL，上传图床后设为当前封面
+  // 将 File 对象读成 base64 data URL，保存到本地图片库后设为当前封面。
   const applyImageFile = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) {
       toast.error('只支持图片文件')
@@ -281,32 +263,21 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
       setGeneratedImage(dataUrl)
       try {
         const ext = file.type.split('/')[1] || 'png'
-        const res = await fetch('/api/images/upload-base64', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            data: dataUrl,
-            mimeType: file.type,
-            originalName: `cover-paste-${Date.now()}.${ext}`,
-            articleId,
-          }),
+        const uploaded = await uploadBase64Image({
+          data: dataUrl,
+          mimeType: file.type,
+          originalName: `cover-paste-${Date.now()}.${ext}`,
+          articleId,
         })
-        const d = await res.json() as { url?: string; error?: string }
-        if (res.ok && d.url) {
-          const serverUrl = d.url.startsWith('http')
-            ? d.url
-            : `${window.location.origin}${d.url}`
-          setGeneratedImage(serverUrl)
-          persistCover(serverUrl)
-          toast.success('封面已上传到图床，发布预览页将自动使用此封面')
-        } else {
-          // 上传失败降级：用 base64 本地预览
-          persistCover(dataUrl)
-          toast.warn('图床上传失败，使用本地预览（发布时可能无法显示）')
-        }
+        const serverUrl = uploaded.url.startsWith('http')
+          ? uploaded.url
+          : `${window.location.origin}${uploaded.url}`
+        setGeneratedImage(serverUrl)
+        persistCover(serverUrl)
+        toast.success('封面已保存到本地图片库，发布预览页将自动使用')
       } catch {
         persistCover(dataUrl)
-        toast.warn('图床上传失败，使用本地预览（发布时可能无法显示）')
+        toast.warn('本地图片保存失败，暂时使用浏览器预览（发布时可能无法显示）')
       }
     }
     reader.readAsDataURL(file)

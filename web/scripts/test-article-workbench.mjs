@@ -16,6 +16,8 @@ try {
   let listFails = false
   let savedArticle = null
   let emptyToutiao = false
+  let coverGeneratedWithAuth = false
+  let coverSavedWithAuth = false
   const unexpectedWrites = []
   const pageErrors = []
   const requestedModules = []
@@ -42,6 +44,14 @@ try {
     if (url.pathname === '/api/articles/workflow-metrics') return route.abort()
     if (url.pathname === '/api/toutiao/status') return route.fulfill({ json: { ready: true } })
     if (url.pathname === '/api/templates') return route.fulfill({ json: [] })
+    if (url.pathname === '/api/generate-cover') {
+      coverGeneratedWithAuth = request.headers().authorization === 'Bearer workbench-test-token'
+      return route.fulfill({ json: { imageUrl: 'data:image/svg+xml;base64,PHN2Zy8+' } })
+    }
+    if (url.pathname === '/api/images/upload-base64') {
+      coverSavedWithAuth = request.headers().authorization === 'Bearer workbench-test-token'
+      return route.fulfill({ json: { id: 'cover-fixture', url: '/api/images/uploads/cover-fixture.png', originalName: 'cover-fixture.png' } })
+    }
     if (url.pathname === '/api/creator-profile') {
       if (request.method() === 'PUT') {
         savedProfile = request.postDataJSON()
@@ -181,9 +191,20 @@ try {
   }
   assert.equal(await page.locator('.wr-preview').evaluate(element => getComputedStyle(element).backgroundColor), 'rgb(250, 245, 232)')
   assert.equal(await page.locator('.editor-panel').evaluate(element => getComputedStyle(element).animationName), 'none')
+  await page.getByRole('button', { name: '封面', exact: true }).click()
+  await page.locator('.cg-provider-card').filter({ hasText: 'SVG 占位' }).click()
+  await page.getByRole('button', { name: '生成封面', exact: true }).click()
+  await page.getByRole('img', { name: '封面预览' }).waitFor()
+  assert.equal(coverGeneratedWithAuth, true, '封面生成请求必须携带登录 Token')
+  await page.getByRole('button', { name: '保存到图片库', exact: true }).click()
+  await page.getByText('已保存到图片库', { exact: true }).waitFor()
+  assert.equal(coverSavedWithAuth, true, '本地图片保存请求必须携带登录 Token')
+  await page.getByText('已保存到图片库', { exact: true }).locator('..').getByRole('button').click()
+  await page.locator('.flow-step').filter({ hasText: '发布' }).click()
+  await page.getByRole('heading', { name: '公众号预览与推送' }).waitFor()
   await page.locator('.toast-error .toast-close').first().click()
   await page.locator('.toast-error .toast-close').first().click()
-  await page.locator('.toast-success').waitFor({ state: 'hidden' })
+  await page.waitForFunction(() => !document.querySelector('.toast-success'))
   await page.locator('.wr-article-card').evaluate(element => Promise.all(element.getAnimations().map(animation => animation.finished)))
   await page.screenshot({ path: join(screenshots, 'publish-desktop.png'), fullPage: true })
   await page.getByRole('group', { name: '发布平台' }).getByRole('button', { name: '小红书', exact: false }).click()
