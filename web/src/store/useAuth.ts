@@ -55,8 +55,11 @@ axios.interceptors.request.use(config => {
 axios.interceptors.response.use(
   res => res,
   err => {
-    if (err?.response?.status === 401 && state.token) {
-      logout()
+    const message = err?.response?.data?.error
+    const isAuthFailure = typeof message === 'string'
+      && (message === '未登录，请先登录' || message.startsWith('Token '))
+    if (err?.response?.status === 401 && state.token && isAuthFailure) {
+      clearAuthState()
     }
     return Promise.reject(err)
   }
@@ -78,6 +81,11 @@ export async function register(username: string, password: string): Promise<void
   setState({ token, user })
 }
 
+function clearAuthState() {
+  localStorage.removeItem(TOKEN_KEY)
+  setState({ token: null, user: null })
+}
+
 // ── 登出 ──
 export function logout() {
   const token = state.token || localStorage.getItem(TOKEN_KEY)
@@ -89,8 +97,7 @@ export function logout() {
       logoutRequestInFlight = false
     })
   }
-  localStorage.removeItem(TOKEN_KEY)
-  setState({ token: null, user: null })
+  clearAuthState()
 }
 
 // ── 应用启动时从 localStorage 恢复 token，并验证有效性 ──

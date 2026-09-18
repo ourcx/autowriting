@@ -7,7 +7,12 @@ import { fetchAllTemplates, BUILTIN_TEMPLATES, TemplateItem } from '../../utils/
 import { DEFAULT_WECHAT_TEMPLATE_ID } from '../../../shared/defaultStyleTemplates'
 import { renderWechatMarkdown } from '../../utils/wechatMarkdown'
 import { ImageLibrary } from '../ImageLibrary/ImageLibrary'
-import { generateXiaohongshuArticleMetadata, publishXiaohongshuNote } from '../../utils/apiHelpers'
+import {
+  generateXiaohongshuArticleMetadata,
+  publishXiaohongshuNote,
+  pushWechatDraft,
+  uploadWechatThumb,
+} from '../../utils/apiHelpers'
 import { hasXiaohongshuCookies, loadXiaohongshuCookies } from '../../utils/accountBindings'
 import { loadAIConfig } from '../../utils/aiConfig'
 import { sanitizeHtml } from '../../utils/sanitizeHtml'
@@ -648,7 +653,6 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
   // 推送草稿到公众号草稿箱
   const handlePushDraft = useCallback(async () => {
     if (!wxBound) {
-      //没有绑定公众号要提示绑定
       toast.warn('请先绑定公众号', {
         duration: 2500,
         action: {
@@ -656,6 +660,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
           onClick: () => navigate('/account'),
         },
       })
+      return
     }
     if (!title?.trim() || !html?.trim()) {
       toast.warn('标题或内容为空，无法推送草稿')
@@ -690,33 +695,18 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
 
       if (coverImageUrl) {
         try {
-          const upR = await fetch('/api/wechat/upload-thumb', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...getWxHeaders() },
-            body: JSON.stringify({ url: coverImageUrl }),
-          })
-          const upD = await upR.json()
-          if (upR.ok && upD.media_id) {
-            thumb_media_id = upD.media_id
-          } else {
-            // 封面上传失败时给 warn，但继续尝试推送（不中断）
-            toast.warn(`封面图上传失败，将尝试无封面推送：${upD.error ?? ''}`)
-          }
-        } catch {
-          toast.warn('封面图上传出错，将尝试无封面推送')
+          thumb_media_id = await uploadWechatThumb(coverImageUrl, getWxHeaders())
+        } catch (error) {
+          toast.warn(`封面图上传失败，将尝试无封面推送：${error instanceof Error ? error.message : ''}`)
         }
       }
 
-      const r = await fetch('/api/wechat/draft', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getWxHeaders() },
-        body: JSON.stringify({ title: title.trim(), content: inlinedHtml, digest, thumb_media_id }),
-      })
-      const d = await r.json()
-      if (!r.ok) {
-        toast.error(d.error ?? '推送失败')
-        return
-      }
+      const d = await pushWechatDraft({
+        title: title.trim(),
+        content: inlinedHtml,
+        digest,
+        thumbMediaId: thumb_media_id,
+      }, getWxHeaders())
       setPushDone(true)
       onDraftPushed?.({ templateId })
       if (Array.isArray(d.failed_images) && d.failed_images.length > 0) {

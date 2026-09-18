@@ -12,7 +12,7 @@ try {
  page.on('pageerror', e => errors.push(e.message))
  await page.addInitScript(() => localStorage.setItem('auth_token', 'style-test-token'))
  const templates = []
- let rejectSave = false, emptyResult = false
+ let rejectSave = false, emptyResult = false, businessUnauthorized = false
  const generated = '#wemd { color: #345678; background: #fff4ef; } #wemd h2 { color: #345678; }'
  await page.route('**/api/**', async route => {
   const url = new URL(route.request().url())
@@ -32,7 +32,14 @@ try {
   if (url.pathname === '/api/generate-style') {
    assert.equal(route.request().headers().authorization, 'Bearer style-test-token')
    assert.equal(route.request().postDataJSON().aiConfig, undefined, '空配置不能覆盖服务端配置')
-   return route.fulfill({ json: { css: emptyResult ? '' : generated } })
+   if (businessUnauthorized) {
+    return route.fulfill({ status: 401, json: { error: '未提供公众号凭据' } })
+   }
+   return route.fulfill({
+    json: {
+     css: emptyResult ? '' : `下面是生成的样式：\n\n\`\`\`css\n${generated}\n\`\`\``,
+    },
+   })
   }
   return route.fulfill({ json: {} })
  })
@@ -91,6 +98,12 @@ try {
  emptyResult = true
  await page.getByRole('button', { name: '生成 CSS', exact: true }).click()
  await page.getByText('AI 未返回有效样式，请换一种描述重试', { exact: true }).waitFor()
+ emptyResult = false
+ businessUnauthorized = true
+ await page.getByRole('button', { name: '生成 CSS', exact: true }).click()
+ await page.getByText('未提供公众号凭据', { exact: true }).waitFor()
+ assert.equal(await page.evaluate(() => localStorage.getItem('auth_token')), 'style-test-token')
+ assert.equal(new URL(page.url()).pathname, '/styles')
  assert.deepEqual(errors, [])
- console.log('样式模板、预览、取消、保存重载、失败保护通过', output)
+ console.log('样式模板、响应清洗、登录态保护、预览取消、保存重载、失败保护通过', output)
 } finally { await browser.close() }

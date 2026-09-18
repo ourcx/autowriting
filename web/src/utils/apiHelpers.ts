@@ -672,7 +672,14 @@ export async function generateArticleStyle(prompt: string, baseCSS: string, aiCo
   const { data } = await axios.post<{ css: string }>("/api/generate-style", {
     prompt, baseCSS, ...(isLocalApiKeyConfigured(aiConfig) ? { aiConfig } : {}),
   }, { timeout: 300000 })
-  const css = typeof data.css === "string" ? data.css.trim() : ""
+  const rawCss = typeof data.css === "string" ? data.css.trim() : ""
+  const fencedCss = rawCss.match(/```(?:css)?\s*([\s\S]*?)```/i)?.[1]
+  const styleCss = rawCss.match(/<style[^>]*>([\s\S]*?)<\/style>/i)?.[1]
+  const cssStart = rawCss.search(/#wemd(?=\s|[{:.#>+~]|\[)/)
+  const css = (fencedCss ?? styleCss ?? (cssStart >= 0 ? rawCss.slice(cssStart) : rawCss))
+    .replace(/\s*```\s*$/i, "")
+    .replace(/\s*<\/style>\s*$/i, "")
+    .trim()
   if (!css.includes("#wemd") || !css.includes("{")) throw new Error("AI 未返回有效样式，请换一种描述重试")
   return css
 }
