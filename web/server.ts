@@ -2,7 +2,7 @@
  * 服务入口
  */
 import express from "express"
-import { PORT, PROJECT_ROOT, DRAFTS_DIR, CACHE_DIR, SERVER_AI_CONFIG, STATIC_DIR } from "./server/config.ts"
+import { PORT, HOST, PROJECT_ROOT, DRAFTS_DIR, CACHE_DIR, SERVER_AI_CONFIG, STATIC_DIR } from "./server/config.ts"
 import { logger } from "./server/logger.ts"
 import { performanceMonitorMiddleware } from "./server/performanceMonitor.ts"
 import articlesRouter from "./server/routes/articles.ts"
@@ -45,6 +45,8 @@ import {
 
 const app = express()
 app.disable("x-powered-by")
+// 生产拓扑只有一层本机 Nginx；仅信任 loopback，避免公网伪造 X-Forwarded-For 绕过限流。
+app.set("trust proxy", "loopback")
 
 const CACHE_TTL_DAYS = 7
 const CLEANUP_HOUR = 2
@@ -163,8 +165,8 @@ for (const t of BUILTIN_TEMPLATES_DATA) { upsertTemplate(t) }
 console.log(`[DB] 内置模板已同步（${BUILTIN_TEMPLATES_DATA.length} 个）`)
 seedBuiltinPrompts()
 
-app.listen(PORT, () => {
+app.listen(Number(PORT), HOST, () => {
   initCronScheduler()
-  logger.info("SERVER", "服务启动成功", { port: PORT, projectRoot: PROJECT_ROOT, draftsDir: DRAFTS_DIR, dbPath: `${CACHE_DIR}/../app.db` })
-  console.log(`Server running at http://localhost:${PORT}`)
+  logger.info("SERVER", "服务启动成功", { host: HOST, port: PORT, projectRoot: PROJECT_ROOT, draftsDir: DRAFTS_DIR, dbPath: `${CACHE_DIR}/../app.db` })
+  console.log(`Server running at http://${HOST}:${PORT}`)
 })

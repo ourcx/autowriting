@@ -35,6 +35,7 @@ EXPENSIVE_RATE_LIMIT_MAX=30
 限流状态保存在当前 Node.js 进程内，适合项目当前的单实例部署。改成 PM2 cluster 或多副本部署前，应接入 Redis 等共享存储，否则各实例会分别计数。
 
 若通过 Nginx 或负载均衡转发流量，不要直接把 Express 的 `trust proxy` 设置成 `true`。应按真实代理层数配置，并确认外部请求不能伪造用于限流的客户端 IP。
+当前部署只信任 loopback 代理；服务器上的 PM2 应配置 `HOST=127.0.0.1`，避免 Node 端口绕过 Nginx 直接暴露。Docker 场景不配置 `HOST` 时仍默认监听 `0.0.0.0`。
 
 ## 查询与输出边界
 
