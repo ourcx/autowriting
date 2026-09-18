@@ -2,7 +2,6 @@
  * 服务入口
  */
 import express from "express"
-import cors from "cors"
 import { PORT, PROJECT_ROOT, DRAFTS_DIR, CACHE_DIR, SERVER_AI_CONFIG, STATIC_DIR } from "./server/config.ts"
 import { logger } from "./server/logger.ts"
 import { performanceMonitorMiddleware } from "./server/performanceMonitor.ts"
@@ -33,6 +32,12 @@ import { upsertTemplate, db } from "./server/db.ts"
 import { BUILTIN_TEMPLATES_DATA } from "./server/builtinTemplates.ts"
 import { seedBuiltinPrompts } from "./server/seedPrompts.ts"
 import { cleanupXiaohongshuDebugArtifacts } from "./server/utils/public.ts"
+import {
+  corsMiddleware,
+  errorHandler,
+  loginRateLimiter,
+  requestBodyLimits,
+} from "./server/security.ts"
 
 const app = express()
 
@@ -73,11 +78,18 @@ try {
 }
 scheduleCleanup()
 
-app.use(cors())
-app.use(express.json({ limit: "50mb" }))
-app.use(express.urlencoded({ limit: "50mb", extended: true }))
+app.use(corsMiddleware)
+app.use([
+  "/api/images/upload-base64",
+  "/api/generate-cover",
+  "/api/generate-covers-batch",
+  "/api/canvas",
+], express.json({ limit: requestBodyLimits.largeJson }))
+app.use(express.json({ limit: requestBodyLimits.defaultJson }))
+app.use(express.urlencoded({ limit: requestBodyLimits.urlEncoded, extended: true }))
 app.use(performanceMonitorMiddleware)
 
+app.use("/api/auth/login", loginRateLimiter)
 app.use("/api/auth", authRouter)
 app.use("/api/agent", agentRouter)
 app.use("/api/canvas", canvasRouter)
@@ -137,6 +149,8 @@ if (process.env.NODE_ENV === "production") {
     res.sendFile("index.html", { root: STATIC_DIR })
   })
 }
+
+app.use(errorHandler)
 
 for (const t of BUILTIN_TEMPLATES_DATA) { upsertTemplate(t) }
 console.log(`[DB] 内置模板已同步（${BUILTIN_TEMPLATES_DATA.length} 个）`)

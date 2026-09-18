@@ -23,6 +23,7 @@ const WEB_ROOT = resolve(__dirname, '..')
 const PORT = process.env.SMOKE_PORT || '3000'
 const BASE = `http://127.0.0.1:${PORT}`
 const SMOKE_AGENT_API_KEY = 'smoke-agent-api-key'
+const SMOKE_ALLOWED_ORIGIN = 'https://allowed.example.test'
 const SMOKE_DATA_ROOT = mkdtempSync(join(tmpdir(), 'autowriting-smoke-'))
 const SMOKE_STATIC_ROOT = join(SMOKE_DATA_ROOT, 'dist')
 const SMOKE_INDEX_MARKER = `autowriting-smoke-index-${Date.now()}`
@@ -69,6 +70,7 @@ function startServer() {
       STATIC_DIR: SMOKE_STATIC_ROOT,
       AGENT_API_KEY: SMOKE_AGENT_API_KEY,
       AGENT_USERNAME: 'admin',
+      CORS_ALLOWED_ORIGINS: SMOKE_ALLOWED_ORIGIN,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
@@ -98,6 +100,49 @@ cases.push({
   run: async () => {
     const r = await fetch(`${BASE}/health`)
     if (!r.ok) throw new Error(`status=${r.status}`)
+  },
+})
+
+cases.push({
+  name: 'CORS 白名单只允许明确配置的来源',
+  run: async () => {
+    const allowed = await fetch(`${BASE}/health`, { headers: { Origin: SMOKE_ALLOWED_ORIGIN } })
+    if (allowed.headers.get('access-control-allow-origin') !== SMOKE_ALLOWED_ORIGIN) {
+      throw new Error('白名单来源未收到正确的 CORS 响应头')
+    }
+
+    const denied = await fetch(`${BASE}/health`, { headers: { Origin: 'https://denied.example.test' } })
+    if (denied.status !== 403) throw new Error(`非白名单来源期望 403，实际 ${denied.status}`)
+    if (denied.headers.has('access-control-allow-origin')) throw new Error('非白名单来源不应收到 CORS 允许头')
+  },
+})
+
+cases.push({
+  name: '普通 JSON 请求超过 1MB 应返回 413',
+  run: async () => {
+    const r = await fetch(`${BASE}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'oversized', password: 'x'.repeat(1024 * 1024) }),
+    })
+    if (r.status !== 413) throw new Error(`期望 413，实际 ${r.status}`)
+    const body = await r.json()
+    if (body.error !== '请求内容过大') throw new Error(`错误信息不正确：${JSON.stringify(body)}`)
+  },
+})
+
+cases.push({
+  name: '非法 JSON 返回安全的 400 响应',
+  run: async () => {
+    const r = await fetch(`${BASE}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{invalid',
+    })
+    if (r.status !== 400) throw new Error(`期望 400，实际 ${r.status}`)
+    const text = await r.text()
+    if (!text.includes('JSON 格式不正确')) throw new Error(`错误信息不正确：${text}`)
+    if (/SyntaxError|server\.ts|node_modules/.test(text)) throw new Error('响应泄露了内部错误信息')
   },
 })
 
@@ -328,6 +373,24 @@ cases.push({
     smokeUserId = j.user?.id
     if (!token) throw new Error('响应中没有 token')
     if (!smokeUserId) throw new Error('响应中没有用户 ID')
+  },
+})
+cases.push({
+  name: '同一用户名连续登录失败应触发限流',
+  run: async () => {
+    const username = `missing_${Date.now()}`
+    for (let attempt = 1; attempt <= 6; attempt++) {
+      const r = await fetch(`${BASE}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password: 'wrong-password' }),
+      })
+      if (attempt <= 5 && r.status !== 401) throw new Error(`第 ${attempt} 次期望 401，实际 ${r.status}`)
+      if (attempt === 6) {
+        if (r.status !== 429) throw new Error(`第 6 次期望 429，实际 ${r.status}`)
+        if (!r.headers.has('retry-after')) throw new Error('429 响应缺少 Retry-After')
+      }
+    }
   },
 })
 cases.push({
