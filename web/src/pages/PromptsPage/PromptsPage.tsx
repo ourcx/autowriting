@@ -5,6 +5,7 @@ import {
   RotateCcw, CheckCircle, Zap, Search,
 } from 'lucide-react'
 import PageHeader from '../../components/PageHeader/PageHeader'
+import { fetchJson } from '../../utils/apiHelpers'
 import '../../styles/PromptsPage.css'
 
 interface Prompt {
@@ -28,6 +29,12 @@ interface PromptVersion {
   content: string
   changeNote: string
   createdAt: string
+}
+
+interface PromptResponse<T> {
+  success: boolean
+  data: T
+  error?: string
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -84,8 +91,7 @@ export default function PromptsPage() {
   const fetchPrompts = async () => {
     try {
       setLoading(true)
-      const res = await fetch('/api/prompts/list')
-      const data = await res.json()
+      const data = await fetchJson<PromptResponse<Prompt[]>>('/api/prompts/list')
       if (data.success) setPrompts(data.data)
     } catch (e) {
       console.error('获取提示词失败:', e)
@@ -96,8 +102,7 @@ export default function PromptsPage() {
 
   const fetchVersions = async (promptId: string) => {
     try {
-      const res = await fetch(`/api/prompts/${promptId}/versions`)
-      const data = await res.json()
+      const data = await fetchJson<PromptResponse<PromptVersion[]>>(`/api/prompts/${promptId}/versions`)
       if (data.success) setVersions(data.data)
     } catch (e) {
       console.error('获取版本历史失败:', e)
@@ -144,12 +149,11 @@ export default function PromptsPage() {
         ? `/api/prompts/${selectedPrompt.id}/override`
         : `/api/prompts/${selectedPrompt.id}/update`
 
-      const res = await fetch(endpoint, {
+      const data = await fetchJson<PromptResponse<Prompt>>(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: editingContent, changeNote }),
       })
-      const data = await res.json()
       if (data.success) {
         setShowEditor(false)
         setChangeNote('')
@@ -168,8 +172,7 @@ export default function PromptsPage() {
   const handleResetOverride = async (builtinId: string) => {
     if (!confirm('确定要重置为内置默认版本吗？自定义修改将被删除。')) return
     try {
-      const res = await fetch(`/api/prompts/${builtinId}/reset-override`, { method: 'POST' })
-      const data = await res.json()
+      const data = await fetchJson<PromptResponse<Prompt>>(`/api/prompts/${builtinId}/reset-override`, { method: 'POST' })
       if (data.success) {
         await fetchPrompts()
         showToast('已重置为内置默认版本')
@@ -184,8 +187,7 @@ export default function PromptsPage() {
   const handleDelete = async (promptId: string) => {
     if (!confirm('确定要删除这个提示词吗？')) return
     try {
-      const res = await fetch(`/api/prompts/${promptId}/delete`, { method: 'POST' })
-      const data = await res.json()
+      const data = await fetchJson<PromptResponse<Prompt>>(`/api/prompts/${promptId}/delete`, { method: 'POST' })
       if (data.success) {
         setSelectedPrompt(null)
         await fetchPrompts()
@@ -205,8 +207,7 @@ export default function PromptsPage() {
     if (!selectedPrompt) return
     if (!confirm(`确定要恢复到版本 ${version} 吗？`)) return
     try {
-      const res = await fetch(`/api/prompts/${selectedPrompt.id}/restore/${version}`, { method: 'POST' })
-      const data = await res.json()
+      const data = await fetchJson<PromptResponse<Prompt>>(`/api/prompts/${selectedPrompt.id}/restore/${version}`, { method: 'POST' })
       if (data.success) {
         setSelectedPrompt(data.data)
         await fetchPrompts()
@@ -232,7 +233,7 @@ export default function PromptsPage() {
     }
     setSaving(true)
     try {
-      const res = await fetch('/api/prompts/create', {
+      const data = await fetchJson<PromptResponse<Prompt>>('/api/prompts/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -243,7 +244,6 @@ export default function PromptsPage() {
           tags: newPrompt.tags || [],
         }),
       })
-      const data = await res.json()
       if (data.success) {
         setIsCreating(false)
         await fetchPrompts()

@@ -599,31 +599,51 @@ export async function generateCoverImage(input: Record<string, unknown>): Promis
   return response.data as { imageUrl: string; warning?: string }
 }
 
-// ── 通用 JSON 请求（给 fetch 场景收口错误处理） ──
-export async function fetchJson<T = any>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init)
-  const data = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    const message = (data as any)?.error || (data as any)?.message || `HTTP ${response.status}`
-    throw new Error(message)
-  }
-  return data as T
+function normalizeRequestHeaders(headers?: HeadersInit): Record<string, string> | undefined {
+  if (!headers) return undefined
+  return Object.fromEntries(new Headers(headers).entries())
 }
 
-// ── 通用 Blob 请求（给文件预览 / 下载场景收口错误处理） ──
-export async function fetchBlob(url: string, init?: RequestInit): Promise<Blob> {
-  const response = await fetch(url, init)
-  if (!response.ok) {
-    let message = `HTTP ${response.status}`
-    try {
-      const data = await response.json()
-      message = data?.error || data?.message || message
-    } catch {
-      // ignore non-JSON error bodies
-    }
-    throw new Error(message)
+function normalizeApiError(error: unknown): Error {
+  const message = extractErrorMessage(error)
+  if (error instanceof Error) {
+    error.message = message
+    return error
   }
-  return response.blob()
+  return new Error(message)
+}
+
+// ── 通用 JSON 请求：统一走 Axios，自动附带登录态 ──
+export async function fetchJson<T = unknown>(url: string, init: RequestInit = {}): Promise<T> {
+  try {
+    const response = await axios.request<T>({
+      url,
+      method: init.method ?? "GET",
+      headers: normalizeRequestHeaders(init.headers),
+      data: init.body,
+      signal: init.signal ?? undefined,
+    })
+    return response.data
+  } catch (error) {
+    throw normalizeApiError(error)
+  }
+}
+
+// ── 通用 Blob 请求：统一走 Axios，自动附带登录态 ──
+export async function fetchBlob(url: string, init: RequestInit = {}): Promise<Blob> {
+  try {
+    const response = await axios.request<Blob>({
+      url,
+      method: init.method ?? "GET",
+      headers: normalizeRequestHeaders(init.headers),
+      data: init.body,
+      signal: init.signal ?? undefined,
+      responseType: "blob",
+    })
+    return response.data
+  } catch (error) {
+    throw normalizeApiError(error)
+  }
 }
 
 // ── 连通性测试（发 max_tokens=1 的最小请求） ──

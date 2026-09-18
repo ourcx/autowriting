@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { showConfirm } from '../Toast/Toast'
+import { fetchJson } from '../../utils/apiHelpers'
 import './ImageLibrary.css'
 
 interface ImageItem {
@@ -17,6 +18,12 @@ interface ImageLibraryProps {
   onImageSelect?: (image: ImageItem) => void
 }
 
+interface ImageStats {
+  totalImages: number
+  categories: number
+  providers: number
+}
+
 export const ImageLibrary: React.FC<ImageLibraryProps> = ({ onImageSelect }) => {
   const [images, setImages] = useState<ImageItem[]>([])
   const [categories, setCategories] = useState<string[]>([])
@@ -24,7 +31,7 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({ onImageSelect }) => 
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [allTags, setAllTags] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
-  const [stats, setStats] = useState<any>(null)
+  const [stats, setStats] = useState<ImageStats | null>(null)
 
   // 加载图片库
   useEffect(() => {
@@ -46,9 +53,7 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({ onImageSelect }) => 
       if (selectedCategory) params.append('category', selectedCategory)
       if (selectedTags.length > 0) params.append('tags', selectedTags.join(','))
 
-      const response = await fetch(`/api/images?${params}`)
-      const data = await response.json()
-      setImages(data)
+      setImages(await fetchJson<ImageItem[]>(`/api/images?${params}`))
     } catch (error) {
       console.error('Error loading images:', error)
     } finally {
@@ -58,9 +63,7 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({ onImageSelect }) => 
 
   const loadCategories = async () => {
     try {
-      const response = await fetch('/api/images/categories')
-      const data = await response.json()
-      setCategories(data)
+      setCategories(await fetchJson<string[]>('/api/images/categories'))
     } catch (error) {
       console.error('Error loading categories:', error)
     }
@@ -68,9 +71,7 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({ onImageSelect }) => 
 
   const loadTags = async () => {
     try {
-      const response = await fetch('/api/images/tags')
-      const data = await response.json()
-      setAllTags(data)
+      setAllTags(await fetchJson<string[]>('/api/images/tags'))
     } catch (error) {
       console.error('Error loading tags:', error)
     }
@@ -78,9 +79,7 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({ onImageSelect }) => 
 
   const loadStats = async () => {
     try {
-      const response = await fetch('/api/images/stats')
-      const data = await response.json()
-      setStats(data)
+      setStats(await fetchJson<ImageStats>('/api/images/stats'))
     } catch (error) {
       console.error('Error loading stats:', error)
     }
@@ -93,11 +92,9 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({ onImageSelect }) => 
       danger: true,
       onConfirm: async () => {
         try {
-          const response = await fetch(`/api/images/${id}`, { method: 'DELETE' })
-          if (response.ok) {
-            loadImages()
-            loadStats()
-          }
+          await fetchJson(`/api/images/${id}`, { method: 'DELETE' })
+          loadImages()
+          loadStats()
         } catch (error) {
           console.error('Error deleting image:', error)
         }

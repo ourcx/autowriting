@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Search, Copy, X, Zap, ChevronRight } from 'lucide-react'
+import { fetchJson } from '../../utils/apiHelpers'
 import './PromptSelector.css'
 
 interface Prompt {
@@ -34,8 +35,7 @@ export default function PromptSelector({ onSelect, onClose, category }: PromptSe
   async function fetchPrompts() {
     try {
       setLoading(true)
-      const res = await fetch('/api/prompts/list')
-      const data = await res.json()
+      const data = await fetchJson<{ success: boolean; data: Prompt[] }>('/api/prompts/list')
       if (data.success) {
         setPrompts(data.data)
       }

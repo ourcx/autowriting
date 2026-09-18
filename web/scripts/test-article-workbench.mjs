@@ -18,6 +18,7 @@ try {
   let emptyToutiao = false
   let coverGeneratedWithAuth = false
   let coverSavedWithAuth = false
+  const authenticatedPageRequests = []
   const unexpectedWrites = []
   const pageErrors = []
   const requestedModules = []
@@ -26,6 +27,7 @@ try {
   await page.addInitScript(() => {
     localStorage.setItem('auth_token', 'workbench-test-token')
     localStorage.setItem('onboarding-completed', 'true')
+    localStorage.setItem('wechat_credentials', JSON.stringify({ appId: 'wx-fixture', appSecret: 'secret-fixture' }))
   })
   await page.route('**/api/**', async route => {
     const request = route.request()
@@ -44,6 +46,22 @@ try {
     if (url.pathname === '/api/articles/workflow-metrics') return route.abort()
     if (url.pathname === '/api/toutiao/status') return route.fulfill({ json: { ready: true } })
     if (url.pathname === '/api/templates') return route.fulfill({ json: [] })
+    if (url.pathname === '/api/prompts/list') {
+      authenticatedPageRequests.push({ path: url.pathname, headers: request.headers() })
+      return route.fulfill({ json: { success: true, data: [] } })
+    }
+    if (['/api/images', '/api/images/categories', '/api/images/tags'].includes(url.pathname)) {
+      authenticatedPageRequests.push({ path: url.pathname, headers: request.headers() })
+      return route.fulfill({ json: [] })
+    }
+    if (url.pathname === '/api/images/stats') {
+      authenticatedPageRequests.push({ path: url.pathname, headers: request.headers() })
+      return route.fulfill({ json: { totalImages: 0, categories: 0, providers: 0 } })
+    }
+    if (url.pathname === '/api/wechat/drafts') {
+      authenticatedPageRequests.push({ path: url.pathname, headers: request.headers() })
+      return route.fulfill({ json: { items: [], total_count: 0, item_count: 0 } })
+    }
     if (url.pathname === '/api/generate-cover') {
       coverGeneratedWithAuth = request.headers().authorization === 'Bearer workbench-test-token'
       return route.fulfill({ json: { imageUrl: 'data:image/svg+xml;base64,PHN2Zy8+' } })
@@ -260,6 +278,23 @@ try {
   await page.getByRole('button', { name: '重新加载', exact: true }).click()
   await page.getByRole('button', { name: '继续编辑：工作台验收文章' }).waitFor()
   await page.setViewportSize({ width: 1440, height: 960 })
+  await page.goto(`${baseUrl}/editor/workbench-test`)
+  await page.locator('.flow-step').first().waitFor()
+  await page.getByRole('button', { name: '图片库', exact: true }).click()
+  await page.getByRole('heading', { name: '图片库', exact: true }).waitFor()
+  await page.locator('.flow-step').filter({ hasText: '写作' }).click()
+  await page.getByRole('button', { name: '提示词', exact: true }).click()
+  await page.getByText('选择提示词', { exact: true }).waitFor()
+  await page.goto(`${baseUrl}/prompts`)
+  await page.getByText('提示词管理', { exact: true }).waitFor()
+  await page.goto(`${baseUrl}/drafts`)
+  await page.getByText('公众号管理', { exact: true }).waitFor()
+  await page.getByText('草稿箱是空的', { exact: true }).waitFor()
+  for (const entry of authenticatedPageRequests) {
+    assert.equal(entry.headers.authorization, 'Bearer workbench-test-token', `${entry.path} 必须携带登录 Token`)
+  }
+  const wechatDraftRequest = authenticatedPageRequests.find(entry => entry.path === '/api/wechat/drafts')
+  assert.equal(wechatDraftRequest?.headers['x-wx-appid'], 'wx-fixture', '微信请求必须同时保留公众号凭据')
   await page.goto(`${baseUrl}/editor/workbench-test`)
   await page.locator('.flow-step').first().waitFor()
 

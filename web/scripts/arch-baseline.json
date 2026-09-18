@@ -44,20 +44,16 @@
     "web/src/components/ContentStats/ContentStats.tsx::page-bare-fetch",
     "web/src/components/CoverGenerator/CoverGenerator.tsx::page-bare-fetch",
     "web/src/components/GenerateModal/GenerateModal.tsx::page-bare-fetch",
-    "web/src/components/ImageLibrary/ImageLibrary.tsx::page-bare-fetch",
     "web/src/components/MarkdownEditor/MarkdownEditor.tsx::page-bare-fetch",
     "web/src/components/MaterialsCollector/MaterialsCollector.tsx::page-bare-fetch",
     "web/src/components/PrivateRoute/PrivateRoute.tsx::component-import-store",
-    "web/src/components/PromptSelector/PromptSelector.tsx::page-bare-fetch",
     "web/src/components/WeChatRenderer/WeChatRenderer.tsx::page-bare-fetch",
     "web/src/pages/AISettings/AISettings.tsx::page-bare-fetch",
     "web/src/pages/ArticleEditor/ArticleEditor.tsx::page-bare-fetch",
     "web/src/pages/ArticleScorePage/ArticleScorePage.tsx::page-bare-fetch",
     "web/src/pages/Dashboard/Dashboard.tsx::page-bare-fetch",
-    "web/src/pages/PromptsPage/PromptsPage.tsx::page-bare-fetch",
     "web/src/pages/RagPage/RagPage.tsx::page-bare-fetch",
     "web/src/pages/StyleEditor/StyleEditor.tsx::page-bare-fetch",
-    "web/src/pages/TokenUsagePage/TokenUsagePage.tsx::page-bare-fetch",
-    "web/src/pages/WeChatDrafts/WeChatDrafts.tsx::page-bare-fetch"
+    "web/src/pages/TokenUsagePage/TokenUsagePage.tsx::page-bare-fetch"
   ]
 }
