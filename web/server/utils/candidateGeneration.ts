@@ -47,11 +47,11 @@ export async function streamCandidate(userId: string, articleId: string, id: str
     const { input } = candidate
     const profile = formatCreatorProfileForPrompt(normalizeCreatorWritingProfile(getSetting(`creator_writing_profile:${userId}`)))
     const examples = await formatExampleContext(userId).catch(() => "")
-    const memory = getSetting("global_memory")
+    const memory = getSetting(`global_memory:${userId}`)
     const promptId = input.platform === "wechat" ? "prompt-article-generate" : "prompt-article-generate-toutiao"
     const instruction = getEffectivePrompt(promptId)?.content || "你是专业的文章创作者。"
     const prompt = `${getWritingGuideContent()}\n${profile}\n${examples}
-${typeof memory === "string" && memory ? `# 全局背景信息\n${memory}` : ""}
+${typeof memory === "string" && memory ? `# 个人背景信息（永久记忆）\n${memory}` : ""}
 # 本次任务
 ${input.task}
 # 素材

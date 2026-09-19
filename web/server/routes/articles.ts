@@ -479,9 +479,9 @@ router.post('/:articleId/generate', async (req, res) => {
     })
     const currentDateTimeGen = formatterGen.format(nowGen)
 
-    // 全局永久记忆
-    const globalMemoryGen = getSetting('global_memory')
-    const globalMemorySectionGen = globalMemoryGen ? `\n# 全局背景信息（永久记忆）\n${globalMemoryGen}\n` : ''
+    // 当前用户的永久记忆
+    const globalMemoryGen = getSetting(`global_memory:${req.user.id}`)
+    const globalMemorySectionGen = globalMemoryGen ? `\n# 个人背景信息（永久记忆）\n${globalMemoryGen}\n` : ''
 
     const userPrompt = `${writingGuideSection}${creatorProfileSection}${globalMemorySectionGen}
 # 当前时间
@@ -681,9 +681,9 @@ router.post('/:articleId/generate/stream', async (req, res) => {
     })
     const currentDateTime = formatter.format(now)
 
-    // 全局永久记忆
-    const globalMemory = getSetting('global_memory')
-    const globalMemorySection = globalMemory ? `\n# 全局背景信息（永久记忆）\n${globalMemory}\n` : ''
+    // 当前用户的永久记忆
+    const globalMemory = getSetting(`global_memory:${req.user.id}`)
+    const globalMemorySection = globalMemory ? `\n# 个人背景信息（永久记忆）\n${globalMemory}\n` : ''
 
     // ── 公众号 prompt ──────────────────────────────────────────────────────────
     const wechatPrompt = `${writingGuideSection}${creatorProfileSection}${ragSection}${exampleSection ? '\n' + exampleSection + '\n' : ''}${globalMemorySection}

@@ -14,6 +14,7 @@ import {
 } from '../../utils/aiConfig'
 import PageHeader from '../../components/PageHeader/PageHeader'
 import { useConfigStore, setLocalConfig, fetchServerStatus } from '../../store/useConfigStore'
+import axios from 'axios'
 import { testAIConnection } from '../../utils/apiHelpers'
 import './AISettings.css'
 
@@ -24,7 +25,7 @@ const NAV_ITEMS: { id: Section; icon: React.ReactNode; label: string; sub: strin
   { id: 'cover', icon: <Image size={16} />, label: '封面生成', sub: '图片生成 API' },
   { id: 'search', icon: <Search size={16} />, label: '素材搜索', sub: '搜索引擎 API' },
   { id: 'cdn', icon: <Image size={16} />, label: '图床配置', sub: 'Imgur 图片 CDN' },
-  { id: 'memory', icon: <Brain size={16} />, label: '永久记忆', sub: '每次生成都注入' },
+  { id: 'memory', icon: <Brain size={16} />, label: '个人记忆', sub: '仅当前账号使用' },
 ]
 
 export default function AISettings() {
@@ -47,12 +48,8 @@ export default function AISettings() {
 
   const loadGlobalMemory = useCallback(async () => {
     try {
-      const token = localStorage.getItem('auth_token')
-      const r = await fetch('/api/settings/global_memory', {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-      })
-      const d = await r.json()
-      setGlobalMemory(d.value || '')
+      const response = await axios.get<{ value: unknown }>('/api/settings/global_memory')
+      setGlobalMemory(typeof response.data.value === 'string' ? response.data.value : '')
     } catch {
       setMemoryLoadError('加载失败')
     }
@@ -61,16 +58,7 @@ export default function AISettings() {
   const saveGlobalMemory = async () => {
     setMemorySaving(true)
     try {
-      const token = localStorage.getItem('auth_token')
-      const r = await fetch('/api/settings/global_memory', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ value: globalMemory }),
-      })
-      if (!r.ok) throw new Error('保存失败')
+      await axios.put('/api/settings/global_memory', { value: globalMemory })
       setMemorySaved(true)
       setTimeout(() => setMemorySaved(false), 2500)
     } catch {
@@ -896,12 +884,12 @@ export default function AISettings() {
           {activeSection === 'memory' && (
             <div className="as-panel">
               <div className="as-panel-header">
-                <h2 className="as-panel-title">永久记忆</h2>
-                <p className="as-panel-desc">这里的内容会在每次生成文章时自动注入到 AI 提示词中，适合放置写作背景、账号定位、常用素材模板等固定信息</p>
+                <h2 className="as-panel-title">个人永久记忆</h2>
+                <p className="as-panel-desc">仅当前登录账号可见，并会在该账号每次生成文章时自动注入到 AI 提示词中，适合放置写作背景、账号定位、常用素材模板等固定信息</p>
               </div>
 
               <div className="as-card">
-                <div className="as-card-section-label">全局背景内容</div>
+                <div className="as-card-section-label">当前账号的背景内容</div>
                 <p className="as-card-desc">
                   支持 Markdown 格式。建议包含：账号定位、目标读者、写作风格偏好、常见禁忌词、固定参考数据等。
                 </p>

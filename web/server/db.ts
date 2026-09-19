@@ -52,6 +52,8 @@ migrateFromLegacyCache()
 
 const DB_PATH = path.join(DATA_DIR, "app.db")
 export const db = new Database(DB_PATH)
+const GLOBAL_MEMORY_KEY = "global_memory"
+const USER_GLOBAL_MEMORY_PREFIX = `${GLOBAL_MEMORY_KEY}:`
 
 // WAL 模式：读写并发更好
 db.pragma("journal_mode = WAL")
@@ -507,6 +509,18 @@ function seedAdminUser(): void {
 }
 
 seedAdminUser()
+
+function migrateLegacyGlobalMemory(): void {
+  const legacy = db.prepare("SELECT value, updated_at FROM settings WHERE key = ?").get(GLOBAL_MEMORY_KEY) as { value: string; updated_at: string } | undefined
+  if (!legacy) return
+  const admin = db.prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY created_at ASC LIMIT 1").get() as { id: string } | undefined
+  if (!admin) return
+  db.prepare(`
+    INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+  `).run(`${USER_GLOBAL_MEMORY_PREFIX}${admin.id}`, legacy.value, legacy.updated_at)
+}
+
+migrateLegacyGlobalMemory()
 
 // ── Users API ─────────────────────────────────────────────────────────────────
 

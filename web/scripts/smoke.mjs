@@ -509,6 +509,48 @@ cases.push({
   },
 })
 cases.push({
+  name: '永久记忆应按当前用户隔离',
+  run: async () => {
+    const primaryHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+    const primaryMemory = `primary-memory-${Date.now()}`
+    const savePrimary = await fetch(`${BASE}/api/settings/global_memory`, {
+      method: 'PUT', headers: primaryHeaders, body: JSON.stringify({ value: primaryMemory }),
+    })
+    if (!savePrimary.ok) throw new Error(`主账号保存失败 status=${savePrimary.status}`)
+
+    const otherUser = { username: `smoke_memory_other_${Date.now()}`, password: 'smoke_pw_9999' }
+    const registerResponse = await fetch(`${BASE}/api/auth/register`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(otherUser),
+    })
+    if (!registerResponse.ok) throw new Error(`副账号注册失败 status=${registerResponse.status}`)
+    const loginResponse = await fetch(`${BASE}/api/auth/login`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(otherUser),
+    })
+    if (!loginResponse.ok) throw new Error(`副账号登录失败 status=${loginResponse.status}`)
+    const otherToken = (await loginResponse.json()).token
+    const otherHeaders = { Authorization: `Bearer ${otherToken}`, 'Content-Type': 'application/json' }
+
+    const initialOther = await (await fetch(`${BASE}/api/settings/global_memory`, { headers: otherHeaders })).json()
+    if (initialOther.value) throw new Error('副账号读取到了主账号永久记忆')
+    const allOther = await (await fetch(`${BASE}/api/settings`, { headers: otherHeaders })).json()
+    if (allOther.global_memory) throw new Error('批量配置接口泄漏了主账号永久记忆')
+    if (Object.keys(allOther).some(key => key.startsWith('global_memory:'))) throw new Error('批量配置接口暴露了私有存储键')
+
+    const forbidden = await fetch(`${BASE}/api/settings/global_memory:${smokeUserId}`, { headers: otherHeaders })
+    if (forbidden.status !== 403) throw new Error(`跨用户私有键访问期望 403，实际 ${forbidden.status}`)
+
+    const otherMemory = `other-memory-${Date.now()}`
+    const saveOther = await fetch(`${BASE}/api/settings/global_memory`, {
+      method: 'PUT', headers: otherHeaders, body: JSON.stringify({ value: otherMemory }),
+    })
+    if (!saveOther.ok) throw new Error(`副账号保存失败 status=${saveOther.status}`)
+    const readPrimary = await (await fetch(`${BASE}/api/settings/global_memory`, { headers: primaryHeaders })).json()
+    const readOther = await (await fetch(`${BASE}/api/settings/global_memory`, { headers: otherHeaders })).json()
+    if (readPrimary.value !== primaryMemory) throw new Error('副账号写入覆盖了主账号永久记忆')
+    if (readOther.value !== otherMemory) throw new Error('副账号未读到自己的永久记忆')
+  },
+})
+cases.push({
   name: '创作反馈接口应返回可解释统计结构',
   run: async () => {
     const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
