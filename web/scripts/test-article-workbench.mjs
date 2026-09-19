@@ -23,6 +23,7 @@ try {
   const unexpectedWrites = []
   const pageErrors = []
   const requestedModules = []
+  let analyticsCookieRequest = null
   const analyticsSnapshot = {
     version: 1,
     source: 'wechat-browser',
@@ -48,6 +49,7 @@ try {
     localStorage.setItem('onboarding-completed', 'true')
     localStorage.setItem('wechat_credentials', JSON.stringify({ appId: 'wx-fixture', appSecret: 'secret-fixture' }))
     localStorage.setItem('toutiao_cookies', JSON.stringify([{ name: 'sessionid', value: 'fixture', domain: '.toutiao.com' }]))
+    localStorage.setItem('wechat_analytics_cookies:fixture', JSON.stringify([{ name: 'slave_sid', value: 'fixture', domain: '.mp.weixin.qq.com' }]))
   })
   await page.route('**/api/**', async route => {
     const request = route.request()
@@ -66,16 +68,15 @@ try {
     if (url.pathname === '/api/articles/workflow-metrics') return route.abort()
     if (url.pathname === '/api/wechat-analytics') return route.fulfill({ json: {
       snapshots: [analyticsSnapshot],
-      config: { enabled: true, intervalHours: 24 },
-      state: { status: 'succeeded', lastSuccessAt: analyticsSnapshot.collectedAt, message: '已采集 8 篇文章' },
-      collectorAvailable: true,
-    } })
-    if (url.pathname === '/api/wechat-analytics/config') return route.fulfill({ json: request.postDataJSON() })
-    if (url.pathname === '/api/wechat-analytics/collect') return route.fulfill({ json: {
-      snapshot: analyticsSnapshot,
-      config: { enabled: true, intervalHours: 24 },
       state: { status: 'succeeded', lastSuccessAt: analyticsSnapshot.collectedAt, message: '已采集 8 篇文章' },
     } })
+    if (url.pathname === '/api/wechat-analytics/collect') {
+      analyticsCookieRequest = request.postDataJSON().cookies
+      return route.fulfill({ json: {
+        snapshot: analyticsSnapshot,
+        state: { status: 'succeeded', lastSuccessAt: analyticsSnapshot.collectedAt, message: '已采集 8 篇文章' },
+      } })
+    }
     if (url.pathname === '/api/toutiao/status') return route.fulfill({ json: { ready: true } })
     if (url.pathname === '/api/toutiao/account') return route.fulfill({ json: { nickname: 'fixture', cached: false } })
     if (url.pathname === '/api/toutiao/publish') {
@@ -296,6 +297,9 @@ try {
   emptyToutiao = false
   await page.goto(`${baseUrl}/insights`)
   await page.getByRole('heading', { name: '下一篇，值得写什么' }).waitFor()
+  await page.getByRole('button', { name: '立即同步' }).click()
+  await page.getByText('已自动同步 8 篇文章', { exact: true }).waitFor()
+  assert.match(analyticsCookieRequest, /slave_sid/)
   await page.getByText('8', { exact: true }).first().waitFor()
   await page.getByRole('textbox', { name: '主题关键词' }).fill('校园跑')
   await page.getByText('1 篇匹配', { exact: false }).waitFor()
@@ -368,6 +372,10 @@ try {
   await page.getByRole('button', { name: '保存写作档案', exact: true }).click()
   await page.waitForFunction(() => document.body.textContent?.includes('账号写作档案'))
   assert.equal(savedProfile.audience, '校园内容读者')
+  await page.goto(`${baseUrl}/account`)
+  await page.getByText('微信内容分析', { exact: true }).waitFor()
+  await page.getByText('内容分析 Cookie', { exact: true }).waitFor()
+  await page.screenshot({ path: join(screenshots, 'account-cookie-binding.png'), fullPage: true })
   assert.deepEqual(pageErrors, [])
   assert.deepEqual(unexpectedWrites, [])
   console.log(`截图：${screenshots}`)

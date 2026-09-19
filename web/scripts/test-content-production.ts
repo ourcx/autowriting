@@ -7,6 +7,7 @@ import {
 } from "../shared/contentProduction.ts"
 import { acquireCandidate, CandidateError } from "../server/generationCandidates.ts"
 import { rankWechatArticles, wechatAnalyticsSchema } from "../shared/wechatAnalytics.ts"
+import { parseWechatCookieJson } from "../server/utils/platformCookies.ts"
 
 const profile = normalizeCreatorWritingProfile({
   audience: "大学生",
@@ -57,6 +58,25 @@ assert.equal(ranked[0].band, "high")
 assert.equal(ranked.at(-1)?.band, "low")
 assert.equal(ranked[0].rank, 1)
 assert.equal(ranked.at(-1)?.rank, 8)
+assert.deepEqual(parseWechatCookieJson(JSON.stringify([{
+  name: "slave_sid",
+  value: "fixture",
+  domain: ".mp.weixin.qq.com",
+  expirationDate: 1800000000,
+}]))[0], {
+  name: "slave_sid",
+  value: "fixture",
+  domain: ".mp.weixin.qq.com",
+  path: "/",
+  secure: true,
+  httpOnly: false,
+  sameSite: "Lax",
+  expires: 1800000000,
+})
+assert.throws(
+  () => parseWechatCookieJson('[{"name":"session","value":"fixture","domain":".example.com"}]'),
+  /域名不属于微信公众平台/,
+)
 
 const releaseCandidates = [
   acquireCandidate("concurrency-test-user", "candidate-1"),

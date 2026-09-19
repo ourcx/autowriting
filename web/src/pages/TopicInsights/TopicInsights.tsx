@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { ArrowLeft, ArrowRight, Upload, Search, RefreshCw, Clock3 } from "lucide-react"
 import {
@@ -8,16 +8,24 @@ import {
   importWechatAnalytics,
   extractErrorMessage,
   saveArticle,
-  saveWechatAnalyticsConfig,
-  type WechatAnalyticsConfig,
   type WechatAnalyticsState,
 } from "../../utils/apiHelpers"
+import {
+  hasWechatAnalyticsCookies,
+  loadWechatAnalyticsCookies,
+  loadWechatAnalyticsRefreshConfig,
+  saveWechatAnalyticsRefreshConfig,
+  type WechatAnalyticsRefreshConfig,
+} from "../../utils/accountBindings"
+import { useAuth } from "../../store/useAuth"
 import { analyzeTopic, rankWechatArticles, topicBrief, wechatAnalyticsSchema, type WechatAnalyticsSnapshot } from "../../../shared/wechatAnalytics"
 import { toast } from "../../components/Toast/Toast"
 import "./TopicInsights.css"
 
 export default function TopicInsights() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const userId = user?.id || ""
   const [snapshots, setSnapshots] = useState<WechatAnalyticsSnapshot[]>([])
   const [index, setIndex] = useState(0)
   const [keyword, setKeyword] = useState("")
@@ -27,9 +35,9 @@ export default function TopicInsights() {
   const [error, setError] = useState("")
   const [busy, setBusy] = useState(false)
   const [drafts, setDrafts] = useState<Array<{ id: string; title: string }>>([])
-  const [config, setConfig] = useState<WechatAnalyticsConfig>({ enabled: false, intervalHours: 24 })
+  const [config, setConfig] = useState<WechatAnalyticsRefreshConfig>({ enabled: false, intervalHours: 24 })
   const [state, setState] = useState<WechatAnalyticsState>({ status: "idle" })
-  const [collectorAvailable, setCollectorAvailable] = useState(false)
+  const [cookieBound, setCookieBound] = useState(false)
   const snapshot = snapshots[index]
   const analysis = useMemo(() => snapshot ? analyzeTopic(snapshot, keyword) : null, [snapshot, keyword])
   const ranked = useMemo(() => snapshot ? rankWechatArticles(snapshot) : [], [snapshot])
@@ -42,45 +50,60 @@ export default function TopicInsights() {
     })(),
   })), [snapshots])
   const trendMax = Math.max(1, ...history.map(item => item.median))
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const response = await fetchWechatAnalytics()
       setSnapshots(response.snapshots)
-      setConfig(response.config)
       setState(response.state)
-      setCollectorAvailable(response.collectorAvailable)
       setDrafts(await fetchArticleList())
+      if (userId) {
+        setConfig(loadWechatAnalyticsRefreshConfig(userId))
+        setCookieBound(hasWechatAnalyticsCookies(userId))
+      }
       setError("")
     } catch { setError("数据未能加载，请刷新重试。") }
-  }
-  useEffect(() => { void load() }, [])
+  }, [userId])
+  useEffect(() => { void load() }, [load])
 
-  const collect = async () => {
+  const collect = useCallback(async () => {
+    const cookies = userId ? loadWechatAnalyticsCookies(userId) : ""
+    if (!cookies) {
+      setCookieBound(false)
+      setError("请先到用户页绑定微信公众号后台 Cookie JSON。")
+      return
+    }
     setBusy(true)
     setState(previous => ({ ...previous, status: "collecting", message: "正在读取微信后台" }))
     try {
-      const response = await collectWechatAnalytics()
+      const response = await collectWechatAnalytics(cookies)
       setSnapshots(previous => [response.snapshot, ...previous.filter(item =>
         item.accountName !== response.snapshot.accountName
         || item.period.start !== response.snapshot.period.start
         || item.period.end !== response.snapshot.period.end
       )])
-      setConfig(response.config)
       setState(response.state)
       setIndex(0)
       setError("")
       toast.success(`已自动同步 ${response.snapshot.articles.length} 篇文章`)
     } catch (caught) {
-      setError(extractErrorMessage(caught, "自动采集失败，请确认本机浏览器已打开微信内容分析页。"))
+      const message = extractErrorMessage(caught, "自动采集失败，请检查微信 Cookie JSON。")
       await load()
+      setError(message)
     } finally { setBusy(false) }
+  }, [load, userId])
+  const updateConfig = (next: WechatAnalyticsRefreshConfig) => {
+    if (!userId) return
+    saveWechatAnalyticsRefreshConfig(userId, next)
+    setConfig(next)
+    toast.success(next.enabled ? "已开启页面内定时刷新" : "已暂停定时刷新")
   }
-  const updateConfig = async (next: WechatAnalyticsConfig) => {
-    try {
-      setConfig(await saveWechatAnalyticsConfig(next))
-      toast.success(next.enabled ? "已开启定时刷新" : "已暂停定时刷新")
-    } catch { toast.error("刷新设置未保存") }
-  }
+  useEffect(() => {
+    if (!config.enabled || !cookieBound || busy) return
+    const elapsed = state.lastAttemptAt ? Date.now() - new Date(state.lastAttemptAt).getTime() : Number.POSITIVE_INFINITY
+    const delay = Math.max(1000, config.intervalHours * 3600000 - elapsed)
+    const timer = window.setTimeout(() => { void collect() }, delay)
+    return () => window.clearTimeout(timer)
+  }, [busy, collect, config.enabled, config.intervalHours, cookieBound, state.lastAttemptAt])
 
   const importSnapshot = async () => {
     setBusy(true)
@@ -125,13 +148,14 @@ export default function TopicInsights() {
     <section className="topic-sync" aria-label="微信数据同步">
       <div className={`topic-sync-state topic-sync-state--${state.status}`}><span />
         <strong>{state.status === "collecting" ? "正在同步" : state.status === "failed" ? "同步中断" : state.lastSuccessAt ? `上次同步 ${new Date(state.lastSuccessAt).toLocaleString()}` : "尚未同步"}</strong>
-        <small>{state.message || (collectorAvailable ? "已配置本机专用浏览器连接" : "本机浏览器连接未配置")}</small>
+        <small>{state.message || (cookieBound ? "Cookie JSON 已保存在当前浏览器" : "尚未绑定数据 Cookie")}</small>
       </div>
-      <label className="topic-switch"><input type="checkbox" checked={config.enabled} disabled={!collectorAvailable} onChange={event => void updateConfig({ ...config, enabled: event.target.checked })}/><span />定时刷新</label>
-      <label className="topic-interval"><Clock3 size={14}/><select aria-label="自动刷新间隔" value={config.intervalHours} disabled={!collectorAvailable || !config.enabled} onChange={event => void updateConfig({ ...config, intervalHours: Number(event.target.value) })}>
+      {!cookieBound && <button className="topic-bind-link" onClick={() => navigate("/account")}>绑定数据 Cookie</button>}
+      <label className="topic-switch"><input type="checkbox" checked={config.enabled} disabled={!cookieBound} onChange={event => updateConfig({ ...config, enabled: event.target.checked })}/><span />页面内定时刷新</label>
+      <label className="topic-interval"><Clock3 size={14}/><select aria-label="自动刷新间隔" value={config.intervalHours} disabled={!cookieBound || !config.enabled} onChange={event => updateConfig({ ...config, intervalHours: Number(event.target.value) })}>
         <option value={6}>每 6 小时</option><option value={12}>每 12 小时</option><option value={24}>每天</option><option value={72}>每 3 天</option>
       </select></label>
-      <button className="btn btn-primary" disabled={!collectorAvailable || busy} onClick={() => void collect()}><RefreshCw size={16} className={busy ? "topic-spin" : ""}/>{busy ? "同步中" : "立即同步"}</button>
+      <button className="btn btn-primary" disabled={!cookieBound || busy} onClick={() => void collect()}><RefreshCw size={16} className={busy ? "topic-spin" : ""}/>{busy ? "同步中" : "立即同步"}</button>
     </section>
     {error && <p role="alert" className="topic-error">{error}<button onClick={() => void load()}>重新加载</button></p>}
     <details className="topic-import">

@@ -6,6 +6,17 @@ export interface WechatCredentials {
 const WECHAT_CREDENTIALS_KEY = "wechat_credentials"
 const TOUTIAO_COOKIES_KEY = "toutiao_cookies"
 const XIAOHONGSHU_COOKIES_KEY = "xiaohongshu_cookies"
+const WECHAT_ANALYTICS_COOKIES_KEY = "wechat_analytics_cookies"
+const WECHAT_ANALYTICS_REFRESH_KEY = "wechat_analytics_refresh"
+
+export interface WechatAnalyticsRefreshConfig {
+  enabled: boolean
+  intervalHours: number
+}
+
+function scopedKey(prefix: string, userId: string): string {
+  return `${prefix}:${userId}`
+}
 
 export function loadWechatCredentials(): WechatCredentials | null {
   try {
@@ -76,6 +87,47 @@ export function hasXiaohongshuCookies(): boolean {
   } catch {
     return false
   }
+}
+
+export function loadWechatAnalyticsCookies(userId: string): string {
+  return localStorage.getItem(scopedKey(WECHAT_ANALYTICS_COOKIES_KEY, userId)) ?? ""
+}
+
+export function saveWechatAnalyticsCookies(userId: string, cookies: string): void {
+  localStorage.setItem(scopedKey(WECHAT_ANALYTICS_COOKIES_KEY, userId), cookies)
+}
+
+export function clearWechatAnalyticsCookies(userId: string): void {
+  localStorage.removeItem(scopedKey(WECHAT_ANALYTICS_COOKIES_KEY, userId))
+}
+
+export function hasWechatAnalyticsCookies(userId: string): boolean {
+  try {
+    const value: unknown = JSON.parse(loadWechatAnalyticsCookies(userId))
+    return Array.isArray(value) && value.length > 0
+  } catch {
+    return false
+  }
+}
+
+export function loadWechatAnalyticsRefreshConfig(userId: string): WechatAnalyticsRefreshConfig {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(scopedKey(WECHAT_ANALYTICS_REFRESH_KEY, userId)) || "null")
+    if (!value || typeof value !== "object") throw new Error("invalid")
+    const source = value as Record<string, unknown>
+    return {
+      enabled: source.enabled === true,
+      intervalHours: typeof source.intervalHours === "number" && Number.isFinite(source.intervalHours)
+        ? Math.min(168, Math.max(1, Math.round(source.intervalHours)))
+        : 24,
+    }
+  } catch {
+    return { enabled: false, intervalHours: 24 }
+  }
+}
+
+export function saveWechatAnalyticsRefreshConfig(userId: string, config: WechatAnalyticsRefreshConfig): void {
+  localStorage.setItem(scopedKey(WECHAT_ANALYTICS_REFRESH_KEY, userId), JSON.stringify(config))
 }
 
 function isWechatCredentials(value: unknown): value is WechatCredentials {

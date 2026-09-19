@@ -1,11 +1,6 @@
-import { getAllSettings, getSetting, setSetting } from "./db.ts"
+import { getSetting, setSetting } from "./db.ts"
 import { findArticleIdByTitle, readArticleContent, resolveArticleFiles } from "./articleStorage.ts"
 import { rankWechatArticles, wechatAnalyticsSchema, type WechatAnalyticsSnapshot } from "../shared/wechatAnalytics.ts"
-
-export interface WechatAnalyticsConfig {
-  enabled: boolean
-  intervalHours: number
-}
 
 export interface WechatAnalyticsState {
   status: "idle" | "collecting" | "succeeded" | "failed"
@@ -16,7 +11,6 @@ export interface WechatAnalyticsState {
 }
 
 const snapshotsKey = (userId: string) => `wechat_analytics:${userId}`
-const configKey = (userId: string) => `wechat_analytics_config:${userId}`
 const stateKey = (userId: string) => `wechat_analytics_state:${userId}`
 
 export function getWechatAnalyticsSnapshots(userId: string): WechatAnalyticsSnapshot[] {
@@ -51,28 +45,6 @@ export function saveWechatAnalyticsSnapshot(userId: string, input: unknown): Wec
   return snapshot
 }
 
-export function getWechatAnalyticsConfig(userId: string): WechatAnalyticsConfig {
-  const value = getSetting(configKey(userId))
-  if (!value || typeof value !== "object") return { enabled: false, intervalHours: 24 }
-  const source = value as Record<string, unknown>
-  const interval = typeof source.intervalHours === "number" && Number.isFinite(source.intervalHours)
-    ? Math.min(168, Math.max(1, Math.round(source.intervalHours)))
-    : 24
-  return { enabled: source.enabled === true, intervalHours: interval }
-}
-
-export function saveWechatAnalyticsConfig(userId: string, input: unknown): WechatAnalyticsConfig {
-  const source = input && typeof input === "object" ? input as Record<string, unknown> : {}
-  const config = getWechatAnalyticsConfig(userId)
-  if (typeof source.enabled === "boolean") config.enabled = source.enabled
-  if (source.intervalHours !== undefined) {
-    if (typeof source.intervalHours !== "number" || !Number.isFinite(source.intervalHours)) throw new Error("刷新间隔不正确")
-    config.intervalHours = Math.min(168, Math.max(1, Math.round(source.intervalHours)))
-  }
-  setSetting(configKey(userId), config)
-  return config
-}
-
 export function getWechatAnalyticsState(userId: string): WechatAnalyticsState {
   const value = getSetting(stateKey(userId))
   if (!value || typeof value !== "object") return { status: "idle" }
@@ -91,13 +63,6 @@ export function getWechatAnalyticsState(userId: string): WechatAnalyticsState {
 
 export function saveWechatAnalyticsState(userId: string, state: WechatAnalyticsState): void {
   setSetting(stateKey(userId), state)
-}
-
-export function listEnabledWechatAnalyticsUsers(): string[] {
-  return Object.entries(getAllSettings()).flatMap(([key, value]) => {
-    const match = key.match(/^wechat_analytics_config:(.+)$/)
-    return match && value && typeof value === "object" && (value as Record<string, unknown>).enabled === true ? [match[1]] : []
-  })
 }
 
 export function isWechatAnalyticsPrivateKey(key: string): boolean {

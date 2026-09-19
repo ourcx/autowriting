@@ -33,7 +33,6 @@ import { upsertTemplate, db } from "./server/db.ts"
 import { BUILTIN_TEMPLATES_DATA } from "./server/builtinTemplates.ts"
 import { seedBuiltinPrompts } from "./server/seedPrompts.ts"
 import { cleanupXiaohongshuDebugArtifacts } from "./server/utils/public.ts"
-import { startWechatAnalyticsScheduler } from "./server/wechatAnalyticsCollector.ts"
 import {
   apiRateLimiter,
   corsMiddleware,
@@ -86,7 +85,6 @@ try {
   })
 }
 scheduleCleanup()
-startWechatAnalyticsScheduler()
 
 app.use(securityHeaders)
 app.use(corsMiddleware)

@@ -1,18 +1,19 @@
 /**
- * Export sanitized metrics from a locally connected, logged-in browser.
- * Cookies and token-bearing URLs remain in the browser process.
+ * Export sanitized metrics with a browser-exported Cookie JSON file.
  *
- * WECHAT_ANALYTICS_CDP_URL=http://127.0.0.1:9222 \
- *   node --import tsx scripts/collect-wechat-analytics.mjs /tmp/wechat-analysis.json
+ * node --import tsx scripts/collect-wechat-analytics.mjs \
+ *   /path/to/wechat-cookies.json /tmp/wechat-analysis.json
  */
-import { writeFile } from "node:fs/promises"
-import { readWechatAnalyticsFromBrowser } from "../server/wechatAnalyticsCollector.ts"
+import { readFile, writeFile } from "node:fs/promises"
+import { readWechatAnalyticsFromCookies } from "../server/wechatAnalyticsCollector.ts"
 
-const output = process.argv[2]
-if (!output) throw new Error("请提供输出 JSON 文件路径")
+const cookieFile = process.argv[2]
+const output = process.argv[3]
+if (!cookieFile || !output) throw new Error("请提供 Cookie JSON 文件和输出 JSON 文件路径")
 
 try {
-  const snapshot = await readWechatAnalyticsFromBrowser()
+  const cookies = await readFile(cookieFile, "utf8")
+  const snapshot = await readWechatAnalyticsFromCookies(cookies)
   await writeFile(output, JSON.stringify(snapshot, null, 2), { encoding: "utf8", mode: 0o600, flag: "wx" })
   console.log(`已采集 ${snapshot.articles.length} 篇文章，${snapshot.period.start} 至 ${snapshot.period.end}。`)
 } catch {

@@ -31,7 +31,6 @@
     "test:wechat-collector": "node --import tsx scripts/test-wechat-collector.ts",
     "test:toutiao-publish": "node --import tsx scripts/test-toutiao-publish.ts",
     "wechat:analytics:collect": "node --import tsx scripts/collect-wechat-analytics.mjs",
-    "wechat:analytics:browser": "node --import tsx scripts/open-wechat-analytics-browser.mjs",
     "smoke": "node scripts/smoke.mjs",
     "test:deploy": "node scripts/test-deploy-release.mjs",
     "verify": "pnpm lint && pnpm arch && pnpm typecheck:changed && pnpm test:production && pnpm test:workers && pnpm test:wechat-collector && pnpm test:toutiao-publish && pnpm test:canvas && pnpm test:xiumi && pnpm build",

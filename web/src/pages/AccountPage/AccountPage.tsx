@@ -7,7 +7,7 @@ import {
 import PageHeader from "../../components/PageHeader/PageHeader"
 import {
   extractErrorMessage, fetchCreatorWritingProfile, fetchToutiaoAccount, fetchWechatAccount,
-  saveCreatorWritingProfile,
+  collectWechatAnalytics, saveCreatorWritingProfile,
   ToutiaoAccount, WechatAccount,
 } from "../../utils/apiHelpers"
 import { toast } from "../../components/Toast/Toast"
@@ -21,7 +21,10 @@ import {
   hasToutiaoCookies, loadToutiaoCookies, loadWechatCredentials,
   clearXiaohongshuCookies, hasXiaohongshuCookies,
   saveToutiaoCookies, saveWechatCredentials, saveXiaohongshuCookies,
+  clearWechatAnalyticsCookies, hasWechatAnalyticsCookies,
+  saveWechatAnalyticsCookies,
 } from "../../utils/accountBindings"
+import { useAuth } from "../../store/useAuth"
 import "./AccountPage.css"
 
 type Platform = "wechat" | "toutiao" | "xiaohongshu"
@@ -37,6 +40,7 @@ function AccountAvatar({ name, imageUrl, platform }: { name: string; imageUrl: s
 
 export default function AccountPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [wechatAccount, setWechatAccount] = useState<WechatAccount | null>(null)
   const [toutiaoAccount, setToutiaoAccount] = useState<ToutiaoAccount | null>(null)
   const [wechatLoading, setWechatLoading] = useState(false)
@@ -46,6 +50,7 @@ export default function AccountPage() {
   const [wechatBound, setWechatBound] = useState(() => !!loadWechatCredentials())
   const [toutiaoBound, setToutiaoBound] = useState(hasToutiaoCookies)
   const [xiaohongshuBound, setXiaohongshuBound] = useState(hasXiaohongshuCookies)
+  const [wechatAnalyticsBound, setWechatAnalyticsBound] = useState(false)
   const [appId, setAppId] = useState("")
   const [appSecret, setAppSecret] = useState("")
   const [showSecret, setShowSecret] = useState(false)
@@ -54,6 +59,9 @@ export default function AccountPage() {
   const [bindingToutiao, setBindingToutiao] = useState(false)
   const [xiaohongshuCookies, setXiaohongshuCookies] = useState("")
   const [xiaohongshuError, setXiaohongshuError] = useState("")
+  const [wechatAnalyticsCookies, setWechatAnalyticsCookies] = useState("")
+  const [wechatAnalyticsError, setWechatAnalyticsError] = useState("")
+  const [bindingWechatAnalytics, setBindingWechatAnalytics] = useState(false)
   const [writingProfile, setWritingProfile] = useState<CreatorWritingProfile>(EMPTY_CREATOR_WRITING_PROFILE)
   const [profileLoading, setProfileLoading] = useState(true)
   const [profileSaving, setProfileSaving] = useState(false)
@@ -98,6 +106,10 @@ export default function AccountPage() {
       .catch(error => toast.error(extractErrorMessage(error, "写作档案加载失败")))
       .finally(() => setProfileLoading(false))
   }, [])
+
+  useEffect(() => {
+    setWechatAnalyticsBound(user ? hasWechatAnalyticsCookies(user.id) : false)
+  }, [user])
 
   function updateProfile<K extends keyof CreatorWritingProfile>(field: K, value: CreatorWritingProfile[K]) {
     setWritingProfile(previous => ({ ...previous, [field]: value }))
@@ -209,6 +221,39 @@ export default function AccountPage() {
     clearXiaohongshuCookies()
     setXiaohongshuBound(false)
     setXiaohongshuError("")
+  }
+
+  async function bindWechatAnalytics(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!user) return
+    const value = wechatAnalyticsCookies.trim()
+    try {
+      const parsed: unknown = JSON.parse(value)
+      if (!Array.isArray(parsed) || parsed.length === 0) throw new Error("Cookie 必须是非空 JSON 数组")
+    } catch (error) {
+      setWechatAnalyticsError(error instanceof Error ? error.message : "Cookie 格式不正确")
+      return
+    }
+    setBindingWechatAnalytics(true)
+    setWechatAnalyticsError("")
+    try {
+      await collectWechatAnalytics(value)
+      saveWechatAnalyticsCookies(user.id, value)
+      setWechatAnalyticsBound(true)
+      setWechatAnalyticsCookies("")
+      toast.success("微信数据 Cookie 已绑定，并完成首次同步")
+    } catch (error) {
+      setWechatAnalyticsError(extractErrorMessage(error, "微信数据绑定失败，请重新导出 Cookie"))
+    } finally {
+      setBindingWechatAnalytics(false)
+    }
+  }
+
+  function unbindWechatAnalytics() {
+    if (!user || !confirm("确认解绑微信数据 Cookie？历史快照会保留。")) return
+    clearWechatAnalyticsCookies(user.id)
+    setWechatAnalyticsBound(false)
+    setWechatAnalyticsError("")
   }
 
   return (
@@ -328,6 +373,37 @@ export default function AccountPage() {
                 {toutiaoError ? <p className="ap-error">{toutiaoError}</p> : null}
                 <button className="ap-btn ap-btn--dark" disabled={bindingToutiao}>{bindingToutiao ? "验证中…" : <><Link2 size={15} />绑定今日头条</>}</button>
                 <a href="https://mp.toutiao.com/profile_v4/index" target="_blank" rel="noreferrer">打开头条创作中心 <ExternalLink size={13} /></a>
+              </form>
+            )}
+          </article>
+
+          <article className="ap-card ap-card--wechat-data">
+            <div className="ap-card-top">
+              <div className="ap-platform"><span className="ap-platform-mark ap-platform-mark--wechat">数</span><span>微信内容分析</span></div>
+              <span className={`ap-status ${wechatAnalyticsBound ? "ap-status--ok" : ""}`}>{wechatAnalyticsBound ? "已绑定" : "未绑定"}</span>
+            </div>
+            {wechatAnalyticsBound ? (
+              <>
+                <div className="ap-profile">
+                  <AccountAvatar name="微信数据" imageUrl={null} platform="wechat" />
+                  <div><h2>内容分析 Cookie</h2><p>用于自动读取文章表现，不影响 AppID 草稿推送</p></div>
+                </div>
+                <div className="ap-metric">
+                  <ShieldCheck size={18} /><div><strong>会话已就绪</strong><span>Cookie JSON 仅保存在当前浏览器</span></div>
+                </div>
+                <p className="ap-limited">看板刷新时才临时发送给后端，后端不会持久化 Cookie。登录失效后重新导出即可。</p>
+                <div className="ap-actions">
+                  <button className="ap-btn ap-btn--dark" onClick={() => navigate("/insights")}>打开数据看板</button>
+                  <button className="ap-icon-btn" onClick={unbindWechatAnalytics} title="解绑微信数据 Cookie"><Link2Off size={16} /></button>
+                </div>
+              </>
+            ) : (
+              <form className="ap-bind-form" onSubmit={bindWechatAnalytics}>
+                <p>粘贴已登录微信公众平台浏览器导出的 Cookie JSON。绑定时会立即读取一次内容分析，验证登录态。</p>
+                <textarea value={wechatAnalyticsCookies} onChange={event => { setWechatAnalyticsCookies(event.target.value); setWechatAnalyticsError("") }} placeholder='[{"name":"slave_sid","value":"…","domain":".mp.weixin.qq.com"}]' rows={5} />
+                {wechatAnalyticsError ? <p className="ap-error">{wechatAnalyticsError}</p> : null}
+                <button className="ap-btn ap-btn--dark" disabled={bindingWechatAnalytics}>{bindingWechatAnalytics ? "验证并同步中…" : <><Link2 size={15} />绑定微信数据</>}</button>
+                <a href="https://mp.weixin.qq.com" target="_blank" rel="noreferrer">打开微信公众平台 <ExternalLink size={13} /></a>
               </form>
             )}
           </article>

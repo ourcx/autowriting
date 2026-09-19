@@ -329,11 +329,6 @@ export async function confirmWechatDraft(articleId: string, input: { mediaId?: s
   return (await axios.post<ArticleWorkflow>("/api/wechat/draft/confirm", { articleId, ...input }, { headers })).data
 }
 
-export interface WechatAnalyticsConfig {
-  enabled: boolean
-  intervalHours: number
-}
-
 export interface WechatAnalyticsState {
   status: "idle" | "collecting" | "succeeded" | "failed"
   lastAttemptAt?: string
@@ -344,9 +339,7 @@ export interface WechatAnalyticsState {
 
 export interface WechatAnalyticsResponse {
   snapshots: WechatAnalyticsSnapshot[]
-  config: WechatAnalyticsConfig
   state: WechatAnalyticsState
-  collectorAvailable: boolean
 }
 
 export async function fetchWechatAnalytics(): Promise<WechatAnalyticsResponse> {
@@ -357,12 +350,8 @@ export async function importWechatAnalytics(snapshot: WechatAnalyticsSnapshot): 
   return (await axios.post("/api/wechat-analytics", snapshot)).data
 }
 
-export async function collectWechatAnalytics(): Promise<{ snapshot: WechatAnalyticsSnapshot; config: WechatAnalyticsConfig; state: WechatAnalyticsState }> {
-  return (await axios.post("/api/wechat-analytics/collect")).data
-}
-
-export async function saveWechatAnalyticsConfig(config: WechatAnalyticsConfig): Promise<WechatAnalyticsConfig> {
-  return (await axios.put("/api/wechat-analytics/config", config)).data
+export async function collectWechatAnalytics(cookies: string): Promise<{ snapshot: WechatAnalyticsSnapshot; state: WechatAnalyticsState }> {
+  return (await axios.post("/api/wechat-analytics/collect", { cookies })).data
 }
 
 export async function fetchCreatorWritingProfile(): Promise<CreatorWritingProfile> {

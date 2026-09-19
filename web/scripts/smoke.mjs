@@ -588,6 +588,11 @@ cases.push({
     if (Object.keys(settings).some(key => key.startsWith('wechat_analytics'))) {
       throw new Error('批量配置接口暴露了微信数据私有键')
     }
+    const missingCookie = await fetch(`${BASE}/api/wechat-analytics/collect`, {
+      method: 'POST', headers, body: JSON.stringify({ cookies: '[]' }),
+    })
+    if (missingCookie.status !== 400) throw new Error(`空 Cookie 应被拒绝，实际 ${missingCookie.status}`)
+    if ((await missingCookie.text()).includes('slave_sid')) throw new Error('错误响应不得回显 Cookie')
   },
 })
 cases.push({

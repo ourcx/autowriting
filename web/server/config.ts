@@ -109,9 +109,6 @@ export const PORT = process.env.PORT || 3000
 export const HOST = process.env.HOST || '0.0.0.0'
 export const AGENT_API_KEY = process.env.AGENT_API_KEY || ''
 export const AGENT_USERNAME = process.env.AGENT_USERNAME || 'admin'
-// Optional local Chrome DevTools endpoint for WeChat analytics collection.
-// Authentication remains inside that browser profile; the app never stores cookies.
-export const WECHAT_ANALYTICS_CDP_URL = process.env.WECHAT_ANALYTICS_CDP_URL || 'http://127.0.0.1:9222'
 
 // ── AGENTS.md 内容缓存 ────────────────────────────────────────────────────────
 
