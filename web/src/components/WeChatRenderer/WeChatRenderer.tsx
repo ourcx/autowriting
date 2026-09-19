@@ -9,6 +9,7 @@ import { renderWechatMarkdown } from '../../utils/wechatMarkdown'
 import { ImageLibrary } from '../ImageLibrary/ImageLibrary'
 import {
   generateXiaohongshuArticleMetadata,
+  publishToutiaoArticle,
   publishXiaohongshuNote,
   pushWechatDraft,
   uploadWechatThumb,
@@ -532,42 +533,31 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
     try {
       // Cookie 放 body 而非 Header，避免 Header 超长导致 fetch 报错
       const cookiesJson = getTtCookies()
-      const r = await fetch('/api/toutiao/publish', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token') ?? ''}`,
-        },
-        body: JSON.stringify({
-          title: title.trim(),
-          content,
-          cookies: cookiesJson,
-          coverImageUrl: selectedCoverImage?.imageUrl ?? null,
-        }),
+      const result = await publishToutiaoArticle({
+        title: title.trim(),
+        content,
+        cookies: cookiesJson,
+        coverImageUrl: selectedCoverImage?.imageUrl ?? null,
       })
-      const d = await r.json()
-      if (!r.ok) {
-        if (r.status === 401 && d.error?.includes('Cookie')) {
-          toast.error('Cookie 已失效，请重新配置', {
-            duration: 0,
-            action: { label: '重新配置', onClick: () => setShowTtCookieModal(true) },
-          })
-        } else {
-          toast.error(d.error ?? '推送失败')
-        }
-        return
-      }
       setTtPushDone(true)
-      toast.success(d.message ?? '文章已发布到今日头条！', {
+      toast.success(result.message ?? '文章已发布到今日头条！', {
         duration: 0,
         action: { label: '去头条号', onClick: () => window.open('https://mp.toutiao.com/profile_v4/graphic/articles', '_blank') },
       })
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : '推送失败，请检查网络')
+      const message = e instanceof Error ? e.message : '推送失败，请检查网络'
+      if (message.includes('Cookie')) {
+        toast.error('Cookie 已失效，请重新配置', {
+          duration: 0,
+          action: { label: '重新配置', onClick: () => setShowTtCookieModal(true) },
+        })
+      } else {
+        toast.error(message)
+      }
     } finally {
       setTtPushing(false)
     }
-  }, [ttCookieBound, title, content])
+  }, [ttCookieBound, title, content, selectedCoverImage])
 
   const handleXhsPublish = useCallback(async () => {
     if (!xhsBound) {
@@ -1053,7 +1043,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                 className={`wr-push-btn wr-push-btn--toutiao ${ttPushDone ? 'success' : ''} ${!ttCookieBound ? 'disabled' : ''}`}
                 onClick={handleTtPublish}
                 disabled={ttPushing || ttPushDone}
-                title={ttCookieBound ? '自动登录头条，将文章存为草稿（需手动添加封面后发布）' : '请先配置 Cookie'}
+                title={ttCookieBound ? '自动登录头条，携带当前所选封面发布文章' : '请先配置 Cookie'}
               >
                 {ttPushing
                   ? <Loader2 size={15} className="wr-spin" />

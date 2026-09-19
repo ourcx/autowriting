@@ -150,6 +150,19 @@ cases.push({
 })
 
 cases.push({
+  name: '今日头条发布应允许超过 1MB 的正文请求',
+  run: async () => {
+    const r = await fetch(`${BASE}/api/toutiao/publish`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: '头条大正文测试', content: '文'.repeat(1024 * 1024 + 1), cookies: '[]' }),
+    })
+    if (r.status === 413) throw new Error('今日头条发布仍被普通 1MB 上限拦截')
+    if (![401, 403].includes(r.status)) throw new Error(`期望鉴权拒绝，实际 ${r.status}`)
+  },
+})
+
+cases.push({
   name: '非法 JSON 返回安全的 400 响应',
   run: async () => {
     const r = await fetch(`${BASE}/api/auth/login`, {

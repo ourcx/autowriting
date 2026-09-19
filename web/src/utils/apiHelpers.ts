@@ -534,6 +534,16 @@ export async function fetchToutiaoAccount(cookies: string, forceRefresh = false)
   return response.data as ToutiaoAccount
 }
 
+export async function publishToutiaoArticle(input: {
+  title: string
+  content: string
+  cookies: string
+  coverImageUrl: string | null
+}): Promise<{ success: boolean; message: string; url?: string }> {
+  const response = await axios.post('/api/toutiao/publish', input)
+  return response.data as { success: boolean; message: string; url?: string }
+}
+
 export async function publishXiaohongshuNote(input: {
   cookies: string
   contentType: "image_note" | "article"

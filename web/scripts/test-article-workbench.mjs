@@ -18,6 +18,7 @@ try {
   let emptyToutiao = false
   let coverGeneratedWithAuth = false
   let coverSavedWithAuth = false
+  let toutiaoPublishPayload = null
   const authenticatedPageRequests = []
   const unexpectedWrites = []
   const pageErrors = []
@@ -28,6 +29,7 @@ try {
     localStorage.setItem('auth_token', 'workbench-test-token')
     localStorage.setItem('onboarding-completed', 'true')
     localStorage.setItem('wechat_credentials', JSON.stringify({ appId: 'wx-fixture', appSecret: 'secret-fixture' }))
+    localStorage.setItem('toutiao_cookies', JSON.stringify([{ name: 'sessionid', value: 'fixture', domain: '.toutiao.com' }]))
   })
   await page.route('**/api/**', async route => {
     const request = route.request()
@@ -45,6 +47,11 @@ try {
       ] })
     if (url.pathname === '/api/articles/workflow-metrics') return route.abort()
     if (url.pathname === '/api/toutiao/status') return route.fulfill({ json: { ready: true } })
+    if (url.pathname === '/api/toutiao/account') return route.fulfill({ json: { nickname: 'fixture', cached: false } })
+    if (url.pathname === '/api/toutiao/publish') {
+      toutiaoPublishPayload = request.postDataJSON()
+      return route.fulfill({ json: { success: true, message: '文章已发布到今日头条（含封面）' } })
+    }
     if (url.pathname === '/api/templates') return route.fulfill({ json: [] })
     if (url.pathname === '/api/prompts/list') {
       authenticatedPageRequests.push({ path: url.pathname, headers: request.headers() })
@@ -238,6 +245,12 @@ try {
   await page.waitForURL('**/preview/workbench-test?platform=xiaohongshu')
   await page.getByRole('button', { name: '返回', exact: true }).click()
   await page.getByRole('heading', { name: '小红书预览与发布' }).waitFor()
+  await page.getByRole('group', { name: '发布平台' }).getByRole('button', { name: '今日头条', exact: false }).click()
+  await page.getByRole('heading', { name: '今日头条预览与发布' }).waitFor()
+  await page.getByRole('button', { name: '存为草稿', exact: true }).click()
+  await page.getByText('文章已发布到今日头条（含封面）', { exact: true }).waitFor()
+  assert.equal(toutiaoPublishPayload.coverImageUrl, 'data:image/svg+xml;base64,PHN2Zy8+', '头条发布必须携带最新封面')
+  await page.getByText('文章已发布到今日头条（含封面）', { exact: true }).locator('..').locator('.toast-close').click()
   emptyToutiao = true
   await page.goto(`${baseUrl}/editor/workbench-test?tab=publish&platform=toutiao`)
   await page.getByRole('heading', { name: '今日头条版本尚未生成' }).waitFor()

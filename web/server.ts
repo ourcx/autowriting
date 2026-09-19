@@ -93,6 +93,7 @@ app.use([
   "/api/images/upload-base64",
   "/api/generate-cover",
   "/api/generate-covers-batch",
+  "/api/toutiao/publish",
   "/api/canvas",
 ], express.json({ limit: requestBodyLimits.largeJson }))
 app.use(express.json({ limit: requestBodyLimits.defaultJson }))

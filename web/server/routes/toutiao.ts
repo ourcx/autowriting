@@ -18,39 +18,15 @@ import { spawn, execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
-import https from 'https'
-import http from 'http'
 import { createHash } from 'crypto'
 import { marked } from 'marked'
 import { logger } from '../logger.js'
 import { authMiddleware } from '../authMiddleware.js'
+import { prepareToutiaoCoverFile } from '../utils/toutiaoCover.ts'
 
 function sleep(min, max) {
   const ms = max ? Math.floor(min + Math.random() * (max - min)) : min
   return new Promise(r => setTimeout(r, ms))
-}
-
-async function downloadImageToTemp(imageUrl, baseOrigin) {
-  const tmpPath = path.join(os.tmpdir(), `tt_cover_${Date.now()}.jpg`)
-  const fullUrl = imageUrl.startsWith('http') ? imageUrl : `${baseOrigin}${imageUrl}`
-
-  return new Promise((resolve, reject) => {
-    const protocol = fullUrl.startsWith('https') ? https : http
-    const file = fs.createWriteStream(tmpPath)
-    protocol.get(fullUrl, (res) => {
-      if (res.statusCode !== 200) {
-        file.close()
-        fs.unlink(tmpPath, () => {})
-        return reject(new Error(`下载封面失败: HTTP ${res.statusCode}`))
-      }
-      res.pipe(file)
-      file.on('finish', () => { file.close(); resolve(tmpPath) })
-    }).on('error', (err) => {
-      file.close()
-      fs.unlink(tmpPath, () => {})
-      reject(err)
-    })
-  })
 }
 
 const EDGE_PATH = '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge'
@@ -429,7 +405,7 @@ router.post('/publish', async (req, res) => {
   if (coverImageUrl) {
     try {
       const origin = `${req.protocol}://${req.get('host')}`
-      tmpCoverPath = await downloadImageToTemp(coverImageUrl, origin)
+      tmpCoverPath = await prepareToutiaoCoverFile(coverImageUrl, origin)
       logger.info('TOUTIAO', `封面已下载: ${tmpCoverPath}`)
     } catch (e) {
       logger.warn('TOUTIAO', '封面下载失败，跳过', { error: e.message })

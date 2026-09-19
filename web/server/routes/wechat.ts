@@ -655,6 +655,7 @@ router.post('/draft', async (req, res) => {
       appId: creds.appId,
       articleType: normalizedArticleType,
       title: normalizedTitle.slice(0, 20),
+      digest: normalizedDigest.slice(0, 20),
       hasThumb: !!thumb_media_id,
       openComment: !!normalizedNeedOpenComment,
       fansOnlyComment: !!normalizedOnlyFansCanComment,
