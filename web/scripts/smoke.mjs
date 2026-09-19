@@ -580,6 +580,31 @@ cases.push({
   },
 })
 cases.push({
+  name: '小红书发布必须登录，缺少平台 Cookie 时不创建发布记录',
+  run: async () => {
+    const anonymous = await fetch(`${BASE}/api/xiaohongshu/publish`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contentType: 'article', title: 'smoke', content: 'smoke' }),
+    })
+    if (anonymous.status !== 401) throw new Error(`未登录期望 401，实际 ${anonymous.status}`)
+    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+    const before = await (await fetch(`${BASE}/api/xiaohongshu/records`, { headers })).json()
+    const missingCookie = await fetch(`${BASE}/api/xiaohongshu/publish`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ contentType: 'article', title: 'smoke', content: 'smoke' }),
+    })
+    const body = await missingCookie.json()
+    if (missingCookie.status !== 401 || !String(body.error).includes('Cookie')) {
+      throw new Error(`平台凭据错误响应不正确：${JSON.stringify(body)}`)
+    }
+    const after = await (await fetch(`${BASE}/api/xiaohongshu/records`, { headers })).json()
+    if (!Array.isArray(after.records) || JSON.stringify(before.records) !== JSON.stringify(after.records)) {
+      throw new Error('校验失败的请求不应创建发布记录')
+    }
+  },
+})
+cases.push({
   name: '小红书标题超过 20 字仍应通过长度校验',
   run: async () => {
     const r = await fetch(`${BASE}/api/xiaohongshu/article-metadata`, {
