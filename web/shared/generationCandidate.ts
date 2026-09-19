@@ -14,6 +14,7 @@ export interface GenerationCandidate {
   firstChunkAt?: string
   finishedAt?: string
   model?: string
+  promptIds?: string[]
 }
 
 export interface CandidateInput {

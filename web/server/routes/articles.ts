@@ -20,7 +20,11 @@ import {
   readArticleWorkflow,
   recordArticleWorkflowEvent,
   writeArticleSafely,
+  resolveArticleFiles,
 } from '../articleStorage.js'
+import { listCreatorExperiences, recordCreatorFeedback, recordEditingActivity, selectCandidate, formatCreatorExperiences } from '../productionJournal.ts'
+import { getWechatAnalyticsSnapshots } from '../wechatAnalyticsStore.ts'
+import { rankWechatArticles } from '../../shared/wechatAnalytics.ts'
 import { ensureDir, buildLLMRequest, callLLMWithRetry } from '../utils'
 import { retrieveRelevant, formatRetrievedContext, formatExampleContext, extractSearchQuery } from '../rag.js'
 import { saveAnalysis, getLatestAnalysis, listAnalyses, recordTokenUsage, getEffectivePrompt, getSetting, listArticleScores } from '../db.js'
@@ -81,29 +85,7 @@ function getUserDraftsDir(userId) {
 }
 
 function getArticlePath(articleId, type, userId) {
-  const baseDir = userId ? getUserDraftsDir(userId) : DRAFTS_DIR
-
-  // 优先尝试直接在 baseDir 找完整目录（如 20260430-广州五月旅游指南）
-  const directPath = path.join(baseDir, articleId)
-  if (fs.existsSync(directPath)) {
-    return {
-      task:      path.join(directPath, 'prompt', 'task.md'),
-      materials: path.join(directPath, 'prompt', 'materials.md'),
-      article:   path.join(directPath, 'raw', 'article_raw.md'),
-      title:     path.join(directPath, 'title.txt'),
-    }[type]
-  }
-
-  // 按 YYYYMMDD-后缀 格式解析
-  const parts = articleId.split('-')
-  const dateDir = parts[0]
-  const suffix = parts.length > 1 ? `-${parts.slice(1).join('-')}` : ''
-  return {
-    task:      path.join(baseDir, dateDir, 'prompt', `task${suffix}.md`),
-    materials: path.join(baseDir, dateDir, 'prompt', `materials${suffix}.md`),
-    article:   path.join(baseDir, dateDir, 'raw', `article_raw${suffix}.md`),
-    title:     path.join(baseDir, dateDir, `title${suffix}.txt`),
-  }[type]
+  return resolveArticleFiles(String(userId), String(articleId))[type]
 }
 
 function readText(filePath) {
@@ -222,13 +204,15 @@ router.get('/', (req, res) => {
 router.get('/workflow-metrics', (req, res) => {
   try {
     const articles = scanArticlesInDir(getUserDraftsDir(req.user.id))
+    const completedWorkflows = []
     const durations = articles.flatMap(article => {
       const taskPath = getArticlePath(article.id, 'task', req.user.id)
       const materialsPath = getArticlePath(article.id, 'materials', req.user.id)
       const articlePath = getArticlePath(article.id, 'article', req.user.id)
       const workflow = getWorkflow(articlePath, taskPath, materialsPath)
-      if (!workflow.wechatDraftAt) return []
-      const duration = new Date(workflow.wechatDraftAt).getTime() - new Date(workflow.createdAt).getTime()
+      if (!workflow.firstWechatDraftAt) return []
+      completedWorkflows.push(workflow)
+      const duration = new Date(workflow.firstWechatDraftAt).getTime() - new Date(workflow.createdAt).getTime()
       return Number.isFinite(duration) && duration >= 0 ? [Math.round(duration / 60000)] : []
     }).sort((a, b) => a - b)
     const middle = Math.floor(durations.length / 2)
@@ -237,7 +221,15 @@ router.get('/workflow-metrics', (req, res) => {
       : durations.length % 2
         ? durations[middle]
         : Math.round((durations[middle - 1] + durations[middle]) / 2)
-    res.json({ sampleSize: durations.length, medianMinutes })
+    const tracked = completedWorkflows.filter(item => typeof item.firstDraftActiveMs === 'number')
+    const active = tracked.map(item => Math.round(item.firstDraftActiveMs / 60000)).sort((a, b) => a - b)
+    const mid = Math.floor(active.length / 2)
+    const medianActiveMinutes = !active.length ? null : active.length % 2 ? active[mid] : Math.round((active[mid - 1] + active[mid]) / 2)
+    res.json({
+      sampleSize: durations.length, medianMinutes, medianActiveMinutes,
+      activeSampleSize: tracked.length,
+      reworkCount: completedWorkflows.reduce((sum, item) => sum + (item.firstDraftReworkCount || 0), 0),
+    })
   } catch (error) {
     logger.error('ARTICLES', '统计文章发布耗时失败', { error: error.message, userId: req.user.id })
     res.status(500).json({ error: '统计文章发布耗时失败' })
@@ -246,6 +238,8 @@ router.get('/workflow-metrics', (req, res) => {
 
 router.get('/production-insights', (req, res) => {
   try {
+    const snapshot = getWechatAnalyticsSnapshots(req.user.id)[0]
+    const audience = snapshot ? rankWechatArticles(snapshot) : []
     const scores = listArticleScores(req.user.id)
       .filter(score => typeof score.composite === 'number')
       .sort((a, b) => (b.composite || 0) - (a.composite || 0))
@@ -285,6 +279,14 @@ router.get('/production-insights', (req, res) => {
       ? Math.round(withContent.reduce((sum, item) => sum + item.characters, 0) / withContent.length)
       : null
     res.json({
+      creatorExperiences: listCreatorExperiences(req.user.id),
+      audienceEvidence: snapshot ? {
+        period: snapshot.period,
+        collectedAt: snapshot.collectedAt,
+        sampleSize: snapshot.articles.length,
+        highAttention: audience.filter(item => item.band === 'high').slice(0, 5),
+        lowAttention: audience.filter(item => item.band === 'low').slice(0, 5),
+      } : null,
       sampleSize: scores.length,
       topArticles: enriched,
       patterns: { bestPlatform, averageTitleCharacters, averageArticleCharacters },
@@ -349,6 +351,12 @@ router.post('/:articleId', (req, res) => {
     const toutiaoPath   = articlePath ? getArticleSidecarPath(articlePath, 'article_toutiao') : null
     const xiaohongshuTitlePath = articlePath ? getArticleSidecarPath(articlePath, 'xiaohongshu_title', 'txt') : null
     const existingArticle = readText(articlePath)
+    const selected = req.body?.selectedCandidateId
+    if (selected !== undefined) {
+      if (typeof selected !== 'string') throw new CandidateError('候选稿标识不正确')
+      const candidate = readCandidate(uid, articleId, selected)
+      if (candidate.platform !== 'wechat' || candidate.content !== article || !candidate.content.trim()) throw new CandidateError('正文与所选候选稿不一致')
+    }
 
     ensureDir(path.dirname(taskPath))
     ensureDir(path.dirname(materialsPath))
@@ -361,7 +369,7 @@ router.post('/:articleId', (req, res) => {
     if (articleToutiao !== undefined && toutiaoPath) fs.writeFileSync(toutiaoPath, articleToutiao ?? '', 'utf-8')
     if (xiaohongshuTitle !== undefined && xiaohongshuTitlePath) fs.writeFileSync(xiaohongshuTitlePath, xiaohongshuTitle ?? '', 'utf-8')
 
-    if (article !== undefined && String(article ?? '').trim().length > 100 && String(article ?? '') !== existingArticle) {
+    if (article !== undefined && String(article ?? '') !== existingArticle) {
       recordArticleWorkflowEvent({
         articlePath,
         content: {
@@ -372,6 +380,7 @@ router.post('/:articleId', (req, res) => {
         event: 'generated',
       })
     }
+    if (selected) selectCandidate(uid, articleId, articlePath, selected)
 
     // 文章内容有更新时，异步触发增量 RAG 索引（不阻塞响应）
     // 但要先做「内容指纹判重」：仅当 article/materials 真的变了才触发，
@@ -405,7 +414,7 @@ router.post('/:articleId', (req, res) => {
     } else {
       console.error('Error saving article:', error)
     }
-    res.status(error instanceof ArticleContentConflictError ? 409 : 500).json({ error: error.message })
+    res.status(error instanceof ArticleContentConflictError ? 409 : error instanceof CandidateError ? error.statusCode : 500).json({ error: error.message })
   }
 })
 
@@ -414,7 +423,8 @@ router.post('/:articleId', (req, res) => {
 router.post('/:articleId/workflow', (req, res) => {
   try {
     const event = req.body?.event
-    const allowedEvents = new Set(['generated', 'reviewed', 'wechat_draft_opened', 'wechat_draft_pushed'])
+    // Push completion is recorded only by the server after WeChat returns media_id.
+    const allowedEvents = new Set(['generated', 'reviewed', 'wechat_draft_opened'])
     if (!allowedEvents.has(event)) return res.status(400).json({ error: '不支持的工作流事件' })
 
     const { articleId } = req.params
@@ -422,6 +432,7 @@ router.post('/:articleId/workflow', (req, res) => {
     const taskPath = getArticlePath(articleId, 'task', uid)
     const materialsPath = getArticlePath(articleId, 'materials', uid)
     const articlePath = getArticlePath(articleId, 'article', uid)
+    if (event === 'reviewed' && !readText(articlePath).trim()) return res.status(400).json({ error: '请先保存正文再确认审核' })
     const workflow = recordArticleWorkflowEvent({
       articlePath,
       content: {
@@ -436,6 +447,22 @@ router.post('/:articleId/workflow', (req, res) => {
   } catch (error) {
     logger.error('ARTICLES', '记录文章工作流失败', { error: error.message, articleId: req.params.articleId })
     res.status(500).json({ error: '记录文章进度失败' })
+  }
+})
+
+router.post('/:articleId/activity', (req, res) => {
+  try {
+    res.json(recordEditingActivity(getArticlePath(req.params.articleId, 'article', req.user.id), req.body))
+  } catch (error) {
+    res.status(error instanceof CandidateError ? error.statusCode : 400).json({ error: error.message })
+  }
+})
+
+router.post('/:articleId/feedback', (req, res) => {
+  try {
+    res.json(recordCreatorFeedback(req.user.id, req.params.articleId, getArticlePath(req.params.articleId, 'article', req.user.id), req.body))
+  } catch (error) {
+    res.status(error instanceof CandidateError ? error.statusCode : 400).json({ error: error.message })
   }
 })
 
@@ -483,7 +510,7 @@ router.post('/:articleId/generate', async (req, res) => {
     const globalMemoryGen = getSetting(`global_memory:${req.user.id}`)
     const globalMemorySectionGen = globalMemoryGen ? `\n# 个人背景信息（永久记忆）\n${globalMemoryGen}\n` : ''
 
-    const userPrompt = `${writingGuideSection}${creatorProfileSection}${globalMemorySectionGen}
+    const userPrompt = `${writingGuideSection}${creatorProfileSection}${formatCreatorExperiences(req.user.id)}${globalMemorySectionGen}
 # 当前时间
 ${currentDateTimeGen}
 
@@ -686,7 +713,7 @@ router.post('/:articleId/generate/stream', async (req, res) => {
     const globalMemorySection = globalMemory ? `\n# 个人背景信息（永久记忆）\n${globalMemory}\n` : ''
 
     // ── 公众号 prompt ──────────────────────────────────────────────────────────
-    const wechatPrompt = `${writingGuideSection}${creatorProfileSection}${ragSection}${exampleSection ? '\n' + exampleSection + '\n' : ''}${globalMemorySection}
+    const wechatPrompt = `${writingGuideSection}${creatorProfileSection}${formatCreatorExperiences(req.user.id)}${ragSection}${exampleSection ? '\n' + exampleSection + '\n' : ''}${globalMemorySection}
 # 当前时间
 ${currentDateTime}
 

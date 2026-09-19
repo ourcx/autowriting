@@ -21,6 +21,8 @@ const AGENT_ROUTE_ALLOWLIST = [
   { method: "GET", path: /^\/api\/articles\/[^/]+$/ },
   { method: "POST", path: /^\/api\/articles\/[^/]+$/ },
   { method: "POST", path: /^\/api\/articles\/[^/]+\/workflow$/ },
+  { method: "POST", path: /^\/api\/articles\/[^/]+\/activity$/ },
+  { method: "POST", path: /^\/api\/articles\/[^/]+\/feedback$/ },
   { method: "POST", path: /^\/api\/articles\/[^/]+\/generate$/ },
   { method: "DELETE", path: /^\/api\/articles\/[^/]+$/ },
   { method: "POST", path: /^\/api\/toutiao\/publish$/ },

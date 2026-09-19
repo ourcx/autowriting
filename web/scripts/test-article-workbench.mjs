@@ -23,6 +23,24 @@ try {
   const unexpectedWrites = []
   const pageErrors = []
   const requestedModules = []
+  const analyticsSnapshot = {
+    version: 1,
+    source: 'wechat-browser',
+    accountName: '工作台测试账号',
+    collectedAt: '2026-09-19T10:00:00.000Z',
+    period: { start: '2026-08-20', end: '2026-09-18' },
+    scope: 'period-article-list',
+    metric: 'period-readers',
+    collection: { complete: true, nextOffset: 0 },
+    trafficSources: [{ name: '推荐', percent: 64.2 }],
+    articles: Array.from({ length: 8 }, (_, index) => ({
+      id: `${8000 + index}_1`,
+      title: index === 0 ? '校园跑新规值得继续追踪' : `历史文章 ${index + 1}`,
+      publishedAt: '2026-09-01',
+      reads: 8000 - index * 900,
+      shareOfReads: 12.5,
+    })),
+  }
   page.on('pageerror', error => pageErrors.push(error.message))
   page.on('request', request => requestedModules.push(new URL(request.url()).pathname))
   await page.addInitScript(() => {
@@ -46,6 +64,18 @@ try {
         { id: 'empty-test', title: '新文章', date: '20260910', status: 'brief' },
       ] })
     if (url.pathname === '/api/articles/workflow-metrics') return route.abort()
+    if (url.pathname === '/api/wechat-analytics') return route.fulfill({ json: {
+      snapshots: [analyticsSnapshot],
+      config: { enabled: true, intervalHours: 24 },
+      state: { status: 'succeeded', lastSuccessAt: analyticsSnapshot.collectedAt, message: '已采集 8 篇文章' },
+      collectorAvailable: true,
+    } })
+    if (url.pathname === '/api/wechat-analytics/config') return route.fulfill({ json: request.postDataJSON() })
+    if (url.pathname === '/api/wechat-analytics/collect') return route.fulfill({ json: {
+      snapshot: analyticsSnapshot,
+      config: { enabled: true, intervalHours: 24 },
+      state: { status: 'succeeded', lastSuccessAt: analyticsSnapshot.collectedAt, message: '已采集 8 篇文章' },
+    } })
     if (url.pathname === '/api/toutiao/status') return route.fulfill({ json: { ready: true } })
     if (url.pathname === '/api/toutiao/account') return route.fulfill({ json: { nickname: 'fixture', cached: false } })
     if (url.pathname === '/api/toutiao/publish') {
@@ -88,6 +118,13 @@ try {
       } })
     }
     if (url.pathname === '/api/articles/production-insights') return route.fulfill({ json: {
+      audienceEvidence: {
+        period: analyticsSnapshot.period,
+        collectedAt: analyticsSnapshot.collectedAt,
+        sampleSize: analyticsSnapshot.articles.length,
+        highAttention: [{ ...analyticsSnapshot.articles[0], rank: 1 }],
+        lowAttention: [{ ...analyticsSnapshot.articles[7], rank: 8 }],
+      },
       sampleSize: 2,
       topArticles: [{ articleId: 'top-1', title: '高表现文章', platform: 'wechat', composite: 88, views: 12000, characters: 1500, templateId: 'seasalt', promptIds: ['prompt-article-generate'], referenceArticleIds: ['older-1'] }],
       patterns: { bestPlatform: { platform: 'wechat', average: 82 }, averageTitleCharacters: 16, averageArticleCharacters: 1500 },
@@ -105,6 +142,7 @@ try {
         ...(event === 'wechat_draft_opened' ? { wechatDraftOpenedAt: '2026-09-09T00:10:00.000Z' } : {}),
       } })
     }
+    if (url.pathname === '/api/articles/workbench-test/activity') return route.fulfill({ json: { success: true } })
     if (['/api/articles/workbench-test', '/api/articles/ready-test', '/api/articles/empty-test'].includes(url.pathname)) {
       if (request.method() === 'POST') {
         if (saveFails) return route.fulfill({ status: 500, json: { error: 'fixture save failure' } })
@@ -143,7 +181,7 @@ try {
   await page.getByRole('heading', { name: '创作工作台' }).waitFor()
   await page.getByRole('button', { name: '继续编辑：工作台验收文章' }).waitFor()
   assert.equal(requestedModules.some(path => /\/pages\/ArticleEditor\/|\/assets\/ArticleEditor-/.test(path)), false, 'home must not eagerly load the editor')
-  for (const label of ['微信草稿', '知识库', '提示词', '定时任务', '文章评分', '素材库', '样式', '画布', 'AI 配置']) {
+  for (const label of ['微信草稿', '知识库', '提示词', '定时任务', '数据看板', '素材库', '样式', '画布', 'AI 配置']) {
     assert.equal(await page.getByRole('navigation', { name: '工作台导航' }).getByRole('button', { name: label, exact: true }).isVisible(), true, `${label} must remain directly visible`)
   }
   assert.equal(await page.locator('.dp-nav details').count(), 0)
@@ -192,7 +230,7 @@ try {
   await page.getByText('任务要求：不使用 emoji', { exact: false }).waitFor()
   await page.getByText('需增加到 1200 字以上', { exact: false }).waitFor()
   await page.getByText('1 条待核对', { exact: true }).waitFor()
-  await page.getByText('高表现文章', { exact: true }).waitFor()
+  await page.getByText('校园跑新规值得继续追踪 · 8,000 人', { exact: true }).waitFor()
   await page.getByText('已有平台改写', { exact: true }).waitFor()
 
   saveFails = true
@@ -243,7 +281,7 @@ try {
   )
   await page.getByRole('button', { name: '打开独立预览', exact: true }).click()
   await page.waitForURL('**/preview/workbench-test?platform=xiaohongshu')
-  await page.getByRole('button', { name: '返回', exact: true }).click()
+  await page.goto(`${baseUrl}/editor/workbench-test?tab=publish&platform=xiaohongshu`)
   await page.getByRole('heading', { name: '小红书预览与发布' }).waitFor()
   await page.getByRole('group', { name: '发布平台' }).getByRole('button', { name: '今日头条', exact: false }).click()
   await page.getByRole('heading', { name: '今日头条预览与发布' }).waitFor()
@@ -256,6 +294,14 @@ try {
   await page.getByRole('heading', { name: '今日头条版本尚未生成' }).waitFor()
   assert.equal(await page.locator('.wr-root').count(), 0)
   emptyToutiao = false
+  await page.goto(`${baseUrl}/insights`)
+  await page.getByRole('heading', { name: '下一篇，值得写什么' }).waitFor()
+  await page.getByText('8', { exact: true }).first().waitFor()
+  await page.getByRole('textbox', { name: '主题关键词' }).fill('校园跑')
+  await page.getByText('1 篇匹配', { exact: false }).waitFor()
+  await page.getByText('高关注', { exact: true }).waitFor()
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
+  await page.screenshot({ path: join(screenshots, 'topic-insights-desktop.png'), fullPage: true })
 
   for (const width of [390, 768]) {
     await page.setViewportSize({ width, height: 844 })
@@ -279,6 +325,11 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
     await page.locator('.wr-article-card').evaluate(element => Promise.all(element.getAnimations().map(animation => animation.finished)))
     await page.screenshot({ path: join(screenshots, `publish-wechat-${width}.png`), fullPage: true })
+    await page.goto(`${baseUrl}/insights`)
+    await page.getByRole('heading', { name: '下一篇，值得写什么' }).waitFor()
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `数据看板在 ${width}px 出现页面横向溢出`)
+    assert.equal(await page.locator('.topic-table-wrap').evaluate(element => getComputedStyle(element).overflowX), 'auto')
+    await page.screenshot({ path: join(screenshots, `topic-insights-${width}.png`), fullPage: true })
   }
   await page.goto(`${baseUrl}/editor/empty-test`)
   await page.locator('.flow-step').first().waitFor()

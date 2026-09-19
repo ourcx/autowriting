@@ -363,16 +363,14 @@ cases.push({
       headers,
       body: JSON.stringify({ event: 'wechat_draft_pushed' }),
     })
-    if (!pushedResponse.ok) throw new Error(`记录微信草稿失败 status=${pushedResponse.status}`)
-    const pushedWorkflow = await pushedResponse.json()
-    if (pushedWorkflow.currentStage !== 'wechat_draft') throw new Error('推送后文章应进入微信草稿阶段')
+    if (pushedResponse.status !== 400) throw new Error(`客户端不应能伪造微信草稿成功 status=${pushedResponse.status}`)
 
     const metricsResponse = await fetch(`${BASE}/api/articles/workflow-metrics`, {
       headers: { 'X-Agent-API-Key': SMOKE_AGENT_API_KEY },
     })
     if (!metricsResponse.ok) throw new Error(`读取工作流指标失败 status=${metricsResponse.status}`)
     const metrics = await metricsResponse.json()
-    if (metrics.sampleSize < 1 || metrics.medianMinutes === null) throw new Error('工作流指标未纳入完成样本')
+    if (metrics.sampleSize !== 0 || metrics.medianMinutes !== null) throw new Error('未经微信回执的文章不应纳入完成样本')
 
     const deleteResponse = await fetch(`${BASE}/api/articles/${articleId}`, {
       method: 'DELETE',
@@ -548,6 +546,48 @@ cases.push({
     const readOther = await (await fetch(`${BASE}/api/settings/global_memory`, { headers: otherHeaders })).json()
     if (readPrimary.value !== primaryMemory) throw new Error('副账号写入覆盖了主账号永久记忆')
     if (readOther.value !== otherMemory) throw new Error('副账号未读到自己的永久记忆')
+  },
+})
+cases.push({
+  name: '微信数据快照应自动分档并按用户隔离',
+  run: async () => {
+    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+    const snapshot = {
+      version: 1,
+      source: 'wechat-browser',
+      accountName: 'Smoke 公众号',
+      collectedAt: new Date().toISOString(),
+      period: { start: '2026-08-20', end: '2026-09-18' },
+      scope: 'visible-ranking',
+      metric: 'period-readers',
+      collection: { complete: true, nextOffset: 0 },
+      trafficSources: [{ name: '推荐', percent: 50 }],
+      articles: Array.from({ length: 8 }, (_, index) => ({
+        id: `${9000 + index}_1`,
+        title: `自动数据 ${index + 1}`,
+        publishedAt: '2026-09-01',
+        reads: 800 - index * 100,
+        shareOfReads: 12.5,
+      })),
+    }
+    const saved = await fetch(`${BASE}/api/wechat-analytics`, {
+      method: 'POST', headers, body: JSON.stringify(snapshot),
+    })
+    if (!saved.ok) throw new Error(`快照保存失败 status=${saved.status}`)
+    const response = await fetch(`${BASE}/api/wechat-analytics`, { headers })
+    if (!response.ok) throw new Error(`快照读取失败 status=${response.status}`)
+    const data = await response.json()
+    if (data.snapshots?.[0]?.articles?.length !== 8 || data.snapshots[0].collection?.complete !== true) {
+      throw new Error('快照列表或完整性状态不正确')
+    }
+    const insights = await (await fetch(`${BASE}/api/articles/production-insights`, { headers })).json()
+    if (insights.audienceEvidence?.highAttention?.[0]?.title !== '自动数据 1') {
+      throw new Error('自动高关注文章未进入创作反馈')
+    }
+    const settings = await (await fetch(`${BASE}/api/settings`, { headers })).json()
+    if (Object.keys(settings).some(key => key.startsWith('wechat_analytics'))) {
+      throw new Error('批量配置接口暴露了微信数据私有键')
+    }
   },
 })
 cases.push({

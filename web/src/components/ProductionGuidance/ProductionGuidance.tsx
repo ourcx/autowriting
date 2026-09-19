@@ -4,7 +4,8 @@ import {
   auditArticleSources,
   comparePlatformVersions,
 } from "../../../shared/contentProduction"
-import { fetchProductionInsights, type ProductionInsights } from "../../utils/apiHelpers"
+import { fetchProductionInsights, saveCreatorFeedback, type ProductionInsights } from "../../utils/apiHelpers"
+import { toast } from "../Toast/Toast"
 import type { ArticleWorkflow } from "../../../shared/articleWorkflow"
 import "./ProductionGuidance.css"
 
@@ -34,14 +35,31 @@ export function PlatformVersionSummary({ source, target, platform }: {
   )
 }
 
-export default function ProductionGuidance({ article, materials, articleToutiao, workflow }: {
+export default function ProductionGuidance({ article, materials, articleToutiao, workflow, articleId, onBeforeFeedback, onWorkflow }: {
   article: string
   materials: string
   articleToutiao: string
   workflow: ArticleWorkflow
+  articleId?: string
+  onBeforeFeedback?: () => Promise<boolean>
+  onWorkflow?: (workflow: ArticleWorkflow) => void
 }) {
   const sourceAudit = useMemo(() => auditArticleSources(article, materials), [article, materials])
   const [insights, setInsights] = useState<ProductionInsights | null>(null)
+  const [note, setNote] = useState(workflow.feedback?.note || "")
+  const [expressions, setExpressions] = useState(workflow.feedback?.retainedExpressions.join("\n") || "")
+  const [savingFeedback, setSavingFeedback] = useState(false)
+  const saveFeedback = async () => {
+    if (!articleId || savingFeedback) return
+    setSavingFeedback(true)
+    try {
+      if (onBeforeFeedback && !await onBeforeFeedback()) return
+      onWorkflow?.(await saveCreatorFeedback(articleId, note, expressions.split("\n").map(value => value.trim()).filter(Boolean)))
+      setInsights(await fetchProductionInsights())
+      toast.success("已记录你的取舍，下一篇生成时会说明参考依据")
+    } catch { toast.error("反馈未保存，请确认保留表达出现在正文中，每条不超过 300 字") }
+    finally { setSavingFeedback(false) }
+  }
 
   useEffect(() => {
     fetchProductionInsights().then(setInsights).catch(() => setInsights(null))
@@ -78,29 +96,36 @@ export default function ProductionGuidance({ article, materials, articleToutiao,
 
       <section className="pg-card" aria-label="历史表现参考">
         <div className="pg-card-head">
-          <div><BarChart3 size={17} /><h3>历史表现参考</h3></div>
-          <span>{insights?.sampleSize || 0} 条评分</span>
+          <div><BarChart3 size={17} /><h3>读者关注记录</h3></div>
+          <span>{insights?.audienceEvidence?.sampleSize || 0} 篇自动数据</span>
         </div>
-        {!insights?.sampleSize ? (
-          <p className="pg-empty">还没有文章表现数据。发布后在“文章评分”录入阅读、点赞和转发，后续生成会自动参考高表现文章。</p>
+        {!insights?.audienceEvidence ? (
+          <p className="pg-empty">还没有微信后台数据。到“选题与素材”连接已登录浏览器后，系统会自动更新。</p>
         ) : (
           <>
-            <div className="pg-patterns">
-              <div><span>高表现标题</span><strong>约 {insights.patterns.averageTitleCharacters ?? "—"} 字</strong></div>
-              <div><span>高表现正文</span><strong>约 {insights.patterns.averageArticleCharacters ?? "—"} 字</strong></div>
-              <div><span>平均分最佳平台</span><strong>{insights.patterns.bestPlatform ? PLATFORM_LABEL[insights.patterns.bestPlatform.platform] : "—"}</strong></div>
-            </div>
-            <div className="pg-top-list">
-              {insights.topArticles.slice(0, 3).map(item => (
-                <div key={`${item.articleId}-${item.platform}`}>
-                  <span>{PLATFORM_LABEL[item.platform]} · {item.composite} 分{item.templateId ? ` · ${item.templateId}` : ""}</span>
-                  <strong title={`${item.promptIds.length} 个提示词，${item.referenceArticleIds.length} 篇参考文章`}>{item.title}</strong>
-                </div>
-              ))}
-            </div>
-            <p className="pg-help">生成时已自动注入高、低表现示例；这里展示当前可解释的参考口径。</p>
+            <div className="pg-top-list">{insights.audienceEvidence.highAttention.slice(0, 3).map(item => (
+              <div key={item.id}><span>高关注 · 第 {item.rank} 位</span><strong>{item.title} · {item.reads.toLocaleString()} 人</strong></div>
+            ))}</div>
+            <p className="pg-help">{insights.audienceEvidence.period.start} 至 {insights.audienceEvidence.period.end} 的相对位置。阅读人数会受选题、发布时间、账号体量和推荐流量影响，生成时只把它当作选题证据，不会模仿句式。</p>
           </>
         )}
+      </section>
+
+      <section className="pg-card pg-card--wide" aria-label="我的写作取舍">
+        <div className="pg-card-head"><h3>我的写作取舍</h3><span>只记录你明确确认的偏好</span></div>
+        <p className="pg-help">{workflow.selectedCandidateId ? `本稿来自候选 ${workflow.selectedCandidateId.slice(0, 8)}，原始候选稿和素材仍保留。` : "本稿未关联候选稿，仍可记录修改原因。"} 原样保留的段落只表示没有修改，不自动等同于偏好。</p>
+        <label className="pg-feedback-label">这次为什么这样改
+          <textarea value={note} onChange={event => setNote(event.target.value)} maxLength={1000} placeholder="例如：删掉泛泛的开场，先写自己的亲身观察。"/>
+        </label>
+        <label className="pg-feedback-label">下次还想保留的表达（从正文粘贴，每行一条，最多 10 条）
+          <textarea value={expressions} onChange={event => setExpressions(event.target.value)} placeholder="只填你明确认可的表达；留空也可以。"/>
+        </label>
+        <button className="btn btn-secondary" onClick={() => void saveFeedback()} disabled={!articleId || savingFeedback}>{savingFeedback ? "保存中…" : "保存写作取舍"}</button>
+        {!articleId && <p className="pg-help">此稿仅保存在浏览器中，移到服务器后可积累账号经验。</p>}
+        {insights?.creatorExperiences?.slice(0, 3).map(item => <p className="pg-help" key={item.articleId}>
+          <a href={`/article/${encodeURIComponent(item.articleId)}?tab=analysis`}>{item.articleId}</a>：{item.note || "已记录保留表达"}
+          {item.candidateId ? ` · 原样保留 ${item.retainedParagraphs} 段，修改或新增 ${item.changedParagraphs} 段` : ""}
+        </p>)}
       </section>
 
       <section className="pg-card pg-card--wide" aria-label="平台版本关系">

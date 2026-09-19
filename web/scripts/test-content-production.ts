@@ -6,6 +6,7 @@ import {
   normalizeCreatorWritingProfile,
 } from "../shared/contentProduction.ts"
 import { acquireCandidate, CandidateError } from "../server/generationCandidates.ts"
+import { rankWechatArticles, wechatAnalyticsSchema } from "../shared/wechatAnalytics.ts"
 
 const profile = normalizeCreatorWritingProfile({
   audience: "大学生",
@@ -32,6 +33,30 @@ const audit = auditArticleSources(
 assert.equal(audit.sources.length, 1)
 assert.equal(audit.claims.length, 2)
 assert.equal(audit.unsupportedCount, 1)
+
+const analytics = wechatAnalyticsSchema.parse({
+  version: 1,
+  source: "wechat-browser",
+  accountName: "测试账号",
+  collectedAt: "2026-09-19T10:00:00.000Z",
+  period: { start: "2026-08-20", end: "2026-09-18" },
+  scope: "period-article-list",
+  metric: "period-readers",
+  collection: { complete: true, nextOffset: 0 },
+  trafficSources: [{ name: "推荐", percent: 50 }],
+  articles: Array.from({ length: 8 }, (_, index) => ({
+    id: `${1000 + index}_1`,
+    title: `文章 ${index + 1}`,
+    publishedAt: "2026-09-01",
+    reads: 800 - index * 100,
+    shareOfReads: 12.5,
+  })),
+})
+const ranked = rankWechatArticles(analytics)
+assert.equal(ranked[0].band, "high")
+assert.equal(ranked.at(-1)?.band, "low")
+assert.equal(ranked[0].rank, 1)
+assert.equal(ranked.at(-1)?.rank, 8)
 
 const releaseCandidates = [
   acquireCandidate("concurrency-test-user", "candidate-1"),

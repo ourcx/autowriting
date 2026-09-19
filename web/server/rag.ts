@@ -13,9 +13,10 @@ import { Embeddings } from "@langchain/core/embeddings"
 import { Document } from "@langchain/core/documents"
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters"
 import { DATA_DIR, DRAFTS_DIR, SERVER_AI_CONFIG } from "./config.ts"
-import type { AIConfig, SearchResult, ArticleScore } from "./types.ts"
+import type { AIConfig, SearchResult } from "./types.ts"
 import { logger } from "./logger.ts"
 import { replaceDirectoryAtomically } from "./utils/atomicDirectory.ts"
+import { formatWechatAudienceEvidence } from "./wechatAnalyticsStore.ts"
 
 // ── 本地向量模型默认配置 ───────────────────────────────────────────────────────
 const LOCAL_EMBED_MODEL = "Xenova/multilingual-e5-small"
@@ -908,70 +909,8 @@ export function formatRetrievedContext(docs: SearchResult[]): string {
 
 export async function formatExampleContext(userId: string, draftsDir?: string): Promise<string> {
   try {
-    const { getExampleArticles } = await import("./db.ts")
-    const { good, bad } = getExampleArticles(userId, { goodThreshold: 70, badThreshold: 30, maxEach: 2 }) as { good: ArticleScore[]; bad: ArticleScore[] }
-
-    if (!good.length && !bad.length) return ""
-
-    const parts: string[] = []
-
-    function readArticleSnippet(articleId: string): string | null {
-      const userDraftsDir = draftsDir || path.join(DATA_DIR, "drafts", String(userId))
-      const candidates = [
-        path.join(userDraftsDir, articleId, "raw", "article_raw.md"),
-        path.join(userDraftsDir, articleId.substring(0, 8), "raw", "article_raw.md"),
-      ]
-      for (const p of candidates) {
-        if (fs.existsSync(p)) {
-          const raw = fs.readFileSync(p, "utf-8")
-          const cleaned = cleanText(raw)
-          return cleaned.slice(0, 600)
-        }
-      }
-      return null
-    }
-
-    if (good.length) {
-      const goodParts: string[] = []
-      for (const s of good) {
-        const snippet = readArticleSnippet(s.articleId)
-        if (!snippet) continue
-        const meta = [
-          s.platform === "wechat" ? "公众号" : "今日头条",
-          s.views != null ? `浏览 ${s.views}` : null,
-          s.likes != null ? `点赞 ${s.likes}` : null,
-          s.shares != null ? `转发 ${s.shares}` : null,
-          `综合评分 ${s.composite}`,
-        ].filter(Boolean).join(" · ")
-        goodParts.push(`#### 优秀示例：${s.title}（${meta}）\n${snippet}`)
-      }
-      if (goodParts.length) {
-        parts.push(`### 高表现文章（请参考其写作风格、结构和表达方式）\n\n${goodParts.join("\n\n")}`)
-      }
-    }
-
-    if (bad.length) {
-      const badParts: string[] = []
-      for (const s of bad) {
-        const snippet = readArticleSnippet(s.articleId)
-        if (!snippet) continue
-        const meta = [
-          s.platform === "wechat" ? "公众号" : "今日头条",
-          s.views != null ? `浏览 ${s.views}` : null,
-          s.likes != null ? `点赞 ${s.likes}` : null,
-          s.shares != null ? `转发 ${s.shares}` : null,
-          `综合评分 ${s.composite}`,
-        ].filter(Boolean).join(" · ")
-        badParts.push(`#### 低表现示例：${s.title}（${meta}）\n${snippet}`)
-      }
-      if (badParts.length) {
-        parts.push(`### 低表现文章（请避免其写作风格和结构问题）\n\n${badParts.join("\n\n")}`)
-      }
-    }
-
-    if (!parts.length) return ""
-
-    return `# 历史文章表现参考（基于真实数据，请学习优秀示例、规避低表现模式）\n\n${parts.join("\n\n---\n\n")}`
+    void draftsDir
+    return formatWechatAudienceEvidence(userId)
   } catch (e: unknown) {
     logger.warn("RAG", "formatExampleContext 失败", { error: (e as Error).message })
     return ""

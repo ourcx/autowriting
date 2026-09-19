@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Plus, Calendar, FileText, Trash2, ArrowRight, RefreshCw, Zap, Server, HardDrive, AlertTriangle, Upload, Search, MessageCircle, Newspaper, BookOpen, X } from 'lucide-react'
-import { fetchArticleList, fetchArticleWorkflowMetrics, deleteArticle } from '../../utils/apiHelpers'
+import { fetchArticleList, fetchArticleWorkflowMetrics, deleteArticle, type WorkflowMetrics } from '../../utils/apiHelpers'
 import { showConfirm, toast } from '../../components/Toast/Toast'
 import './Dashboard.css'
 import type { PublishPlatform } from '../../utils/articleNavigation'
@@ -106,7 +106,7 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<'all' | 'writing' | 'review' | 'ready' | 'done'>('all')
   const [loadError, setLoadError] = useState(false)
-  const [workflowMetrics, setWorkflowMetrics] = useState<{ sampleSize: number; medianMinutes: number | null }>({ sampleSize: 0, medianMinutes: null })
+  const [workflowMetrics, setWorkflowMetrics] = useState<WorkflowMetrics>({ sampleSize: 0, medianMinutes: null, medianActiveMinutes: null, activeSampleSize: 0, reworkCount: 0 })
   const titleRef = useRef<HTMLInputElement>(null)
 
   async function loadArticles() {
@@ -318,15 +318,24 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
             <span className="dash-stat-label">草稿</span>
           </div>
           <div className="dash-stat-divider" />
-          <div className="dash-stat" title={`已统计 ${workflowMetrics.sampleSize} 篇推送到微信草稿的文章`}>
+          <div className="dash-stat" title={`创建到首次推送，含搁置时间；${workflowMetrics.sampleSize} 篇。降低 30% 是目标，尚未验证。`}>
             <span className="dash-stat-num">
               {workflowMetrics.medianMinutes === null ? '—' : workflowMetrics.medianMinutes < 60
                 ? workflowMetrics.medianMinutes
                 : (workflowMetrics.medianMinutes / 60).toFixed(1)}
             </span>
             <span className="dash-stat-label">
-              {workflowMetrics.medianMinutes === null ? '暂无耗时样本' : workflowMetrics.medianMinutes < 60 ? '分钟 / 微信草稿' : '小时 / 微信草稿'}
+              {workflowMetrics.medianMinutes === null ? '暂无耗时样本' : workflowMetrics.medianMinutes < 60 ? '分钟 / 首次草稿中位数' : '小时 / 首次草稿中位数'}
             </span>
+          </div>
+          <div className="dash-stat-divider" />
+          <div className="dash-stat" title={`仅含开始计时后的 ${workflowMetrics.activeSampleSize} 篇完成稿；页面可见、有焦点且近 30 秒有操作才计时，属于估算。`}>
+            <span className="dash-stat-num">{workflowMetrics.medianActiveMinutes ?? "—"}</span>
+            <span className="dash-stat-label">活跃编辑分钟 / 中位数</span>
+          </div>
+          <div className="dash-stat">
+            <span className="dash-stat-num">{workflowMetrics.reworkCount}</span>
+            <span className="dash-stat-label">完成稿审核后返工次数</span>
           </div>
         </div>
 

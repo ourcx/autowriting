@@ -13,7 +13,10 @@ import {
   publishXiaohongshuNote,
   pushWechatDraft,
   uploadWechatThumb,
+  fetchArticle,
+  confirmWechatDraft,
 } from '../../utils/apiHelpers'
+import type { ArticleWorkflow } from '../../../shared/articleWorkflow'
 import { hasXiaohongshuCookies, loadXiaohongshuCookies } from '../../utils/accountBindings'
 import { loadAIConfig } from '../../utils/aiConfig'
 import { sanitizeHtml } from '../../utils/sanitizeHtml'
@@ -264,6 +267,16 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
   const [wxBound, setWxBound] = useState(false)
   const [pushing, setPushing] = useState(false)
   const [pushDone, setPushDone] = useState(false)
+  const [receipt, setReceipt] = useState<ArticleWorkflow["draftReceipt"]>()
+  const [confirmationId, setConfirmationId] = useState("")
+  const pushLock = useRef(false)
+  const refreshReceipt = useCallback(async () => {
+    if (!articleId || articleId.startsWith("local:")) return
+    const result = await fetchArticle(articleId)
+    setReceipt(result.workflow?.draftReceipt)
+  }, [articleId])
+  useEffect(() => { void refreshReceipt().catch(() => {}) }, [refreshReceipt])
+  useEffect(() => { setPushDone(false) }, [content, title])
 
   // 今日头条：Cookie 配置弹窗 + 自动推送状态
   const [showTtCookieModal, setShowTtCookieModal] = useState(false)
@@ -642,6 +655,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
 
   // 推送草稿到公众号草稿箱
   const handlePushDraft = useCallback(async () => {
+    if (pushLock.current) return
     if (!wxBound) {
       toast.warn('请先绑定公众号', {
         duration: 2500,
@@ -656,6 +670,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
       toast.warn('标题或内容为空，无法推送草稿')
       return
     }
+    pushLock.current = true
     setPushing(true)
     try {
       // 用内联样式版本作为草稿内容（微信支持 HTML，但不支持 <style>，需内联）
@@ -696,6 +711,10 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
         content: inlinedHtml,
         digest,
         thumbMediaId: thumb_media_id,
+        articleId: articleId && !articleId.startsWith("local:") ? articleId : undefined,
+        sourceArticle: content,
+        templateId,
+        coverImageUrl,
       }, getWxHeaders())
       setPushDone(true)
       onDraftPushed?.({ templateId })
@@ -715,9 +734,24 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '推送失败')
     } finally {
+      pushLock.current = false
       setPushing(false)
+      void refreshReceipt().catch(() => {})
     }
-  }, [html, editedCss, fontSize, title, content, selectedCoverImage, onDraftPushed, navigate, templateId, wxBound])
+  }, [html, editedCss, fontSize, title, content, selectedCoverImage, onDraftPushed, navigate, templateId, wxBound, articleId, refreshReceipt])
+
+  const confirmReceipt = async (confirmedAbsent = false) => {
+    if (!articleId || pushing) return
+    if (confirmedAbsent && !window.confirm("请先检查微信草稿箱。确认没有本次草稿后才允许重试，继续吗？")) return
+    setPushing(true)
+    try {
+      const result = await confirmWechatDraft(articleId, confirmedAbsent ? { confirmedAbsent } : { mediaId: confirmationId }, getWxHeaders())
+      setReceipt(result.draftReceipt)
+      if (!confirmedAbsent) onDraftPushed?.({ templateId })
+      toast.success(confirmedAbsent ? "已记录核对结果，可以重试" : "已确认微信草稿")
+    } catch { toast.error("未能核对草稿，请检查 media_id 和公众号绑定") }
+    finally { setPushing(false) }
+  }
 
   // 空状态
   if (!content?.trim()) {
@@ -742,6 +776,15 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
       {/* ── 公众号模式 ── */}
       {platformMode === 'wechat' && (
         <>
+          {receipt && <div className="editor-save-status" role="status">
+            {receipt.status === "succeeded" ? <>最近一次推送成功 · {new Date(receipt.at).toLocaleString()} · 回执 {receipt.mediaId} · 仅进入草稿箱，尚未群发</>
+              : receipt.status === "failed" ? "上次推送未成功，可以重试。" : <>
+                上次请求的结果尚未确认。请先打开<a href="/drafts" target="_blank" rel="noreferrer">微信草稿箱</a>核对。
+                <input aria-label="草稿 media_id" value={confirmationId} onChange={event => setConfirmationId(event.target.value)} placeholder="已找到草稿的 media_id" />
+                <button className="btn btn-secondary btn-small" disabled={pushing || !confirmationId.trim()} onClick={() => void confirmReceipt()}>核对回执</button>
+                <button className="btn btn-secondary btn-small" disabled={pushing} onClick={() => void confirmReceipt(true)}>已核对，草稿未生成</button>
+              </>}
+          </div>}
           {/* 顶部工具栏 */}
           <div className="wr-toolbar">
             <div className="wr-toolbar-left">
@@ -785,7 +828,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
               <button
                 className={`wr-push-btn ${pushDone ? 'success' : ''}`}
                 onClick={handlePushDraft}
-                disabled={pushing || pushDone}
+                disabled={pushing || pushDone || receipt?.status === "unknown" || receipt?.status === "sending"}
                 title="将文章以 HTML 格式推送到公众号草稿箱"
               >
                 {pushing
@@ -794,7 +837,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                     ? <Check size={15} />
                     : <Send size={15} />
                 }
-                {pushing ? '推送中...' : pushDone ? '已推送！' : '推送草稿'}
+                {pushing ? '推送中...' : pushDone ? '已推送！' : receipt?.status === "unknown" || receipt?.status === "sending" ? "待核对推送结果" : '推送草稿'}
               </button>
             </div>
           </div>

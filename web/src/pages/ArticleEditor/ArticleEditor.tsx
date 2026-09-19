@@ -3,7 +3,15 @@ import { toast } from '../../components/Toast/Toast'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { Zap, Save, Edit3, Palette, Settings, AlertTriangle, Plus, Trash2, Pencil, Sparkles, LayoutList, CheckCircle, ChevronRight, GripVertical, Send, User, ExternalLink, Newspaper, BookOpen, MessageCircle } from 'lucide-react'
 import { useAIReadiness, fetchServerStatus } from '../../store/useConfigStore'
-import { fetchArticle, recordArticleWorkflowEvent, saveArticle } from '../../utils/apiHelpers'
+import { useAuth } from '../../store/useAuth'
+import { useEditingActivity } from './useEditingActivity'
+import {
+  fetchArticle,
+  generateArticleOutline,
+  recordArticleWorkflowEvent,
+  refineArticleMaterials,
+  saveArticle,
+} from '../../utils/apiHelpers'
 import {
   ArticleData,
   createEmptyArticleData,
@@ -67,6 +75,12 @@ export default function ArticleEditor() {
   // 封面是否已存在（从 localStorage 读取，CoverGenerator 生成/粘贴后更新）
   const [hasCover, setHasCover] = useState(false)
   const [workflow, setWorkflow] = useState<ArticleWorkflow>(() => normalizeArticleWorkflow(null, createEmptyArticleData()))
+  const { user } = useAuth()
+  const savedData = useRef(createEmptyArticleData())
+  const [savedArticle, setSavedArticle] = useState("")
+  const [dirty, setDirty] = useState(false)
+  const [recovery, setRecovery] = useState<ArticleData | null>(null)
+  const recoveryKey = `article_recovery:${user?.id || "anonymous"}:${articleId}`
   // URL records the workspace, not production progress. Refreshing never marks a step complete.
   const activeTab = resolveEditorTab(searchParams.get('tab'), workflow.currentStage)
   const publishPlatform = resolvePublishPlatform(searchParams.get('platform'))
@@ -127,12 +141,21 @@ export default function ArticleEditor() {
 
   // ── 本地文章读写（local: 前缀） ───────────────────────────────────────────
   const isLocalArticle = articleId.startsWith('local:')
+  useEditingActivity(articleId, !loading && !loadError && !isLocalArticle)
 
-  function loadLocalData(): ArticleData {
-    return loadLocalArticleData(articleId)
-  }
+  useEffect(() => {
+    if (loading || loadError) return
+    const changed = JSON.stringify(data) !== JSON.stringify(savedData.current)
+    setDirty(changed)
+    if (changed) {
+      try { sessionStorage.setItem(recoveryKey, JSON.stringify(data)) } catch { /* Storage can be full; saving remains available. */ }
+    }
+    const warn = (event: BeforeUnloadEvent) => { if (changed) { event.preventDefault(); event.returnValue = "" } }
+    window.addEventListener("beforeunload", warn)
+    return () => window.removeEventListener("beforeunload", warn)
+  }, [data, loading, loadError, recoveryKey])
 
-  function saveLocalData(d: ArticleData) {
+  const saveLocalData = useCallback((d: ArticleData) => {
     localStorage.setItem(getLocalArticleStorageKey(articleId), JSON.stringify(d))
     // 同步更新本地文章列表中的标题
     const title = d.title || d.article.split('\n')[0]?.replace(/^#+\s*/, '') || ''
@@ -141,29 +164,38 @@ export default function ArticleEditor() {
       const updated = articles.map(a => a.id === articleId ? { ...a, title, status: d.article ? 'generated' : 'draft' } : a)
       localStorage.setItem('local_articles', JSON.stringify(updated))
     }
-  }
+  }, [articleId])
 
-  async function fetchArticleData() {
+  const fetchArticleData = useCallback(async () => {
     try {
       setLoading(true)
       setLoadError(null)
       if (isLocalArticle) {
-        const localData = loadLocalData()
+        const localData = loadLocalArticleData(articleId)
         setData(localData)
+        savedData.current = localData
+        setSavedArticle(localData.article)
         const stored = localStorage.getItem(`article_workflow_${articleId}`)
         setWorkflow(normalizeArticleWorkflow(stored ? JSON.parse(stored) : null, localData))
       } else {
         const d = await fetchArticle(articleId)
         setData(normalizeArticleData(d))
+        savedData.current = normalizeArticleData(d)
+        setSavedArticle(normalizeArticleData(d).article)
         setWorkflow(normalizeArticleWorkflow(d.workflow, d))
       }
+      try {
+        const cached = sessionStorage.getItem(recoveryKey)
+        setRecovery(cached && cached !== JSON.stringify(savedData.current) ? normalizeArticleData(JSON.parse(cached)) : null)
+      } catch { setRecovery(null) }
+      setDirty(false)
     } catch (err) {
       console.error('加载文章失败', err)
       setLoadError('文章加载失败。为保护原文，当前页面已禁止保存，请重试加载。')
     } finally {
       setLoading(false)
     }
-  }
+  }, [articleId, isLocalArticle, recoveryKey])
 
   const handleSave = useCallback(async (): Promise<boolean> => {
     if (savingRef.current || loading || loadError) return false
@@ -178,6 +210,11 @@ export default function ArticleEditor() {
         if (result.workflow) setWorkflow(result.workflow)
         toast.success('保存成功')
       }
+      savedData.current = data
+      setSavedArticle(data.article)
+      setDirty(false)
+      setRecovery(null)
+      sessionStorage.removeItem(recoveryKey)
       return true
     } catch {
       toast.error('保存失败，请重试')
@@ -186,7 +223,7 @@ export default function ArticleEditor() {
       savingRef.current = false
       setSaving(false)
     }
-  }, [articleId, data, isLocalArticle, loadError, loading, saveLocalData])
+  }, [articleId, data, isLocalArticle, loadError, loading, saveLocalData, recoveryKey])
 
   const handleWorkflowEvent = useCallback(async (event: ArticleWorkflowEvent, metadata?: { templateId?: string }) => {
     try {
@@ -198,12 +235,12 @@ export default function ArticleEditor() {
           delete next.lastReviewedAt
           delete next.wechatDraftOpenedAt
           delete next.wechatDraftAt
-          delete next.publishContext
         }
         if (event === 'reviewed') next.lastReviewedAt = now
         if (event === 'wechat_draft_opened') next.wechatDraftOpenedAt = now
         if (event === 'wechat_draft_pushed') {
           next.wechatDraftAt = now
+          next.firstWechatDraftAt ||= now
           if (metadata?.templateId) next.publishContext = { templateId: metadata.templateId }
         }
         const normalized = normalizeArticleWorkflow(next, data, next.createdAt)
@@ -229,19 +266,19 @@ export default function ArticleEditor() {
     if (platform === 'wechat') void handleWorkflowEvent('wechat_draft_opened')
   }, [data.article, data.articleToutiao, handleSave, handleWorkflowEvent, setSearchParams])
 
-  function handleGenerate() {
+  const handleGenerate = useCallback(() => {
     if (!apiKeyReady) {
       setGenerateError('未配置 AI API Key，请先前往「AI 配置」页面填写后再生成。')
       return
     }
     setGenerateError(null)
     setShowGenerateModal(true)
-  }
+  }, [apiKeyReady])
 
   useEffect(() => {
     if (!articleId) return
-    fetchArticleData()
-  }, [articleId])
+    void fetchArticleData()
+  }, [articleId, fetchArticleData])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -263,7 +300,7 @@ export default function ArticleEditor() {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [data, handlePreview, handleSave])
+  }, [data, handleGenerate, handlePreview, handleSave])
 
   // ── AI：生成大纲 → 追加到 materials ─────────────────────────────────────
   const handleGenerateOutline = async () => {
@@ -274,19 +311,8 @@ export default function ArticleEditor() {
     setGeneratingOutline(true)
     try {
       const apiId = isLocalArticle ? articleId.slice(6) : articleId
-      const token = localStorage.getItem('auth_token')
-      const resp = await fetch(`/api/articles/${apiId}/outline`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ task: data.task, aiConfig }),
-      })
-      const d = await resp.json()
-      if (!resp.ok) throw new Error(d.error || '生成失败')
       // 不直接追加，而是进入「待确认」状态让用户先编辑
-      setPendingOutline(d.outline)
+      setPendingOutline(await generateArticleOutline(apiId, data.task, aiConfig))
       setActiveTab('materials')
       toast.success('大纲已生成，请确认后追加到素材库')
     } catch (e: unknown) {
@@ -304,18 +330,8 @@ export default function ArticleEditor() {
     setRefiningMaterials(true)
     try {
       const apiId = isLocalArticle ? articleId.slice(6) : articleId
-      const token = localStorage.getItem('auth_token')
-      const resp = await fetch(`/api/articles/${apiId}/refine-materials`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ materials: data.materials, task: data.task, aiConfig }),
-      })
-      const d = await resp.json()
-      if (!resp.ok) throw new Error(d.error || '整理失败')
-      setData(prev => ({ ...prev, materials: d.refined }))
+      const refined = await refineArticleMaterials(apiId, data.materials, data.task, aiConfig)
+      setData(prev => ({ ...prev, materials: refined }))
       toast.success('素材已整理完毕')
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : '整理素材失败')
@@ -323,11 +339,18 @@ export default function ArticleEditor() {
     setRefiningMaterials(false)
   }
 
-  const handleGenerateComplete = async (article: string, articleToutiao: string, platforms: 'both' | 'wechat' | 'toutiao') => {
+  const handleGenerateComplete = async (article: string, articleToutiao: string, platforms: 'both' | 'wechat' | 'toutiao', candidateId?: string) => {
     const next = { ...data, ...(article ? { article } : {}), ...(articleToutiao ? { articleToutiao } : {}) }
     // Candidate generation never writes the mother draft. Persist selection before closing the dialog.
     if (isLocalArticle) saveLocalData(next)
-    else await saveArticle(articleId, next)
+    else {
+      const result = await saveArticle(articleId, { ...next, ...(platforms === 'wechat' ? { selectedCandidateId: candidateId } : {}) })
+      if (result.workflow) setWorkflow(result.workflow)
+    }
+    savedData.current = next
+    setSavedArticle(next.article)
+    setDirty(false)
+    sessionStorage.removeItem(recoveryKey)
     setData(next)
     // 跳转到对应 tab
     if (platforms === 'toutiao') {
@@ -339,12 +362,13 @@ export default function ArticleEditor() {
       : platforms === 'toutiao' ? '今日头条文章已生成'
       : '公众号 + 今日头条两篇文章已生成'
     toast.success(msg)
-    if (platforms !== 'toutiao') void handleWorkflowEvent('generated')
+    if (platforms !== 'toutiao' && isLocalArticle) void handleWorkflowEvent('generated')
   }
 
   const articleTitle = data.title || data.article.split('\n')[0]?.replace(/^#+\s*/, '') || `文章 ${articleId}`
-  const reviewDone = Boolean(workflow.lastReviewedAt)
-  const publishDone = Boolean(workflow.wechatDraftAt)
+  const bodyChanged = data.article !== savedArticle
+  const reviewDone = Boolean(workflow.lastReviewedAt) && !bodyChanged
+  const publishDone = Boolean(workflow.wechatDraftAt) && !bodyChanged
 
   const nextAction = publishDone
     ? { label: '查看微信草稿', action: () => navigate('/drafts') }
@@ -544,6 +568,16 @@ export default function ArticleEditor() {
         </div>
 
         <div className="editor-content">
+          <div className="editor-save-status" role="status">
+            {dirty ? "有未保存的修改 · 本标签页已保留恢复副本" : isLocalArticle ? "已保存在此浏览器" : "已保存到服务器 · 文章列表可继续编辑"}
+            <span> · 活跃编辑约 {Math.round((workflow.activeEditingMs || 0) / 60000)} 分钟 · 审核后返工 {workflow.reworkCount || 0} 次</span>
+            {workflow.selectedCandidateId && <span> · 已记录候选稿选择</span>}
+          </div>
+          {recovery && <div className="editor-save-status">
+            检测到上次未保存的修改。
+            <button className="btn btn-secondary btn-small" onClick={() => { setData(recovery); setRecovery(null) }}>恢复修改</button>
+            <button className="btn btn-secondary btn-small" onClick={() => { sessionStorage.removeItem(recoveryKey); setRecovery(null) }}>使用已保存版本</button>
+          </div>}
           {activeTab === 'task' && (
             <div className="editor-panel editor-panel--task">
               {/* 模板选择栏 */}
@@ -764,14 +798,15 @@ export default function ArticleEditor() {
 
           {activeTab === 'analysis' && (
             <div className="editor-panel">
-              <ProductionGuidance article={data.article} materials={data.materials} articleToutiao={data.articleToutiao} workflow={workflow} />
+              <ProductionGuidance article={data.article} materials={data.materials} articleToutiao={data.articleToutiao} workflow={workflow}
+                articleId={isLocalArticle ? undefined : articleId} onBeforeFeedback={handleSave} onWorkflow={setWorkflow} />
               <ContentStats
                 title={articleTitle}
                 content={data.article}
                 articleId={isLocalArticle ? articleId.slice(6) : articleId}
                 task={data.task}
                 onArticleChange={value => setData(prev => ({ ...prev, article: value }))}
-                onReviewCompleted={() => void handleWorkflowEvent('reviewed')}
+                onReviewCompleted={() => void (async () => { if (await handleSave()) await handleWorkflowEvent('reviewed') })()}
               />
             </div>
           )}
@@ -804,7 +839,7 @@ export default function ArticleEditor() {
                   title={publishTitle}
                   articleId={articleId}
                   platformMode={publishPlatform}
-                  onDraftPushed={context => void handleWorkflowEvent('wechat_draft_pushed', context)}
+                  onDraftPushed={() => { if (!isLocalArticle) void fetchArticle(articleId).then(result => setWorkflow(normalizeArticleWorkflow(result.workflow, result))) }}
                 /> : <div className="publish-empty">
                   <BookOpen size={28} />
                   <h3>{publishPlatform === 'toutiao' ? '今日头条版本尚未生成' : '尚未添加正文'}</h3>

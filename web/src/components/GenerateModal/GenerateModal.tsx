@@ -13,7 +13,7 @@ interface Props {
   materials: string
   sourceArticle?: string
   aiConfig: Record<string, unknown>
-  onComplete: (article: string, articleToutiao: string, platforms: "both" | "wechat" | "toutiao") => void | Promise<void>
+  onComplete: (article: string, articleToutiao: string, platforms: "both" | "wechat" | "toutiao", candidateId?: string) => void | Promise<void>
   onClose: () => void
 }
 
@@ -183,7 +183,7 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
     setApplying(true)
     setError("")
     try {
-      await onComplete(candidate.platform === "wechat" ? candidate.content : "", candidate.platform === "toutiao" ? candidate.content : "", candidate.platform)
+      await onComplete(candidate.platform === "wechat" ? candidate.content : "", candidate.platform === "toutiao" ? candidate.content : "", candidate.platform, candidate.id)
       stop()
       onClose()
     } catch (cause) { setError(extractErrorMessage(cause, "选用失败，候选稿仍保留")) }

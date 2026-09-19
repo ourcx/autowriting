@@ -29,6 +29,8 @@
     "test:production": "node --import tsx scripts/test-content-production.ts",
     "test:workers": "node --import tsx scripts/test-workers.ts",
     "test:wechat-collector": "node --import tsx scripts/test-wechat-collector.ts",
+    "wechat:analytics:collect": "node --import tsx scripts/collect-wechat-analytics.mjs",
+    "wechat:analytics:browser": "node --import tsx scripts/open-wechat-analytics-browser.mjs",
     "smoke": "node scripts/smoke.mjs",
     "test:deploy": "node scripts/test-deploy-release.mjs",
     "verify": "pnpm lint && pnpm arch && pnpm typecheck:changed && pnpm test:production && pnpm test:workers && pnpm test:wechat-collector && pnpm test:canvas && pnpm test:xiumi && pnpm build",

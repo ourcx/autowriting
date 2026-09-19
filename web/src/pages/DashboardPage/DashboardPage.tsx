@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings, Palette, AlertTriangle, Database, BookOpen, LogOut, Shield, Zap, Clock, Star, Image, User, Shapes } from 'lucide-react'
+import { Settings, Palette, AlertTriangle, Database, BookOpen, LogOut, Shield, Zap, Clock, BarChart3, Image, User, Shapes } from 'lucide-react'
 import Dashboard from '../Dashboard/Dashboard'
 import OnboardingGuide from '../../components/OnboardingGuide/OnboardingGuide'
 import PageHeader from '../../components/PageHeader/PageHeader'
@@ -54,9 +54,9 @@ export default function DashboardPage() {
               <Clock size={14} />
               定时任务
             </button>
-            <button className="dp-nav-btn" onClick={() => navigate('/scores')}>
-              <Star size={14} />
-              文章评分
+            <button className="dp-nav-btn" onClick={() => navigate('/insights')}>
+              <BarChart3 size={14} />
+              数据看板
             </button>
           </div>
           <div className="dp-nav-group" role="group" aria-label="设计">

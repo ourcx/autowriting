@@ -26,12 +26,14 @@ import xiaohongshuRouter from "./server/routes/xiaohongshu.ts"
 import agentRouter from "./server/routes/agent.ts"
 import canvasRouter from "./server/routes/canvas.ts"
 import creatorProfileRouter from "./server/routes/creatorProfile.ts"
+import wechatAnalyticsRouter from "./server/routes/wechatAnalytics.ts"
 import { validateArticleId } from "./server/articleIdMiddleware.ts"
 import { initCronScheduler } from "./server/cronEngine.ts"
 import { upsertTemplate, db } from "./server/db.ts"
 import { BUILTIN_TEMPLATES_DATA } from "./server/builtinTemplates.ts"
 import { seedBuiltinPrompts } from "./server/seedPrompts.ts"
 import { cleanupXiaohongshuDebugArtifacts } from "./server/utils/public.ts"
+import { startWechatAnalyticsScheduler } from "./server/wechatAnalyticsCollector.ts"
 import {
   apiRateLimiter,
   corsMiddleware,
@@ -84,6 +86,7 @@ try {
   })
 }
 scheduleCleanup()
+startWechatAnalyticsScheduler()
 
 app.use(securityHeaders)
 app.use(corsMiddleware)
@@ -105,6 +108,7 @@ app.use("/api/auth", authRouter)
 app.use("/api/agent", agentRouter)
 app.use("/api/canvas", canvasRouter)
 app.use("/api/creator-profile", creatorProfileRouter)
+app.use("/api/wechat-analytics", wechatAnalyticsRouter)
 app.use("/api/admin", adminRouter)
 app.use("/api/articles/:articleId", validateArticleId)
 app.use("/api/articles", articlesRouter)

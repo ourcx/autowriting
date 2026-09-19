@@ -16,6 +16,26 @@ export interface ArticleWorkflow {
   lastReviewedAt?: string
   wechatDraftOpenedAt?: string
   wechatDraftAt?: string
+  firstWechatDraftAt?: string
+  firstDraftActiveMs?: number
+  firstDraftReworkCount?: number
+  activeEditingMs?: number
+  activityTrackedAt?: string
+  activitySessions?: Record<string, number>
+  reworkCount?: number
+  selectedCandidateId?: string
+  selectionCount?: number
+  feedback?: { note: string; retainedExpressions: string[]; updatedAt: string }
+  draftReceipt?: {
+    status: "sending" | "succeeded" | "unknown" | "failed"
+    fingerprint: string
+    accountId: string
+    at: string
+    mediaId?: string
+    message?: string
+    title?: string
+    sourceHash?: string
+  }
   generationContext?: {
     platforms: Array<"wechat" | "toutiao">
     referenceArticleIds: string[]
@@ -59,6 +79,40 @@ export function normalizeArticleWorkflow(
     ...(text("lastReviewedAt") ? { lastReviewedAt: text("lastReviewedAt") } : {}),
     ...(text("wechatDraftOpenedAt") ? { wechatDraftOpenedAt: text("wechatDraftOpenedAt") } : {}),
     ...(text("wechatDraftAt") ? { wechatDraftAt: text("wechatDraftAt") } : {}),
+    ...(text("firstWechatDraftAt") || text("wechatDraftAt") ? { firstWechatDraftAt: text("firstWechatDraftAt") || text("wechatDraftAt") } : {}),
+    ...(text("activityTrackedAt") ? { activityTrackedAt: text("activityTrackedAt") } : {}),
+    ...(text("selectedCandidateId") ? { selectedCandidateId: text("selectedCandidateId") } : {}),
+  }
+  for (const key of ["activeEditingMs", "reworkCount", "selectionCount", "firstDraftActiveMs", "firstDraftReworkCount"] as const) {
+    if (typeof source[key] === "number" && Number.isFinite(source[key]) && source[key] >= 0) workflow[key] = source[key]
+  }
+  if (source.activitySessions && typeof source.activitySessions === "object") {
+    workflow.activitySessions = Object.fromEntries(Object.entries(source.activitySessions).filter(
+      ([key, value]) => /^[a-f0-9-]{36}$/.test(key) && typeof value === "number" && Number.isFinite(value) && value >= 0,
+    ).slice(-100)) as Record<string, number>
+  }
+  if (source.feedback && typeof source.feedback === "object") {
+    const feedback = source.feedback as Record<string, unknown>
+    workflow.feedback = {
+      note: typeof feedback.note === "string" ? feedback.note.slice(0, 1000) : "",
+      retainedExpressions: Array.isArray(feedback.retainedExpressions)
+        ? feedback.retainedExpressions.filter((value): value is string => typeof value === "string").slice(0, 10).map(value => value.slice(0, 300)) : [],
+      updatedAt: typeof feedback.updatedAt === "string" ? feedback.updatedAt : createdAt,
+    }
+  }
+  if (source.draftReceipt && typeof source.draftReceipt === "object") {
+    const receipt = source.draftReceipt as Record<string, unknown>
+    if (["sending", "succeeded", "unknown", "failed"].includes(String(receipt.status))
+      && typeof receipt.fingerprint === "string" && typeof receipt.accountId === "string" && typeof receipt.at === "string") {
+      workflow.draftReceipt = {
+        status: receipt.status as NonNullable<ArticleWorkflow["draftReceipt"]>["status"],
+        fingerprint: receipt.fingerprint, accountId: receipt.accountId, at: receipt.at,
+        ...(typeof receipt.mediaId === "string" ? { mediaId: receipt.mediaId } : {}),
+        ...(typeof receipt.message === "string" ? { message: receipt.message.slice(0, 300) } : {}),
+        ...(typeof receipt.title === "string" ? { title: receipt.title } : {}),
+        ...(typeof receipt.sourceHash === "string" ? { sourceHash: receipt.sourceHash } : {}),
+      }
+    }
   }
   if (source.generationContext && typeof source.generationContext === "object") {
     const context = source.generationContext as Record<string, unknown>

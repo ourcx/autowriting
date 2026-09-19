@@ -21,9 +21,9 @@ const AdminPage = lazy(() => import('./pages/AdminPage/AdminPage'))
 const MonitoringPage = lazy(() => import('./pages/MonitoringPage/MonitoringPage'))
 const PromptsPage = lazy(() => import('./pages/PromptsPage/PromptsPage'))
 const CronPage = lazy(() => import('./pages/CronPage/CronPage'))
-const ArticleScorePage = lazy(() => import('./pages/ArticleScorePage/ArticleScorePage'))
 const AccountPage = lazy(() => import('./pages/AccountPage/AccountPage'))
 const CanvasStudio = lazy(() => import('./pages/CanvasStudio/CanvasStudio'))
+const TopicInsights = lazy(() => import('./pages/TopicInsights/TopicInsights'))
 
 
 
@@ -57,7 +57,8 @@ export default function App() {
         <Route path="/token-usage" element={<PrivateRoute><TokenUsagePage /></PrivateRoute>} />
         <Route path="/prompts" element={<PrivateRoute><PromptsPage /></PrivateRoute>} />
         <Route path="/cron" element={<PrivateRoute><CronPage /></PrivateRoute>} />
-        <Route path="/scores" element={<PrivateRoute><ArticleScorePage /></PrivateRoute>} />
+        <Route path="/scores" element={<Navigate to="/insights" replace />} />
+        <Route path="/insights" element={<PrivateRoute><TopicInsights /></PrivateRoute>} />
         <Route path="/account" element={<PrivateRoute><AccountPage /></PrivateRoute>} />
         <Route path="/canvas" element={<PrivateRoute><CanvasStudio /></PrivateRoute>} />
 

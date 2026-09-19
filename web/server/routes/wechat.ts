@@ -19,6 +19,8 @@ import sharp from 'sharp'
 import zlib from 'zlib'
 import { logger } from '../logger.js'
 import { authMiddleware } from '../authMiddleware.ts'
+import { readArticleContent, readArticleWorkflow, resolveArticleFiles, saveArticleWorkflow, recordArticleWorkflowEvent } from '../articleStorage.ts'
+import { draftFingerprint } from '../productionJournal.ts'
 
 const router = Router()
 router.use(authMiddleware)
@@ -26,6 +28,7 @@ const WECHAT = 'WECHAT'
 const wechatUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } })
 const WECHAT_MATERIAL_TYPES = new Set(['image', 'voice', 'video', 'news'])
 const WECHAT_UPLOAD_MATERIAL_TYPES = new Set(['image', 'voice', 'video', 'thumb'])
+const activeDrafts = new Set<string>()
 // ── Token 缓存（按 appId 隔离，进程重启后重新获取）──────────────────────────
 // Map<appId, { token: string, exp: number }>
 const _tokenCache = new Map()
@@ -588,6 +591,54 @@ router.post('/draft', async (req, res) => {
     return res.status(400).json({ error: '标题和内容不能为空' })
   }
 
+  let articlePath
+  let receipt
+  let submitted = false
+  if (req.body.articleId !== undefined) {
+    try {
+      articlePath = resolveArticleFiles(req.user.id, req.body.articleId).article
+      const saved = readArticleContent(articlePath)
+      if (!saved.article.trim() || saved.article !== req.body.sourceArticle) return res.status(409).json({ error: '正文已变化或尚未保存，请返回编辑器保存后再推送' })
+      if (activeDrafts.has(articlePath)) return res.status(409).json({ error: '正在推送，请稍候再查看结果' })
+      const workflow = readArticleWorkflow(articlePath, saved)
+      receipt = {
+        status: 'sending', at: new Date().toISOString(), accountId: creds.appId,
+        title: normalizedTitle, sourceHash: draftFingerprint(creds.appId, saved.article),
+        fingerprint: draftFingerprint(creds.appId, {
+          title: normalizedTitle, content: rawContent, digest: normalizedDigest,
+          templateId: req.body.templateId, coverImageUrl: req.body.coverImageUrl,
+        }),
+      }
+      const previous = workflow.draftReceipt
+      if (previous && ['sending', 'unknown'].includes(previous.status)) {
+        return res.status(409).json({ error: '上次推送结果尚未确认，请先在微信草稿箱核对，再填写草稿 media_id 确认结果' })
+      }
+      if (previous?.status === 'succeeded' && previous.fingerprint === receipt.fingerprint) {
+        recordArticleWorkflowEvent({ articlePath, content: saved, event: 'wechat_draft_pushed', at: previous.at, metadata: { templateId: req.body.templateId } })
+        return res.json({ success: true, media_id: previous.mediaId, reused: true })
+      }
+      workflow.draftReceipt = receipt
+      saveArticleWorkflow(articlePath, workflow)
+      activeDrafts.add(articlePath)
+    } catch {
+      return res.status(400).json({ error: '无法读取文章或保存推送记录，请先保存正文' })
+    }
+  }
+  const persistReceipt = (status, mediaId, message) => {
+    if (!articlePath || !receipt) return
+    const saved = readArticleContent(articlePath)
+    const workflow = readArticleWorkflow(articlePath, saved)
+    workflow.draftReceipt = { ...receipt, status, ...(mediaId ? { mediaId } : {}), ...(message ? { message } : {}) }
+    saveArticleWorkflow(articlePath, workflow)
+    if (status === 'succeeded') {
+      const next = recordArticleWorkflowEvent({ articlePath, content: saved, event: 'wechat_draft_pushed', metadata: { templateId: req.body.templateId } })
+      if (receipt.sourceHash !== draftFingerprint(creds.appId, saved.article)) {
+        delete next.wechatDraftAt
+        next.currentStage = next.lastReviewedAt ? 'ready' : 'review'
+        saveArticleWorkflow(articlePath, next)
+      }
+    }
+  }
   const submitDraft = async (token) => {
     let finalThumbId = thumb_media_id
     if (normalizedArticleType === 'news' && !finalThumbId) {
@@ -639,9 +690,7 @@ router.post('/draft', async (req, res) => {
       if (product_info) article.product_info = product_info
     }
 
-    // #region debug-point A-B-C-D-E:wechat-payload
-    void fetch('http://127.0.0.1:7777/event', { method: 'POST', body: JSON.stringify({ sessionId: 'wechat-draft-style', runId: 'post-fix', hypothesisId: 'A,B,C,D,E', location: 'server/routes/wechat.ts:submitDraft', msg: '[DEBUG] Final WeChat draft payload prepared', data: { hasRequestedThumb: Boolean(thumb_media_id), hasFinalThumb: Boolean(finalThumbId), htmlLength: rewrittenContent.html.length, blackBorderMatches: (rewrittenContent.html.match(/border[^;"]*(?:#000(?:000)?|rgb\(0,\s*0,\s*0\))/gi) || []).length, dataSvgIconCount: (rewrittenContent.html.match(/data:image\/svg\+xml/gi) || []).length, rewrittenImages: rewrittenContent.rewritten, failedImages: rewrittenContent.failed.length }, ts: Date.now() }) }).catch(() => {})
-    // #endregion
+    submitted = true
     const resp = await axios.post(
       'https://api.weixin.qq.com/cgi-bin/draft/add',
       { articles: [article] },
@@ -664,6 +713,7 @@ router.post('/draft', async (req, res) => {
     let { resp, rewrittenContent } = await submitDraft(token)
 
     if (resp.data.errcode === 40001) {
+      submitted = false
       logger.warn(WECHAT, '收到 40001，强制刷新 token 后重试', { appId: creds.appId })
       invalidateToken(creds.appId)
       token = await getAccessToken(creds.appId, creds.appSecret, { forceRefresh: true })
@@ -671,6 +721,8 @@ router.post('/draft', async (req, res) => {
     }
 
     if (resp.data.errcode && resp.data.errcode !== 0) {
+      submitted = false
+      persistReceipt('failed', undefined, `微信拒绝请求：${resp.data.errcode}`)
       logger.error(WECHAT, '推送草稿失败', { errcode: resp.data.errcode, errmsg: resp.data.errmsg })
       return res.status(400).json({
         error: `推送失败: [${resp.data.errcode}] ${resp.data.errmsg}`,
@@ -678,6 +730,8 @@ router.post('/draft', async (req, res) => {
       })
     }
 
+    if (typeof resp.data.media_id !== 'string' || !resp.data.media_id) throw new Error('微信未返回草稿回执，请核对草稿箱')
+    persistReceipt('succeeded', resp.data.media_id)
     logger.info(WECHAT, '草稿新增成功', { mediaId: resp.data.media_id })
     res.json({
       success: true,
@@ -686,8 +740,47 @@ router.post('/draft', async (req, res) => {
       failed_images: rewrittenContent.failed,
     })
   } catch (err) {
+    try { persistReceipt(submitted ? 'unknown' : 'failed', undefined, submitted ? '请求已发出，结果未确认，请核对微信草稿箱' : '准备推送失败，可重试') }
+    catch { logger.error(WECHAT, '推送回执保存失败', { articleId: req.body.articleId }) }
     logger.error(WECHAT, '新增草稿失败', { error: err.message })
-    res.status(500).json({ error: err.message })
+    res.status(500).json({ error: submitted ? '推送结果未确认，请先核对微信草稿箱，避免重复推送' : err.message })
+  } finally {
+    if (articlePath) activeDrafts.delete(articlePath)
+  }
+})
+
+// A recovery confirmation performs only draft/get; it never creates a new draft.
+router.post('/draft/confirm', async (req, res) => {
+  const creds = getCredentials(req)
+  if (!creds) return res.status(400).json({ error: '请先绑定公众号' })
+  try {
+    const articlePath = resolveArticleFiles(req.user.id, req.body?.articleId).article
+    if (activeDrafts.has(articlePath)) return res.status(409).json({ error: '推送仍在进行，请稍后核对' })
+    const content = readArticleContent(articlePath)
+    const workflow = readArticleWorkflow(articlePath, content)
+    const receipt = workflow.draftReceipt
+    if (!receipt || receipt.accountId !== creds.appId || !['unknown', 'sending'].includes(receipt.status)) return res.status(409).json({ error: '当前没有待确认的推送' })
+    if (req.body.confirmedAbsent === true) {
+      workflow.draftReceipt = { ...receipt, status: 'failed', message: '用户已在微信草稿箱核对，确认未生成草稿' }
+      saveArticleWorkflow(articlePath, workflow)
+      return res.json(workflow)
+    }
+    const mediaId = req.body.mediaId
+    if (typeof mediaId !== 'string' || !mediaId || mediaId.length > 256) return res.status(400).json({ error: '请填写微信草稿的 media_id' })
+    const token = await getAccessToken(creds.appId, creds.appSecret)
+    const result = await axios.post('https://api.weixin.qq.com/cgi-bin/draft/get', { media_id: mediaId }, { params: { access_token: token }, timeout: 10000 })
+    if (result.data.errcode || !result.data.news_item?.some(item => item.title === receipt.title)) return res.status(400).json({ error: '该公众号未找到同标题草稿，请重新核对' })
+    workflow.draftReceipt = { ...receipt, status: 'succeeded', mediaId }
+    saveArticleWorkflow(articlePath, workflow)
+    const confirmed = recordArticleWorkflowEvent({ articlePath, content, event: 'wechat_draft_pushed', at: receipt.at })
+    if (receipt.sourceHash !== draftFingerprint(creds.appId, content.article)) {
+      delete confirmed.wechatDraftAt
+      confirmed.currentStage = confirmed.lastReviewedAt ? 'ready' : 'review'
+      saveArticleWorkflow(articlePath, confirmed)
+    }
+    res.json(confirmed)
+  } catch {
+    res.status(400).json({ error: '草稿核对失败，保留待确认状态，请稍后重试' })
   }
 })
 

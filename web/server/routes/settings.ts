@@ -10,6 +10,7 @@ import { Router } from 'express'
 import { getSetting, setSetting, getAllSettings, getTokenUsageSummary } from '../db.js'
 import { authMiddleware } from '../authMiddleware.js'
 import { settingsSchemas, validateBody } from '../validation.ts'
+import { isWechatAnalyticsPrivateKey } from '../wechatAnalyticsStore.ts'
 
 const router = Router()
 const GLOBAL_MEMORY_KEY = 'global_memory'
@@ -32,14 +33,14 @@ function getUserGlobalMemory(userId: string) {
 function getVisibleSettings(userId: string) {
   const settings = getAllSettings()
   for (const key of Object.keys(settings)) {
-    if (isPrivateMemoryKey(key)) delete settings[key]
+    if (isPrivateMemoryKey(key) || isWechatAnalyticsPrivateKey(key)) delete settings[key]
   }
   settings[GLOBAL_MEMORY_KEY] = getUserGlobalMemory(userId)
   return settings
 }
 
 function isForbiddenPrivateKey(key: string) {
-  return isPrivateMemoryKey(key)
+  return isPrivateMemoryKey(key) || isWechatAnalyticsPrivateKey(key)
 }
 
 function parseGlobalMemory(value: unknown) {

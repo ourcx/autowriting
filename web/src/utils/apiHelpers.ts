@@ -14,6 +14,7 @@ import {
 import type { CanvasDesignTemplateId } from '../../shared/canvasDesignTemplates'
 import type { ArticleWorkflow, ArticleWorkflowEvent, ArticleWorkflowStage } from '../../shared/articleWorkflow'
 import type { CandidateInput, CandidateEvent, GenerationCandidate } from '../../shared/generationCandidate'
+import type { WechatAnalyticsSnapshot } from '../../shared/wechatAnalytics'
 import {
   normalizeCreatorWritingProfile,
   type CreatorWritingProfile,
@@ -120,6 +121,7 @@ export async function saveArticle(articleId: string, data: {
   title?: string
   articleToutiao?: string
   xiaohongshuTitle?: string
+  selectedCandidateId?: string
 }): Promise<{ workflow?: ArticleWorkflow }> {
   const response = await axios.post(`/api/articles/${articleId}`, data)
   return response.data as { workflow?: ArticleWorkflow }
@@ -251,6 +253,22 @@ export async function recordArticleWorkflowEvent(
 }
 
 export interface ProductionInsights {
+  audienceEvidence: {
+    period: { start: string; end: string }
+    collectedAt: string
+    sampleSize: number
+    highAttention: Array<{ id: string; title: string; reads: number; rank: number; localArticleId?: string | null }>
+    lowAttention: Array<{ id: string; title: string; reads: number; rank: number; localArticleId?: string | null }>
+  } | null
+  creatorExperiences?: Array<{
+    articleId: string
+    candidateId?: string
+    note: string
+    retainedExpressions: string[]
+    retainedParagraphs: number
+    changedParagraphs: number
+    updatedAt: string
+  }>
   sampleSize: number
   topArticles: Array<{
     articleId: string
@@ -276,9 +294,75 @@ export async function fetchProductionInsights(): Promise<ProductionInsights> {
   return response.data as ProductionInsights
 }
 
-export async function fetchArticleWorkflowMetrics(): Promise<{ sampleSize: number; medianMinutes: number | null }> {
+export interface WorkflowMetrics {
+  sampleSize: number
+  medianMinutes: number | null
+  medianActiveMinutes: number | null
+  activeSampleSize: number
+  reworkCount: number
+}
+
+export async function fetchArticleWorkflowMetrics(): Promise<WorkflowMetrics> {
   const response = await axios.get('/api/articles/workflow-metrics')
-  return response.data as { sampleSize: number; medianMinutes: number | null }
+  return response.data as WorkflowMetrics
+}
+
+export async function recordEditingActivity(articleId: string, sessionId: string, totalMs: number): Promise<void> {
+  await axios.post(`/api/articles/${encodeURIComponent(articleId)}/activity`, { sessionId, totalMs })
+}
+
+export async function saveCreatorFeedback(articleId: string, note: string, retainedExpressions: string[]): Promise<ArticleWorkflow> {
+  return (await axios.post<ArticleWorkflow>(`/api/articles/${encodeURIComponent(articleId)}/feedback`, { note, retainedExpressions })).data
+}
+
+export async function generateArticleOutline(articleId: string, task: string, aiConfig: AIConfig): Promise<string> {
+  const response = await axios.post(`/api/articles/${encodeURIComponent(articleId)}/outline`, { task, aiConfig })
+  return (response.data as { outline: string }).outline
+}
+
+export async function refineArticleMaterials(articleId: string, materials: string, task: string, aiConfig: AIConfig): Promise<string> {
+  const response = await axios.post(`/api/articles/${encodeURIComponent(articleId)}/refine-materials`, { materials, task, aiConfig })
+  return (response.data as { refined: string }).refined
+}
+
+export async function confirmWechatDraft(articleId: string, input: { mediaId?: string; confirmedAbsent?: boolean }, headers: Record<string, string>): Promise<ArticleWorkflow> {
+  return (await axios.post<ArticleWorkflow>("/api/wechat/draft/confirm", { articleId, ...input }, { headers })).data
+}
+
+export interface WechatAnalyticsConfig {
+  enabled: boolean
+  intervalHours: number
+}
+
+export interface WechatAnalyticsState {
+  status: "idle" | "collecting" | "succeeded" | "failed"
+  lastAttemptAt?: string
+  lastSuccessAt?: string
+  nextRunAt?: string
+  message?: string
+}
+
+export interface WechatAnalyticsResponse {
+  snapshots: WechatAnalyticsSnapshot[]
+  config: WechatAnalyticsConfig
+  state: WechatAnalyticsState
+  collectorAvailable: boolean
+}
+
+export async function fetchWechatAnalytics(): Promise<WechatAnalyticsResponse> {
+  return (await axios.get("/api/wechat-analytics")).data
+}
+
+export async function importWechatAnalytics(snapshot: WechatAnalyticsSnapshot): Promise<WechatAnalyticsSnapshot> {
+  return (await axios.post("/api/wechat-analytics", snapshot)).data
+}
+
+export async function collectWechatAnalytics(): Promise<{ snapshot: WechatAnalyticsSnapshot; config: WechatAnalyticsConfig; state: WechatAnalyticsState }> {
+  return (await axios.post("/api/wechat-analytics/collect")).data
+}
+
+export async function saveWechatAnalyticsConfig(config: WechatAnalyticsConfig): Promise<WechatAnalyticsConfig> {
+  return (await axios.put("/api/wechat-analytics/config", config)).data
 }
 
 export async function fetchCreatorWritingProfile(): Promise<CreatorWritingProfile> {
@@ -511,6 +595,10 @@ export async function pushWechatDraft(input: {
   content: string
   digest: string
   thumbMediaId?: string
+  articleId?: string
+  sourceArticle?: string
+  templateId?: string
+  coverImageUrl?: string
 }, headers: Record<string, string>): Promise<{
   media_id: string
   rewritten_images?: number
@@ -521,6 +609,10 @@ export async function pushWechatDraft(input: {
     content: input.content,
     digest: input.digest,
     thumb_media_id: input.thumbMediaId,
+    articleId: input.articleId,
+    sourceArticle: input.sourceArticle,
+    templateId: input.templateId,
+    coverImageUrl: input.coverImageUrl,
   }, { headers })
   return response.data as {
     media_id: string
