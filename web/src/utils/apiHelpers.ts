@@ -632,8 +632,14 @@ export async function publishToutiaoArticle(input: {
   cookies: string
   coverImageUrl: string | null
 }): Promise<{ success: boolean; message: string; url?: string }> {
-  const response = await axios.post('/api/toutiao/publish', input)
-  return response.data as { success: boolean; message: string; url?: string }
+  try {
+    const response = await axios.post('/api/toutiao/publish', input)
+    return response.data as { success: boolean; message: string; url?: string }
+  } catch (error) {
+    const wrapped = new Error(extractErrorMessage(error, '头条发布失败，请到头条号后台核对'))
+    Object.defineProperty(wrapped, 'cause', { value: error })
+    throw wrapped
+  }
 }
 
 export async function publishXiaohongshuNote(input: {

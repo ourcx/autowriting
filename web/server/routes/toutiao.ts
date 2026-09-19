@@ -23,6 +23,7 @@ import { marked } from 'marked'
 import { logger } from '../logger.js'
 import { authMiddleware } from '../authMiddleware.js'
 import { prepareToutiaoCoverFile } from '../utils/toutiaoCover.ts'
+import { assertToutiaoPublishConfirmed, isToutiaoPublishEndpoint, verifyToutiaoPublishResponse } from '../utils/toutiaoPublish.ts'
 
 function sleep(min, max) {
   const ms = max ? Math.floor(min + Math.random() * (max - min)) : min
@@ -522,6 +523,7 @@ router.post('/publish', async (req, res) => {
 
     const finalUrl = page.url()
     logger.info('TOUTIAO', '发布流程完成', { url: finalUrl, published })
+    assertToutiaoPublishConfirmed(published)
 
     res.json({
       success: true,
@@ -851,15 +853,12 @@ async function publishViaAPI(page, articleId, csrfToken, title) {
 
     logger.info('TOUTIAO', `发布 API 响应: ${result.status} ${result.body?.slice(0, 200)}`)
 
-    if (result.status === 200) {
-      try {
-        const json = JSON.parse(result.body)
-        if (json.message === 'success' || json.data?.article_id) {
-          logger.info('TOUTIAO', '发布 API 调用成功')
-          return true
-        }
-      } catch { /* 继续 */ }
+    const evidence = verifyToutiaoPublishResponse('https://mp.toutiao.com/mp/article/publish/', result.status, result.body)
+    if (evidence.confirmed) {
+      logger.info('TOUTIAO', '发布 API 调用成功')
+      return true
     }
+    logger.warn('TOUTIAO', '发布 API 未确认成功', { detail: evidence.detail })
 
     return false
   } catch (e) {
@@ -880,13 +879,21 @@ async function publishViaAPI(page, articleId, csrfToken, title) {
  */
 async function clickPublishWithJSBlock(page) {
   // 监听发布相关的 API 请求
-  let publishApiCalled = false
-  const publishApiHandler = async (response) => {
+  let publishConfirmed = false
+  let publishFailure = ''
+  const pendingPublishResponses = []
+  const publishApiHandler = (response) => {
     const url = response.url()
-    if (url.includes('/mp/article/publish/') || url.includes('/mp/article/save_draft/')) {
-      publishApiCalled = true
-      logger.info('TOUTIAO', `检测到发布 API 调用: ${url}`)
-    }
+    if (!isToutiaoPublishEndpoint(url, response.request().method())) return
+    const task = response.text().then(body => {
+      const evidence = verifyToutiaoPublishResponse(url, response.status(), body)
+      publishConfirmed ||= evidence.confirmed
+      if (!evidence.confirmed) publishFailure = evidence.detail
+      logger.info('TOUTIAO', '检测到发布 API 响应', { url, status: response.status(), confirmed: evidence.confirmed })
+    }).catch(error => {
+      publishFailure = error.message
+    })
+    pendingPublishResponses.push(task)
   }
   page.on('response', publishApiHandler)
 
@@ -993,7 +1000,18 @@ async function clickPublishWithJSBlock(page) {
       }
     }
 
-    return confirmClicked || previewClicked || publishApiCalled
+    await Promise.allSettled(pendingPublishResponses)
+    if (publishConfirmed) return true
+
+    const successVisible = await page.getByText(/^(发布成功|提交成功)/).first()
+      .isVisible({ timeout: 2000 }).catch(() => false)
+    const reachedArticleList = /\/profile_v4\/graphic\/articles(?:[/?#]|$)/.test(page.url())
+    if (!successVisible && !reachedArticleList) {
+      logger.warn('TOUTIAO', 'UI 操作后未确认发布成功', {
+        previewClicked, confirmClicked, publishFailure: publishFailure || undefined, url: page.url(),
+      })
+    }
+    return successVisible || reachedArticleList
 
   } finally {
     page.off('response', publishApiHandler)
