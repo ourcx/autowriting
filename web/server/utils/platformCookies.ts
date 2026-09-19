@@ -19,13 +19,15 @@ export function parseWechatCookieJson(value: unknown): Cookie[] {
     if (!item || typeof item !== "object") throw new Error(`第 ${index + 1} 项 Cookie 格式不正确`)
     const source = item as Record<string, unknown>
     const name = typeof source.name === "string" ? source.name.trim() : ""
-    const cookieValue = typeof source.value === "string" ? source.value : ""
+    const rawCookieValue = source.value
+    const hasStringValue = typeof rawCookieValue === "string"
+    const cookieValue = hasStringValue ? rawCookieValue : ""
     const domain = typeof source.domain === "string" && source.domain.trim()
       ? source.domain.trim().toLowerCase()
       : `.${WECHAT_HOST}`
     const hostname = domain.replace(/^\./, "")
     const allowedDomains = new Set([WECHAT_HOST, "weixin.qq.com", "qq.com"])
-    if (!name || !cookieValue || !allowedDomains.has(hostname)) {
+    if (!name || !hasStringValue || !allowedDomains.has(hostname)) {
       throw new Error(`第 ${index + 1} 项 Cookie 缺少 name/value，或域名不属于微信公众平台`)
     }
     const sameSite = source.sameSite === "Strict" || source.sameSite === "None" ? source.sameSite : "Lax"

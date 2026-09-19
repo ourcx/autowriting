@@ -73,9 +73,18 @@ assert.deepEqual(parseWechatCookieJson(JSON.stringify([{
   sameSite: "Lax",
   expires: 1800000000,
 })
+assert.equal(parseWechatCookieJson(JSON.stringify([{
+  name: "noticeLoginFlag",
+  value: "",
+  domain: "mp.weixin.qq.com",
+}]))[0].value, "")
 assert.throws(
   () => parseWechatCookieJson('[{"name":"session","value":"fixture","domain":".example.com"}]'),
   /域名不属于微信公众平台/,
+)
+assert.throws(
+  () => parseWechatCookieJson('[{"name":"session","value":null,"domain":"mp.weixin.qq.com"}]'),
+  /缺少 name\/value/,
 )
 
 const releaseCandidates = [

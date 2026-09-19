@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { ArrowLeft, ArrowRight, Upload, Search, RefreshCw, Clock3 } from "lucide-react"
+import { ArrowLeft, ArrowRight, BarChart3, BookOpen, Clock3, ExternalLink, Info, RefreshCw, Search, Sparkles, Upload } from "lucide-react"
 import {
   collectWechatAnalytics,
   fetchArticleList,
@@ -143,19 +143,27 @@ export default function TopicInsights() {
   }
 
   return <main className="topic-page">
-    <nav><button onClick={() => navigate("/")}><ArrowLeft size={16} />工作台</button><span>账号观察 / 选题与素材</span></nav>
-    <header className="topic-header"><div><p className="topic-eyebrow">从读者反馈，回到你的观察</p><h1>下一篇，值得写什么</h1><p>看看哪些问题持续有人读，把你的线索和判断接着写下去。</p></div><a href="https://mp.weixin.qq.com" target="_blank" rel="noreferrer">打开微信后台 ↗</a></header>
+    <nav className="topic-nav">
+      <button className="topic-back-button" onClick={() => navigate("/")}><ArrowLeft size={16} />工作台</button>
+      <div className="topic-breadcrumb"><span>账号观察</span><i /><strong>选题与素材</strong></div>
+    </nav>
+    <header className="topic-header">
+      <div className="topic-title-block"><p className="topic-eyebrow">从读者反馈，回到你的观察</p><h1>下一篇，值得写什么</h1><p>看看哪些问题持续有人读，把你的线索和判断接着写下去。</p></div>
+      <a className="topic-external" href="https://mp.weixin.qq.com" target="_blank" rel="noreferrer">打开微信后台<ExternalLink size={16} /></a>
+    </header>
     <section className="topic-sync" aria-label="微信数据同步">
       <div className={`topic-sync-state topic-sync-state--${state.status}`}><span />
         <strong>{state.status === "collecting" ? "正在同步" : state.status === "failed" ? "同步中断" : state.lastSuccessAt ? `上次同步 ${new Date(state.lastSuccessAt).toLocaleString()}` : "尚未同步"}</strong>
         <small>{state.message || (cookieBound ? "Cookie JSON 已保存在当前浏览器" : "尚未绑定数据 Cookie")}</small>
       </div>
-      {!cookieBound && <button className="topic-bind-link" onClick={() => navigate("/account")}>绑定数据 Cookie</button>}
-      <label className="topic-switch"><input type="checkbox" checked={config.enabled} disabled={!cookieBound} onChange={event => updateConfig({ ...config, enabled: event.target.checked })}/><span />页面内定时刷新</label>
-      <label className="topic-interval"><Clock3 size={14}/><select aria-label="自动刷新间隔" value={config.intervalHours} disabled={!cookieBound || !config.enabled} onChange={event => updateConfig({ ...config, intervalHours: Number(event.target.value) })}>
-        <option value={6}>每 6 小时</option><option value={12}>每 12 小时</option><option value={24}>每天</option><option value={72}>每 3 天</option>
-      </select></label>
-      <button className="btn btn-primary" disabled={!cookieBound || busy} onClick={() => void collect()}><RefreshCw size={16} className={busy ? "topic-spin" : ""}/>{busy ? "同步中" : "立即同步"}</button>
+      <div className="topic-sync-controls">
+        {!cookieBound && <button className="topic-bind-link" onClick={() => navigate("/account")}>绑定数据 Cookie</button>}
+        <label className="topic-switch"><input type="checkbox" checked={config.enabled} disabled={!cookieBound} onChange={event => updateConfig({ ...config, enabled: event.target.checked })}/><span />页面内定时刷新</label>
+        <label className="topic-interval"><Clock3 size={14}/><select aria-label="自动刷新间隔" value={config.intervalHours} disabled={!cookieBound || !config.enabled} onChange={event => updateConfig({ ...config, intervalHours: Number(event.target.value) })}>
+          <option value={6}>每 6 小时</option><option value={12}>每 12 小时</option><option value={24}>每天</option><option value={72}>每 3 天</option>
+        </select></label>
+        <button className="btn btn-primary" disabled={!cookieBound || busy} onClick={() => void collect()}><RefreshCw size={16} className={busy ? "topic-spin" : ""}/>{busy ? "同步中" : "立即同步"}</button>
+      </div>
     </section>
     {error && <p role="alert" className="topic-error">{error}<button onClick={() => void load()}>重新加载</button></p>}
     <details className="topic-import">
@@ -171,22 +179,23 @@ export default function TopicInsights() {
     </details>
     {snapshot && analysis ? <>
       <div className="topic-period">
-        <strong>{snapshot.accountName}</strong>
-        <select aria-label="统计窗口" value={index} onChange={event => setIndex(Number(event.target.value))}>{snapshots.map((item, position) => <option key={`${item.accountName}-${item.period.start}-${item.period.end}`} value={position}>{item.accountName} · {item.period.start} — {item.period.end}</option>)}</select>
-        <span>采集于 {new Date(snapshot.collectedAt).toLocaleString()}</span>
+        <div className="topic-period-account"><span>当前账号</span><strong>{snapshot.accountName}</strong></div>
+        <label className="topic-period-picker"><span>统计窗口</span><select aria-label="统计窗口" value={index} onChange={event => setIndex(Number(event.target.value))}>{snapshots.map((item, position) => <option key={`${item.accountName}-${item.period.start}-${item.period.end}`} value={position}>{item.accountName} · {item.period.start} — {item.period.end}</option>)}</select></label>
+        <span className="topic-collected">采集于 {new Date(snapshot.collectedAt).toLocaleString()}</span>
       </div>
       <div className="topic-observation">
-        <div><strong>{snapshot.articles.length}</strong><span>{snapshot.collection.complete ? "篇完整列表" : "篇已采集，列表未完整"}</span></div>
-        <div><strong>{snapshot.trafficSources.find(item => item.name === "推荐")?.percent.toFixed(1) ?? "—"}<small>%</small></strong><span>期间推荐流量占比</span></div>
-        <div><strong>{ranked.filter(item => item.band === "high").length}<small> / </small>{ranked.filter(item => item.band === "low").length}</strong><span>高关注 / 低关注</span></div>
-        <p>这里是统计期内的阅读人数，包含旧文继续获得的阅读。高低关注只表示同一窗口内的相对位置；不同文章的读者可能重叠，也不能据此认定某种句式有效。</p>
+        <div className="topic-stat topic-stat--peach"><BookOpen size={20}/><strong>{snapshot.articles.length}</strong><span>{snapshot.collection.complete ? "篇完整列表" : "篇已采集，列表未完整"}</span></div>
+        <div className="topic-stat topic-stat--lavender"><BarChart3 size={20}/><strong>{snapshot.trafficSources.find(item => item.name === "推荐")?.percent.toFixed(1) ?? "—"}<small>%</small></strong><span>期间推荐流量占比</span></div>
+        <div className="topic-stat topic-stat--ochre"><Sparkles size={20}/><strong>{ranked.filter(item => item.band === "high").length}<small> / </small>{ranked.filter(item => item.band === "low").length}</strong><span>高关注 / 低关注</span></div>
+        <div className="topic-metric-note"><Info size={18}/><p>这里是统计期内的阅读人数，包含旧文继续获得的阅读。高低关注只表示同一窗口内的相对位置；不同文章的读者可能重叠，也不能据此认定某种句式有效。</p></div>
       </div>
       {history.length > 1 && <section className="topic-trend" aria-label="快照趋势">
-        <div><h2>窗口中位阅读变化</h2><p>不同统计窗口的文章集合可能变化，这条线只帮助发现波动，不证明增长原因。</p></div>
+        <div className="topic-trend-copy"><p className="topic-section-kicker">阅读趋势</p><h2>窗口中位阅读变化</h2><p>不同统计窗口的文章集合可能变化，这条线只帮助发现波动，不证明增长原因。</p></div>
         <div className="topic-bars">{history.map(item => <div key={item.label} title={`${item.label}：${item.median.toLocaleString()} 人`}><span style={{ height: `${Math.max(8, Math.round(item.median / trendMax * 100))}%` }}/><small>{item.label}</small></div>)}</div>
       </section>}
       <section className="topic-workspace">
         <div className="topic-evidence">
+          <div className="topic-evidence-heading"><div><p className="topic-section-kicker">文章表现</p><h2>从历史文章里找线索</h2></div><span>筛选结果</span></div>
           <label className="topic-search"><Search size={18}/><input value={keyword} onChange={event => setKeyword(event.target.value)} placeholder="按主题筛选，例如：保研、校园跑" aria-label="主题关键词"/></label>
           <p className="topic-note">{analysis.articles.length} 篇匹配 · 期间阅读人数中位数 {analysis.medianReaders?.toLocaleString() ?? "—"} · {analysis.olderArticles} 篇在统计窗口前发布</p>
           <div className="topic-table-wrap"><table><thead><tr><th>文章 / 关联工作台稿件</th><th>相对位置</th><th>发布日期</th><th>期间阅读人数</th></tr></thead><tbody>
@@ -200,7 +209,7 @@ export default function TopicInsights() {
           {!analysis.articles.length && <p>没有匹配的标题，换一个关键词试试。</p>}
           <p className="topic-note">{analysis.observation} 下一次对比应固定发布后的观察时长，并记录账号体量和流量来源。</p>
         </div>
-        <aside className="topic-brief"><h2>把问题带回素材</h2><p>你掌握的事实、现场观察和采访，决定这篇文章是否值得写。</p>
+        <aside className="topic-brief"><div className="topic-brief-heading"><Sparkles size={20}/><span>选题任务</span></div><h2>把问题带回素材</h2><p>你掌握的事实、现场观察和采访，决定这篇文章是否值得写。</p>
           <label>我想回答的问题<input value={question} maxLength={200} onChange={event => setQuestion(event.target.value)} placeholder="写下一个读者真的关心的问题"/></label>
           <label>已有线索与待补资料<textarea value={materials} maxLength={10000} onChange={event => setMaterials(event.target.value)} placeholder="原始公告链接、亲身经历、可采访的人、需要核对的数据…"/></label>
           <button className="btn btn-primary" disabled={busy || !question.trim() || !analysis.articles.length} onClick={() => void createBrief()}>保存为选题任务 <ArrowRight size={16}/></button>
