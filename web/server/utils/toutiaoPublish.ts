@@ -3,6 +3,37 @@ export interface ToutiaoPublishEvidence {
   detail: string
 }
 
+interface ToutiaoLocator {
+  first(): ToutiaoLocator
+  isVisible(options?: { timeout?: number }): Promise<boolean>
+  click(options?: { timeout?: number }): Promise<void>
+}
+
+interface ToutiaoPage {
+  locator(selector: string): ToutiaoLocator
+}
+
+export const TOUTIAO_NO_COVER_SELECTORS = [
+  'label:has-text("无封面")',
+  '[role="radio"]:has-text("无封面")',
+  '[class*="radio"]:has-text("无封面")',
+  'text=无封面',
+  'label:has-text("无图")',
+  '[role="radio"]:has-text("无图")',
+  '[class*="radio"]:has-text("无图")',
+  'text=无图',
+] as const
+
+export async function chooseToutiaoNoCover(page: ToutiaoPage): Promise<string | null> {
+  for (const selector of TOUTIAO_NO_COVER_SELECTORS) {
+    const option = page.locator(selector).first()
+    if (!await option.isVisible({ timeout: 1200 }).catch(() => false)) continue
+    const clicked = await option.click({ timeout: 5000 }).then(() => true).catch(() => false)
+    if (clicked) return selector
+  }
+  return null
+}
+
 export function assertToutiaoPublishConfirmed(confirmed: boolean): void {
   if (!confirmed) {
     throw new Error('未收到今日头条的发布成功确认，文章可能仍在编辑页或草稿箱，请到头条号后台核对后重试')

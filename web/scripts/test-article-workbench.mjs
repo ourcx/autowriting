@@ -286,7 +286,7 @@ try {
   await page.getByRole('heading', { name: '小红书预览与发布' }).waitFor()
   await page.getByRole('group', { name: '发布平台' }).getByRole('button', { name: '今日头条', exact: false }).click()
   await page.getByRole('heading', { name: '今日头条预览与发布' }).waitFor()
-  await page.getByRole('button', { name: '存为草稿', exact: true }).click()
+  await page.getByRole('button', { name: '发布到头条', exact: true }).click()
   await page.getByText('文章已发布到今日头条（含封面）', { exact: true }).waitFor()
   assert.equal(toutiaoPublishPayload.coverImageUrl, 'data:image/svg+xml;base64,PHN2Zy8+', '头条发布必须携带最新封面')
   await page.getByText('文章已发布到今日头条（含封面）', { exact: true }).locator('..').locator('.toast-close').click()

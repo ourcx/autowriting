@@ -23,7 +23,7 @@ import { marked } from 'marked'
 import { logger } from '../logger.js'
 import { authMiddleware } from '../authMiddleware.js'
 import { prepareToutiaoCoverFile } from '../utils/toutiaoCover.ts'
-import { assertToutiaoPublishConfirmed, isToutiaoPublishEndpoint, verifyToutiaoPublishResponse } from '../utils/toutiaoPublish.ts'
+import { assertToutiaoPublishConfirmed, chooseToutiaoNoCover, isToutiaoPublishEndpoint, verifyToutiaoPublishResponse } from '../utils/toutiaoPublish.ts'
 
 function sleep(min, max) {
   const ms = max ? Math.floor(min + Math.random() * (max - min)) : min
@@ -501,6 +501,8 @@ router.post('/publish', async (req, res) => {
       } catch (e) {
         logger.warn('TOUTIAO', '封面上传失败，继续发布', { error: e.message })
       }
+    } else {
+      await selectNoCoverMode(page)
     }
 
     // ── 发布：优先用 API 直接发布，降级用 UI 点击 ─────────────────────────
@@ -608,6 +610,16 @@ async function dismissSaveFailDialog(page) {
     }
     await page.keyboard.press('Escape')
   } catch { /* 忽略 */ }
+}
+
+async function selectNoCoverMode(page) {
+  const selector = await chooseToutiaoNoCover(page)
+  if (selector) {
+    logger.info('TOUTIAO', `已选择无封面模式: ${selector}`)
+    await sleep(500, 800)
+    return
+  }
+  throw new Error('未找到今日头条的“无封面”选项，无法完成发布；请为文章选择封面后重试')
 }
 
 /**
@@ -1007,8 +1019,13 @@ async function clickPublishWithJSBlock(page) {
       .isVisible({ timeout: 2000 }).catch(() => false)
     const reachedArticleList = /\/profile_v4\/graphic\/articles(?:[/?#]|$)/.test(page.url())
     if (!successVisible && !reachedArticleList) {
+      const validationMessages = await page.locator(
+        '[role=alert], [class*=error], [class*=warning], [class*=validate], [class*=tips]',
+      ).allTextContents().catch(() => [])
       logger.warn('TOUTIAO', 'UI 操作后未确认发布成功', {
-        previewClicked, confirmClicked, publishFailure: publishFailure || undefined, url: page.url(),
+        previewClicked, confirmClicked, publishFailure: publishFailure || undefined,
+        validationMessages: validationMessages.map(item => item.trim()).filter(Boolean).slice(0, 10),
+        url: page.url(),
       })
     }
     return successVisible || reachedArticleList

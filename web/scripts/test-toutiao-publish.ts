@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { assertToutiaoPublishConfirmed, isToutiaoPublishEndpoint, verifyToutiaoPublishResponse } from "../server/utils/toutiaoPublish.ts"
+import { assertToutiaoPublishConfirmed, chooseToutiaoNoCover, isToutiaoPublishEndpoint, verifyToutiaoPublishResponse } from "../server/utils/toutiaoPublish.ts"
 
 assert.equal(isToutiaoPublishEndpoint("https://mp.toutiao.com/mp/article/publish/"), true)
 assert.equal(isToutiaoPublishEndpoint("https://mp.toutiao.com/mp/article/save_draft/"), false)
@@ -55,5 +55,19 @@ assert.throws(
   "未确认发布时不得返回成功",
 )
 assert.doesNotThrow(() => assertToutiaoPublishConfirmed(true))
+
+const attemptedSelectors: string[] = []
+const selectedSelector = await chooseToutiaoNoCover({
+  locator(selector: string) {
+    attemptedSelectors.push(selector)
+    return {
+      first() { return this },
+      async isVisible() { return selector === 'text=无封面' },
+      async click() { assert.equal(selector, 'text=无封面') },
+    }
+  },
+})
+assert.equal(selectedSelector, 'text=无封面')
+assert.equal(attemptedSelectors.includes('text=无封面'), true)
 
 process.stdout.write("toutiao publish evidence tests passed\n")

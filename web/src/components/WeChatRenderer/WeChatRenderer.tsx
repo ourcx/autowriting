@@ -1081,7 +1081,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                 {ttCookieBound ? 'Cookie 已配置' : '配置 Cookie'}
               </button>
 
-              {/* 存为草稿按钮 */}
+              {/* 发布按钮 */}
               <button
                 className={`wr-push-btn wr-push-btn--toutiao ${ttPushDone ? 'success' : ''} ${!ttCookieBound ? 'disabled' : ''}`}
                 onClick={handleTtPublish}
@@ -1094,7 +1094,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                     ? <Check size={15} />
                     : <Send size={15} />
                 }
-                {ttPushing ? '保存中...' : ttPushDone ? '已存草稿！' : '存为草稿'}
+                {ttPushing ? '发布中...' : ttPushDone ? '发布成功！' : '发布到头条'}
               </button>
 
               <a
