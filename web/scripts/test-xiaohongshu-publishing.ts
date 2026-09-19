@@ -14,7 +14,7 @@ import {
 } from "../server/utils/xiaohongshuBrowser.ts"
 
 // 这些 fixture 复现已观察的 DOM 和页面阶段，不连接小红书、不创建真实草稿。
-// 话题候选与实体仅是兼容性假设，不能用这个 fixture 宣称平台实测通过。
+// 开关、摘要浮层、话题实体和原创弹窗按 2026-09-19 实测结构构造。
 let browser: Browser
 before(async () => { browser = await chromium.launch({ headless: true }) })
 after(async () => { await browser?.close() })
@@ -43,7 +43,7 @@ const finalForm = `
     <input type="text" placeholder="填写标题" maxlength="64">
     <div class="tiptap ProseMirror" role="textbox" contenteditable="true"></div>
     <button id="topicBtn">话题</button>
-    <div class="topicTemplate"></div>
+    <div role="tooltip"><div class="items"></div></div>
     <label><input id="original" type="checkbox">原创声明</label>
   </div>
   <div role="dialog" style="position:fixed;inset:0;background:white">
@@ -103,6 +103,28 @@ test("同一设置容器中的复选框分别生效，禁用状态不被强制�
   })
 })
 
+test("隐藏 input 的 d-switch 应点击开关本身，不能点击无事件的说明文字", async () => {
+  await withPage(`<div class="setting-item">
+    <div class="input-item"><div class="label">作者</div>
+      <div class="d-switch" onclick="this.querySelector('input').checked=!this.querySelector('input').checked" style="width:40px;height:24px;background:gray">
+        <input id="author" type="checkbox" style="opacity:0;width:0;height:0">
+      </div>
+    </div>
+    <div class="input-item"><div class="label">摘要</div>
+      <div class="d-switch" onclick="this.querySelector('input').checked=!this.querySelector('input').checked" style="width:40px;height:24px;background:gray">
+        <input id="summary" type="checkbox" checked style="opacity:0;width:0;height:0">
+      </div>
+    </div>
+  </div>`, async (page) => {
+    await setLabeledCheckbox(page, "作者", true)
+    assert.equal(await page.locator("#author").isChecked(), true)
+    assert.equal(await page.locator("#summary").isChecked(), true)
+    await setLabeledCheckbox(page, "摘要", false)
+    assert.equal(await page.locator("#author").isChecked(), true)
+    assert.equal(await page.locator("#summary").isChecked(), false)
+  })
+})
+
 test("长文按编辑→排版→模板封面→最终表单顺序执行，下一步之前不提交", async () => {
   await withPage(`
     <section id="editing">
@@ -111,6 +133,7 @@ test("长文按编辑→排版→模板封面→最终表单顺序执行，下�
       <button id="layout">一键排版</button>
     </section>
     <section id="cover" hidden>
+      <button>选择模板</button>
       <div class="template-card-new" onclick="document.body.dataset.template='清晰明朗'">清晰明朗</div>
       <button onclick="document.querySelector('#settings').hidden=false">封面设置</button>
       <div id="settings" hidden>
@@ -120,12 +143,27 @@ test("长文按编辑→排版→模板封面→最终表单顺序执行，下�
           <div><input id="time" type="checkbox"><span>字数和时长</span></div>
           <div><input id="summary" type="checkbox" checked><span>摘要</span></div>
         </div>
-        <div data-dom-type="summary" onclick="this.contentEditable='true'">默认摘要</div>
+        <div data-dom-type="summary">默认摘要</div>
       </div>
       <div class="footer-new"><button class="submit" id="next">下一步</button></div>
     </section>
     <section id="final" hidden>${finalForm}</section>
     <script>
+      document.querySelector('[data-dom-type="summary"]').onclick=(event)=>{
+        const target=event.currentTarget;
+        const overlay=document.createElement("div");
+        overlay.className="editable-overlay";
+        overlay.style="position:fixed;inset:0;z-index:100";
+        overlay.innerHTML='<textarea class="editable-textarea" style="position:absolute;left:100px;top:100px"></textarea>';
+        overlay.querySelector("textarea").value=target.textContent;
+        // 平台须点击外层遮罩才保存；Tab/blur 本身不提交值。
+        overlay.onclick=(click)=>{
+          if(click.target!==overlay) return;
+          target.textContent=overlay.querySelector("textarea").value;
+          overlay.remove();
+        };
+        document.body.append(overlay);
+      };
       document.querySelector("#layout").onclick=()=>{
         document.body.dataset.body=document.querySelector(".ProseMirror").innerHTML;
         document.querySelector("#editing").hidden=true;
@@ -146,6 +184,7 @@ test("长文按编辑→排版→模板封面→最终表单顺序执行，下�
     assert.equal(await page.locator("#author").isChecked(), false)
     assert.equal(await page.locator("#time").isChecked(), true)
     assert.equal(await page.locator('[data-dom-type="summary"]').innerText(), "指定封面摘要")
+    assert.equal(await page.locator(".editable-overlay").count(), 0)
     const body = await page.locator("body").getAttribute("data-body")
     assert.match(body || "", /<h2>分节<\/h2>/)
     assert.match(body || "", /<strong>重点<\/strong>/)
@@ -155,6 +194,33 @@ test("长文按编辑→排版→模板封面→最终表单顺序执行，下�
     assert.equal(await page.locator('input[placeholder="填写标题"]').inputValue(), "最终标题")
     assert.equal(await page.locator('#final [role="textbox"]').innerText(), "最终简介")
     assert.equal(await page.locator("#original").isChecked(), true)
+    assert.equal(await page.locator("body").getAttribute("data-clicks"), null)
+  })
+})
+
+test("原创声明必须完成须知确认，不能留下遮挡发布按钮的弹窗", async () => {
+  await withPage(`${finalForm}
+    <div class="d-modal" hidden style="position:fixed;inset:0;background:white">
+      <h6>笔记完成原创声明后，将获得以下权益</h6>
+      <label class="d-checkbox"><input type="checkbox" id="consent">我已阅读并同意《原创声明须知》</label>
+      <button id="declare" disabled>声明原创</button>
+    </div>
+    <script>
+      document.querySelector("#original").onchange=(event)=>{
+        document.querySelector(".d-modal").hidden=!event.target.checked;
+      };
+      document.querySelector("#consent").onchange=(event)=>{
+        document.querySelector("#declare").disabled=!event.target.checked;
+      };
+      document.querySelector("#declare").onclick=()=>{
+        document.body.dataset.declared="true";
+        document.querySelector(".d-modal").hidden=true;
+      };
+    </script>`, async (page) => {
+    await fillFinalArticleMetadata(page, { title: "原创确认测试", summary: "测试简介", topics: [], original: true })
+    assert.equal(await page.locator("#original").isChecked(), true)
+    assert.equal(await page.locator("body").getAttribute("data-declared"), "true")
+    assert.equal(await page.locator(".d-modal").isVisible(), false)
     assert.equal(await page.locator("body").getAttribute("data-clicks"), null)
   })
 })
@@ -180,18 +246,28 @@ test("缺少话题候选时停止，不改标题、不点击发布", async () =>
 test("精确选择话题后检查实体，话题文本不会覆盖标题或前面的简介", async () => {
   await withPage(`${finalForm}<script>
     const editor=document.querySelector('[role="textbox"]');
-    const candidates=document.querySelector(".topicTemplate");
+    const candidates=document.querySelector('[role="tooltip"] .items');
     editor.oninput=()=>{
       // Chromium 会把 contenteditable 末尾空格转成 NBSP，候选查询按空白字符分隔。
       const query=editor.textContent.match(/\\s#([^#\\s]+)$/)?.[1];
       candidates.replaceChildren();
       if(!query) return;
+      const newTopic=document.createElement("div");newTopic.className="item";
+      newTopic.innerHTML='<span class="name"></span><span class="newTopic">新建话题</span>';
+      newTopic.querySelector(".name").textContent="#"+query;
+      newTopic.onclick=()=>document.body.dataset.createdTopic="true";
+      candidates.append(newTopic);
       for(const name of [query+"相关", query]){
-        const option=document.createElement("div"); option.textContent=name;
+        const option=document.createElement("div");option.className="item";
+        const label=document.createElement("span");label.className="name";label.textContent="#"+name;
+        option.append(label);
         option.onclick=()=>{
           const last=editor.lastChild;
           if(last?.nodeType===Node.TEXT_NODE) last.textContent=last.textContent.replace(/\\s#[^#\\s]+$/, "");
-          const entity=document.createElement("span"); entity.contentEditable="false"; entity.textContent="#"+name;
+          const entity=document.createElement("a");entity.className="tiptap-topic";
+          entity.dataset.topic=JSON.stringify({id:"existing-"+name,name});entity.textContent="#"+name;
+          const hidden=document.createElement("span");hidden.className="content-hide";hidden.textContent="[话题]#";
+          entity.append(hidden);
           editor.append(entity, document.createTextNode(" ")); candidates.replaceChildren();
         };
         candidates.append(option);
@@ -202,7 +278,10 @@ test("精确选择话题后检查实体，话题文本不会覆盖标题或前�
     assert.equal(await page.locator('input[type="text"]').inputValue(), "精确话题")
     const editor = page.locator('[contenteditable="true"]')
     assert.match(await editor.innerText(), /^保留简介/)
-    assert.deepEqual(await editor.locator('[contenteditable="false"]').allTextContents(), ["#编程", "#阅读"])
+    const topics = await editor.locator("a.tiptap-topic").evaluateAll((nodes) =>
+      nodes.map((node) => JSON.parse(node.getAttribute("data-topic") || "{}").name))
+    assert.deepEqual(topics, ["编程", "阅读"])
+    assert.equal(await page.locator("body").getAttribute("data-created-topic"), null)
   })
 })
 

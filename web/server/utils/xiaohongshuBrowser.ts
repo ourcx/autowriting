@@ -26,6 +26,7 @@ export async function fillText(locator: Locator, text: string): Promise<void> {
   if (maxLength >= 0 && text.length > maxLength) {
     throw new Error(`小红书输入框最多允许 ${maxLength} 个字符，当前为 ${text.length}，请缩短后重试`)
   }
+  await locator.click()
   await locator.fill(text)
   const actual = await locator.evaluate((element) =>
     element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
@@ -58,9 +59,15 @@ export async function setLabeledCheckbox(page: Page, label: string, enabled: boo
   if (await checkbox.isVisible()) {
     await checkbox.setChecked(enabled)
   } else {
-    // 自定义复选框常隐藏 input；让页面的标签事件修改状态，不强改 DOM。
-    if (await labelNode.count() !== 1) throw new Error(`未能准确定位小红书“${label}”标签`)
-    await labelNode.click()
+    // 小红书 d-switch 的 input 为 0 高度，旁边的 .label 只是说明文字。
+    // 应点击该 input 所属的开关；普通 HTML label 仍保留原生切换方式。
+    const toggle = checkbox.locator('xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " d-switch ")][1]')
+    if (await toggle.count() === 1) {
+      await toggle.click()
+    } else {
+      if (await labelNode.count() !== 1) throw new Error(`未能准确定位小红书“${label}”标签`)
+      await labelNode.click()
+    }
   }
   if (await checkbox.isChecked() !== enabled) throw new Error(`小红书“${label}”选项未设置成功`)
 }
@@ -107,11 +114,21 @@ async function fillCoverSummary(page: Page, summary: string): Promise<void> {
     '[data-dom-type="summary"] [contenteditable="true"]',
     '[data-dom-type="summary"] input',
     '[data-dom-type="summary"] textarea',
+    '.editable-overlay textarea.editable-textarea',
     '[contenteditable="true"][data-dom-type="editable-text"]:focus',
   ], 3000)
   if (!editable) throw new Error("未找到小红书封面摘要编辑框，已停止发布")
   await fillText(editable, summary)
   await editable.press("Tab")
+  const overlay = page.locator(".editable-overlay:visible")
+  if (await overlay.count()) {
+    // 实际平台把 textarea 挂在全屏遮罩中，Tab 不会关闭；点击遮罩空白处才保存。
+    await overlay.click({ position: { x: 8, y: 8 } })
+    await overlay.waitFor({ state: "hidden", timeout: 3000 })
+  }
+  if ((await container.innerText()).trim() !== summary.trim()) {
+    throw new Error("小红书封面摘要未保存成功，已停止发布")
+  }
 }
 
 /** 排版之后才有模板和封面设置；必须在点击下一步前完成这些配置。 */
@@ -127,6 +144,11 @@ export async function prepareLongArticle(page: Page, input: LongArticleInput): P
   if (!await waitForAnySelector(page, NEXT_STEP.map((selector) => `${selector}:enabled`), 60000)) {
     throw new Error("小红书一键排版后未出现可用的“下一步”按钮")
   }
+  await configureLongArticleCover(page, input)
+}
+
+export async function configureLongArticleCover(page: Page, input: LongArticleInput): Promise<void> {
+  await page.getByText("选择模板", { exact: true }).click({ timeout: 5000 })
   const template = page.locator(".template-card-new:visible, .template-card:visible")
     .filter({ hasText: input.templateName }).first()
   await template.click({ timeout: 5000 })
@@ -143,6 +165,7 @@ async function addTopics(page: Page, editor: Locator, topics: string[]): Promise
   for (const topic of new Set(topics)) {
     // #topicBtn 把 # 插入当前富文本光标；这里直接在正文末尾输入，绝不猜测通用 input。
     // 选过话题后焦点在候选列表，macOS 的 Meta+End 不保证把新光标移到末尾。
+    await editor.click()
     await editor.evaluate((element) => {
       element.focus()
       const range = document.createRange()
@@ -154,14 +177,20 @@ async function addTopics(page: Page, editor: Locator, topics: string[]): Promise
     })
     await editor.pressSequentially(` #${topic}`, { delay: 30 })
     const escaped = topic.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-    const candidate = page.locator(".topicTemplate:visible")
-      .getByText(new RegExp(`^#?\\s*${escaped}$`)).first()
+    const candidate = page.getByRole("tooltip").locator(".item:not(:has(.newTopic)) .name")
+      .filter({ hasText: new RegExp(`^#?\\s*${escaped}$`) }).first()
     try {
       await candidate.click({ timeout: 5000 })
-      // 纯文本 #topic 不等于话题关联，只有富文本里的不可编辑实体才算成功。
-      const entity = editor.locator('[contenteditable="false"]')
-        .filter({ hasText: new RegExp(`^#?\\s*${escaped}\\s*$`) }).first()
+      // 真实关联节点是带 data-topic 的链接，文本还包含隐藏的“[话题]#”标记。
+      // 不把未选中的 suggestion 文本或“新建话题”当作已关联的现有话题。
+      const entity = editor.locator("a.tiptap-topic[data-topic]")
+        .filter({ hasText: new RegExp(`^#${escaped}(?:\\[话题\\]#)?\\s*$`) }).first()
       await entity.waitFor({ state: "visible", timeout: 3000 })
+      const data: unknown = JSON.parse(await entity.getAttribute("data-topic") || "null")
+      if (!data || typeof data !== "object" || !("name" in data) || data.name !== topic
+        || !("id" in data) || typeof data.id !== "string" || !data.id || data.id === "newTopic_Id") {
+        throw new Error("话题节点缺少匹配的名称或有效 ID")
+      }
     } catch {
       throw new Error(`未能确认小红书话题“${topic}”已关联，已停止发布，请在平台检查话题`)
     }
@@ -173,6 +202,21 @@ export interface FinalArticleInput {
   summary: string
   topics: string[]
   original: boolean
+}
+
+/** 勾选原创声明后平台还会弹出须知确认，完成确认才允许提交。 */
+export async function confirmOriginalDeclaration(page: Page): Promise<void> {
+  const modal = page.locator(".d-modal:visible").filter({
+    has: page.getByRole("heading", { name: "笔记完成原创声明后，将获得以下权益", exact: true }),
+  })
+  if (!await modal.count()) return
+  const consent = modal.locator(".d-checkbox").filter({ hasText: "我已阅读并同意" })
+  const checkbox = consent.locator('input[type="checkbox"]')
+  if (await checkbox.count() !== 1) throw new Error("未找到小红书原创声明须知确认项")
+  if (!await checkbox.isChecked()) await consent.click()
+  if (!await checkbox.isChecked()) throw new Error("小红书原创声明须知未确认")
+  await modal.getByRole("button", { name: "声明原创", exact: true }).click({ timeout: 5000 })
+  await modal.waitFor({ state: "hidden", timeout: 5000 })
 }
 
 export async function fillFinalArticleMetadata(page: Page, input: FinalArticleInput): Promise<void> {
@@ -192,6 +236,7 @@ export async function fillFinalArticleMetadata(page: Page, input: FinalArticleIn
     await addTopics(page, description, input.topics)
   }
   await setLabeledCheckbox(page, "原创声明", input.original)
+  if (input.original) await confirmOriginalDeclaration(page)
   if (await title.inputValue() !== input.title) throw new Error("小红书最终发布标题发生变化，已停止发布")
 }
 
