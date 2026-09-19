@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { ArrowLeft, ArrowRight, BarChart3, BookOpen, Clock3, ExternalLink, Info, RefreshCw, Search, Sparkles, Upload } from "lucide-react"
+import { ArrowRight, BarChart3, BookOpen, Clock3, ExternalLink, Info, RefreshCw, Search, Sparkles, Upload } from "lucide-react"
 import {
   collectWechatAnalytics,
   fetchArticleList,
@@ -19,6 +19,7 @@ import {
 } from "../../utils/accountBindings"
 import { useAuth } from "../../store/useAuth"
 import { analyzeTopic, rankWechatArticles, topicBrief, wechatAnalyticsSchema, type WechatAnalyticsSnapshot } from "../../../shared/wechatAnalytics"
+import PageHeader from "../../components/PageHeader/PageHeader"
 import { toast } from "../../components/Toast/Toast"
 import "./TopicInsights.css"
 
@@ -143,13 +144,17 @@ export default function TopicInsights() {
   }
 
   return <main className="topic-page">
-    <nav className="topic-nav">
-      <button className="topic-back-button" onClick={() => navigate("/")}><ArrowLeft size={16} />工作台</button>
-      <div className="topic-breadcrumb"><span>账号观察</span><i /><strong>选题与素材</strong></div>
-    </nav>
+    <PageHeader
+      title="账号观察"
+      subtitle="用文章表现辅助选题与素材整理"
+      icon={<BarChart3 size={16}/>}
+      backLabel="返回工作台"
+      onBack={() => navigate("/")}
+      actions={<a className="topic-header-action" href="https://mp.weixin.qq.com" target="_blank" rel="noreferrer">微信后台<ExternalLink size={14}/></a>}
+    />
+    <div className="topic-content">
     <header className="topic-header">
       <div className="topic-title-block"><p className="topic-eyebrow">从读者反馈，回到你的观察</p><h1>下一篇，值得写什么</h1><p>看看哪些问题持续有人读，把你的线索和判断接着写下去。</p></div>
-      <a className="topic-external" href="https://mp.weixin.qq.com" target="_blank" rel="noreferrer">打开微信后台<ExternalLink size={16} /></a>
     </header>
     <section className="topic-sync" aria-label="微信数据同步">
       <div className={`topic-sync-state topic-sync-state--${state.status}`}><span />
@@ -217,5 +222,6 @@ export default function TopicInsights() {
         </aside>
       </section>
     </> : <div className="topic-empty"><h2>先同步一次微信数据</h2><p>数据到位后，可以筛选主题、关联已写文章，并把新的问题保存为任务。“降低 30%”仍是目标，不会作为已有结果展示。</p></div>}
+    </div>
   </main>
 }
