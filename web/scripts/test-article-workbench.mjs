@@ -33,7 +33,23 @@ try {
     scope: 'period-article-list',
     metric: 'period-readers',
     collection: { complete: true, nextOffset: 0 },
-    trafficSources: [{ name: '推荐', percent: 64.2 }],
+    trafficSources: [
+      { name: '推荐', percent: 64.2 },
+      { name: '公众号消息', percent: 12.4 },
+      { name: '搜一搜', percent: 9.6 },
+      { name: '朋友圈', percent: 8.1 },
+      { name: '其他', percent: 5.7 },
+    ],
+    dashboard: {
+      daily: Array.from({ length: 30 }, (_, index) => ({
+        date: new Date(Date.UTC(2026, 7, 20 + index)).toISOString().slice(0, 10),
+        readers: 2200 + (index * 137) % 1800,
+        sharers: 80 + (index * 17) % 140,
+        collectors: 55 + (index * 11) % 90,
+        sourceReaders: 30 + (index * 7) % 70,
+        publishedArticles: index % 4 === 0 ? 2 : 1,
+      })),
+    },
     articles: Array.from({ length: 8 }, (_, index) => ({
       id: `${8000 + index}_1`,
       title: index === 0 ? '校园跑新规值得继续追踪' : `历史文章 ${index + 1}`,
@@ -297,14 +313,20 @@ try {
   emptyToutiao = false
   await page.goto(`${baseUrl}/insights`)
   await page.getByRole('heading', { name: '下一篇，值得写什么' }).waitFor()
+  assert.equal(await page.getByRole('button', { name: '立即同步' }).evaluate(element => element.classList.contains('ui-button')), true)
   await page.getByRole('button', { name: '立即同步' }).click()
-  await page.getByText('已自动同步 8 篇文章', { exact: true }).waitFor()
+  await page.getByText('已同步 8 篇文章和 30 天看板数据', { exact: true }).waitFor()
   assert.match(analyticsCookieRequest, /slave_sid/)
+  await page.getByRole('heading', { name: '账号每日表现' }).waitFor()
+  await page.getByText('每日趋势', { exact: true }).waitFor()
+  await page.getByText('阅读来源', { exact: true }).waitFor()
+  assert.equal(await page.locator('.topic-chart-panel .recharts-responsive-container').count(), 2)
   await page.getByText('8', { exact: true }).first().waitFor()
   await page.getByRole('textbox', { name: '主题关键词' }).fill('校园跑')
   await page.getByText('1 篇匹配', { exact: false }).waitFor()
   await page.getByText('高关注', { exact: true }).waitFor()
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
+  await page.evaluate(() => window.scrollTo(0, 0))
   await page.screenshot({ path: join(screenshots, 'topic-insights-desktop.png'), fullPage: true })
 
   for (const width of [390, 768]) {

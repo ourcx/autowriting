@@ -8,6 +8,7 @@ import {
 import { acquireCandidate, CandidateError } from "../server/generationCandidates.ts"
 import { rankWechatArticles, wechatAnalyticsSchema } from "../shared/wechatAnalytics.ts"
 import { parseWechatCookieJson } from "../server/utils/platformCookies.ts"
+import { parseWechatDailyMetrics } from "../server/utils/wechatAnalyticsParser.ts"
 
 const profile = normalizeCreatorWritingProfile({
   audience: "大学生",
@@ -54,10 +55,39 @@ const analytics = wechatAnalyticsSchema.parse({
   })),
 })
 const ranked = rankWechatArticles(analytics)
+assert.deepEqual(analytics.dashboard.daily, [])
 assert.equal(ranked[0].band, "high")
 assert.equal(ranked.at(-1)?.band, "low")
 assert.equal(ranked[0].rank, 1)
 assert.equal(ranked.at(-1)?.rank, 8)
+const dailyMetrics = parseWechatDailyMetrics([
+  { date: 1787241600, scene: 1, read_uv: 10, share_uv: 1 },
+  {
+    date: 1787241600,
+    scene: 9999,
+    read_uv: 120,
+    share_uv: 15,
+    collection_uv: 8,
+    source_uv: 6,
+    mass_pv: 2,
+  },
+])
+assert.deepEqual(dailyMetrics, [{
+  date: "2026-08-21",
+  readers: 120,
+  sharers: 15,
+  collectors: 8,
+  sourceReaders: 6,
+  publishedArticles: 2,
+}])
+assert.equal(wechatAnalyticsSchema.parse({
+  ...analytics,
+  dashboard: { daily: dailyMetrics },
+}).dashboard.daily.length, 1)
+assert.throws(
+  () => parseWechatDailyMetrics([{ date: 1787241600, scene: 9999, read_uv: "missing" }]),
+  /字段发生变化/,
+)
 assert.deepEqual(parseWechatCookieJson(JSON.stringify([{
   name: "slave_sid",
   value: "fixture",

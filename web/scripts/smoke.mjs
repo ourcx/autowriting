@@ -562,6 +562,16 @@ cases.push({
       metric: 'period-readers',
       collection: { complete: true, nextOffset: 0 },
       trafficSources: [{ name: '推荐', percent: 50 }],
+      dashboard: {
+        daily: [{
+          date: '2026-09-18',
+          readers: 1200,
+          sharers: 80,
+          collectors: 40,
+          sourceReaders: 20,
+          publishedArticles: 1,
+        }],
+      },
       articles: Array.from({ length: 8 }, (_, index) => ({
         id: `${9000 + index}_1`,
         title: `自动数据 ${index + 1}`,
@@ -577,8 +587,12 @@ cases.push({
     const response = await fetch(`${BASE}/api/wechat-analytics`, { headers })
     if (!response.ok) throw new Error(`快照读取失败 status=${response.status}`)
     const data = await response.json()
-    if (data.snapshots?.[0]?.articles?.length !== 8 || data.snapshots[0].collection?.complete !== true) {
-      throw new Error('快照列表或完整性状态不正确')
+    if (
+      data.snapshots?.[0]?.articles?.length !== 8
+      || data.snapshots[0].collection?.complete !== true
+      || data.snapshots[0].dashboard?.daily?.[0]?.readers !== 1200
+    ) {
+      throw new Error('快照列表、看板数据或完整性状态不正确')
     }
     const insights = await (await fetch(`${BASE}/api/articles/production-insights`, { headers })).json()
     if (insights.audienceEvidence?.highAttention?.[0]?.title !== '自动数据 1') {

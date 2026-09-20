@@ -5,6 +5,7 @@ const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value
 }, "日期不正确")
 const percent = z.number().finite().min(0).max(100)
+const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
 export const wechatAnalyticsSchema = z.object({
   version: z.literal(1),
   source: z.literal("wechat-browser"),
@@ -18,6 +19,16 @@ export const wechatAnalyticsSchema = z.object({
     nextOffset: z.number().int().nonnegative(),
   }).default({ complete: false, nextOffset: 0 }),
   trafficSources: z.array(z.object({ name: z.string().max(100), percent })).max(30),
+  dashboard: z.object({
+    daily: z.array(z.object({
+      date,
+      readers: count,
+      sharers: count,
+      collectors: count,
+      sourceReaders: count,
+      publishedArticles: count,
+    })).max(366),
+  }).default({ daily: [] }),
   articles: z.array(z.object({
     id: z.string().regex(/^\d+_\d+$/),
     title: z.string().trim().min(1).max(300),
@@ -29,6 +40,10 @@ export const wechatAnalyticsSchema = z.object({
 }).superRefine((value, context) => {
   if (new Set(value.articles.map(item => item.id)).size !== value.articles.length) context.addIssue({ code: "custom", message: "快照中存在重复文章" })
   if (value.articles.some(item => item.publishedAt > value.period.end)) context.addIssue({ code: "custom", message: "文章发布时间晚于统计截止日期" })
+  if (new Set(value.dashboard.daily.map(item => item.date)).size !== value.dashboard.daily.length) context.addIssue({ code: "custom", message: "看板中存在重复日期" })
+  if (value.dashboard.daily.some(item => item.date < value.period.start || item.date > value.period.end)) {
+    context.addIssue({ code: "custom", message: "看板日期超出统计窗口" })
+  }
 })
 
 export type WechatAnalyticsSnapshot = z.infer<typeof wechatAnalyticsSchema>

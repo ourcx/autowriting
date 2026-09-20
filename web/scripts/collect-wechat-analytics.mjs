@@ -15,7 +15,7 @@ try {
   const cookies = await readFile(cookieFile, "utf8")
   const snapshot = await readWechatAnalyticsFromCookies(cookies)
   await writeFile(output, JSON.stringify(snapshot, null, 2), { encoding: "utf8", mode: 0o600, flag: "wx" })
-  console.log(`已采集 ${snapshot.articles.length} 篇文章，${snapshot.period.start} 至 ${snapshot.period.end}。`)
+  console.log(`已采集 ${snapshot.articles.length} 篇文章和 ${snapshot.dashboard.daily.length} 天看板数据，${snapshot.period.start} 至 ${snapshot.period.end}。`)
 } catch {
-  throw new Error("采集失败。请确认本机浏览器已启用调试端口，并且只打开一个已登录的微信内容分析页。")
+  throw new Error("采集失败。请确认 Cookie JSON 来自当前已登录的微信公众平台。")
 }

@@ -1,5 +1,6 @@
 import { chromium, type Page } from "playwright"
 import { parseWechatCookieJson } from "./utils/platformCookies.ts"
+import { parseWechatDailyMetrics } from "./utils/wechatAnalyticsParser.ts"
 import {
   getWechatAnalyticsState,
   saveWechatAnalyticsSnapshot,
@@ -20,6 +21,11 @@ interface WechatArticleListResponse {
   base_resp?: { ret?: unknown }
   article_list?: WechatArticleRow[]
   next_offset?: unknown
+}
+
+interface WechatDashboardResponse {
+  base_resp?: { ret?: unknown }
+  all_article_stat_tendency?: { list?: unknown }
 }
 
 const collecting = new Set<string>()
@@ -93,8 +99,13 @@ export async function readWechatAnalyticsFromCookies(rawCookies: unknown): Promi
     analyticsUrl.searchParams.set("token", token)
     analyticsUrl.searchParams.set("lang", "zh_CN")
     const articleListResponse = page.waitForResponse(response => response.url().includes("action=get_article_list"), { timeout: 20000 })
+    const dashboardResponse = page.waitForResponse(response => response.url().includes("action=get_article_stat_tendency_and_source"), { timeout: 20000 })
     await page.goto(analyticsUrl.toString(), { waitUntil: "domcontentloaded", timeout: 20000 })
-    const sourceUrl = (await articleListResponse).url()
+    const [articleResponse, dashboardResult] = await Promise.all([articleListResponse, dashboardResponse])
+    const sourceUrl = articleResponse.url()
+    const dashboardBody = await dashboardResult.json() as WechatDashboardResponse
+    if (dashboardBody.base_resp?.ret !== 0) throw new Error("微信数据概览返回异常")
+    const daily = parseWechatDailyMetrics(dashboardBody.all_article_stat_tendency?.list)
     await page.locator('input[placeholder="开始日期"]').first().waitFor({ state: "visible", timeout: 10000 })
     const [{ articles, nextOffset }, accountName, period, trafficSources] = await Promise.all([
       readAllArticles(page, sourceUrl),
@@ -117,6 +128,7 @@ export async function readWechatAnalyticsFromCookies(rawCookies: unknown): Promi
       metric: "period-readers",
       collection: { complete: nextOffset === 0, nextOffset },
       trafficSources,
+      dashboard: { daily },
       articles,
     })
   } finally {
@@ -137,7 +149,7 @@ export async function collectWechatAnalytics(userId: string, rawCookies: unknown
       status: "succeeded",
       lastAttemptAt: startedAt,
       lastSuccessAt: saved.collectedAt,
-      message: `已采集 ${saved.articles.length} 篇文章`,
+      message: `已采集 ${saved.articles.length} 篇文章和 ${saved.dashboard.daily.length} 天看板数据`,
     })
     return saved
   } catch (error) {
