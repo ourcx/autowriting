@@ -675,7 +675,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
     try {
       // 用内联样式版本作为草稿内容（微信支持 HTML，但不支持 <style>，需内联）
       const inlinedHtml = buildInlinedHtml(html, editedCss, fontSize)
-      const digest = content?.replace(/\s+/g, ' ').slice(0, 120) ?? ''
+      const digest = title.trim()
 
       // 简单估算 UTF-8 字节数（中文 3 字节，ASCII 1 字节）
       const byteLen = new Blob([inlinedHtml]).size

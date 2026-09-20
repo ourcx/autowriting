@@ -305,6 +305,7 @@ async function pushToWechat(job, title, htmlContent) {
   const token = await getWxToken(job.wxAppId, job.wxAppSecret)
   const article = {
     title:                 title.slice(0, 64),
+    digest:                title.slice(0, 120),
     content:               htmlContent,
     need_open_comment:     0,
     only_fans_can_comment: 0,

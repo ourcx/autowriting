@@ -93,6 +93,7 @@ export const ARTICLE_BACKUP_DIR = path.join(DATA_DIR, 'article-backups')
 export const GENERATION_CANDIDATE_DIR = path.join(DATA_DIR, 'generation-candidates')
 export const XIAOHONGSHU_DEBUG_DIR = path.join(DATA_DIR, 'xiaohongshu-debug')
 export const XIAOHONGSHU_PUBLISH_LOCK_FILE = path.join(DATA_DIR, 'xiaohongshu-publish.lock')
+export const WECHAT_PUBLISH_DEBUG_DIR = path.join(DATA_DIR, 'wechat-publish-debug')
 export const XIAOHONGSHU_DEBUG_RETENTION_DAYS = Math.max(
   0,
   Number.parseInt(process.env.XIAOHONGSHU_DEBUG_RETENTION_DAYS || '7', 10) || 0,

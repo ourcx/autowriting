@@ -21,6 +21,11 @@ import { logger } from '../logger.js'
 import { authMiddleware } from '../authMiddleware.ts'
 import { readArticleContent, readArticleWorkflow, resolveArticleFiles, saveArticleWorkflow, recordArticleWorkflowEvent } from '../articleStorage.ts'
 import { draftFingerprint } from '../productionJournal.ts'
+import {
+  publishWechatDraftInBrowser,
+  WechatPublishOutcomeUnknownError,
+} from '../utils/wechatPublishBrowser.ts'
+import { parseWechatCookieJson } from '../utils/platformCookies.ts'
 
 const router = Router()
 router.use(authMiddleware)
@@ -29,6 +34,7 @@ const wechatUpload = multer({ storage: multer.memoryStorage(), limits: { fileSiz
 const WECHAT_MATERIAL_TYPES = new Set(['image', 'voice', 'video', 'news'])
 const WECHAT_UPLOAD_MATERIAL_TYPES = new Set(['image', 'voice', 'video', 'thumb'])
 const activeDrafts = new Set<string>()
+const activeWechatPublishes = new Set<string>()
 // ── Token 缓存（按 appId 隔离，进程重启后重新获取）──────────────────────────
 // Map<appId, { token: string, exp: number }>
 const _tokenCache = new Map()
@@ -910,6 +916,72 @@ router.delete('/draft/:mediaId', async (req, res) => {
 router.post('/draft/:mediaId/publish', async (req, res) => {
   const creds = getCredentials(req)
   if (!creds) return res.status(401).json({ error: '未提供公众号凭据' })
+
+  const rawCookies = req.body?.cookies
+  if (rawCookies !== undefined) {
+    let browserCookies
+    try {
+      browserCookies = parseWechatCookieJson(rawCookies)
+    } catch (err) {
+      return res.status(400).json({ error: err instanceof Error ? err.message : 'Cookie JSON 格式不正确' })
+    }
+    const index = Number(req.body?.index)
+    if (!Number.isSafeInteger(index) || index < 0 || index > 499) {
+      return res.status(400).json({ error: '草稿位置无效，请刷新草稿箱后重试' })
+    }
+    const publishKey = `${req.user.id}:${creds.appId}`
+    if (activeWechatPublishes.has(publishKey)) {
+      return res.status(409).json({ error: '该公众号正在执行发布，请等待当前操作完成' })
+    }
+    activeWechatPublishes.add(publishKey)
+    try {
+      const token = await getAccessToken(creds.appId, creds.appSecret)
+      const targetResponse = await axios.post(
+        'https://api.weixin.qq.com/cgi-bin/draft/batchget',
+        { offset: index, count: 1, no_content: 1 },
+        { params: { access_token: token }, timeout: 10000 },
+      )
+      if (targetResponse.data.errcode && targetResponse.data.errcode !== 0) {
+        return res.status(400).json({
+          error: `[${targetResponse.data.errcode}] ${targetResponse.data.errmsg}`,
+          errcode: targetResponse.data.errcode,
+        })
+      }
+      const target = targetResponse.data.item?.[0]
+      const first = target?.content?.news_item?.[0]
+      if (!target || target.media_id !== req.params.mediaId || !first?.title) {
+        return res.status(409).json({ error: '草稿列表已经变化，请刷新后重新选择' })
+      }
+      const result = await publishWechatDraftInBrowser({
+        cookies: browserCookies,
+        target: { title: first.title, index },
+        options: req.body?.options,
+      })
+      logger.info(WECHAT, '浏览器发布草稿已确认', {
+        appId: creds.appId,
+        mediaId: req.params.mediaId,
+        status: result.status,
+        evidenceCount: result.evidence.length,
+      })
+      return res.json({
+        success: true,
+        status: result.status,
+        title: result.title,
+        evidence_count: result.evidence.length,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '微信后台自动发布失败'
+      const unknown = err instanceof WechatPublishOutcomeUnknownError
+      logger.error(WECHAT, '浏览器发布草稿失败', {
+        mediaId: req.params.mediaId,
+        outcomeUnknown: unknown,
+        error: message,
+      })
+      return res.status(unknown ? 409 : 500).json({ error: message, outcome_unknown: unknown })
+    } finally {
+      activeWechatPublishes.delete(publishKey)
+    }
+  }
 
   try {
     const token = await getAccessToken(creds.appId, creds.appSecret)

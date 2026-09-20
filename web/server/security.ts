@@ -112,6 +112,7 @@ const EXPENSIVE_OPERATION_PATHS = [
   /^\/canvas\/(?:generate|generate-blocks|regenerate)/,
   /^\/(?:generate-cover|generate-covers-batch)/,
   /^\/rag\/(?:index|search|candidates)/,
+  /^\/wechat\/draft\/[^/]+\/publish$/,
   /^\/(?:publish|toutiao|xiaohongshu)\//,
 ]
 

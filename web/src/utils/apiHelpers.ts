@@ -15,6 +15,7 @@ import type { CanvasDesignTemplateId } from '../../shared/canvasDesignTemplates'
 import type { ArticleWorkflow, ArticleWorkflowEvent, ArticleWorkflowStage } from '../../shared/articleWorkflow'
 import type { CandidateInput, CandidateEvent, GenerationCandidate } from '../../shared/generationCandidate'
 import type { WechatAnalyticsSnapshot } from '../../shared/wechatAnalytics'
+import type { WechatBrowserPublishOptions } from '../../shared/wechatPublish'
 import {
   normalizeCreatorWritingProfile,
   type CreatorWritingProfile,
@@ -609,6 +610,30 @@ export async function pushWechatDraft(input: {
     media_id: string
     rewritten_images?: number
     failed_images?: Array<{ url: string; error: string }>
+  }
+}
+
+export async function publishWechatDraft(input: {
+  mediaId: string
+  index: number
+  cookies: string
+  options: WechatBrowserPublishOptions
+}, headers: Record<string, string>): Promise<{
+  success: true
+  status: "published" | "reviewing"
+  title: string
+  evidence_count: number
+}> {
+  const response = await axios.post(`/api/wechat/draft/${encodeURIComponent(input.mediaId)}/publish`, {
+    index: input.index,
+    cookies: input.cookies,
+    options: input.options,
+  }, { headers })
+  return response.data as {
+    success: true
+    status: "published" | "reviewing"
+    title: string
+    evidence_count: number
   }
 }
 

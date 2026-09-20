@@ -3,11 +3,19 @@ import { useNavigate } from 'react-router-dom'
 import {
   RefreshCw, FileText, Clock, Layers,
   ExternalLink, Link2, Download, Loader2, Trash2,
-  Send, Image, BookOpen, BarChart2, ChevronRight,
+  Send, Image, BookOpen, BarChart2, ChevronRight, X, ShieldCheck,
 } from 'lucide-react'
 import { toast } from '../../components/Toast/Toast'
 import PageHeader from '../../components/PageHeader/PageHeader'
-import { fetchJson, saveArticle } from '../../utils/apiHelpers'
+import { fetchJson, publishWechatDraft, saveArticle } from '../../utils/apiHelpers'
+import {
+  hasWechatAnalyticsCookies,
+  loadWechatAnalyticsCookies,
+  loadWechatPublishOptions,
+  saveWechatPublishOptions,
+} from '../../utils/accountBindings'
+import { useAuth } from '../../store/useAuth'
+import type { WechatBrowserPublishOptions, WechatCommentMode } from '../../../shared/wechatPublish'
 import './WeChatDrafts.css'
 
 /* ── HTML → Markdown（导入用）── */
@@ -114,8 +122,11 @@ function formatTime(ts: number): string {
 ══════════════════════════════════════════════ */
 export default function WeChatDrafts() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [tab, setTab]   = useState<TabId>('drafts')
   const [bound, setBound] = useState<boolean | null>(null)
+  const [publishTarget, setPublishTarget] = useState<{ item: DraftItem; index: number } | null>(null)
+  const [publishOptions, setPublishOptions] = useState<WechatBrowserPublishOptions | null>(null)
 
   /* ── 草稿箱 state ── */
   const [drafts,       setDrafts]       = useState<DraftItem[]>([])
@@ -153,6 +164,10 @@ export default function WeChatDrafts() {
   useEffect(() => {
     setBound(hasWxCreds())
   }, [])
+
+  useEffect(() => {
+    if (user) setPublishOptions(loadWechatPublishOptions(user.id))
+  }, [user])
 
   /* ══ 草稿箱 ══ */
   const fetchDrafts = useCallback(async (off: number) => {
@@ -216,16 +231,57 @@ export default function WeChatDrafts() {
     } finally { setDeleting(null) }
   }
 
-  /* 发布草稿 */
-  const handlePublishDraft = async (item: DraftItem) => {
-    if (!confirm(`确定将「${item.title}」发布到公众号？发布后将对所有关注者可见。`)) return
+  /* 浏览器发布草稿 */
+  const openPublishDialog = (item: DraftItem, index: number) => {
+    if (!user || !hasWechatAnalyticsCookies(user.id)) {
+      toast.warn('请先绑定微信后台 Cookie，自动发布需要登录态', {
+        action: { label: '去绑定', onClick: () => navigate('/account') },
+      })
+      return
+    }
+    setPublishTarget({ item, index })
+  }
+
+  const updatePublishOption = <K extends keyof WechatBrowserPublishOptions>(
+    key: K,
+    value: WechatBrowserPublishOptions[K],
+  ) => {
+    setPublishOptions(previous => previous ? { ...previous, [key]: value } : previous)
+  }
+
+  const selectCommentMode = (commentMode: WechatCommentMode) => {
+    updatePublishOption('commentMode', commentMode)
+  }
+
+  const handlePublishDraft = async () => {
+    if (!user || !publishTarget || !publishOptions) return
+    const cookies = loadWechatAnalyticsCookies(user.id)
+    if (!cookies) {
+      toast.error('微信后台 Cookie 不存在，请重新绑定')
+      return
+    }
+    const { item, index } = publishTarget
+    saveWechatPublishOptions(user.id, publishOptions)
     setPublishing(item.media_id)
     try {
-      await fetchJson(`/api/wechat/draft/${item.media_id}/publish`, {
-        method: 'POST',
-        headers: getWxHeaders(),
-      })
-      toast.success(`「${item.title}」已提交发布，稍后在「已发布」Tab 查看`)
+      const result = await publishWechatDraft({
+        mediaId: item.media_id,
+        index,
+        cookies,
+        options: publishOptions,
+      }, getWxHeaders())
+      setPublishTarget(null)
+      toast.success(
+        result.status === 'reviewing'
+          ? `「${item.title}」已提交微信审核`
+          : `「${item.title}」已确认发表`,
+        {
+          duration: 0,
+          action: { label: '查看后台', onClick: () => window.open('https://mp.weixin.qq.com', '_blank') },
+        },
+      )
+      setDraftOffset(0)
+      await fetchDrafts(0)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '发布失败')
     } finally { setPublishing(null) }
@@ -412,7 +468,7 @@ export default function WeChatDrafts() {
           {drafts.length > 0 && (
             <main className="wd-main">
               <div className="wd-list">
-                {drafts.map(item => (
+                {drafts.map((item, index) => (
                   <div key={item.media_id} className="wd-card">
                     <div className="wd-card-thumb">
                       {item.thumb_url
@@ -448,8 +504,8 @@ export default function WeChatDrafts() {
                       <button
                         className="wd-btn wd-btn--publish"
                         disabled={!!importing || !!deleting || !!publishing}
-                        onClick={() => handlePublishDraft(item)}
-                        title="发布到公众号"
+                        onClick={() => openPublishDialog(item, index)}
+                        title="配置并发布到公众号"
                       >
                         {publishing === item.media_id
                           ? <Loader2 size={12} className="wd-spin" />
@@ -743,6 +799,109 @@ export default function WeChatDrafts() {
             </main>
           )}
         </>
+      )}
+
+      {publishTarget && publishOptions && (
+        <div
+          className="wd-publish-backdrop"
+          onMouseDown={event => {
+            if (event.currentTarget === event.target && !publishing) setPublishTarget(null)
+          }}
+        >
+          <section className="wd-publish-dialog" role="dialog" aria-modal="true" aria-labelledby="wd-publish-title">
+            <header className="wd-publish-head">
+              <div>
+                <p>微信后台发布</p>
+                <h2 id="wd-publish-title">{publishTarget.item.title}</h2>
+              </div>
+              <button
+                className="wd-publish-close"
+                onClick={() => setPublishTarget(null)}
+                disabled={Boolean(publishing)}
+                title="关闭"
+                aria-label="关闭发布设置"
+              >
+                <X size={18} />
+              </button>
+            </header>
+
+            <div className="wd-publish-summary">
+              <ShieldCheck size={17} />
+              <span>系统会核对草稿标题，保存发布前后截图，并在微信返回明确状态后报告成功。</span>
+            </div>
+
+            <div className="wd-publish-settings">
+              <label className="wd-publish-setting">
+                <span>
+                  <strong>声明原创</strong>
+                  <small>仅在确认文章文字为原创时开启</small>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={publishOptions.declareOriginal}
+                  onChange={event => updatePublishOption('declareOriginal', event.target.checked)}
+                />
+              </label>
+
+              <div className="wd-publish-setting wd-publish-setting--stacked">
+                <span>
+                  <strong>留言范围</strong>
+                  <small>保持草稿设置，或在发表前覆盖</small>
+                </span>
+                <div className="wd-segmented" role="group" aria-label="留言范围">
+                  {([
+                    ['keep', '保持现状'],
+                    ['all', '所有人'],
+                    ['fans', '仅关注者'],
+                    ['off', '关闭'],
+                  ] as Array<[WechatCommentMode, string]>).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={publishOptions.commentMode === value}
+                      onClick={() => selectCommentMode(value)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <label className="wd-publish-setting wd-publish-setting--ads">
+                <span>
+                  <strong>流量主广告</strong>
+                  <small>进入广告设置并选择“打开全部广告”</small>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={publishOptions.enableAllAds}
+                  onChange={event => updatePublishOption('enableAllAds', event.target.checked)}
+                />
+              </label>
+
+              <div className="wd-publish-setting wd-publish-setting--locked">
+                <span>
+                  <strong>群发通知</strong>
+                  <small>固定关闭，只发表到公众号主页，不占用群发次数</small>
+                </span>
+                <span>关闭</span>
+              </div>
+            </div>
+
+            <footer className="wd-publish-actions">
+              <button type="button" onClick={() => setPublishTarget(null)} disabled={Boolean(publishing)}>取消</button>
+              <button
+                type="button"
+                className="wd-publish-confirm"
+                onClick={() => void handlePublishDraft()}
+                disabled={Boolean(publishing)}
+              >
+                {publishing ? <Loader2 size={15} className="wd-spin" /> : <Send size={15} />}
+                {publishing ? '正在核对并发表' : '确认发表'}
+              </button>
+            </footer>
+          </section>
+        </div>
       )}
     </div>
   )

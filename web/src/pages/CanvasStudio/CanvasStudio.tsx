@@ -522,7 +522,7 @@ export default function CanvasStudio() {
     const result = await pushWechatDraft({
       title: articleTitle,
       content: html,
-      digest: articleData.article.replace(/\s+/g, " ").slice(0, 120),
+      digest: articleTitle,
       thumbMediaId,
     }, headers)
     if (result.failed_images?.length) {

@@ -725,6 +725,33 @@ cases.push({
   },
 })
 cases.push({
+  name: '微信浏览器发布必须登录并校验 Cookie，校验失败时不得访问微信发布页',
+  run: async () => {
+    const endpoint = `${BASE}/api/wechat/draft/smoke-media/publish`
+    const anonymous = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ index: 0, cookies: '[]', options: {} }),
+    })
+    if (anonymous.status !== 401) throw new Error(`未登录期望 401，实际 ${anonymous.status}`)
+
+    const invalidCookie = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'X-Wx-AppId': 'smoke-app-id',
+        'X-Wx-AppSecret': 'smoke-app-secret',
+      },
+      body: JSON.stringify({ index: 0, cookies: '[]', options: { enableAllAds: true } }),
+    })
+    const body = await invalidCookie.json()
+    if (invalidCookie.status !== 400 || !String(body.error).includes('Cookie')) {
+      throw new Error(`微信浏览器发布凭据错误响应不正确：${JSON.stringify(body)}`)
+    }
+  },
+})
+cases.push({
   name: '小红书标题超过 20 字仍应通过长度校验',
   run: async () => {
     const r = await fetch(`${BASE}/api/xiaohongshu/article-metadata`, {

@@ -1,3 +1,9 @@
+import {
+  DEFAULT_WECHAT_BROWSER_PUBLISH_OPTIONS,
+  wechatBrowserPublishOptionsSchema,
+  type WechatBrowserPublishOptions,
+} from "../../shared/wechatPublish"
+
 export interface WechatCredentials {
   appId: string
   appSecret: string
@@ -8,6 +14,7 @@ const TOUTIAO_COOKIES_KEY = "toutiao_cookies"
 const XIAOHONGSHU_COOKIES_KEY = "xiaohongshu_cookies"
 const WECHAT_ANALYTICS_COOKIES_KEY = "wechat_analytics_cookies"
 const WECHAT_ANALYTICS_REFRESH_KEY = "wechat_analytics_refresh"
+const WECHAT_PUBLISH_OPTIONS_KEY = "wechat_publish_options"
 
 export interface WechatAnalyticsRefreshConfig {
   enabled: boolean
@@ -128,6 +135,22 @@ export function loadWechatAnalyticsRefreshConfig(userId: string): WechatAnalytic
 
 export function saveWechatAnalyticsRefreshConfig(userId: string, config: WechatAnalyticsRefreshConfig): void {
   localStorage.setItem(scopedKey(WECHAT_ANALYTICS_REFRESH_KEY, userId), JSON.stringify(config))
+}
+
+export function loadWechatPublishOptions(userId: string): WechatBrowserPublishOptions {
+  try {
+    const parsed = wechatBrowserPublishOptionsSchema.safeParse(
+      JSON.parse(localStorage.getItem(scopedKey(WECHAT_PUBLISH_OPTIONS_KEY, userId)) || "null"),
+    )
+    return parsed.success ? parsed.data : DEFAULT_WECHAT_BROWSER_PUBLISH_OPTIONS
+  } catch {
+    return DEFAULT_WECHAT_BROWSER_PUBLISH_OPTIONS
+  }
+}
+
+export function saveWechatPublishOptions(userId: string, options: WechatBrowserPublishOptions): void {
+  const parsed = wechatBrowserPublishOptionsSchema.parse(options)
+  localStorage.setItem(scopedKey(WECHAT_PUBLISH_OPTIONS_KEY, userId), JSON.stringify(parsed))
 }
 
 function isWechatCredentials(value: unknown): value is WechatCredentials {

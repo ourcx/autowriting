@@ -301,7 +301,7 @@ export default function AccountPage() {
                 <span className="ap-platform-mark ap-platform-mark--wechat">微</span>
                 <div>
                   <h2>微信公众号</h2>
-                  <p>草稿发布与数据分析使用不同授权，可分别连接。</p>
+                  <p>写入草稿使用 AppID，数据同步与后台发表使用 Cookie，可分别连接。</p>
                 </div>
                 <span className={`ap-status ${wechatBound || wechatAnalyticsBound ? "ap-status--ok" : ""}`}>
                   {Number(wechatBound) + Number(wechatAnalyticsBound)}/2 项可用
@@ -312,7 +312,7 @@ export default function AccountPage() {
                 <section className="ap-capability">
                   <div className="ap-capability-title">
                     <BookOpen size={17} />
-                    <div><h3>草稿发布</h3><p>需要 AppID 与 AppSecret</p></div>
+                    <div><h3>草稿写入</h3><p>需要 AppID 与 AppSecret</p></div>
                     <span className={wechatBound ? "ready" : ""}>{wechatBound ? "已连接" : "未连接"}</span>
                   </div>
                   {wechatBound ? (
@@ -337,7 +337,7 @@ export default function AccountPage() {
                       <div className="ap-password"><input type={showSecret ? "text" : "password"} value={appSecret} onChange={event => { setAppSecret(event.target.value); setWechatError("") }} placeholder="AppSecret" autoComplete="new-password" /><button type="button" onClick={() => setShowSecret(value => !value)} title={showSecret ? "隐藏 AppSecret" : "显示 AppSecret"}>{showSecret ? <EyeOff size={16} /> : <Eye size={16} />}</button></div>
                       {wechatError ? <p className="ap-error">{wechatError}</p> : null}
                       <div className="ap-actions">
-                        <button className="ap-btn ap-btn--dark" disabled={bindingWechat}>{bindingWechat ? "验证中…" : <><Link2 size={15} />连接草稿发布</>}</button>
+                        <button className="ap-btn ap-btn--dark" disabled={bindingWechat}>{bindingWechat ? "验证中…" : <><Link2 size={15} />连接草稿写入</>}</button>
                         <a href="https://developers.weixin.qq.com/console/product/mp" target="_blank" rel="noreferrer">获取凭据<ExternalLink size={13} /></a>
                       </div>
                     </form>
@@ -347,14 +347,14 @@ export default function AccountPage() {
                 <section className="ap-capability">
                   <div className="ap-capability-title">
                     <BarChart3 size={17} />
-                    <div><h3>数据分析</h3><p>需要微信后台 Cookie JSON</p></div>
+                    <div><h3>后台自动化</h3><p>数据看板与草稿发表共用 Cookie JSON</p></div>
                     <span className={wechatAnalyticsBound ? "ready" : ""}>{wechatAnalyticsBound ? "已连接" : "未连接"}</span>
                   </div>
                   {wechatAnalyticsBound ? (
                     <>
                       <div className="ap-account-brief ap-account-brief--plain">
                         <ShieldCheck size={20} />
-                        <div><strong>内容分析会话已就绪</strong><span>刷新看板时临时使用，后端不会持久化 Cookie</span></div>
+                        <div><strong>微信后台会话已就绪</strong><span>同步看板或发表草稿时临时使用，后端不会持久化 Cookie</span></div>
                       </div>
                       <div className="ap-actions">
                         <button className="ap-btn ap-btn--dark" onClick={() => navigate("/insights")}>打开数据看板</button>
@@ -366,7 +366,7 @@ export default function AccountPage() {
                       <textarea value={wechatAnalyticsCookies} onChange={event => { setWechatAnalyticsCookies(event.target.value); setWechatAnalyticsError("") }} placeholder='[{"name":"slave_sid","value":"…","domain":".mp.weixin.qq.com"}]' rows={4} />
                       {wechatAnalyticsError ? <p className="ap-error">{wechatAnalyticsError}</p> : null}
                       <div className="ap-actions">
-                        <button className="ap-btn ap-btn--dark" disabled={bindingWechatAnalytics}>{bindingWechatAnalytics ? "验证并同步中…" : <><Link2 size={15} />连接数据分析</>}</button>
+                        <button className="ap-btn ap-btn--dark" disabled={bindingWechatAnalytics}>{bindingWechatAnalytics ? "验证并同步中…" : <><Link2 size={15} />连接微信后台</>}</button>
                         <a href="https://mp.weixin.qq.com" target="_blank" rel="noreferrer">打开微信后台<ExternalLink size={13} /></a>
                       </div>
                     </form>

@@ -260,7 +260,7 @@ export default function FirstSetupPage() {
                   <span className="fsp-platform-mark fsp-platform-mark--wechat">微</span>
                   <div>
                     <strong>微信公众号</strong>
-                    <span>草稿发布：{accountState.wechatPublish ? "已连接" : "未连接"} · 数据分析：{accountState.wechatAnalytics ? "已连接" : "未连接"}</span>
+                    <span>草稿写入：{accountState.wechatPublish ? "已连接" : "未连接"} · 后台自动化：{accountState.wechatAnalytics ? "已连接" : "未连接"}</span>
                   </div>
                   <span className={accountState.wechatPublish || accountState.wechatAnalytics ? "connected" : ""}>
                     {accountState.wechatPublish || accountState.wechatAnalytics ? "已连接" : "可选"}
