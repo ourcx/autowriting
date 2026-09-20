@@ -4,6 +4,7 @@ import DashboardPage from './pages/DashboardPage/DashboardPage'
 import LoginPage from './pages/LoginPage/LoginPage'
 import PrivateRoute from './components/PrivateRoute/PrivateRoute'
 import ToastProvider from './components/Toast/Toast'
+import IconTooltipProvider from './components/IconTooltipProvider/IconTooltipProvider'
 import { syncAIConfigFromServer } from './utils/aiConfig'
 import { initAuth } from './store/useAuth'
 
@@ -40,6 +41,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <ToastProvider />
+      <IconTooltipProvider />
       <Suspense fallback={<div className="route-loading" role="status">正在打开工作区...</div>}>
       <Routes>
         {/* 公开路由 */}

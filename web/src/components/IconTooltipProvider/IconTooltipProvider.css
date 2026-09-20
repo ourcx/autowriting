@@ -1,0 +1,73 @@
+.icon-tooltip {
+  position: fixed;
+  z-index: 10020;
+  width: max-content;
+  max-width: min(240px, calc(100vw - 24px));
+  padding: 6px 9px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 6px;
+  background: #202523;
+  box-shadow: 0 6px 18px rgb(10 10 10 / 18%);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  pointer-events: none;
+  text-align: center;
+  transform: translateX(-50%);
+  animation: icon-tooltip-in 120ms ease-out both;
+}
+
+.icon-tooltip[data-placement="top"] {
+  transform: translate(-50%, -100%);
+}
+
+.icon-tooltip::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  background: #202523;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.icon-tooltip[data-placement="top"]::after {
+  bottom: -4px;
+}
+
+.icon-tooltip[data-placement="bottom"]::after {
+  top: -4px;
+}
+
+@keyframes icon-tooltip-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.icon-tooltip[data-placement="top"] {
+  animation-name: icon-tooltip-in-top;
+}
+
+@keyframes icon-tooltip-in-top {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-100% + 2px));
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .icon-tooltip {
+    animation: none;
+  }
+}
