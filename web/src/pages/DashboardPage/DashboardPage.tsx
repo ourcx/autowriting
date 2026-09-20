@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings, Palette, AlertTriangle, Database, BookOpen, LogOut, Shield, Zap, Clock, BarChart3, Image, User, Shapes } from 'lucide-react'
+import { Settings, Palette, AlertTriangle, Database, BookOpen, LogOut, Shield, Zap, Clock, BarChart3, Image, User, Shapes, HelpCircle } from 'lucide-react'
 import Dashboard from '../Dashboard/Dashboard'
 import OnboardingGuide from '../../components/OnboardingGuide/OnboardingGuide'
 import PageHeader from '../../components/PageHeader/PageHeader'
@@ -8,6 +8,13 @@ import { useAIReadiness, fetchServerStatus } from '../../store/useConfigStore'
 import { useAuth, logout } from '../../store/useAuth'
 import './DashboardPage.css'
 import { articleEditorUrl } from '../../utils/articleNavigation'
+import {
+  hasToutiaoCookies,
+  hasWechatAnalyticsCookies,
+  hasXiaohongshuCookies,
+  loadWechatCredentials,
+} from '../../utils/accountBindings'
+import { hasCompletedGuide } from '../../utils/userExperience'
 
 export default function DashboardPage() {
   const navigate = useNavigate()
@@ -17,17 +24,14 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchServerStatus()
-    // 检查是否需要显示引导（首次访问）
-    const hasSeenOnboarding = localStorage.getItem('onboarding-completed')
-    if (!hasSeenOnboarding) {
+    if (user && !hasCompletedGuide(user.id, "dashboard")) {
       setShowOnboarding(true)
     }
-  }, [])
+  }, [user])
 
-  const handleOnboardingComplete = () => {
-    localStorage.setItem('onboarding-completed', 'true')
-    setShowOnboarding(false)
-  }
+  const connectedPlatforms = Number(Boolean(loadWechatCredentials()) || (user ? hasWechatAnalyticsCookies(user.id) : false))
+    + Number(hasToutiaoCookies())
+    + Number(hasXiaohongshuCookies())
 
   return (
     <div className="dp-root">
@@ -73,7 +77,7 @@ export default function DashboardPage() {
               画布
             </button>
           </div>
-          <div className="dp-nav-group" role="group" aria-label="账户与配置">
+          <div className="dp-nav-group" role="group" aria-label="账户与配置" data-onboarding="setup-status">
             <button className={`dp-nav-btn ${!apiKeyReady ? 'dp-nav-btn--warn' : ''}`} onClick={() => navigate('/settings')}>
               {apiKeyReady ? <Settings size={14} /> : <AlertTriangle size={14} />}
               AI 配置
@@ -84,9 +88,13 @@ export default function DashboardPage() {
                 管理
               </button>
             )}
-            <button className="dp-nav-btn" onClick={() => navigate('/account')} title="用户页与写作档案">
+            <button className="dp-nav-btn dp-nav-btn--account" onClick={() => navigate('/account')} title={`${user?.username || '当前用户'}的发布账号与写作档案`}>
               <User size={14} />
-              <span className="dp-nav-user">{user?.username || '用户页'}</span>
+              <span>账号与发布</span>
+              <small className={connectedPlatforms ? 'is-ready' : ''}>{connectedPlatforms}/3</small>
+            </button>
+            <button className="dp-nav-btn dp-nav-btn--icon" title="查看当前页引导" aria-label="查看当前页引导" onClick={() => setShowOnboarding(true)}>
+              <HelpCircle size={14} />
             </button>
             <button className="dp-nav-btn dp-nav-btn--icon" title="登出" aria-label="登出" onClick={() => { logout(); navigate('/login') }}>
               <LogOut size={14} />
@@ -105,8 +113,8 @@ export default function DashboardPage() {
       </div>
 
       {/* ── 欢迎引导 ── */}
-      {showOnboarding && (
-        <OnboardingGuide onComplete={handleOnboardingComplete} />
+      {showOnboarding && user && (
+        <OnboardingGuide page="dashboard" userId={user.id} run={showOnboarding} onClose={() => setShowOnboarding(false)} />
       )}
     </div>
   )

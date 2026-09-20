@@ -1,235 +1,169 @@
-import React, { useState, useEffect } from 'react'
-import { ChevronRight, X, CheckCircle, Zap, BookOpen, Settings } from 'lucide-react'
-import './OnboardingGuide.css'
-
-interface GuideStep {
-  id: string
-  title: string
-  description: string
-  icon: React.ReactNode
-  action?: {
-    label: string
-    href?: string
-    onClick?: () => void
-  }
-  completed?: boolean
-  targetSelector?: string
-}
+import { useEffect, useMemo, useState } from "react"
+import {
+  ACTIONS,
+  EVENTS,
+  Joyride,
+  STATUS,
+  type EventData,
+  type Step,
+} from "react-joyride"
+import {
+  completeGuide,
+  type GuidePage,
+} from "../../utils/userExperience"
+import "./OnboardingGuide.css"
 
 interface OnboardingGuideProps {
-  onComplete?: () => void
-  autoHide?: boolean
+  page: GuidePage
+  userId: string
+  run: boolean
+  onClose: () => void
 }
 
-export default function OnboardingGuide({ onComplete, autoHide = true }: OnboardingGuideProps) {
-  const [isVisible, setIsVisible] = useState(true)
-  const [currentStep, setCurrentStep] = useState(0)
-  const [completedSteps, setCompletedSteps] = useState<Set<string>>(new Set())
-  const [targetRect, setTargetRect] = useState<DOMRect | null>(null)
+const PAGE_STEPS: Record<GuidePage, Step[]> = {
+  dashboard: [
+    {
+      target: '[data-onboarding="setup-status"]',
+      title: "先看配置状态",
+      content: "这里会显示 AI 和发布账号是否就绪。缺什么就从这里补，不需要一次配置所有平台。",
+      placement: "bottom-end",
+    },
+    {
+      target: '[data-onboarding="start-writing"]',
+      title: "创建第一篇文章",
+      content: "填标题后点击“开始写作”，接下来只需要沿着编辑器主流程往下走。",
+      placement: "right",
+    },
+  ],
+  editor: [
+    {
+      target: '[data-onboarding="editor-workflow"]',
+      title: "四段主流程",
+      content: "先准备主题和素材，再生成母稿、审核定稿，最后选择平台发布。",
+      placement: "bottom",
+    },
+    {
+      target: '[data-onboarding="editor-prepare"]',
+      title: "任务与素材放在一起",
+      content: "这两个入口属于同一准备阶段，可以随时来回补充。",
+      placement: "bottom",
+    },
+    {
+      target: '[data-onboarding="next-action"]',
+      title: "从这里继续",
+      content: "每个阶段只有一个主要下一步操作。移动端会固定在屏幕底部。",
+      placement: "top-end",
+    },
+  ],
+  publish: [
+    {
+      target: '[data-onboarding="publish-platforms"]',
+      title: "选择发布平台",
+      content: "在这里切换公众号、今日头条或小红书，并查看各平台正文是否就绪。",
+      placement: "bottom",
+    },
+    {
+      target: '[data-onboarding="publish-account-status"]',
+      title: "确认账号连接",
+      content: "发布前先看当前平台的连接状态，未连接时可以直接前往“账号与发布”。",
+      placement: "bottom-end",
+    },
+    {
+      target: '[data-onboarding="publish-workbench"]',
+      title: "检查后发布",
+      content: "预览正文和素材，确认无误后使用发布区里的主按钮完成操作。",
+      placement: "top",
+    },
+  ],
+}
 
-  const steps: GuideStep[] = [
-    {
-      id: 'welcome',
-      title: '欢迎使用 AI 自动写作系统',
-      description: '这是一个强大的 AI 驱动的内容创作平台，可以帮助你快速生成高质量的文章。',
-      icon: <Zap size={32} />,
-    },
-    {
-      id: 'create-article',
-      title: '创建你的第一篇文章',
-      description: '点击"新建文章"按钮开始创作。系统会引导你输入主题和描述。',
-      icon: <BookOpen size={32} />,
-      action: {
-        label: '创建文章',
-        href: '/',
-      },
-      targetSelector: '[data-onboarding="create-article"]',
-    },
-    {
-      id: 'ai-settings',
-      title: '配置 AI 模型',
-      description: '在设置中选择你喜欢的 AI 模型和参数。我们提供了多个预设方案供快速选择。',
-      icon: <Settings size={32} />,
-      action: {
-        label: '前往设置',
-        href: '/settings',
-      },
-      targetSelector: '[data-onboarding="ai-settings"]',
-    },
-    {
-      id: 'generate-content',
-      title: '生成文章内容',
-      description: '使用 AI 自动生成文章。系统会根据你的主题和风格偏好生成高质量内容。',
-      icon: <Zap size={32} />,
-      targetSelector: '[data-onboarding="generate-content"]',
-    },
-    {
-      id: 'complete',
-      title: '开始创作吧！',
-      description: '现在你已经了解了基本功能。开始创作你的第一篇文章，体验 AI 的强大能力。',
-      icon: <CheckCircle size={32} />,
-    },
-  ]
+export default function OnboardingGuide({ page, userId, run, onClose }: OnboardingGuideProps) {
+  const [stepIndex, setStepIndex] = useState(0)
+  const steps = useMemo(() => PAGE_STEPS[page], [page])
 
-  // 更新目标元素的位置
   useEffect(() => {
-    const step = steps[currentStep]
-    if (step.targetSelector) {
-      const element = document.querySelector(step.targetSelector)
-      if (element) {
-        setTargetRect(element.getBoundingClientRect())
-      } else {
-        setTargetRect(null)
-      }
-    } else {
-      setTargetRect(null)
-    }
+    if (run) setStepIndex(0)
+  }, [page, run])
 
-    // 监听窗口大小变化
-    const handleResize = () => {
-      if (step.targetSelector) {
-        const element = document.querySelector(step.targetSelector)
-        if (element) {
-          setTargetRect(element.getBoundingClientRect())
-        }
-      }
-    }
-
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [currentStep, steps])
-
-  const handleStepComplete = (stepId: string) => {
-    const newCompleted = new Set(completedSteps)
-    newCompleted.add(stepId)
-    setCompletedSteps(newCompleted)
-
-    if (currentStep < steps.length - 1) {
-      setCurrentStep(currentStep + 1)
-    } else if (autoHide) {
-      setTimeout(() => {
-        setIsVisible(false)
-        onComplete?.()
-      }, 1000)
-    }
+  function finish() {
+    completeGuide(userId, page)
+    onClose()
   }
 
-  const handleClose = () => {
-    setIsVisible(false)
-    onComplete?.()
+  function handleEvent(data: EventData) {
+    if (data.status === STATUS.FINISHED || data.status === STATUS.SKIPPED) {
+      finish()
+      return
+    }
+    if (data.type === EVENTS.STEP_AFTER || data.type === EVENTS.TARGET_NOT_FOUND) {
+      setStepIndex(previous => previous + (data.action === ACTIONS.PREV ? -1 : 1))
+    }
   }
-
-  if (!isVisible) return null
-
-  const step = steps[currentStep]
 
   return (
-    <>
-      {/* 聚焦遮罩层 */}
-      {targetRect && (
-        <div className="onboarding-spotlight">
-          <svg className="onboarding-spotlight-svg" width="100%" height="100%">
-            <defs>
-              <mask id="spotlight-mask">
-                <rect width="100%" height="100%" fill="white" />
-                <rect
-                  x={targetRect.left - 8}
-                  y={targetRect.top - 8}
-                  width={targetRect.width + 16}
-                  height={targetRect.height + 16}
-                  rx="12"
-                  fill="black"
-                />
-              </mask>
-            </defs>
-            <rect
-              width="100%"
-              height="100%"
-              fill="rgba(10, 10, 10, 0.6)"
-              mask="url(#spotlight-mask)"
-            />
-          </svg>
-        </div>
-      )}
-
-      {/* 引导弹窗 */}
-      <div className="onboarding-overlay">
-        <div className="onboarding-container">
-          {/* 关闭按钮 */}
-          <button className="onboarding-close" onClick={handleClose} title="关闭引导">
-            <X size={20} />
-          </button>
-
-          {/* 内容区域 - 固定高度 */}
-          <div className="onboarding-content">
-            {/* 图标 */}
-            <div className="onboarding-icon">
-              {step.icon}
-            </div>
-
-            {/* 标题和描述 */}
-            <h2 className="onboarding-title">{step.title}</h2>
-            <p className="onboarding-description">{step.description}</p>
-
-            {/* 步骤指示器 */}
-            <div className="onboarding-steps">
-              {steps.map((s, idx) => (
-                <div
-                  key={s.id}
-                  className={`onboarding-step-dot ${
-                    idx === currentStep ? 'active' : idx < currentStep ? 'completed' : ''
-                  }`}
-                  onClick={() => setCurrentStep(idx)}
-                >
-                  {idx < currentStep ? <CheckCircle size={16} /> : idx + 1}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* 操作按钮 */}
-          <div className="onboarding-actions">
-            {currentStep > 0 && (
-              <button
-                className="onboarding-btn onboarding-btn-secondary"
-                onClick={() => setCurrentStep(currentStep - 1)}
-              >
-                上一步
-              </button>
-            )}
-
-            {step.action ? (
-              <a
-                href={step.action.href}
-                className="onboarding-btn onboarding-btn-primary"
-                onClick={(e) => {
-                  if (step.action?.onClick) {
-                    e.preventDefault()
-                    step.action.onClick()
-                  }
-                  handleStepComplete(step.id)
-                }}
-              >
-                {step.action.label}
-                <ChevronRight size={16} />
-              </a>
-            ) : (
-              <button
-                className="onboarding-btn onboarding-btn-primary"
-                onClick={() => handleStepComplete(step.id)}
-              >
-                {currentStep === steps.length - 1 ? '开始创作' : '下一步'}
-                <ChevronRight size={16} />
-              </button>
-            )}
-          </div>
-
-          {/* 跳过按钮 */}
-          <button className="onboarding-skip" onClick={handleClose}>
-            跳过引导
-          </button>
-        </div>
-      </div>
-    </>
+    <Joyride
+      run={run}
+      stepIndex={stepIndex}
+      steps={steps}
+      continuous
+      scrollToFirstStep
+      onEvent={handleEvent}
+      locale={{
+        back: "上一步",
+        close: "关闭",
+        last: "知道了",
+        next: "下一步",
+        nextWithProgress: "下一步（{current}/{total}）",
+        open: "打开引导",
+        skip: "跳过",
+      }}
+      options={{
+        buttons: ["back", "skip", "primary"],
+        closeButtonAction: "skip",
+        dismissKeyAction: "close",
+        overlayClickAction: false,
+        showProgress: true,
+        skipBeacon: true,
+        blockTargetInteraction: false,
+        primaryColor: "#1a3a3a",
+        backgroundColor: "#fffaf0",
+        textColor: "#3a3a3a",
+        overlayColor: "rgba(10, 10, 10, 0.58)",
+        zIndex: 1400,
+        spotlightPadding: 8,
+        spotlightRadius: 8,
+      }}
+      styles={{
+        tooltip: {
+          borderRadius: 8,
+          boxShadow: "0 18px 48px rgba(10, 10, 10, 0.18)",
+          maxWidth: 360,
+          padding: 18,
+        },
+        tooltipTitle: {
+          color: "#0a0a0a",
+          fontSize: 15,
+          fontWeight: 600,
+          letterSpacing: 0,
+        },
+        tooltipContent: {
+          fontSize: 13,
+          lineHeight: 1.65,
+          padding: "8px 0 14px",
+        },
+        buttonPrimary: {
+          borderRadius: 6,
+          minHeight: 36,
+          padding: "0 14px",
+        },
+        buttonBack: {
+          color: "#6a6a6a",
+          marginRight: 8,
+        },
+        buttonSkip: {
+          color: "#6a6a6a",
+        },
+      }}
+    />
   )
 }

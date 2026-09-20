@@ -22,7 +22,7 @@ export default function RegisterPage() {
     setError('')
     try {
       await register(username.trim(), password)
-      navigate('/', { replace: true })
+      navigate('/setup', { replace: true })
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
         || (err instanceof Error ? err.message : '注册失败，请重试')

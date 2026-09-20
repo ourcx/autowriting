@@ -1,18 +1,595 @@
-.ap-root { min-height: 100vh; background: var(--color-canvas, #fffaf0); color: var(--color-ink, #0a0a0a); font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-.ap-back, .ap-icon-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid var(--color-hairline, #e5e5e5); background: var(--color-canvas, #fffaf0); color: var(--color-body, #3a3a3a); border-radius: 12px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; }
-.ap-header-note { display: flex; align-items: center; gap: 6px; color: var(--color-muted, #6a6a6a); font-size: 12px; }
-.ap-content { max-width: 1120px; margin: 0 auto; padding: 76px 32px 96px; }.ap-intro { display: flex; justify-content: space-between; gap: 48px; align-items: end; margin-bottom: 42px; }.ap-eyebrow { margin: 0 0 10px; color: var(--color-muted, #6a6a6a); font-size: 11px; font-weight: 700; letter-spacing: 1.5px; }.ap-intro h1 { max-width: 640px; margin: 0; font-size: clamp(36px, 5vw, 56px); font-weight: 500; letter-spacing: -2px; line-height: 1.04; }.ap-intro > div > p:last-child { margin: 16px 0 0; color: var(--color-body, #3a3a3a); font-size: 16px; }.ap-summary { min-width: 140px; padding: 21px 24px; border-radius: 24px; background: var(--color-brand-lavender, #b8a4ed); display: grid; gap: 2px; }.ap-summary span { color: #282436; font-size: 12px; }.ap-summary strong { font-size: 36px; letter-spacing: -1px; line-height: 1; }.ap-summary small { font-size: 16px; font-weight: 500; }
-.ap-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }.ap-card { min-height: 430px; padding: 30px; border-radius: 24px; display: flex; flex-direction: column; }.ap-card--wechat { background: var(--color-brand-mint, #a4d4c5); }.ap-card--wechat-data { background: #dce9d8; }.ap-card--toutiao { background: var(--color-brand-peach, #ffb084); }.ap-card--xiaohongshu { background: var(--color-brand-lavender, #b8a4ed); }.ap-card-top, .ap-profile, .ap-actions { display: flex; align-items: center; }.ap-card-top { justify-content: space-between; }.ap-platform { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; }.ap-platform-mark { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; font-size: 14px; }.ap-platform-mark--wechat { background: #07c160; color: white; }.ap-platform-mark--toutiao { background: #e84235; color: white; }.ap-platform-mark--xiaohongshu { background: #1a3a3a; color: white; }.ap-status { padding: 5px 10px; border-radius: 999px; background: rgba(255,255,255,.46); color: #735226; font-size: 12px; font-weight: 600; }.ap-status--ok { color: #176542; }.ap-profile { gap: 14px; margin-top: 42px; }.ap-avatar { width: 58px; height: 58px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,.74); display: grid; place-items: center; font-size: 22px; font-weight: 700; }.ap-avatar--wechat { color: #078849; }.ap-avatar--toutiao { color: #c73a30; }.ap-avatar--xiaohongshu { color: #3f326a; }.ap-profile h2 { max-width: 300px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 21px; letter-spacing: -.5px; }.ap-profile p { margin: 5px 0 0; color: #4a4034; font-size: 13px; }.ap-metric { display: flex; gap: 10px; align-items: center; margin: 37px 0 18px; }.ap-metric strong, .ap-stat-grid strong { display: block; font-size: 32px; font-weight: 500; letter-spacing: -1px; line-height: 1; }.ap-metric span, .ap-stat-grid span { display: block; margin-top: 5px; color: #51483d; font-size: 12px; }.ap-stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 37px 0 18px; }.ap-stat-grid > div { padding: 14px 10px; border-radius: 14px; background: rgba(255,255,255,.32); }.ap-stat-grid strong { font-size: 24px; }.ap-limited, .ap-error { margin: 0; font-size: 12px; line-height: 1.5; }.ap-limited { color: #705c30; }.ap-error { color: #a12821; }.ap-actions { gap: 8px; margin-top: auto; padding-top: 24px; }.ap-btn { height: 40px; padding: 0 15px; border-radius: 12px; border: 0; display: inline-flex; align-items: center; justify-content: center; gap: 7px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }.ap-btn:disabled { opacity: .65; cursor: wait; }.ap-btn--dark { background: #0a0a0a; color: white; width: max-content; }.ap-btn--secondary { background: rgba(255,255,255,.7); color: #0a0a0a; }.ap-icon-btn { width: 40px; height: 40px; padding: 0; }.ap-actions .ap-icon-btn { background: rgba(255,255,255,.5); }.ap-bind-form { display: flex; flex: 1; flex-direction: column; gap: 12px; margin-top: 32px; }.ap-bind-form p { min-height: 60px; margin: 0 0 4px; color: #4b4239; font-size: 14px; line-height: 1.55; }.ap-bind-form input, .ap-bind-form textarea { width: 100%; box-sizing: border-box; border: 1px solid rgba(10,10,10,.17); border-radius: 12px; background: rgba(255,255,255,.72); color: #0a0a0a; font: inherit; font-size: 13px; outline: none; }.ap-bind-form input { height: 42px; padding: 0 13px; }.ap-bind-form textarea { padding: 11px 13px; resize: vertical; }.ap-password { position: relative; }.ap-password input { padding-right: 43px; }.ap-password button { position: absolute; right: 2px; top: 2px; height: 38px; width: 38px; border: 0; background: transparent; color: #655a4e; cursor: pointer; }.ap-bind-form > a { display: inline-flex; width: max-content; align-items: center; gap: 5px; margin-top: auto; color: #302820; font-size: 12px; font-weight: 600; }.ap-spin { animation: ap-spin .85s linear infinite; }@keyframes ap-spin { to { transform: rotate(360deg); } }
-.ap-writing-profile { margin: 0 0 24px; padding: 28px 30px; border: 1px solid var(--color-hairline, #e5e5e5); border-radius: 24px; background: #fff; }
-.ap-writing-profile-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
-.ap-writing-profile-head h2 { margin: 0; font-size: 24px; }
-.ap-writing-profile-head p:last-child { margin: 8px 0 0; color: var(--color-muted, #6a6a6a); font-size: 13px; }
-.ap-writing-profile-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 24px; }
-.ap-writing-profile-grid label { display: grid; gap: 7px; }
-.ap-writing-profile-grid label > span, .ap-platform-defaults > span { font-size: 12px; font-weight: 700; color: #4b5563; }
-.ap-writing-profile-grid input, .ap-writing-profile-grid textarea { width: 100%; box-sizing: border-box; padding: 11px 13px; border: 1px solid #ddd; border-radius: 10px; background: #fafafa; color: #111; font: inherit; font-size: 13px; resize: vertical; }
-.ap-writing-profile-wide { grid-column: 1 / -1; }
-.ap-platform-defaults { display: flex; align-items: center; gap: 8px; margin-top: 18px; }
-.ap-platform-defaults button { padding: 7px 11px; border: 1px solid #d8d8d8; border-radius: 999px; background: white; color: #555; cursor: pointer; }
-.ap-platform-defaults button.active { border-color: #1a3a3a; background: #1a3a3a; color: white; }
-@media (max-width: 760px) { .ap-header-note { display: none; }.ap-content { padding: 44px 16px 64px; }.ap-intro { display: block; }.ap-summary { margin-top: 28px; width: 140px; }.ap-writing-profile { padding: 22px 18px; }.ap-writing-profile-head { display: grid; }.ap-writing-profile-grid { grid-template-columns: 1fr; }.ap-writing-profile-wide { grid-column: auto; }.ap-grid { grid-template-columns: 1fr; }.ap-card { min-height: 400px; padding: 24px; } }
+.ap-root {
+  min-height: 100dvh;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.ap-header-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.ap-content {
+  width: min(1040px, calc(100% - 64px));
+  margin: 0 auto;
+  padding: 48px 0 96px;
+}
+
+.ap-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 32px;
+  margin-bottom: 28px;
+}
+
+.ap-heading h1 {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.ap-heading p {
+  margin: 8px 0 0;
+  color: var(--color-muted);
+  font-size: 14px;
+}
+
+.ap-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.ap-summary strong {
+  color: var(--color-brand-teal);
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.ap-summary span {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.ap-tabs {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--color-surface-strong);
+}
+
+.ap-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ap-tabs button[aria-selected="true"] {
+  border-bottom-color: var(--color-brand-teal);
+  color: var(--color-brand-teal);
+  font-weight: 600;
+}
+
+.ap-platform-list {
+  border-top: 1px solid var(--color-surface-strong);
+}
+
+.ap-platform-row {
+  padding: 28px 0;
+  border-bottom: 1px solid var(--color-surface-strong);
+}
+
+.ap-platform-head {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.ap-platform-mark {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--rounded-xs);
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ap-platform-mark--wechat { background: #078a52; }
+.ap-platform-mark--toutiao { background: #d9463e; }
+.ap-platform-mark--xiaohongshu { background: #a61d3d; }
+
+.ap-platform-head h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.ap-platform-head p {
+  margin: 4px 0 0;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.ap-status {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ap-status--ok {
+  color: #176542;
+}
+
+.ap-capability-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 22px 0 0 52px;
+  border: 1px solid var(--color-surface-strong);
+  border-radius: var(--rounded-sm);
+  background: var(--color-surface-soft);
+  overflow: hidden;
+}
+
+.ap-capability {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 214px;
+  padding: 20px;
+}
+
+.ap-capability + .ap-capability {
+  border-left: 1px solid var(--color-surface-strong);
+}
+
+.ap-capability--single {
+  min-height: 0;
+  margin: 18px 0 0 52px;
+  padding: 20px;
+  border: 1px solid var(--color-surface-strong);
+  border-radius: var(--rounded-sm);
+  background: var(--color-surface-soft);
+}
+
+.ap-capability-title {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 18px;
+}
+
+.ap-capability-title > svg {
+  color: var(--color-brand-teal);
+}
+
+.ap-capability-title h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ap-capability-title p {
+  margin: 3px 0 0;
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.ap-capability-title > span {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.ap-capability-title > span.ready {
+  color: #176542;
+  font-weight: 600;
+}
+
+.ap-account-brief {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ap-account-brief--plain {
+  align-items: flex-start;
+  color: var(--color-brand-teal);
+}
+
+.ap-account-brief > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ap-account-brief strong,
+.ap-account-brief span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ap-account-brief strong {
+  color: var(--color-ink);
+  font-size: 13px;
+}
+
+.ap-account-brief span {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.ap-avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--color-canvas);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.ap-avatar--wechat { color: #078849; }
+.ap-avatar--toutiao { color: #c73a30; }
+.ap-avatar--xiaohongshu { color: #7f1732; }
+
+.ap-bind-form {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ap-bind-form--horizontal {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(220px, .8fr);
+  gap: 20px;
+}
+
+.ap-bind-form label {
+  display: grid;
+  gap: 7px;
+}
+
+.ap-bind-form label > span {
+  color: var(--color-body);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ap-bind-form input,
+.ap-bind-form textarea,
+.ap-writing-profile-grid input,
+.ap-writing-profile-grid textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--color-surface-strong);
+  border-radius: var(--rounded-xs);
+  outline: none;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.ap-bind-form input,
+.ap-writing-profile-grid input {
+  height: 42px;
+  padding: 0 12px;
+}
+
+.ap-bind-form textarea,
+.ap-writing-profile-grid textarea {
+  padding: 11px 12px;
+  resize: vertical;
+}
+
+.ap-bind-form :is(input, textarea):focus,
+.ap-writing-profile-grid :is(input, textarea):focus {
+  border-color: var(--color-brand-teal);
+  box-shadow: 0 0 0 3px rgb(26 58 58 / 8%);
+}
+
+.ap-password {
+  position: relative;
+}
+
+.ap-password input {
+  padding-right: 44px;
+}
+
+.ap-password button {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.ap-bind-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.ap-bind-side > p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.ap-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+.ap-actions a,
+.ap-bind-side > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--color-brand-teal);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ap-btn,
+.ap-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  border-radius: var(--rounded-xs);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ap-btn {
+  padding: 0 14px;
+  border: 0;
+}
+
+.ap-btn--dark {
+  background: var(--color-brand-teal);
+  color: var(--color-on-primary);
+}
+
+.ap-btn--secondary,
+.ap-icon-btn {
+  border: 1px solid var(--color-surface-strong);
+  background: var(--color-canvas);
+  color: var(--color-body);
+}
+
+.ap-icon-btn {
+  width: 40px;
+  padding: 0;
+}
+
+.ap-btn:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+
+.ap-error,
+.ap-limited {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ap-error { color: #9b1c1c; }
+.ap-limited { color: #7a5c00; }
+
+.ap-writing-profile {
+  padding-top: 4px;
+}
+
+.ap-writing-profile-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--color-surface-strong);
+}
+
+.ap-writing-profile-head h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.ap-writing-profile-head p {
+  margin: 7px 0 0;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.ap-writing-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  padding: 24px 0;
+}
+
+.ap-writing-profile-grid label {
+  display: grid;
+  gap: 7px;
+}
+
+.ap-writing-profile-grid label > span {
+  color: var(--color-body);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ap-writing-profile-wide {
+  grid-column: 1 / -1;
+}
+
+.ap-platform-defaults {
+  margin: 0;
+  padding: 22px 0 0;
+  border: 0;
+  border-top: 1px solid var(--color-surface-strong);
+}
+
+.ap-platform-defaults legend {
+  padding: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ap-platform-defaults p {
+  margin: 6px 0 14px;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.ap-platform-defaults > div {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: var(--rounded-xs);
+  background: var(--color-surface-card);
+}
+
+.ap-platform-defaults button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ap-platform-defaults button[aria-pressed="true"] {
+  background: var(--color-canvas);
+  color: var(--color-brand-teal);
+  box-shadow: 0 1px 3px rgb(26 58 58 / 10%);
+  font-weight: 600;
+}
+
+.ap-spin {
+  animation: ap-spin .85s linear infinite;
+}
+
+@keyframes ap-spin {
+  to { transform: rotate(360deg); }
+}
+
+.ap-root :is(button, a, input, textarea):focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+
+@media (max-width: 760px) {
+  .ap-header-note {
+    display: none;
+  }
+
+  .ap-content {
+    width: calc(100% - 32px);
+    padding: 32px 0 72px;
+  }
+
+  .ap-heading {
+    align-items: flex-start;
+  }
+
+  .ap-capability-grid {
+    grid-template-columns: 1fr;
+    margin-left: 0;
+  }
+
+  .ap-capability + .ap-capability {
+    border-top: 1px solid var(--color-surface-strong);
+    border-left: 0;
+  }
+
+  .ap-capability--single {
+    margin-left: 0;
+  }
+
+  .ap-bind-form--horizontal,
+  .ap-writing-profile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ap-writing-profile-wide {
+    grid-column: auto;
+  }
+
+  .ap-writing-profile-head {
+    flex-direction: column;
+  }
+
+  .ap-writing-profile-head .ap-btn {
+    width: 100%;
+  }
+
+  .ap-platform-defaults > div {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+}
+
+@media (max-width: 460px) {
+  .ap-heading {
+    display: block;
+  }
+
+  .ap-summary {
+    margin-top: 14px;
+  }
+
+  .ap-platform-head {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+
+  .ap-platform-head > .ap-status {
+    grid-column: 2;
+  }
+}

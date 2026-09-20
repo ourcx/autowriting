@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { toast } from '../../components/Toast/Toast'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { Zap, Save, Edit3, Palette, Settings, AlertTriangle, Plus, Trash2, Pencil, Sparkles, LayoutList, CheckCircle, ChevronRight, GripVertical, Send, User, ExternalLink, Newspaper, BookOpen, MessageCircle } from 'lucide-react'
+import { Zap, Save, Edit3, Palette, Settings, AlertTriangle, Plus, Trash2, Pencil, Sparkles, LayoutList, CheckCircle, ChevronRight, ChevronDown, GripVertical, User, Newspaper, BookOpen, MessageCircle, HelpCircle, Image, Link2, Link2Off } from 'lucide-react'
 import { useAIReadiness, fetchServerStatus } from '../../store/useConfigStore'
 import { useAuth } from '../../store/useAuth'
 import { useEditingActivity } from './useEditingActivity'
 import {
   fetchArticle,
+  fetchCreatorWritingProfile,
   generateArticleOutline,
   recordArticleWorkflowEvent,
   refineArticleMaterials,
@@ -41,6 +42,14 @@ import {
   type ArticleWorkflow,
   type ArticleWorkflowEvent,
 } from '../../../shared/articleWorkflow'
+import type { CandidatePlatform } from '../../../shared/generationCandidate'
+import {
+  hasToutiaoCookies,
+  hasXiaohongshuCookies,
+  loadWechatCredentials,
+} from '../../utils/accountBindings'
+import OnboardingGuide from '../../components/OnboardingGuide/OnboardingGuide'
+import { hasCompletedGuide, type GuidePage } from '../../utils/userExperience'
 
 type TabId = EditorTab
 
@@ -50,14 +59,20 @@ const PUBLISH_PLATFORMS = [
   { id: 'xiaohongshu', label: '小红书', icon: BookOpen },
 ] as const
 
-// 流程步骤定义（cover 的 check 在组件内动态注入）
-const BASE_FLOW_STEPS: { id: TabId; label: string; check: (d: ArticleData) => boolean }[] = [
-  { id: 'task',      label: '任务', check: d => d.task.trim().length >= 20 },
-  { id: 'materials', label: '素材', check: d => d.materials.trim().length >= 30 },
-  { id: 'article',   label: '写作', check: d => d.article.trim().length > 100 },
-  { id: 'analysis',  label: '审核', check: () => false },
-  { id: 'publish',   label: '发布', check: () => false },
-]
+const MAIN_FLOW_STEPS = [
+  { id: 'prepare', label: '准备主题与素材' },
+  { id: 'draft', label: '生成母稿' },
+  { id: 'review', label: '审核定稿' },
+  { id: 'publish', label: '选择平台发布' },
+] as const
+
+type MainFlowStep = typeof MAIN_FLOW_STEPS[number]['id']
+
+const FLOW_TAB: Record<Exclude<MainFlowStep, 'prepare'>, TabId> = {
+  draft: 'article',
+  review: 'analysis',
+  publish: 'publish',
+}
 
 export default function ArticleEditor() {
   const { articleId = '' } = useParams<{ articleId: string }>()
@@ -71,6 +86,9 @@ export default function ArticleEditor() {
   const savingRef = useRef(false)
   const [generateError, setGenerateError] = useState<string | null>(null)
   const [showGenerateModal, setShowGenerateModal] = useState(false)
+  const [defaultGenerationPlatform, setDefaultGenerationPlatform] = useState<CandidatePlatform>('wechat')
+  const [showGuide, setShowGuide] = useState(false)
+  const [guidePage, setGuidePage] = useState<GuidePage>('editor')
   const [editingTitle, setEditingTitle] = useState(false)
   // 封面是否已存在（从 localStorage 读取，CoverGenerator 生成/粘贴后更新）
   const [hasCover, setHasCover] = useState(false)
@@ -138,6 +156,15 @@ export default function ArticleEditor() {
 
   // 首次挂载时拉一次服务端状态
   useEffect(() => { fetchServerStatus() }, [])
+
+  useEffect(() => {
+    fetchCreatorWritingProfile()
+      .then(profile => {
+        const preferred = profile.defaultPlatforms.find(platform => platform === 'wechat' || platform === 'toutiao')
+        if (preferred) setDefaultGenerationPlatform(preferred)
+      })
+      .catch(() => {})
+  }, [])
 
   // ── 本地文章读写（local: 前缀） ───────────────────────────────────────────
   const isLocalArticle = articleId.startsWith('local:')
@@ -281,6 +308,16 @@ export default function ArticleEditor() {
   }, [articleId, fetchArticleData])
 
   useEffect(() => {
+    if (loading || !user || showGuide) return
+    const page: GuidePage = activeTab === 'publish' ? 'publish' : 'editor'
+    const isRealTaskEntry = page === 'publish' || (activeTab === 'task' && !data.task.trim())
+    if (isRealTaskEntry && !hasCompletedGuide(user.id, page)) {
+      setGuidePage(page)
+      setShowGuide(true)
+    }
+  }, [activeTab, data.task, loading, showGuide, user])
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault()
@@ -369,18 +406,86 @@ export default function ArticleEditor() {
   const bodyChanged = data.article !== savedArticle
   const reviewDone = Boolean(workflow.lastReviewedAt) && !bodyChanged
   const publishDone = Boolean(workflow.wechatDraftAt) && !bodyChanged
+  const generationPlatform: CandidatePlatform = activeTab === 'toutiao'
+    || (activeTab === 'publish' && publishPlatform === 'toutiao')
+    ? 'toutiao'
+    : activeTab === 'article'
+      ? 'wechat'
+      : defaultGenerationPlatform
+  const activeFlowStep: MainFlowStep | null = activeTab === 'task' || activeTab === 'materials'
+    ? 'prepare'
+    : activeTab === 'article'
+      ? 'draft'
+      : activeTab === 'analysis'
+        ? 'review'
+        : activeTab === 'publish' || activeTab === 'toutiao' || activeTab === 'xiaohongshu'
+          ? 'publish'
+          : null
+  const publishAccountConnected = publishPlatform === 'wechat'
+    ? Boolean(loadWechatCredentials())
+    : publishPlatform === 'toutiao'
+      ? hasToutiaoCookies()
+      : hasXiaohongshuCookies()
 
-  const nextAction = publishDone
-    ? { label: '查看微信草稿', action: () => navigate('/drafts') }
-    : reviewDone && data.article.trim().length > 0
-      ? { label: '下一步：预览并推送', action: () => void handlePreview() }
-      : data.article.trim().length > 100
-        ? { label: '下一步：审核内容', action: () => setActiveTab('analysis') }
-        : data.task.trim().length < 20
-          ? { label: '下一步：完善任务', action: () => setActiveTab('task') }
-          : data.materials.trim().length < 30
-            ? { label: '下一步：收集素材', action: () => setActiveTab('materials') }
-            : { label: '下一步：生成文章', action: handleGenerate }
+  const flowStepDone = (step: MainFlowStep) => {
+    if (step === 'prepare') return data.task.trim().length >= 20 && data.materials.trim().length >= 30
+    if (step === 'draft') return data.article.trim().length > 100
+    if (step === 'review') return reviewDone
+    return publishDone
+  }
+
+  const openFlowStep = (step: MainFlowStep) => {
+    if (step === 'prepare') {
+      setActiveTab(data.task.trim().length >= 20 ? 'materials' : 'task')
+      return
+    }
+    if (step === 'publish') {
+      void handlePreview()
+      return
+    }
+    setActiveTab(FLOW_TAB[step])
+  }
+
+  const nextActionLabel = activeTab === 'task'
+    ? '下一步：准备素材'
+    : activeTab === 'materials'
+      ? `生成${generationPlatform === 'wechat' ? '公众号母稿' : '今日头条版本'}`
+      : activeTab === 'article'
+        ? data.article.trim().length > 100 ? '下一步：审核定稿' : '生成公众号母稿'
+        : activeTab === 'analysis'
+          ? '下一步：选择平台发布'
+          : activeTab === 'toutiao'
+            ? data.articleToutiao.trim() ? '下一步：发布今日头条' : '生成今日头条版本'
+            : activeTab === 'xiaohongshu'
+              ? '下一步：发布小红书'
+              : ''
+  const nextActionDisabled = activeTab === 'task'
+    ? data.task.trim().length < 20
+    : activeTab === 'materials'
+      ? data.materials.trim().length < 30 || !apiKeyReady
+      : activeTab === 'article'
+        ? data.article.trim().length <= 100 && (!data.task.trim() || !data.materials.trim() || !apiKeyReady)
+        : activeTab === 'analysis' || activeTab === 'xiaohongshu'
+          ? !data.article.trim()
+          : activeTab === 'toutiao'
+            ? data.articleToutiao.trim()
+              ? false
+              : !data.task.trim() || !data.materials.trim() || !apiKeyReady
+            : false
+
+  function handleNextAction() {
+    if (activeTab === 'task') setActiveTab('materials')
+    else if (activeTab === 'materials') handleGenerate()
+    else if (activeTab === 'article') {
+      if (data.article.trim().length > 100) setActiveTab('analysis')
+      else handleGenerate()
+    } else if (activeTab === 'analysis') void handlePreview()
+    else if (activeTab === 'toutiao') {
+      if (data.articleToutiao.trim()) void handlePreview('toutiao')
+      else handleGenerate()
+    }
+    else if (activeTab === 'xiaohongshu') void handlePreview('xiaohongshu')
+  }
 
   const publishContent = publishPlatform === 'toutiao' ? data.articleToutiao : data.article
   const publishTitle = publishPlatform === 'xiaohongshu' ? data.xiaohongshuTitle || articleTitle : articleTitle
@@ -454,7 +559,7 @@ export default function ArticleEditor() {
         actions={<div className="header-actions">
           <button
             className="btn btn-ghost"
-            onClick={() => navigate('/account')}
+            onClick={() => navigate('/account?tab=profile')}
             title="设置账号受众、语气和禁用表达"
             aria-label="写作档案"
           >
@@ -476,28 +581,20 @@ export default function ArticleEditor() {
           >
             <Palette size={16} />
           </button>
+          <button
+            className="btn btn-ghost"
+            onClick={() => {
+              setGuidePage(activeTab === 'publish' ? 'publish' : 'editor')
+              setShowGuide(true)
+            }}
+            title="查看当前页引导"
+            aria-label="查看当前页引导"
+          >
+            <HelpCircle size={16} />
+          </button>
           <button className="btn btn-secondary" title={saving ? '保存中' : '保存'} aria-label={saving ? '保存中' : '保存'} onClick={() => void handleSave()} disabled={saving || loading}>
             <Save size={20} />
           </button>
-          <button
-            className="btn btn-primary"
-            onClick={handleGenerate}
-            disabled={!data.task.trim() || !data.materials.trim() || saving}
-          >
-            <Zap size={20} />
-            生成文章
-          </button>
-          {data.article && (
-            <button
-              className="btn btn-success"
-              onClick={() => void handlePreview()}
-              title="在当前工作台预览并推送公众号草稿 (Cmd+P)"
-              disabled={saving}
-            >
-              <Send size={18} />
-              预览并推送
-            </button>
-          )}
         </div>}
       />
 
@@ -505,62 +602,60 @@ export default function ArticleEditor() {
       <div className="editor-container">
 
         {/* ── 流程进度条 ── */}
-        <div className="editor-flow-bar">
-          {BASE_FLOW_STEPS.map((step, idx) => {
-            const done = step.id === 'analysis'
-              ? reviewDone
-              : step.id === 'publish'
-                ? publishDone
-                : step.check(data)
-            const isActive = activeTab === step.id
-            return (
-              <button
-                key={step.id}
-                className={`flow-step ${isActive ? 'flow-step--active' : ''} ${done ? 'flow-step--done' : ''}`}
-                aria-current={isActive ? 'step' : undefined}
-                onClick={() => step.id === 'publish' ? void handlePreview() : setActiveTab(step.id)}
-                disabled={step.id === 'publish' && (!data.article.trim() || saving)}
-              >
-                <span className="flow-step-num">
-                  {done ? <CheckCircle size={13} /> : idx + 1}
-                </span>
-                <span className="flow-step-label">{step.label}</span>
-                {idx < BASE_FLOW_STEPS.length - 1 && <ChevronRight size={12} className="flow-step-sep" />}
-              </button>
-            )
-          })}
-          {/* 其余 Tab 以普通样式显示 */}
-          <div className="flow-extra-tabs">
-            <span className="flow-extra-label">平台与素材</span>
-            <button
-              className={`tab tab-extra ${activeTab === 'toutiao' ? 'active' : ''}`}
-              onClick={() => setActiveTab('toutiao')}
-            >
-              头条
-            </button>
-            <button
-              className={`tab tab-extra ${activeTab === 'xiaohongshu' ? 'active' : ''}`}
-              onClick={() => setActiveTab('xiaohongshu')}
-            >
-              小红书
-            </button>
-            <button
-              className={`tab tab-extra ${activeTab === 'cover' ? 'active' : ''}`}
-              onClick={() => setActiveTab('cover')}
-            >
-              {hasCover ? '封面 ✓' : '封面'}
-            </button>
-            <button
-              className={`tab tab-extra ${activeTab === 'library' ? 'active' : ''}`}
-              onClick={() => setActiveTab('library')}
-            >
-              图片库
-            </button>
+        <div className="editor-flow-wrap" data-onboarding="editor-workflow">
+          <div className="editor-flow-bar">
+            {MAIN_FLOW_STEPS.map((step, idx) => {
+              const done = flowStepDone(step.id)
+              const isActive = activeFlowStep === step.id
+              return (
+                <button
+                  key={step.id}
+                  className={`flow-step ${isActive ? 'flow-step--active' : ''} ${done ? 'flow-step--done' : ''}`}
+                  aria-current={isActive ? 'step' : undefined}
+                  onClick={() => openFlowStep(step.id)}
+                  disabled={step.id === 'publish' && (!data.article.trim() || saving)}
+                >
+                  <span className="flow-step-num">
+                    {done ? <CheckCircle size={13} /> : idx + 1}
+                  </span>
+                  <span className="flow-step-label">{step.label}</span>
+                  {idx < MAIN_FLOW_STEPS.length - 1 && <ChevronRight size={12} className="flow-step-sep" />}
+                </button>
+              )
+            })}
+
+            <div className="editor-secondary-nav">
+              <details className="editor-menu">
+                <summary><Newspaper size={15} />平台版本<ChevronDown size={13} /></summary>
+                <div className="editor-menu-popover">
+                  <button className={activeTab === 'toutiao' ? 'active' : ''} onClick={() => setActiveTab('toutiao')}>
+                    <Newspaper size={15} /><span><strong>今日头条版本</strong><small>{data.articleToutiao.trim() ? '正文已就绪' : '待生成'}</small></span>
+                  </button>
+                  <button className={activeTab === 'xiaohongshu' ? 'active' : ''} onClick={() => setActiveTab('xiaohongshu')}>
+                    <BookOpen size={15} /><span><strong>小红书版本</strong><small>复用母稿并设置标题</small></span>
+                  </button>
+                </div>
+              </details>
+              <details className="editor-menu">
+                <summary><Image size={15} />辅助工具<ChevronDown size={13} /></summary>
+                <div className="editor-menu-popover editor-menu-popover--right">
+                  <button className={activeTab === 'cover' ? 'active' : ''} onClick={() => setActiveTab('cover')}>
+                    <Image size={15} /><span><strong>封面</strong><small>{hasCover ? '已有封面' : '生成或上传封面'}</small></span>
+                  </button>
+                  <button className={activeTab === 'library' ? 'active' : ''} onClick={() => setActiveTab('library')}>
+                    <LayoutList size={15} /><span><strong>图片库</strong><small>管理正文图片</small></span>
+                  </button>
+                </div>
+              </details>
+            </div>
           </div>
-          <button className="flow-next-action" onClick={nextAction.action} disabled={saving}>
-            {nextAction.label}
-            <ChevronRight size={14} />
-          </button>
+          {activeFlowStep === 'prepare' && (
+            <div className="editor-prepare-tabs" data-onboarding="editor-prepare">
+              <span>准备内容</span>
+              <button aria-pressed={activeTab === 'task'} onClick={() => setActiveTab('task')}>任务</button>
+              <button aria-pressed={activeTab === 'materials'} onClick={() => setActiveTab('materials')}>素材</button>
+            </div>
+          )}
         </div>
 
         <div className="editor-tabs" style={{ display: 'none' }}>
@@ -749,9 +844,6 @@ export default function ArticleEditor() {
             <div className="editor-panel">
               <div className="platform-edit-head">
                 <div className="editor-platform-label editor-platform-label--toutiao">今日头条版本</div>
-                <button className="btn btn-primary" disabled={!data.articleToutiao.trim() || saving} onClick={() => void handlePreview('toutiao')}>
-                  <Send size={16} />预览并发布头条
-                </button>
               </div>
               <PlatformVersionSummary source={data.article} target={data.articleToutiao} platform="toutiao" />
               <MarkdownEditor
@@ -768,9 +860,6 @@ export default function ArticleEditor() {
             <div className="editor-panel editor-panel--xiaohongshu">
               <div className="platform-edit-head">
                 <div className="editor-platform-label editor-platform-label--xiaohongshu">小红书长文</div>
-                <button className="btn btn-primary" disabled={!data.article.trim() || saving} onClick={() => void handlePreview('xiaohongshu')}>
-                  <Send size={16} />预览并发布小红书
-                </button>
               </div>
               <div className="xiaohongshu-title-card">
                 <div>
@@ -818,13 +907,13 @@ export default function ArticleEditor() {
                   <h3>{publishPlatform === 'wechat' ? '公众号预览与推送' : `${publishPlatform === 'toutiao' ? '今日头条' : '小红书'}预览与发布`}</h3>
                   {publishDone && <p><CheckCircle size={13} /> 已推送微信草稿</p>}
                 </div>
-                <button className="btn btn-secondary btn-small" onClick={async () => {
-                  if (await handleSave()) navigate(`/preview/${encodeURIComponent(articleId)}?platform=${publishPlatform}`)
-                }} disabled={saving} title="打开独立预览" aria-label="打开独立预览">
-                  <ExternalLink size={16} />
-                </button>
+                <div className={`publish-account-status ${publishAccountConnected ? 'is-ready' : ''}`} data-onboarding="publish-account-status">
+                  {publishAccountConnected ? <Link2 size={15} /> : <Link2Off size={15} />}
+                  <span>{publishAccountConnected ? '账号已连接' : '账号未连接'}</span>
+                  <button onClick={() => navigate('/account')}>{publishAccountConnected ? '管理' : '去连接'}</button>
+                </div>
               </div>
-              <div className="publish-platforms" role="group" aria-label="发布平台">
+              <div className="publish-platforms" role="group" aria-label="发布平台" data-onboarding="publish-platforms">
                 {PUBLISH_PLATFORMS.map(platform => (
                   <button key={platform.id} className={`publish-platform publish-platform--${platform.id}`} aria-pressed={publishPlatform === platform.id} onClick={() => selectPublishPlatform(platform.id)}>
                     <platform.icon size={18} />
@@ -833,7 +922,7 @@ export default function ArticleEditor() {
                   </button>
                 ))}
               </div>
-              <div className="publish-workbench-body">
+              <div className="publish-workbench-body" data-onboarding="publish-workbench">
                 {publishContent.trim() ? <WeChatRenderer
                   content={publishContent}
                   title={publishTitle}
@@ -871,6 +960,19 @@ export default function ArticleEditor() {
             </div>
           )}
         </div>
+        {nextActionLabel && (
+          <div className="editor-next-dock">
+            <button
+              className="flow-next-action"
+              onClick={handleNextAction}
+              disabled={saving || nextActionDisabled}
+              data-onboarding="next-action"
+            >
+              {nextActionLabel}
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
       </div>
 
       {showGenerateModal && (
@@ -880,6 +982,7 @@ export default function ArticleEditor() {
           materials={data.materials}
           sourceArticle={data.article}
           aiConfig={aiConfig as unknown as Record<string, unknown>}
+          initialPlatform={generationPlatform}
           onComplete={handleGenerateComplete}
           onClose={() => setShowGenerateModal(false)}
         />
@@ -891,6 +994,9 @@ export default function ArticleEditor() {
           onClose={() => setShowTemplateModal(false)}
           onSaved={() => reloadTemplates()}
         />
+      )}
+      {showGuide && user && (
+        <OnboardingGuide page={guidePage} userId={user.id} run={showGuide} onClose={() => setShowGuide(false)} />
       )}
     </div>
   )

@@ -1,0 +1,484 @@
+.fsp-root {
+  min-height: 100dvh;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+.fsp-shell {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 760px);
+  justify-content: center;
+  gap: 56px;
+  padding: 64px 32px 96px;
+}
+
+.fsp-progress {
+  align-self: start;
+  position: sticky;
+  top: 88px;
+}
+
+.fsp-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--color-surface-strong);
+}
+
+.fsp-brand-mark {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--rounded-xs);
+  background: var(--color-brand-teal);
+  color: var(--color-brand-ochre);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.fsp-brand div,
+.fsp-progress li div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.fsp-brand strong,
+.fsp-progress li strong {
+  font-size: 13px;
+}
+
+.fsp-brand span:last-child,
+.fsp-progress li small {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.fsp-progress ol {
+  display: grid;
+  gap: 8px;
+  margin: 24px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fsp-progress li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px;
+  color: var(--color-muted);
+}
+
+.fsp-progress li > span {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--color-surface-strong);
+  border-radius: 50%;
+  background: var(--color-canvas);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.fsp-progress li.active {
+  color: var(--color-ink);
+}
+
+.fsp-progress li.active > span {
+  border-color: var(--color-brand-teal);
+  background: var(--color-brand-teal);
+  color: var(--color-on-primary);
+}
+
+.fsp-progress li.complete > span {
+  border-color: var(--color-brand-mint);
+  background: var(--color-brand-mint);
+  color: var(--color-brand-teal);
+}
+
+.fsp-progress > p {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.fsp-progress > p svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--color-brand-teal);
+}
+
+.fsp-content {
+  min-width: 0;
+}
+
+.fsp-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.fsp-panel > header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--color-surface-strong);
+}
+
+.fsp-section-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--rounded-xs);
+  background: var(--color-brand-mint);
+  color: var(--color-brand-teal);
+}
+
+.fsp-panel header p {
+  margin: 0 0 6px;
+  color: var(--color-brand-teal);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.fsp-panel header h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+.fsp-panel header div > span {
+  display: block;
+  margin-top: 8px;
+  color: var(--color-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.fsp-provider-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.fsp-provider-options button {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 76px;
+  padding: 14px;
+  border: 1px solid var(--color-surface-strong);
+  border-radius: var(--rounded-xs);
+  background: var(--color-canvas);
+  color: var(--color-body);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fsp-provider-options button:hover {
+  border-color: var(--color-brand-mint);
+  background: var(--color-surface-soft);
+}
+
+.fsp-provider-options button[aria-pressed="true"] {
+  border-color: var(--color-brand-teal);
+  box-shadow: inset 3px 0 var(--color-brand-teal);
+  background: color-mix(in srgb, var(--color-brand-mint) 22%, var(--color-canvas));
+}
+
+.fsp-provider-options strong {
+  color: var(--color-ink);
+  font-size: 13px;
+}
+
+.fsp-provider-options span {
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.fsp-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 18px;
+}
+
+.fsp-form-grid label {
+  display: grid;
+  gap: 7px;
+}
+
+.fsp-form-grid label > span {
+  color: var(--color-body);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.fsp-form-grid input {
+  width: 100%;
+  height: 44px;
+  box-sizing: border-box;
+  padding: 0 13px;
+  border: 1px solid var(--color-surface-strong);
+  border-radius: var(--rounded-xs);
+  outline: none;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.fsp-form-grid input:focus {
+  border-color: var(--color-brand-teal);
+  box-shadow: 0 0 0 3px rgb(26 58 58 / 8%);
+}
+
+.fsp-form-grid input:disabled {
+  color: var(--color-muted);
+  background: var(--color-surface-soft);
+}
+
+.fsp-wide {
+  grid-column: 1 / -1;
+}
+
+.fsp-secret {
+  position: relative;
+}
+
+.fsp-secret input {
+  padding-right: 46px;
+}
+
+.fsp-secret button {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.fsp-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 13px;
+  border-left: 3px solid;
+  background: var(--color-surface-soft);
+  font-size: 13px;
+}
+
+.fsp-result--ok {
+  border-color: var(--color-success);
+  color: #176542;
+}
+
+.fsp-result--error {
+  border-color: var(--color-error);
+  color: #9b1c1c;
+}
+
+.fsp-account-list {
+  border-top: 1px solid var(--color-surface-strong);
+}
+
+.fsp-account-row {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 76px;
+  border-bottom: 1px solid var(--color-surface-strong);
+}
+
+.fsp-platform-mark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--rounded-xs);
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.fsp-platform-mark--wechat { background: #078a52; }
+.fsp-platform-mark--toutiao { background: #d9463e; }
+.fsp-platform-mark--xiaohongshu { background: #a61d3d; }
+
+.fsp-account-row div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fsp-account-row strong {
+  font-size: 14px;
+}
+
+.fsp-account-row div span {
+  color: var(--color-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.fsp-account-row > span:last-child {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.fsp-account-row > span.connected {
+  color: #176542;
+  font-weight: 600;
+}
+
+.fsp-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.fsp-actions > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: auto;
+  color: var(--color-brand-teal);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.fsp-primary,
+.fsp-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: var(--rounded-xs);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.fsp-primary {
+  border: 0;
+  background: var(--color-brand-teal);
+  color: var(--color-on-primary);
+}
+
+.fsp-primary:hover:not(:disabled) {
+  background: var(--color-surface-dark-elevated);
+}
+
+.fsp-primary:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+
+.fsp-secondary {
+  border: 1px solid var(--color-surface-strong);
+  background: var(--color-canvas);
+  color: var(--color-body);
+}
+
+.fsp-secondary:hover {
+  background: var(--color-surface-soft);
+}
+
+.fsp-spin {
+  animation: fsp-spin .8s linear infinite;
+}
+
+@keyframes fsp-spin {
+  to { transform: rotate(360deg); }
+}
+
+.fsp-root :is(button, input, a):focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+
+@media (max-width: 760px) {
+  .fsp-shell {
+    grid-template-columns: 1fr;
+    gap: 32px;
+    padding: 28px 16px 96px;
+  }
+
+  .fsp-progress {
+    position: static;
+  }
+
+  .fsp-progress ol {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fsp-progress > p {
+    display: none;
+  }
+
+  .fsp-provider-options {
+    grid-template-columns: 1fr;
+  }
+
+  .fsp-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .fsp-wide {
+    grid-column: auto;
+  }
+
+  .fsp-panel header h1 {
+    font-size: 24px;
+  }
+
+  .fsp-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .fsp-actions > a {
+    align-self: center;
+    margin: 6px 0 0;
+  }
+
+  .fsp-primary,
+  .fsp-secondary {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fsp-spin {
+    animation: none;
+  }
+}

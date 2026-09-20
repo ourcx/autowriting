@@ -1,8 +1,8 @@
 import { FormEvent, useCallback, useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import {
-  Eye, EyeOff, ExternalLink, Link2, Link2Off,
-  RefreshCw, ShieldCheck, Users,
+  BarChart3, BookOpen, Edit3, Eye, EyeOff, ExternalLink, Link2, Link2Off,
+  Newspaper, RefreshCw, ShieldCheck,
 } from "lucide-react"
 import PageHeader from "../../components/PageHeader/PageHeader"
 import {
@@ -40,6 +40,7 @@ function AccountAvatar({ name, imageUrl, platform }: { name: string; imageUrl: s
 
 export default function AccountPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { user } = useAuth()
   const [wechatAccount, setWechatAccount] = useState<WechatAccount | null>(null)
   const [toutiaoAccount, setToutiaoAccount] = useState<ToutiaoAccount | null>(null)
@@ -115,13 +116,8 @@ export default function AccountPage() {
     setWritingProfile(previous => ({ ...previous, [field]: value }))
   }
 
-  function toggleDefaultPlatform(platform: PublishingPlatform) {
-    setWritingProfile(previous => {
-      const selected = previous.defaultPlatforms.includes(platform)
-        ? previous.defaultPlatforms.filter(item => item !== platform)
-        : [...previous.defaultPlatforms, platform]
-      return { ...previous, defaultPlatforms: selected.length ? selected : ["wechat"] }
-    })
+  function selectDefaultPlatform(platform: PublishingPlatform) {
+    setWritingProfile(previous => ({ ...previous, defaultPlatforms: [platform] }))
   }
 
   async function saveWritingProfile() {
@@ -256,190 +252,231 @@ export default function AccountPage() {
     setWechatAnalyticsError("")
   }
 
+  const activeTab = searchParams.get("tab") === "profile" ? "profile" : "connections"
+  const connectedPlatformCount = Number(wechatBound || wechatAnalyticsBound)
+    + Number(toutiaoBound)
+    + Number(xiaohongshuBound)
+  const fromSetup = searchParams.get("from") === "setup"
+  const changeTab = (tab: "connections" | "profile") => {
+    const next = new URLSearchParams(searchParams)
+    if (tab === "profile") next.set("tab", "profile")
+    else next.delete("tab")
+    setSearchParams(next, { replace: true })
+  }
+
   return (
     <main className="ap-root">
       <PageHeader
-        title="用户页"
-        subtitle="管理内容平台连接与账号状态"
-        backLabel="返回工作台"
-        onBack={() => navigate("/")}
+        title="账号与发布"
+        subtitle="管理平台连接、发布能力和写作偏好"
+        backLabel={fromSetup ? "返回首次设置" : "返回工作台"}
+        onBack={() => navigate(fromSetup ? "/setup" : "/")}
         actions={<div className="ap-header-note"><ShieldCheck size={14} /> 凭据仅保存在当前浏览器</div>}
       />
 
       <section className="ap-content">
-        <div className="ap-intro">
+        <div className="ap-heading">
           <div>
-            <p className="ap-eyebrow">CREATOR ACCOUNTS</p>
-            <h1>一个地方，查看你的内容账号</h1>
-            <p>绑定公众号与今日头条后，快速掌握账号状态和创作数据。</p>
+            <h1>{activeTab === "connections" ? "平台连接" : "写作档案"}</h1>
+            <p>{activeTab === "connections"
+              ? "按平台管理发布能力，需要哪项就连接哪项。"
+              : "这些偏好会作为生成参考，单篇任务要求仍然优先。"}</p>
           </div>
-          <div className="ap-summary">
-            <span>已连接</span>
-            <strong>{Number(wechatBound) + Number(toutiaoBound) + Number(xiaohongshuBound)}<small>/3</small></strong>
-            <span>内容平台</span>
-          </div>
+          {activeTab === "connections" && <div className="ap-summary"><strong>{connectedPlatformCount}/3</strong><span>平台已连接</span></div>}
         </div>
 
-        <section className="ap-writing-profile" aria-label="账号写作档案">
-          <div className="ap-writing-profile-head">
-            <div>
-              <p className="ap-eyebrow">WRITING PROFILE</p>
-              <h2>账号写作档案</h2>
-              <p>设置一次，生成公众号和平台版本时自动使用；单篇任务要求仍然优先。</p>
-            </div>
-            <button className="ap-btn ap-btn--dark" onClick={() => void saveWritingProfile()} disabled={profileLoading || profileSaving}>
-              {profileSaving ? "保存中…" : "保存写作档案"}
-            </button>
-          </div>
-          <div className="ap-writing-profile-grid">
-            <label><span>目标读者</span><input value={writingProfile.audience} onChange={event => updateProfile("audience", event.target.value)} placeholder="如：广州大学城学生和年轻教师" /></label>
-            <label><span>内容立场</span><input value={writingProfile.stance} onChange={event => updateProfile("stance", event.target.value)} placeholder="如：实用、克制，明确区分事实和观点" /></label>
-            <label><span>常用语气</span><input value={writingProfile.tone} onChange={event => updateProfile("tone", event.target.value)} placeholder="如：像熟悉校园的学长，直接但不油腻" /></label>
-            <label><span>视觉倾向</span><input value={writingProfile.visualStyle} onChange={event => updateProfile("visualStyle", event.target.value)} placeholder="如：阅读型、少装饰、青绿色" /></label>
-            <label className="ap-writing-profile-wide"><span>常用结构</span><textarea value={writingProfile.preferredStructure} onChange={event => updateProfile("preferredStructure", event.target.value)} rows={2} placeholder="如：场景开头 → 背景解释 → 分步建议 → 风险提醒 → 结论" /></label>
-            <label className="ap-writing-profile-wide"><span>禁用表达</span><input value={writingProfile.bannedPhrases.join("、")} onChange={event => updateProfile("bannedPhrases", event.target.value.split(/[，,、]/).map(item => item.trim()).filter(Boolean))} placeholder="用顿号分隔，如：众所周知、赋能、闭眼冲" /></label>
-          </div>
-          <div className="ap-platform-defaults">
-            <span>默认平台</span>
-            {([['wechat', '公众号'], ['toutiao', '今日头条'], ['xiaohongshu', '小红书']] as Array<[PublishingPlatform, string]>).map(([platform, label]) => (
-              <button key={platform} className={writingProfile.defaultPlatforms.includes(platform) ? "active" : ""} onClick={() => toggleDefaultPlatform(platform)}>{label}</button>
-            ))}
-          </div>
-        </section>
-
-        <div className="ap-grid">
-          <article className="ap-card ap-card--wechat">
-            <div className="ap-card-top">
-              <div className="ap-platform"><span className="ap-platform-mark ap-platform-mark--wechat">微</span><span>微信公众号</span></div>
-              <span className={`ap-status ${wechatBound ? "ap-status--ok" : ""}`}>{wechatBound ? "已绑定" : "未绑定"}</span>
-            </div>
-            {wechatBound ? (
-              <>
-                <div className="ap-profile">
-                  <AccountAvatar name={wechatAccount?.nickname ?? "公众号"} imageUrl={wechatAccount?.headimgurl ?? null} platform="wechat" />
-                  <div><h2>{wechatLoading ? "正在同步账号…" : wechatAccount?.nickname ?? "公众号账号"}</h2><p>{wechatAccount?.principal ?? "已连接公众号"}</p></div>
-                </div>
-                <div className="ap-metric">
-                  <Users size={18} /><div><strong>{formatNumber(wechatAccount?.fans_count ?? null)}</strong><span>关注人数</span></div>
-                </div>
-                {wechatAccount?.fans_limited || wechatAccount?.limited ? <p className="ap-limited">当前账号接口权限有限，部分数据暂不可获取。</p> : null}
-                {wechatError ? <p className="ap-error">{wechatError}</p> : null}
-                <div className="ap-actions">
-                  <button className="ap-btn ap-btn--secondary" onClick={() => void refreshWechat()} disabled={wechatLoading}><RefreshCw size={15} className={wechatLoading ? "ap-spin" : ""} /> 刷新数据</button>
-                  <button className="ap-icon-btn" onClick={unbindWechat} title="解绑公众号"><Link2Off size={16} /></button>
-                </div>
-              </>
-            ) : (
-              <form className="ap-bind-form" onSubmit={bindWechat}>
-                <p>使用公众号 AppID 与 AppSecret 验证并连接账号。</p>
-                <input value={appId} onChange={event => { setAppId(event.target.value); setWechatError("") }} placeholder="AppID" autoComplete="off" />
-                <div className="ap-password"><input type={showSecret ? "text" : "password"} value={appSecret} onChange={event => { setAppSecret(event.target.value); setWechatError("") }} placeholder="AppSecret" autoComplete="new-password" /><button type="button" onClick={() => setShowSecret(value => !value)}>{showSecret ? <EyeOff size={16} /> : <Eye size={16} />}</button></div>
-                {wechatError ? <p className="ap-error">{wechatError}</p> : null}
-                <button className="ap-btn ap-btn--dark" disabled={bindingWechat}>{bindingWechat ? "验证中…" : <><Link2 size={15} />绑定公众号</>}</button>
-                <a href="https://developers.weixin.qq.com/console/product/mp" target="_blank" rel="noreferrer">前往微信公众平台 <ExternalLink size={13} /></a>
-              </form>
-            )}
-          </article>
-
-          <article className="ap-card ap-card--toutiao">
-            <div className="ap-card-top">
-              <div className="ap-platform"><span className="ap-platform-mark ap-platform-mark--toutiao">头</span><span>今日头条</span></div>
-              <span className={`ap-status ${toutiaoBound ? "ap-status--ok" : ""}`}>{toutiaoBound ? "已绑定" : "未绑定"}</span>
-            </div>
-            {toutiaoBound ? (
-              <>
-                <div className="ap-profile">
-                  <AccountAvatar name={toutiaoAccount?.nickname ?? "头条号"} imageUrl={toutiaoAccount?.avatar_url ?? null} platform="toutiao" />
-                  <div><h2>{toutiaoLoading ? "正在同步账号…" : toutiaoAccount?.nickname ?? "今日头条账号"}</h2><p>{toutiaoAccount?.description || "已连接今日头条创作中心"}</p></div>
-                </div>
-                <div className="ap-stat-grid">
-                  <div><strong>{formatNumber(toutiaoAccount?.followers_count ?? null)}</strong><span>粉丝</span></div>
-                  <div><strong>{formatNumber(toutiaoAccount?.total_reads ?? null)}</strong><span>总阅读(播放)量</span></div>
-                  <div><strong>{formatNumber(toutiaoAccount?.total_income ?? null)}</strong><span>累计收益（元）</span></div>
-                </div>
-                {toutiaoAccount?.data_note ? <p className="ap-limited">{toutiaoAccount.data_note}</p> : null}
-                {toutiaoAccount?.cached ? <p className="ap-limited">已使用缓存数据，点击“刷新数据”可立即更新。</p> : null}
-                {toutiaoError ? <p className="ap-error">{toutiaoError}</p> : null}
-                <div className="ap-actions">
-                  <button className="ap-btn ap-btn--secondary" onClick={() => void refreshToutiao(true)} disabled={toutiaoLoading}><RefreshCw size={15} className={toutiaoLoading ? "ap-spin" : ""} /> 刷新数据</button>
-                  <a className="ap-icon-btn" href="https://mp.toutiao.com/profile_v4/index" target="_blank" rel="noreferrer" title="打开头条创作中心"><ExternalLink size={16} /></a>
-                  <button className="ap-icon-btn" onClick={unbindToutiao} title="解绑今日头条"><Link2Off size={16} /></button>
-                </div>
-              </>
-            ) : (
-              <form className="ap-bind-form" onSubmit={bindToutiao}>
-                <p>粘贴已登录头条创作中心浏览器导出的 Cookie JSON，用于读取账号数据及发布文章。</p>
-                <textarea value={cookies} onChange={event => { setCookies(event.target.value); setToutiaoError("") }} placeholder='[{"name":"sessionid","value":"…","domain":".toutiao.com"}]' rows={5} />
-                {toutiaoError ? <p className="ap-error">{toutiaoError}</p> : null}
-                <button className="ap-btn ap-btn--dark" disabled={bindingToutiao}>{bindingToutiao ? "验证中…" : <><Link2 size={15} />绑定今日头条</>}</button>
-                <a href="https://mp.toutiao.com/profile_v4/index" target="_blank" rel="noreferrer">打开头条创作中心 <ExternalLink size={13} /></a>
-              </form>
-            )}
-          </article>
-
-          <article className="ap-card ap-card--wechat-data">
-            <div className="ap-card-top">
-              <div className="ap-platform"><span className="ap-platform-mark ap-platform-mark--wechat">数</span><span>微信内容分析</span></div>
-              <span className={`ap-status ${wechatAnalyticsBound ? "ap-status--ok" : ""}`}>{wechatAnalyticsBound ? "已绑定" : "未绑定"}</span>
-            </div>
-            {wechatAnalyticsBound ? (
-              <>
-                <div className="ap-profile">
-                  <AccountAvatar name="微信数据" imageUrl={null} platform="wechat" />
-                  <div><h2>内容分析 Cookie</h2><p>用于自动读取文章表现，不影响 AppID 草稿推送</p></div>
-                </div>
-                <div className="ap-metric">
-                  <ShieldCheck size={18} /><div><strong>会话已就绪</strong><span>Cookie JSON 仅保存在当前浏览器</span></div>
-                </div>
-                <p className="ap-limited">看板刷新时才临时发送给后端，后端不会持久化 Cookie。登录失效后重新导出即可。</p>
-                <div className="ap-actions">
-                  <button className="ap-btn ap-btn--dark" onClick={() => navigate("/insights")}>打开数据看板</button>
-                  <button className="ap-icon-btn" onClick={unbindWechatAnalytics} title="解绑微信数据 Cookie"><Link2Off size={16} /></button>
-                </div>
-              </>
-            ) : (
-              <form className="ap-bind-form" onSubmit={bindWechatAnalytics}>
-                <p>粘贴已登录微信公众平台浏览器导出的 Cookie JSON。绑定时会立即读取一次内容分析，验证登录态。</p>
-                <textarea value={wechatAnalyticsCookies} onChange={event => { setWechatAnalyticsCookies(event.target.value); setWechatAnalyticsError("") }} placeholder='[{"name":"slave_sid","value":"…","domain":".mp.weixin.qq.com"}]' rows={5} />
-                {wechatAnalyticsError ? <p className="ap-error">{wechatAnalyticsError}</p> : null}
-                <button className="ap-btn ap-btn--dark" disabled={bindingWechatAnalytics}>{bindingWechatAnalytics ? "验证并同步中…" : <><Link2 size={15} />绑定微信数据</>}</button>
-                <a href="https://mp.weixin.qq.com" target="_blank" rel="noreferrer">打开微信公众平台 <ExternalLink size={13} /></a>
-              </form>
-            )}
-          </article>
-
-          <article className="ap-card ap-card--xiaohongshu">
-            <div className="ap-card-top">
-              <div className="ap-platform"><span className="ap-platform-mark ap-platform-mark--xiaohongshu">红</span><span>小红书</span></div>
-              <span className={`ap-status ${xiaohongshuBound ? "ap-status--ok" : ""}`}>{xiaohongshuBound ? "已绑定" : "未绑定"}</span>
-            </div>
-            {xiaohongshuBound ? (
-              <>
-                <div className="ap-profile">
-                  <AccountAvatar name="小红书" imageUrl={null} platform="xiaohongshu" />
-                  <div><h2>小红书创作服务平台</h2><p>已保存当前浏览器的登录会话</p></div>
-                </div>
-                <div className="ap-metric">
-                  <ShieldCheck size={18} /><div><strong>会话已就绪</strong><span>仅用于图文笔记发布</span></div>
-                </div>
-                <p className="ap-limited">发布前会校验登录态；遇到验证码或会话失效时需人工重新登录并更新 Cookie。</p>
-                <div className="ap-actions">
-                  <button className="ap-btn ap-btn--dark" onClick={() => navigate("/")}>在文章预览发布</button>
-                  <a className="ap-icon-btn" href="https://creator.xiaohongshu.com" target="_blank" rel="noreferrer" title="打开小红书创作服务平台"><ExternalLink size={16} /></a>
-                  <button className="ap-icon-btn" onClick={unbindXiaohongshu} title="解绑小红书"><Link2Off size={16} /></button>
-                </div>
-              </>
-            ) : (
-              <form className="ap-bind-form" onSubmit={bindXiaohongshu}>
-                <p>粘贴已登录小红书创作服务平台浏览器导出的 Cookie JSON，用于图文笔记发布。</p>
-                <textarea value={xiaohongshuCookies} onChange={event => { setXiaohongshuCookies(event.target.value); setXiaohongshuError("") }} placeholder='[{"name":"web_session","value":"…","domain":".xiaohongshu.com"}]' rows={5} />
-                {xiaohongshuError ? <p className="ap-error">{xiaohongshuError}</p> : null}
-                <button className="ap-btn ap-btn--dark"><Link2 size={15} />绑定小红书</button>
-                <a href="https://creator.xiaohongshu.com" target="_blank" rel="noreferrer">打开小红书创作服务平台 <ExternalLink size={13} /></a>
-              </form>
-            )}
-          </article>
+        <div className="ap-tabs" role="tablist" aria-label="账号设置">
+          <button role="tab" aria-selected={activeTab === "connections"} onClick={() => changeTab("connections")}>
+            <Link2 size={16} />账号连接
+          </button>
+          <button role="tab" aria-selected={activeTab === "profile"} onClick={() => changeTab("profile")}>
+            <Edit3 size={16} />写作档案
+          </button>
         </div>
+
+        {activeTab === "connections" ? (
+          <div className="ap-platform-list">
+            <article className="ap-platform-row ap-platform-row--wechat">
+              <header className="ap-platform-head">
+                <span className="ap-platform-mark ap-platform-mark--wechat">微</span>
+                <div>
+                  <h2>微信公众号</h2>
+                  <p>草稿发布与数据分析使用不同授权，可分别连接。</p>
+                </div>
+                <span className={`ap-status ${wechatBound || wechatAnalyticsBound ? "ap-status--ok" : ""}`}>
+                  {Number(wechatBound) + Number(wechatAnalyticsBound)}/2 项可用
+                </span>
+              </header>
+
+              <div className="ap-capability-grid">
+                <section className="ap-capability">
+                  <div className="ap-capability-title">
+                    <BookOpen size={17} />
+                    <div><h3>草稿发布</h3><p>需要 AppID 与 AppSecret</p></div>
+                    <span className={wechatBound ? "ready" : ""}>{wechatBound ? "已连接" : "未连接"}</span>
+                  </div>
+                  {wechatBound ? (
+                    <>
+                      <div className="ap-account-brief">
+                        <AccountAvatar name={wechatAccount?.nickname ?? "公众号"} imageUrl={wechatAccount?.headimgurl ?? null} platform="wechat" />
+                        <div>
+                          <strong>{wechatLoading ? "正在同步账号…" : wechatAccount?.nickname ?? "公众号账号"}</strong>
+                          <span>{wechatAccount?.principal ?? "已连接公众号"} · {formatNumber(wechatAccount?.fans_count ?? null)} 位关注者</span>
+                        </div>
+                      </div>
+                      {wechatAccount?.fans_limited || wechatAccount?.limited ? <p className="ap-limited">当前账号接口权限有限，部分数据暂不可获取。</p> : null}
+                      {wechatError ? <p className="ap-error">{wechatError}</p> : null}
+                      <div className="ap-actions">
+                        <button className="ap-btn ap-btn--secondary" onClick={() => void refreshWechat()} disabled={wechatLoading}><RefreshCw size={15} className={wechatLoading ? "ap-spin" : ""} />刷新</button>
+                        <button className="ap-icon-btn" onClick={unbindWechat} title="解绑公众号"><Link2Off size={16} /></button>
+                      </div>
+                    </>
+                  ) : (
+                    <form className="ap-bind-form" onSubmit={bindWechat}>
+                      <input value={appId} onChange={event => { setAppId(event.target.value); setWechatError("") }} placeholder="AppID" autoComplete="off" />
+                      <div className="ap-password"><input type={showSecret ? "text" : "password"} value={appSecret} onChange={event => { setAppSecret(event.target.value); setWechatError("") }} placeholder="AppSecret" autoComplete="new-password" /><button type="button" onClick={() => setShowSecret(value => !value)} title={showSecret ? "隐藏 AppSecret" : "显示 AppSecret"}>{showSecret ? <EyeOff size={16} /> : <Eye size={16} />}</button></div>
+                      {wechatError ? <p className="ap-error">{wechatError}</p> : null}
+                      <div className="ap-actions">
+                        <button className="ap-btn ap-btn--dark" disabled={bindingWechat}>{bindingWechat ? "验证中…" : <><Link2 size={15} />连接草稿发布</>}</button>
+                        <a href="https://developers.weixin.qq.com/console/product/mp" target="_blank" rel="noreferrer">获取凭据<ExternalLink size={13} /></a>
+                      </div>
+                    </form>
+                  )}
+                </section>
+
+                <section className="ap-capability">
+                  <div className="ap-capability-title">
+                    <BarChart3 size={17} />
+                    <div><h3>数据分析</h3><p>需要微信后台 Cookie JSON</p></div>
+                    <span className={wechatAnalyticsBound ? "ready" : ""}>{wechatAnalyticsBound ? "已连接" : "未连接"}</span>
+                  </div>
+                  {wechatAnalyticsBound ? (
+                    <>
+                      <div className="ap-account-brief ap-account-brief--plain">
+                        <ShieldCheck size={20} />
+                        <div><strong>内容分析会话已就绪</strong><span>刷新看板时临时使用，后端不会持久化 Cookie</span></div>
+                      </div>
+                      <div className="ap-actions">
+                        <button className="ap-btn ap-btn--dark" onClick={() => navigate("/insights")}>打开数据看板</button>
+                        <button className="ap-icon-btn" onClick={unbindWechatAnalytics} title="解绑微信数据 Cookie"><Link2Off size={16} /></button>
+                      </div>
+                    </>
+                  ) : (
+                    <form className="ap-bind-form" onSubmit={bindWechatAnalytics}>
+                      <textarea value={wechatAnalyticsCookies} onChange={event => { setWechatAnalyticsCookies(event.target.value); setWechatAnalyticsError("") }} placeholder='[{"name":"slave_sid","value":"…","domain":".mp.weixin.qq.com"}]' rows={4} />
+                      {wechatAnalyticsError ? <p className="ap-error">{wechatAnalyticsError}</p> : null}
+                      <div className="ap-actions">
+                        <button className="ap-btn ap-btn--dark" disabled={bindingWechatAnalytics}>{bindingWechatAnalytics ? "验证并同步中…" : <><Link2 size={15} />连接数据分析</>}</button>
+                        <a href="https://mp.weixin.qq.com" target="_blank" rel="noreferrer">打开微信后台<ExternalLink size={13} /></a>
+                      </div>
+                    </form>
+                  )}
+                </section>
+              </div>
+            </article>
+
+            <article className="ap-platform-row">
+              <header className="ap-platform-head">
+                <span className="ap-platform-mark ap-platform-mark--toutiao">头</span>
+                <div><h2>今日头条</h2><p>一份 Cookie 同时用于读取账号数据与发布文章。</p></div>
+                <span className={`ap-status ${toutiaoBound ? "ap-status--ok" : ""}`}>{toutiaoBound ? "已连接" : "未连接"}</span>
+              </header>
+              <section className="ap-capability ap-capability--single">
+                {toutiaoBound ? (
+                  <>
+                    <div className="ap-account-brief">
+                      <AccountAvatar name={toutiaoAccount?.nickname ?? "头条号"} imageUrl={toutiaoAccount?.avatar_url ?? null} platform="toutiao" />
+                      <div>
+                        <strong>{toutiaoLoading ? "正在同步账号…" : toutiaoAccount?.nickname ?? "今日头条账号"}</strong>
+                        <span>{formatNumber(toutiaoAccount?.followers_count ?? null)} 粉丝 · {formatNumber(toutiaoAccount?.total_reads ?? null)} 总阅读（播放）</span>
+                      </div>
+                    </div>
+                    {toutiaoAccount?.data_note ? <p className="ap-limited">{toutiaoAccount.data_note}</p> : null}
+                    {toutiaoAccount?.cached ? <p className="ap-limited">当前展示缓存数据，可手动刷新。</p> : null}
+                    {toutiaoError ? <p className="ap-error">{toutiaoError}</p> : null}
+                    <div className="ap-actions">
+                      <button className="ap-btn ap-btn--secondary" onClick={() => void refreshToutiao(true)} disabled={toutiaoLoading}><RefreshCw size={15} className={toutiaoLoading ? "ap-spin" : ""} />刷新</button>
+                      <a className="ap-icon-btn" href="https://mp.toutiao.com/profile_v4/index" target="_blank" rel="noreferrer" title="打开头条创作中心"><ExternalLink size={16} /></a>
+                      <button className="ap-icon-btn" onClick={unbindToutiao} title="解绑今日头条"><Link2Off size={16} /></button>
+                    </div>
+                  </>
+                ) : (
+                  <form className="ap-bind-form ap-bind-form--horizontal" onSubmit={bindToutiao}>
+                    <label><span>Cookie JSON</span><textarea value={cookies} onChange={event => { setCookies(event.target.value); setToutiaoError("") }} placeholder='[{"name":"sessionid","value":"…","domain":".toutiao.com"}]' rows={4} /></label>
+                    <div className="ap-bind-side">
+                      <p>从已登录的头条创作中心导出，验证通过后保存在当前浏览器。</p>
+                      {toutiaoError ? <p className="ap-error">{toutiaoError}</p> : null}
+                      <button className="ap-btn ap-btn--dark" disabled={bindingToutiao}>{bindingToutiao ? "验证中…" : <><Newspaper size={15} />连接今日头条</>}</button>
+                      <a href="https://mp.toutiao.com/profile_v4/index" target="_blank" rel="noreferrer">打开创作中心<ExternalLink size={13} /></a>
+                    </div>
+                  </form>
+                )}
+              </section>
+            </article>
+
+            <article className="ap-platform-row">
+              <header className="ap-platform-head">
+                <span className="ap-platform-mark ap-platform-mark--xiaohongshu">红</span>
+                <div><h2>小红书</h2><p>连接创作服务平台，用于图文笔记发布。</p></div>
+                <span className={`ap-status ${xiaohongshuBound ? "ap-status--ok" : ""}`}>{xiaohongshuBound ? "已连接" : "未连接"}</span>
+              </header>
+              <section className="ap-capability ap-capability--single">
+                {xiaohongshuBound ? (
+                  <>
+                    <div className="ap-account-brief ap-account-brief--plain">
+                      <ShieldCheck size={20} />
+                      <div><strong>发布会话已就绪</strong><span>遇到验证码或登录失效时，需要重新导出 Cookie</span></div>
+                    </div>
+                    <div className="ap-actions">
+                      <button className="ap-btn ap-btn--dark" onClick={() => navigate("/")}>选择文章发布</button>
+                      <a className="ap-icon-btn" href="https://creator.xiaohongshu.com" target="_blank" rel="noreferrer" title="打开小红书创作服务平台"><ExternalLink size={16} /></a>
+                      <button className="ap-icon-btn" onClick={unbindXiaohongshu} title="解绑小红书"><Link2Off size={16} /></button>
+                    </div>
+                  </>
+                ) : (
+                  <form className="ap-bind-form ap-bind-form--horizontal" onSubmit={bindXiaohongshu}>
+                    <label><span>Cookie JSON</span><textarea value={xiaohongshuCookies} onChange={event => { setXiaohongshuCookies(event.target.value); setXiaohongshuError("") }} placeholder='[{"name":"web_session","value":"…","domain":".xiaohongshu.com"}]' rows={4} /></label>
+                    <div className="ap-bind-side">
+                      <p>从已登录的小红书创作服务平台导出，仅用于图文笔记发布。</p>
+                      {xiaohongshuError ? <p className="ap-error">{xiaohongshuError}</p> : null}
+                      <button className="ap-btn ap-btn--dark"><BookOpen size={15} />连接小红书</button>
+                      <a href="https://creator.xiaohongshu.com" target="_blank" rel="noreferrer">打开创作服务平台<ExternalLink size={13} /></a>
+                    </div>
+                  </form>
+                )}
+              </section>
+            </article>
+          </div>
+        ) : (
+          <section className="ap-writing-profile" aria-label="写作档案">
+            <div className="ap-writing-profile-head">
+              <div>
+                <h2>生成时默认使用的写作偏好</h2>
+                <p>单篇文章里的任务要求优先级更高，这里只补充长期不变的信息。</p>
+              </div>
+              <button className="ap-btn ap-btn--dark" onClick={() => void saveWritingProfile()} disabled={profileLoading || profileSaving}>
+                {profileSaving ? "保存中…" : "保存写作档案"}
+              </button>
+            </div>
+            <div className="ap-writing-profile-grid">
+              <label><span>目标读者</span><input value={writingProfile.audience} onChange={event => updateProfile("audience", event.target.value)} placeholder="如：广州大学城学生和年轻教师" /></label>
+              <label><span>内容立场</span><input value={writingProfile.stance} onChange={event => updateProfile("stance", event.target.value)} placeholder="如：实用、克制，明确区分事实和观点" /></label>
+              <label><span>常用语气</span><input value={writingProfile.tone} onChange={event => updateProfile("tone", event.target.value)} placeholder="如：像熟悉校园的学长，直接但不油腻" /></label>
+              <label><span>视觉倾向</span><input value={writingProfile.visualStyle} onChange={event => updateProfile("visualStyle", event.target.value)} placeholder="如：阅读型、少装饰、青绿色" /></label>
+              <label className="ap-writing-profile-wide"><span>常用结构</span><textarea value={writingProfile.preferredStructure} onChange={event => updateProfile("preferredStructure", event.target.value)} rows={3} placeholder="如：场景开头 → 背景解释 → 分步建议 → 风险提醒 → 结论" /></label>
+              <label className="ap-writing-profile-wide"><span>禁用表达</span><input value={writingProfile.bannedPhrases.join("、")} onChange={event => updateProfile("bannedPhrases", event.target.value.split(/[，,、]/).map(item => item.trim()).filter(Boolean))} placeholder="用顿号分隔，如：众所周知、赋能、闭眼冲" /></label>
+            </div>
+            <fieldset className="ap-platform-defaults">
+              <legend>默认生成平台</legend>
+              <p>生成弹窗会按当前编辑位置优先选择；没有明确上下文时使用这里的设置。</p>
+              <div>
+                {([["wechat", "公众号母稿"], ["toutiao", "今日头条版本"], ["xiaohongshu", "小红书发布"]] as Array<[PublishingPlatform, string]>).map(([platform, label]) => (
+                  <button type="button" key={platform} aria-pressed={writingProfile.defaultPlatforms[0] === platform} onClick={() => selectDefaultPlatform(platform)}>{label}</button>
+                ))}
+              </div>
+            </fieldset>
+          </section>
+        )}
       </section>
     </main>
   )

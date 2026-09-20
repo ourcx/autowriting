@@ -863,10 +863,30 @@
 }
 
 .gc-modal { width: min(1180px, calc(100vw - 32px)); max-width: calc(100vw - 32px); height: min(840px, calc(100dvh - 40px)); max-height: calc(100dvh - 40px); background: var(--color-canvas); border-radius: 12px; }
-.gc-settings { display: flex; align-items: end; flex-wrap: wrap; gap: 16px; padding: 16px 20px; border-bottom: 1px solid var(--color-surface-strong); }
-.gc-settings label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--color-muted); }
-.gc-settings select { height: 34px; padding: 0 10px; background: var(--color-canvas); color: var(--color-ink); border: 1px solid var(--color-surface-strong); border-radius: 6px; }
-.gc-cost { flex: 1; font-size: 12px; color: var(--color-muted); padding-bottom: 8px; }
+.gc-settings { display: flex; align-items: end; flex-wrap: wrap; gap: 18px; padding: 16px 20px; border-bottom: 1px solid var(--color-surface-strong); }
+.gc-choice { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; border: 0; }
+.gc-choice legend { margin-bottom: 6px; padding: 0; color: var(--color-muted); font-size: 11px; font-weight: 600; }
+.gc-segmented, .gc-count-options { display: inline-flex; padding: 3px; border-radius: 8px; background: var(--color-surface-card); }
+.gc-segmented button, .gc-count-options button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.gc-segmented button[aria-pressed="true"], .gc-count-options button[aria-pressed="true"] {
+  background: var(--color-canvas);
+  color: var(--color-brand-teal);
+  box-shadow: 0 1px 3px rgb(26 58 58 / 10%);
+  font-weight: 600;
+}
+.gc-count-options button { width: 36px; padding: 0; }
+.gc-generate-button { min-height: 40px; margin-left: auto; }
+.gc-cost { margin: 0 0 12px; color: var(--color-muted); font-size: 12px; line-height: 1.5; }
 .gc-references {
   flex: 0 0 auto;
   max-height: 350px;
@@ -1004,11 +1024,13 @@
 .gc-modal :is(button, select):focus-visible { outline: 2px solid var(--color-brand-teal); outline-offset: 2px; }
 .gc-modal button:disabled { opacity: .45; cursor: not-allowed; }
 @media (max-width: 720px) {
-  .gc-modal { width: calc(100vw - 16px); height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); }
-  .gc-settings { gap: 8px; padding: 12px; }
-  .gc-settings > .gm-btn-primary { padding: 8px 10px; font-size: 12px; min-height: 34px; }
-  .gc-settings select { max-width: 118px; }
-  .gc-cost { flex-basis: 100%; order: 1; }
+  .gm-overlay { padding: 8px; }
+  .gc-modal { width: calc(100vw - 16px); max-width: calc(100vw - 16px); height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); }
+  .gc-settings { align-items: stretch; gap: 10px; padding: 12px; }
+  .gc-choice:first-child { flex: 1 1 100%; }
+  .gc-segmented button { flex: 1; padding: 0 8px; }
+  .gc-count-options { width: max-content; }
+  .gc-settings > .gm-btn-primary { flex: 1; padding: 8px 10px; font-size: 12px; min-height: 44px; }
   .gc-references { max-height: 330px; }
   .gc-references summary { padding: 0 12px; }
   .gc-reference-body { padding: 12px; }

@@ -401,6 +401,7 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
             className="dash-create-btn"
             onClick={handleCreate}
             disabled={creating}
+            data-onboarding="start-writing"
           >
             {creating ? (
               <>

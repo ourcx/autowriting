@@ -13,6 +13,7 @@ interface Props {
   materials: string
   sourceArticle?: string
   aiConfig: Record<string, unknown>
+  initialPlatform?: CandidatePlatform
   onComplete: (article: string, articleToutiao: string, platforms: "both" | "wechat" | "toutiao", candidateId?: string) => void | Promise<void>
   onClose: () => void
 }
@@ -26,8 +27,8 @@ interface ReferenceArticle {
 }
 const STATUS = { queued: "排队中", generating: "生成中", complete: "已完成", interrupted: "已中断" }
 
-export default function GenerateModal({ articleId, task, materials, sourceArticle = "", aiConfig, onComplete, onClose }: Props) {
-  const [platform, setPlatform] = useState<CandidatePlatform>("wechat")
+export default function GenerateModal({ articleId, task, materials, sourceArticle = "", aiConfig, initialPlatform = "wechat", onComplete, onClose }: Props) {
+  const [platform, setPlatform] = useState<CandidatePlatform>(initialPlatform)
   const [count, setCount] = useState(1)
   const [rows, setRows] = useState<GenerationCandidate[]>([])
   const [activeId, setActiveId] = useState("")
@@ -206,17 +207,33 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
         <button className="gm-icon-btn" onClick={close} title="关闭并保留候选稿" aria-label="关闭生成窗口"><X size={18} /></button>
       </header>
       <div className="gc-settings">
-        <label>生成平台<select value={platform} disabled={busy} onChange={event => setPlatform(event.target.value as CandidatePlatform)}><option value="wechat">公众号母稿</option><option value="toutiao">今日头条版本</option></select></label>
-        <label>候选数量<select value={count} disabled={busy} onChange={event => setCount(Number(event.target.value))}><option value={1}>1 篇</option><option value={2}>2 篇</option><option value={3}>3 篇</option></select></label>
-        <span className="gc-cost">所选候选稿同时生成 · {count} 次模型调用{count > 1 ? "，费用按实际用量增加" : ""}</span>
-        <button className="gm-btn-primary" disabled={busy || loading || applying} onClick={() => void start()}><Zap size={14} />{busy ? "生成中" : "开始生成"}</button>
+        <fieldset className="gc-choice">
+          <legend>生成平台</legend>
+          <div className="gc-segmented" role="group" aria-label="生成平台">
+            <button type="button" aria-pressed={platform === "wechat"} disabled={busy} onClick={() => setPlatform("wechat")}>公众号母稿</button>
+            <button type="button" aria-pressed={platform === "toutiao"} disabled={busy} onClick={() => setPlatform("toutiao")}>今日头条版本</button>
+          </div>
+        </fieldset>
+        <fieldset className="gc-choice">
+          <legend>候选数量</legend>
+          <div className="gc-count-options" role="group" aria-label="候选数量">
+            {[1, 2, 3].map(value => (
+              <button type="button" key={value} aria-pressed={count === value} disabled={busy} onClick={() => setCount(value)}>{value}</button>
+            ))}
+          </div>
+        </fieldset>
+        <button className="gm-btn-primary gc-generate-button" disabled={busy || loading || applying} onClick={() => void start()}>
+          <Zap size={14} />
+          {busy ? "生成中" : `生成${platform === "wechat" ? "公众号母稿" : "今日头条版本"}`}
+        </button>
       </div>
       <details className="gc-references">
         <summary>
-          <span className="gc-reference-summary"><ChevronDown size={15} /><strong>往期参考</strong><span>已选 {selected.length} 篇</span></span>
+          <span className="gc-reference-summary"><ChevronDown size={15} /><strong>更多设置</strong><span>往期参考已选 {selected.length} 篇</span></span>
           {references.length > 0 && <span className="gc-reference-total">{references.length} 篇相关</span>}
         </summary>
         <div className="gc-reference-body">
+          <p className="gc-cost">本次会调用模型 {count} 次。候选越多，等待时间和费用会按实际用量增加。</p>
           <div className="gc-reference-actions">
             <div><strong>参考文章</strong><span>只影响本次生成，不会修改原文</span></div>
             <button className="gc-reference-search" disabled={referencesLoading || busy} onClick={() => void loadReferences()}>

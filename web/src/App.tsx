@@ -24,6 +24,7 @@ const CronPage = lazy(() => import('./pages/CronPage/CronPage'))
 const AccountPage = lazy(() => import('./pages/AccountPage/AccountPage'))
 const CanvasStudio = lazy(() => import('./pages/CanvasStudio/CanvasStudio'))
 const TopicInsights = lazy(() => import('./pages/TopicInsights/TopicInsights'))
+const FirstSetupPage = lazy(() => import('./pages/FirstSetupPage/FirstSetupPage'))
 
 
 
@@ -47,6 +48,7 @@ export default function App() {
 
         {/* 登录保护路由 */}
         <Route path="/" element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
+        <Route path="/setup" element={<PrivateRoute><FirstSetupPage /></PrivateRoute>} />
         <Route path="/editor/:articleId" element={<PrivateRoute><ArticleEditor /></PrivateRoute>} />
         <Route path="/preview/:articleId" element={<PrivateRoute><WeChatPreview /></PrivateRoute>} />
         <Route path="/drafts" element={<PrivateRoute><WeChatDrafts /></PrivateRoute>} />

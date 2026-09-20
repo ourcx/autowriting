@@ -33,6 +33,19 @@
 .dp-nav-btn--icon { width: 32px; padding: 0; }
 .dp-nav-btn--warn svg { color: var(--color-warning); }
 .dp-nav-user { max-width: 72px; overflow: hidden; text-overflow: ellipsis; }
+.dp-nav-btn--account small {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--color-surface-card);
+  color: var(--color-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.dp-nav-btn--account small.is-ready { background: var(--color-brand-mint); color: var(--color-brand-teal); }
 .dp-body { flex: 1; min-height: 0; overflow: hidden; }
 .dp-root button:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .dp-root .page-header { border-bottom-color: var(--color-surface-strong); }
