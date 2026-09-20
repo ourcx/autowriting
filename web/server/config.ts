@@ -185,6 +185,10 @@ export const SERVER_AI_CONFIG = {
   siliconflowApiKey: process.env.SILICONFLOW_API_KEY || '',
   siliconflowBaseUrl: process.env.SILICONFLOW_BASE_URL || 'https://api.siliconflow.cn/v1',
   siliconflowModel: process.env.SILICONFLOW_MODEL || 'Kwai-Kolors/Kolors',
+  // 火山方舟 / 豆包 Seedream
+  doubaoApiKey: process.env.ARK_API_KEY || process.env.DOUBAO_API_KEY || '',
+  doubaoBaseUrl: process.env.DOUBAO_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3',
+  doubaoModel: process.env.DOUBAO_IMAGE_MODEL || '',
 
   // Imgur 图床
   imgurClientId: process.env.IMGUR_CLIENT_ID || '',

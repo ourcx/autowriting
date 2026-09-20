@@ -13,10 +13,12 @@ export interface ServerConfigStatus {
   maasReady: boolean
   maasEmail: string | null
   openaiReady: boolean
-  coverProvider: 'local' | 'openai' | 'stability'
+  coverProvider: 'local' | 'openai' | 'stability' | 'siliconflow' | 'z-image' | 'qwen-edit' | 'doubao'
   coverReady: boolean
   dalleReady: boolean
   stabilityReady: boolean
+  siliconflowReady: boolean
+  doubaoReady: boolean
   wechatCollectorReady: {
     tikhub: boolean
     dajiala: boolean
@@ -96,7 +98,11 @@ export function isArticleReady(s: ConfigState): boolean {
 export function isCoverReady(s: ConfigState): boolean {
   const { localConfig, serverStatus } = s
   if (localConfig.coverProvider === 'local') return true
-  const localReady = !!localConfig.coverApiKey
+  const localReady = localConfig.coverProvider === 'doubao'
+    ? Boolean(localConfig.doubaoApiKey && localConfig.doubaoModel)
+    : ['siliconflow', 'z-image', 'qwen-edit'].includes(localConfig.coverProvider)
+      ? Boolean(localConfig.siliconflowApiKey)
+      : Boolean(localConfig.coverApiKey)
   if (localReady) return true
   return serverStatus?.coverReady ?? false
 }

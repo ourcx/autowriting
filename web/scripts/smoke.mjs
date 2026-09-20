@@ -427,6 +427,25 @@ cases.push({
   },
 })
 cases.push({
+  name: '豆包封面生成缺少凭据时应返回可操作错误',
+  run: async () => {
+    const r = await fetch(`${BASE}/api/generate-cover`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: '豆包封面冒烟测试',
+        provider: 'doubao',
+        aiConfig: { doubaoApiKey: '', doubaoModel: '' },
+      }),
+    })
+    if (r.status !== 400) throw new Error(`期望 400，实际 ${r.status}`)
+    const body = await r.json()
+    if (!String(body.error || '').includes('豆包方舟 API Key 或图片模型未配置')) {
+      throw new Error(`错误信息不正确：${JSON.stringify(body)}`)
+    }
+  },
+})
+cases.push({
   name: '同一用户名连续登录失败应触发限流',
   run: async () => {
     const username = `missing_${Date.now()}`

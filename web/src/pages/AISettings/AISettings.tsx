@@ -118,6 +118,7 @@ export default function AISettings() {
   const localMaas = config.articleProvider === 'maas' && !!config.maasApiKey
   const localOpenai = config.articleProvider !== 'maas' && !!config.articleApiKey
   const localSiliconflow = !!config.siliconflowApiKey
+  const localDoubao = !!config.doubaoApiKey && !!config.doubaoModel
   const localCoverKey = !!config.coverApiKey
   const localSearchKey = config.searchProvider === 'searxng' || !!config.searchApiKey
   const localCdn = (config.cdnProvider === 'imgur' && !!config.imgurClientId)
@@ -141,10 +142,18 @@ export default function AISettings() {
       section: 'article' as Section,
     },
     {
+      label: '豆包图片',
+      local: localDoubao,
+      server: !!serverStatus?.doubaoReady,
+      serverNote: '服务端',
+      color: 'mint',
+      section: 'cover' as Section,
+    },
+    {
       label: 'SiliconFlow',
       local: localSiliconflow,
-      server: false,
-      serverNote: '',
+      server: !!serverStatus?.siliconflowReady,
+      serverNote: '服务端',
       color: 'peach',
       section: 'cover' as Section,
     },
@@ -440,6 +449,52 @@ export default function AISettings() {
               <div className="as-panel-header">
                 <h2 className="as-panel-title">封面生成</h2>
                 <p className="as-panel-desc">封面生成器支持多种图片服务，Key 填了才能用对应服务</p>
+              </div>
+
+              <div className="as-card">
+                <div className="as-card-label-row">
+                  <span className="as-card-section-label">火山方舟</span>
+                  <span className="as-card-tag as-card-tag--teal">豆包 Seedream</span>
+                </div>
+                <p className="as-card-desc">使用方舟图片生成 API。模型可填写模型 ID 或你在方舟控制台创建的推理接入点 ID。</p>
+                <div className="as-row-2">
+                  <div className="as-field as-field--grow">
+                    <label className="as-label">Base URL</label>
+                    <input
+                      className="as-input"
+                      value={config.doubaoBaseUrl}
+                      onChange={e => set({ doubaoBaseUrl: e.target.value })}
+                      placeholder="https://ark.cn-beijing.volces.com/api/v3"
+                    />
+                  </div>
+                  <div className="as-field">
+                    <label className="as-label">模型 / Endpoint ID</label>
+                    <input
+                      className="as-input"
+                      value={config.doubaoModel}
+                      onChange={e => set({ doubaoModel: e.target.value })}
+                      placeholder="ep-... 或 Seedream 模型 ID"
+                    />
+                  </div>
+                </div>
+                <div className="as-field">
+                  <label className="as-label">方舟 API Key</label>
+                  <div className="as-key-wrap">
+                    <input
+                      className="as-input as-input-mono"
+                      type={showKeys['doubao'] ? 'text' : 'password'}
+                      value={config.doubaoApiKey}
+                      onChange={e => set({ doubaoApiKey: e.target.value })}
+                      placeholder="填写方舟 API Key"
+                    />
+                    <button className="as-eye-btn" onClick={() => toggleKey('doubao')}>
+                      {showKeys['doubao'] ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                  <p className="as-hint">
+                    前往 <a href="https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey" target="_blank" rel="noreferrer">火山方舟控制台</a> 获取 API Key，并先开通对应图片模型。
+                  </p>
+                </div>
               </div>
 
               {/* SiliconFlow — Kolors / Z-Image / Qwen 图编 */}

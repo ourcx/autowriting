@@ -110,6 +110,8 @@ export function isLocalApiKeyConfigured(cfg: AIConfig): boolean {
 // ── 判断本地封面 Key 是否已配置 ──
 export function isLocalCoverKeyConfigured(cfg: AIConfig): boolean {
   if (cfg.coverProvider === 'local') return true
+  if (cfg.coverProvider === 'doubao') return Boolean(cfg.doubaoApiKey && cfg.doubaoModel)
+  if (['siliconflow', 'z-image', 'qwen-edit'].includes(cfg.coverProvider)) return Boolean(cfg.siliconflowApiKey)
   return !!cfg.coverApiKey
 }
 

@@ -16,7 +16,7 @@ function authFetch(url: string, init: RequestInit = {}): Promise<Response> {
 }
 
 export type ArticleProvider = 'maas' | 'openai' | 'openai-compat'
-export type CoverProvider = 'local' | 'openai' | 'stability' | 'siliconflow' | 'z-image' | 'qwen-edit'
+export type CoverProvider = 'local' | 'openai' | 'stability' | 'siliconflow' | 'z-image' | 'qwen-edit' | 'doubao'
 
 export interface AIConfig {
   // 文章生成
@@ -32,6 +32,11 @@ export interface AIConfig {
   // SiliconFlow / Kolors
   siliconflowApiKey: string
   siliconflowModel: string
+
+  // 火山方舟 / 豆包 Seedream
+  doubaoApiKey: string
+  doubaoBaseUrl: string
+  doubaoModel: string
 
   // MaaS 专用（内部用，外部用户不填）
   maasApiKey: string
@@ -79,6 +84,10 @@ export const DEFAULT_CONFIG: AIConfig = {
 
   siliconflowApiKey: '',
   siliconflowModel: 'Kwai-Kolors/Kolors',
+
+  doubaoApiKey: '',
+  doubaoBaseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+  doubaoModel: '',
 
   maasApiKey: '',
   maasBaseUrl: 'https://maas.devops.xiaohongshu.com/v1',
@@ -273,6 +282,7 @@ export const PROVIDER_PRESETS: Array<{
 
 export const COVER_PROVIDER_PRESETS = [
   { id: 'local'       as CoverProvider, name: 'SVG 占位',      desc: '无需 API，免费即时生成' },
+  { id: 'doubao'      as CoverProvider, name: '豆包 Seedream', desc: '火山方舟，中文提示词友好' },
   { id: 'siliconflow' as CoverProvider, name: 'Kolors 可图',   desc: 'SiliconFlow，性价比高' },
   { id: 'z-image'     as CoverProvider, name: 'Z-Image 造相',  desc: 'SiliconFlow，支持复杂提示词' },
   { id: 'qwen-edit'   as CoverProvider, name: 'Qwen 图片编辑', desc: 'SiliconFlow，对已有封面精修' },

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 
 import { toast } from '../Toast/Toast'
 import './CoverGenerator.css'
-import { loadAIConfig } from '../../utils/aiConfig'
+import { loadAIConfig, type CoverProvider } from '../../utils/aiConfig'
 import { generateCoverImage, uploadBase64Image } from '../../utils/apiHelpers'
 
 interface CoverGeneratorProps {
@@ -26,11 +26,11 @@ interface ColorOption {
 }
 
 interface ProviderOption {
-  id: string
+  id: CoverProvider
   name: string
   desc: string
   /** 哪个 key 字段必须非空 */
-  requiresKey: 'siliconflowApiKey' | 'coverApiKey' | null
+  requiresKey: 'siliconflowApiKey' | 'coverApiKey' | 'doubaoApiKey' | null
   /** 配置页的描述 */
   keyLabel: string
 }
@@ -60,6 +60,13 @@ const PROVIDERS: ProviderOption[] = [
     desc: '免费，秒出',
     requiresKey: null,
     keyLabel: '',
+  },
+  {
+    id: 'doubao',
+    name: '豆包 Seedream',
+    desc: '中文提示词，高清横图',
+    requiresKey: 'doubaoApiKey',
+    keyLabel: '豆包方舟 API Key 与模型 ID',
   },
   {
     id: 'siliconflow',
@@ -112,7 +119,7 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
 
   const [selectedStyle,  setSelectedStyle]  = useState('modern')
   const [selectedColor,  setSelectedColor]  = useState('matcha')
-  const [provider,       setProvider]       = useState('siliconflow')
+  const [provider,       setProvider]       = useState<CoverProvider>(() => loadAIConfig().coverProvider)
   const [customPrompt,   setCustomPrompt]   = useState('')
   const [isGenerating,   setIsGenerating]   = useState(false)
   const [generatedImage, setGeneratedImage] = useState<string | null>(null)
@@ -142,7 +149,8 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
       return
     }
     const keyVal = (cfg[prov.requiresKey] as string | undefined) || ''
-    setMissingKey(keyVal.trim() ? null : prov.keyLabel)
+    const modelReady = provider !== 'doubao' || Boolean(cfg.doubaoModel.trim())
+    setMissingKey(keyVal.trim() && modelReady ? null : prov.keyLabel)
   }, [provider])
 
   const handleGenerate = async () => {
@@ -180,6 +188,9 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
         aiConfig: {
           siliconflowApiKey: aiConfig.siliconflowApiKey,
           siliconflowModel:  aiConfig.siliconflowModel,
+          doubaoApiKey:      aiConfig.doubaoApiKey,
+          doubaoBaseUrl:     aiConfig.doubaoBaseUrl,
+          doubaoModel:       aiConfig.doubaoModel,
           coverApiKey:       aiConfig.coverApiKey,
           articleApiKey:     aiConfig.articleApiKey,
         },

@@ -15,11 +15,12 @@ import {
   loadHistory, addToHistory,
   addImageToLibrary,
   generatePrompt, generatePlaceholderCover, generateWithDallE, generateWithSiliconFlow, generateWithQwenEdit,
-  maskApiKey,
 } from '../utils'
 import { deleteCoverHistory, clearCoverHistory, getCoverCacheCount } from '../db.js'
 import { mapWithConcurrency } from '../utils/concurrency.ts'
 import { authMiddleware } from '../authMiddleware.ts'
+import { logger } from '../logger.ts'
+import { generateWithDoubao } from '../utils/doubaoImage.ts'
 
 const router = Router()
 router.use([
@@ -29,6 +30,17 @@ router.use([
   '/cover-history/:id',
   '/cache-stats',
 ], authMiddleware)
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function errorDetail(error: unknown): string {
+  if (axios.isAxiosError(error) && error.response?.data) {
+    return JSON.stringify(error.response.data)
+  }
+  return errorMessage(error)
+}
 
 // ── POST /api/generate-cover ──────────────────────────────────────────────────
 
@@ -40,19 +52,20 @@ router.post('/generate-cover', async (req, res) => {
     // 合并服务端配置与前端传入的用户配置，前端优先
     const cfg         = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
     const provider    = reqProvider || cfg.coverProvider || 'local'
-    const sfKey       = cfg.siliconflowApiKey || ''
-    const sfModel     = cfg.siliconflowModel  || 'Kwai-Kolors/Kolors'
-    const coverApiKey = cfg.coverApiKey || cfg.stabilityApiKey || ''
+    const sfKey       = String(cfg.siliconflowApiKey || '')
+    const sfModel     = String(cfg.siliconflowModel || 'Kwai-Kolors/Kolors')
+    const doubaoKey   = String(cfg.doubaoApiKey || '')
+    const doubaoModel = String(cfg.doubaoModel || '')
+    const doubaoBaseUrl = String(cfg.doubaoBaseUrl || 'https://ark.cn-beijing.volces.com/api/v3')
+    const coverApiKey = String(cfg.coverApiKey || cfg.stabilityApiKey || '')
 
-    // ── 诊断日志（已脱敏） ───────────────────────────────────────────────────
-    console.log('[cover] ─────────────────────────────────')
-    console.log('[cover] provider (req)    :', reqProvider)
-    console.log('[cover] provider (final)  :', provider)
-    console.log('[cover] sfKey             :', sfKey ? `sk-...${sfKey.slice(-6)} (len=${sfKey.length})` : '❌ 空')
-    console.log('[cover] sfModel           :', sfModel)
-    console.log('[cover] coverApiKey       :', coverApiKey ? `sk-...${coverApiKey.slice(-6)}` : '❌ 空')
-    console.log('[cover] aiConfig received :', JSON.stringify(maskApiKey(aiConfig || {})))
-    console.log('[cover] ─────────────────────────────────')
+    logger.debug('COVERS', '准备生成封面', {
+      provider,
+      hasSiliconflowKey: Boolean(sfKey),
+      hasCoverKey: Boolean(coverApiKey),
+      hasDoubaoKey: Boolean(doubaoKey),
+      doubaoModelConfigured: Boolean(doubaoModel),
+    })
 
     // ── 本地 SVG 占位（不需要 API） ─────────────────────────────────────────
     if (provider === 'local') {
@@ -79,15 +92,19 @@ router.post('/generate-cover', async (req, res) => {
     if (provider === 'stability' && !coverApiKey) {
       return res.status(400).json({ error: 'Stability AI API Key 未配置。请前往「AI 配置」页面填写。' })
     }
+    if (provider === 'doubao' && (!doubaoKey || !doubaoModel)) {
+      return res.status(400).json({ error: '豆包方舟 API Key 或图片模型未配置。请前往「AI 配置」页面填写。' })
+    }
 
     // ── 缓存检查（仅非自定义 prompt，provider 参与 key 避免跨 provider 污染） ──
-    const cacheKey = generateCacheKey(title, style, `${color}|${provider}`)
+    const providerCacheKey = provider === 'doubao' ? `${provider}:${doubaoModel}` : provider
+    const cacheKey = generateCacheKey(title, style, `${color}|${providerCacheKey}`)
     if (!customPrompt && provider !== 'qwen-edit') {
       const cached = getCachedImage(cacheKey)
       if (cached) {
         // 跳过旧的 SVG 脏缓存（之前兜底写进来的）
         if (provider !== 'local' && cached.imageUrl?.startsWith('data:image/svg')) {
-          console.log('[cover] 跳过旧 SVG 缓存，重新生成')
+          logger.debug('COVERS', '跳过旧 SVG 缓存，重新生成', { provider })
         } else {
           const historyItem = addToHistory(title, style, color, provider, cached.imageUrl, cacheKey)
           return res.json({ imageUrl: cached.imageUrl, cached: true, historyId: historyItem.id })
@@ -115,7 +132,7 @@ router.post('/generate-cover', async (req, res) => {
 
     // ── OpenAI DALL-E ────────────────────────────────────────────────────────
     if (provider === 'openai') {
-      const key      = cfg.coverApiKey || cfg.articleApiKey
+      const key      = String(cfg.coverApiKey || cfg.articleApiKey || '')
       const imageUrl = await generateWithDallE(finalPrompt, key)
       cacheImage(cacheKey, imageUrl, { title, style, color, provider: 'openai' })
       const historyItem = addToHistory(title, style, color, provider, imageUrl, cacheKey)
@@ -123,9 +140,17 @@ router.post('/generate-cover', async (req, res) => {
       return res.json({ imageUrl, historyId: historyItem.id })
     }
 
+    // ── 火山方舟 / 豆包 Seedream ─────────────────────────────────────────────
+    if (provider === 'doubao') {
+      const imageUrl = await generateWithDoubao(finalPrompt, doubaoKey, doubaoModel, doubaoBaseUrl)
+      cacheImage(cacheKey, imageUrl, { title, style, color, provider: 'doubao', model: doubaoModel })
+      const historyItem = addToHistory(title, style, color, provider, imageUrl, cacheKey)
+      addImageToLibrary(imageUrl, title, 'cover', [style, color], 'doubao')
+      return res.json({ imageUrl, historyId: historyItem.id })
+    }
+
     // ── SiliconFlow Kolors ───────────────────────────────────────────────────
     if (provider === 'siliconflow') {
-      console.log(`[cover] siliconflow model=${sfModel}, key=sk-...${sfKey.slice(-6)}`)
       const imageUrl    = await generateWithSiliconFlow(finalPrompt, sfKey, sfModel)
       cacheImage(cacheKey, imageUrl, { title, style, color, provider: 'siliconflow' })
       const historyItem = addToHistory(title, style, color, provider, imageUrl, cacheKey)
@@ -135,7 +160,6 @@ router.post('/generate-cover', async (req, res) => {
 
     // ── Z-Image ──────────────────────────────────────────────────────────────
     if (provider === 'z-image') {
-      console.log(`[cover] z-image, key=sk-...${sfKey.slice(-6)}`)
       const imageUrl    = await generateWithSiliconFlow(finalPrompt, sfKey, 'Tongyi-MAI/Z-Image')
       cacheImage(cacheKey, imageUrl, { title, style, color, provider: 'z-image' })
       const historyItem = addToHistory(title, style, color, provider, imageUrl, cacheKey)
@@ -145,7 +169,7 @@ router.post('/generate-cover', async (req, res) => {
 
     // ── Qwen Image Edit ──────────────────────────────────────────────────────
     if (provider === 'qwen-edit') {
-      let baseBuffer = null
+      let baseBuffer: Buffer | null = null
       let baseType   = 'image/png'
       if (baseImageUrl) {
         if (baseImageUrl.startsWith('data:')) {
@@ -154,10 +178,10 @@ router.post('/generate-cover', async (req, res) => {
         } else {
           const imgResp = await axios.get(baseImageUrl, { responseType: 'arraybuffer' })
           baseBuffer    = Buffer.from(imgResp.data)
-          baseType      = imgResp.headers['content-type'] || 'image/png'
+          baseType      = String(imgResp.headers['content-type'] || 'image/png')
         }
       }
-      console.log(`[cover] qwen-edit, hasBase=${!!baseBuffer}, key=sk-...${sfKey.slice(-6)}`)
+      if (!baseBuffer) return res.status(400).json({ error: 'Qwen 图片编辑需要先选择或生成一张基础封面。' })
       const imageUrl    = await generateWithQwenEdit(finalPrompt, sfKey, baseBuffer, baseType)
       const historyItem = addToHistory(title, style, color, provider, imageUrl, cacheKey)
       addImageToLibrary(imageUrl, title, 'cover', [style, color], 'qwen-edit')
@@ -165,11 +189,9 @@ router.post('/generate-cover', async (req, res) => {
     }
 
     res.status(400).json({ error: `未知的图片生成服务商：${provider}` })
-  } catch (error) {
-    const detail = error.response?.data
-      ? JSON.stringify(error.response.data)
-      : error.message
-    console.error('[cover] generate error:', detail)
+  } catch (error: unknown) {
+    const detail = errorDetail(error)
+    logger.error('COVERS', '封面生成失败', { error: detail })
     res.status(500).json({ error: detail || '封面生成失败，请检查 API Key 和网络连接' })
   }
 })
@@ -205,13 +227,13 @@ router.post('/generate-covers-batch', async (req, res) => {
         if (provider === 'openai') {
           try {
             const prompt   = generatePrompt(title, content || '', style, color)
-            const imageUrl = await generateWithDallE(prompt)
+            const imageUrl = await generateWithDallE(prompt, String(SERVER_AI_CONFIG.coverApiKey || SERVER_AI_CONFIG.articleApiKey || ''))
             cacheImage(cacheKey, imageUrl, { title, style, color, provider: 'openai' })
             const h = addToHistory(title, style, color, provider, imageUrl, cacheKey)
             addImageToLibrary(imageUrl, title, 'cover', [style, color], 'openai')
             return { result: { index: i, title, imageUrl, cached: false, historyId: h.id } }
-          } catch (e) {
-            console.error(`OpenAI DALL-E error for ${title}:`, e.message)
+          } catch (error: unknown) {
+            logger.warn('COVERS', '批量生成中的 DALL-E 请求失败，回退到本地封面', { title, error: errorMessage(error) })
             const svg      = generatePlaceholderCover(title, style, color)
             const imageUrl = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
             cacheImage(cacheKey, imageUrl, { title, style, color, provider: 'local' })
@@ -220,27 +242,27 @@ router.post('/generate-covers-batch', async (req, res) => {
           }
         }
         return { error: { index: i, error: `批量生成暂不支持服务商：${provider}` } }
-      } catch (e) {
-        return { error: { index: i, error: e.message } }
+      } catch (error: unknown) {
+        return { error: { index: i, error: errorMessage(error) } }
       }
     })
     const results = outcomes.flatMap(outcome => outcome.result ? [outcome.result] : [])
     const errors = outcomes.flatMap(outcome => outcome.error ? [outcome.error] : [])
 
     res.json({ success: true, results, errors: errors.length > 0 ? errors : undefined, total: covers.length, succeeded: results.length, failed: errors.length })
-  } catch (error) {
-    console.error('Error in batch generation:', error)
-    res.status(500).json({ error: error.message })
+  } catch (error: unknown) {
+    logger.error('COVERS', '批量生成封面失败', { error: errorMessage(error) })
+    res.status(500).json({ error: errorMessage(error) })
   }
 })
 
 // ── GET /api/cover-history ────────────────────────────────────────────────────
 
-router.get('/cover-history', (req, res) => {
+router.get('/cover-history', (_req, res) => {
   try {
     res.json(loadHistory())
-  } catch (error) {
-    res.status(500).json({ error: error.message })
+  } catch (error: unknown) {
+    res.status(500).json({ error: errorMessage(error) })
   }
 })
 
@@ -250,25 +272,25 @@ router.delete('/cover-history/:id', (req, res) => {
   try {
     deleteCoverHistory(req.params.id)
     res.json({ success: true })
-  } catch (error) {
-    res.status(500).json({ error: error.message })
+  } catch (error: unknown) {
+    res.status(500).json({ error: errorMessage(error) })
   }
 })
 
 // ── DELETE /api/cover-history（清空）─────────────────────────────────────────
 
-router.delete('/cover-history', (req, res) => {
+router.delete('/cover-history', (_req, res) => {
   try {
     clearCoverHistory()
     res.json({ success: true })
-  } catch (error) {
-    res.status(500).json({ error: error.message })
+  } catch (error: unknown) {
+    res.status(500).json({ error: errorMessage(error) })
   }
 })
 
 // ── GET /api/cache-stats ──────────────────────────────────────────────────────
 
-router.get('/cache-stats', (req, res) => {
+router.get('/cache-stats', (_req, res) => {
   try {
     const history    = loadHistory()
     const cacheCount = getCoverCacheCount()
@@ -277,8 +299,8 @@ router.get('/cache-stats', (req, res) => {
       cacheCount,
       cacheSize: cacheCount > 0 ? `${(cacheCount * 0.05).toFixed(2)} MB` : '0 MB',
     })
-  } catch (error) {
-    res.status(500).json({ error: error.message })
+  } catch (error: unknown) {
+    res.status(500).json({ error: errorMessage(error) })
   }
 })
 

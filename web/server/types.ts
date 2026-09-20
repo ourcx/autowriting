@@ -49,6 +49,9 @@ export interface AIConfig {
   siliconflowApiKey?: string
   siliconflowBaseUrl?: string
   siliconflowModel?: string
+  doubaoApiKey?: string
+  doubaoBaseUrl?: string
+  doubaoModel?: string
   imgurClientId?: string
   embeddingApiKey?: string
   embeddingBaseUrl?: string

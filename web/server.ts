@@ -134,6 +134,7 @@ app.get("/api/config/status", (_req, res) => {
   const hasCoverKey = !!(SERVER_AI_CONFIG.coverApiKey)
   const hasStabilityKey = !!(SERVER_AI_CONFIG.stabilityApiKey)
   const hasSiliconflowKey = !!(SERVER_AI_CONFIG.siliconflowApiKey)
+  const hasDoubaoKey = !!(SERVER_AI_CONFIG.doubaoApiKey && SERVER_AI_CONFIG.doubaoModel)
   let provider: string | null = (SERVER_AI_CONFIG.articleProvider as string) || null
   if (!provider || provider === "openai") {
     if (hasMaasKey) provider = "maas"
@@ -144,8 +145,9 @@ app.get("/api/config/status", (_req, res) => {
     articleProvider: provider, articleReady: hasMaasKey || hasOpenaiKey,
     maasReady: hasMaasKey, maasEmail: hasMaasKey ? SERVER_AI_CONFIG.maasUserEmail : null,
     openaiReady: hasOpenaiKey, coverProvider: (SERVER_AI_CONFIG.coverProvider as string) || "local",
-    coverReady: !!(hasCoverKey || hasStabilityKey || hasSiliconflowKey || (SERVER_AI_CONFIG.coverProvider === "local")),
+    coverReady: !!(hasCoverKey || hasStabilityKey || hasSiliconflowKey || hasDoubaoKey || (SERVER_AI_CONFIG.coverProvider === "local")),
     dalleReady: hasCoverKey, stabilityReady: hasStabilityKey, siliconflowReady: hasSiliconflowKey,
+    doubaoReady: hasDoubaoKey,
     wechatCollectorReady: {
       tikhub: !!SERVER_AI_CONFIG.tikhubApiKey,
       dajiala: !!SERVER_AI_CONFIG.dajialaApiKey,
