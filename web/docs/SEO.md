@@ -1,201 +1,110 @@
-# SEO 优化文档
+# SEO 配置
 
-本文档记录 Dashy 项目的 SEO（搜索引擎优化）配置和最佳实践。
+Dashy 同时包含公开产品首页和登录后的内容创作工作台。SEO 配置只让公开首页参与搜索收录，登录、注册、配置、文章、管理等页面统一禁止索引。
 
-## 已实施的 SEO 优化
+## 收录边界
 
-### 1. HTML Meta 标签优化
+| 地址 | 搜索策略 | 说明 |
+| --- | --- | --- |
+| `/` | `index, follow` | 未登录时展示公开产品首页，已登录时进入创作工作台 |
+| `/login`、`/register` | `noindex` | 账号操作页 |
+| 文章、素材、配置、数据和管理路由 | `noindex` | 登录后的私有工作台 |
+| `/api/*` | robots 禁止抓取 | 接口没有可收录内容 |
+| 未知地址 | HTTP 404 + `noindex` | 返回独立的 `404.html` |
 
-**位置**: `web/index.html`
+公开首页在 [`web/index.html`](../index.html) 中保留了可直接抓取的正文。即使搜索引擎不执行 JavaScript，也能读取产品名称、定位和账号入口。浏览器执行 React 后，会由 [`PublicHomePage`](../src/pages/PublicHomePage/PublicHomePage.tsx) 展示完整首页。
 
-#### 基础 Meta 标签
-- **Title**: `Dashy - AI 公众号写作助手 | 智能内容创作工具`
-- **Description**: 简洁描述产品核心功能和价值
-- **Keywords**: 包含主要关键词（dashy, AI写作, 公众号写作等）
-- **Author**: Dashy Team
-- **Language**: zh-CN
-- **Robots**: index, follow（允许搜索引擎索引）
+已登录用户访问 `/` 时仍进入原有工作台，不改变现有使用习惯。
 
-#### Open Graph（社交媒体分享）
-- 完整的 OG 标签配置
-- 针对 Facebook、微信等社交平台优化
-- 需要添加 `og-image.png`（1200x630px）
+## 元信息
 
-#### Twitter Card
-- 使用 `summary_large_image` 格式
-- 需要添加 `twitter-image.png`（1200x600px）
+基础 title、description、Open Graph、Twitter Card、canonical 和 JSON-LD 位于 [`web/index.html`](../index.html)。
 
-#### 结构化数据（JSON-LD）
-- Schema.org SoftwareApplication 格式
-- 包含应用类型、价格、评分、功能列表
-- 帮助搜索引擎理解产品信息
+React 路由切换后，[`SeoMetadata`](../src/components/SeoMetadata/SeoMetadata.tsx) 会更新：
 
-### 2. robots.txt
+- 页面标题和描述
+- robots 策略
+- canonical
+- Open Graph URL、标题和描述
+- Twitter URL、标题和描述
 
-**位置**: `web/public/robots.txt`
+结构化数据使用 `SoftwareApplication`，只保留项目中能确认的产品信息。不要写入无法核验的评分、用户数、价格或效率提升比例。
 
-#### 配置内容
-- 允许所有搜索引擎抓取主要页面
-- 禁止抓取 `/api/`、`/admin/`、`/user/`、`/drafts/`
-- 针对 Google、百度、Bing 的特定优化
-- 指向 sitemap.xml
+## robots 与 sitemap
 
-#### 爬取延迟
-- 默认: 1 秒
-- Googlebot: 0 秒（优先）
-- Baiduspider: 1 秒
-- Bingbot: 1 秒
+[`robots.txt`](../public/robots.txt) 只禁止 `/api/`。私有页面不在 robots 中屏蔽，因为搜索引擎需要读取页面或响应头里的 `noindex`。
 
-### 3. sitemap.xml
+[`sitemap.xml`](../public/sitemap.xml) 只包含公开首页。新增公开页面后，需要同时满足以下条件：
 
-**位置**: `web/public/sitemap.xml`
+- 无需登录即可访问
+- 返回 HTTP 200
+- 有独立 title、description 和 canonical
+- 有稳定正文，不依赖用户数据
+- 加入 sitemap
 
-#### 包含的页面
-- 首页（priority: 1.0, daily）
-- 编辑器（priority: 0.9, weekly）
-- 历史记录（priority: 0.8, weekly）
-- 设置（priority: 0.7, monthly）
-- 样式管理（priority: 0.7, monthly）
-- 文档（priority: 0.6, monthly）
-- 关于（priority: 0.5, monthly）
+登录后的工作台路由不要加入 sitemap。
 
-#### 更新频率
-- **daily**: 首页（内容更新频繁）
-- **weekly**: 功能页面
-- **monthly**: 设置和文档页面
+## 404 与私有路由
 
-### 4. 性能优化
+生产环境由 [`web/server.ts`](../server.ts) 区分三类页面请求：
 
-#### 资源预加载
-- `preconnect`: Google Fonts
-- `dns-prefetch`: 提前解析域名
+- `/` 返回公开首页
+- 已知工作台路由返回 SPA，同时添加 `X-Robots-Tag: noindex, nofollow, noarchive`
+- 未知路由返回 HTTP 404 和 [`404.html`](../public/404.html)
 
-#### Canonical URL
-- 防止重复内容问题
-- 指向主域名: `https://dashy.app/`
+缺失的图片、脚本和样式也会返回 404，不再回退到首页 HTML。
 
-## 待完成的优化任务
+## Nginx 要求
 
-### 必需任务
+Nginx 如果直接托管 `web/dist`，不能使用无条件的 `try_files $uri $uri/ /index.html`。这条规则会把未知地址和缺失图片都变成 HTTP 200。
 
-1. **创建社交媒体分享图片**
-   - [ ] `web/public/og-image.png` (1200x630px)
-   - [ ] `web/public/twitter-image.png` (1200x600px)
-   - 建议内容：产品 logo + 核心功能说明
+推荐让所有页面请求交给 Express，由 Express 负责合法 SPA 路由和 404：
 
-2. **配置实际域名**
-   - [ ] 将 `dashy.app` 替换为实际域名
-   - [ ] 更新所有 meta 标签中的 URL
-   - [ ] 更新 robots.txt 和 sitemap.xml
+```nginx
+location / {
+    proxy_pass http://autowriting_backend;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
 
-3. **验证搜索引擎**
-   - [ ] Google Search Console 验证
-   - [ ] 百度站长平台验证
-   - [ ] 提交 sitemap.xml
+静态资源可以单独缓存，但缺失资源必须返回 404：
 
-### 进阶优化
+```nginx
+location /assets/ {
+    root /opt/autowriting/web/dist;
+    try_files $uri =404;
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+}
+```
 
-4. **内容优化**
-   - [ ] 为每个页面添加独特的 title 和 description
-   - [ ] 使用语义化 HTML（`<article>`, `<section>`, `<nav>`）
-   - [ ] 添加 alt 属性到所有图片
+## 发布检查
 
-5. **性能优化**
-   - [ ] 启用 Gzip/Brotli 压缩
-   - [ ] 配置 CDN
-   - [ ] 优化图片（WebP 格式）
-   - [ ] 代码分割和懒加载
+```bash
+pnpm --dir web verify
+pnpm --dir web smoke
+```
 
-6. **移动端优化**
-   - [x] 响应式 viewport 配置
-   - [ ] 移动端性能测试
-   - [ ] Touch 事件优化
+部署后再检查：
 
-7. **国际化（可选）**
-   - [ ] 添加 `hreflang` 标签
-   - [ ] 多语言 sitemap
+```bash
+curl -I https://0oq8he.site/
+curl -I https://0oq8he.site/login
+curl -I https://0oq8he.site/does-not-exist
+curl https://0oq8he.site/robots.txt
+curl https://0oq8he.site/sitemap.xml
+```
 
-## SEO 检查清单
+预期结果：
 
-### 发布前检查
+- `/` 返回 200，没有 `X-Robots-Tag: noindex`
+- `/login` 返回 200，并带有 `X-Robots-Tag: noindex, nofollow, noarchive`
+- 未知地址返回 404
+- sitemap 只有真实公开页面
+- 分享图地址返回图片内容，不能返回 HTML
 
-- [x] HTML meta 标签完整
-- [x] robots.txt 正确配置
-- [x] sitemap.xml 包含所有页面
-- [x] 结构化数据正确
-- [ ] 社交媒体分享图片准备完毕
-- [ ] 实际域名配置完成
-- [ ] 所有链接可访问（无 404）
-
-### 定期维护
-
-- [ ] 每月更新 sitemap.xml 的 lastmod
-- [ ] 监控 Google Search Console 错误
-- [ ] 检查页面加载速度（< 3 秒）
-- [ ] 移动端友好性测试
-- [ ] 检查外链和内链有效性
-
-## 关键指标
-
-### Core Web Vitals
-- **LCP (Largest Contentful Paint)**: < 2.5s
-- **FID (First Input Delay)**: < 100ms
-- **CLS (Cumulative Layout Shift)**: < 0.1
-
-### SEO 工具
-
-推荐使用以下工具监控和优化：
-
-1. **Google Search Console**: 索引状态、搜索表现
-2. **Google PageSpeed Insights**: 性能评分
-3. **Google Lighthouse**: 综合评估
-4. **百度站长平台**: 百度搜索优化
-5. **Ahrefs / Semrush**: 关键词排名和竞品分析
-
-## 关键词策略
-
-### 主要关键词
-- dashy
-- AI 写作
-- 公众号写作
-- 智能写作助手
-- 内容创作工具
-
-### 长尾关键词
-- AI 公众号写作工具
-- 公众号智能编辑器
-- RAG 写作系统
-- 自动配图生成工具
-- 提示词工程平台
-
-### 关键词密度
-- 保持 1-2% 的自然密度
-- 避免关键词堆砌
-- 优先考虑用户体验
-
-## 常见问题
-
-### Q: 为什么要用 JSON-LD 而不是 Microdata？
-A: JSON-LD 更易维护，不侵入 HTML 结构，Google 推荐。
-
-### Q: 多久能看到 SEO 效果？
-A: 通常需要 3-6 个月。新站建议先做好内容和技术优化。
-
-### Q: sitemap.xml 需要多久更新一次？
-A: 有新页面时立即更新，现有页面至少每月更新一次 lastmod。
-
-### Q: 如何处理重复内容？
-A: 使用 canonical 标签指向主页面，或在 robots.txt 中屏蔽。
-
-## 参考资源
-
-- [Google 搜索中心文档](https://developers.google.com/search/docs)
-- [百度搜索资源平台](https://ziyuan.baidu.com/)
-- [Schema.org 结构化数据](https://schema.org/)
-- [Open Graph Protocol](https://ogp.me/)
-- [Twitter Cards 文档](https://developer.twitter.com/en/docs/twitter-for-websites/cards/)
-
----
-
-**最后更新**: 2026-07-02  
-**维护者**: Dashy Team
+最后在 Google Search Console 和百度搜索资源平台重新提交 sitemap。索引状态和搜索曝光以平台数据为准。

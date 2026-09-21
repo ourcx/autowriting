@@ -27,11 +27,16 @@ const SMOKE_ALLOWED_ORIGIN = 'https://allowed.example.test'
 const SMOKE_DATA_ROOT = mkdtempSync(join(tmpdir(), 'autowriting-smoke-'))
 const SMOKE_STATIC_ROOT = join(SMOKE_DATA_ROOT, 'dist')
 const SMOKE_INDEX_MARKER = `autowriting-smoke-index-${Date.now()}`
+const SMOKE_NOT_FOUND_MARKER = `autowriting-smoke-404-${Date.now()}`
 
 mkdirSync(SMOKE_STATIC_ROOT, { recursive: true })
 writeFileSync(
   join(SMOKE_STATIC_ROOT, 'index.html'),
   `<!doctype html><html><body>${SMOKE_INDEX_MARKER}</body></html>`,
+)
+writeFileSync(
+  join(SMOKE_STATIC_ROOT, '404.html'),
+  `<!doctype html><html><body>${SMOKE_NOT_FOUND_MARKER}</body></html>`,
 )
 
 let serverProc = null
@@ -188,12 +193,31 @@ cases.push({
 })
 
 cases.push({
-  name: '生产模式前端路由应回退到 index.html',
+  name: '生产模式私有前端路由应回退到 index.html 并禁止索引',
   run: async () => {
-    const r = await fetch(`${BASE}/articles/example`)
+    const r = await fetch(`${BASE}/settings`)
     if (!r.ok) throw new Error(`status=${r.status}`)
+    if (r.headers.get('x-robots-tag') !== 'noindex, nofollow, noarchive') {
+      throw new Error('私有前端路由缺少 X-Robots-Tag')
+    }
+    if (r.headers.get('cache-control') !== 'no-store') throw new Error('私有前端路由缺少 no-store')
     const body = await r.text()
     if (!body.includes(SMOKE_INDEX_MARKER)) throw new Error('SPA 路由未回退到 index.html')
+  },
+})
+
+cases.push({
+  name: '生产模式未知页面应返回 HTML 404',
+  run: async () => {
+    const r = await fetch(`${BASE}/does-not-exist`)
+    if (r.status !== 404) throw new Error(`期望 404，实际 ${r.status}`)
+    if (r.headers.get('x-robots-tag') !== 'noindex, nofollow, noarchive') {
+      throw new Error('404 页面缺少 X-Robots-Tag')
+    }
+    const contentType = r.headers.get('content-type') || ''
+    if (!contentType.includes('text/html')) throw new Error(`响应不是 HTML: ${contentType}`)
+    const body = await r.text()
+    if (!body.includes(SMOKE_NOT_FOUND_MARKER)) throw new Error('未知页面未返回 404 页面')
   },
 })
 

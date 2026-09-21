@@ -340,16 +340,22 @@ server {
         access_log off;
     }
 
-    # 前端静态资源
-    location / {
+    # 带内容哈希的前端静态资源可以由 Nginx 长期缓存
+    location /assets/ {
         root /opt/autowriting/web/dist;
-        try_files $uri $uri/ /index.html;
+        try_files $uri =404;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
 
-        # 静态资源缓存
-        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
-            expires 1y;
-            add_header Cache-Control "public, immutable";
-        }
+    # 页面交给 Express 区分公开首页、私有 SPA 路由和真实 404
+    location / {
+        proxy_pass http://autowriting_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 
     # Gzip 压缩

@@ -2,11 +2,13 @@ import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import DashboardPage from './pages/DashboardPage/DashboardPage'
 import LoginPage from './pages/LoginPage/LoginPage'
+import PublicHomePage from './pages/PublicHomePage/PublicHomePage'
 import PrivateRoute from './components/PrivateRoute/PrivateRoute'
 import ToastProvider from './components/Toast/Toast'
 import IconTooltipProvider from './components/IconTooltipProvider/IconTooltipProvider'
+import SeoMetadata from './components/SeoMetadata/SeoMetadata'
 import { syncAIConfigFromServer } from './utils/aiConfig'
-import { initAuth } from './store/useAuth'
+import { initAuth, useAuth } from './store/useAuth'
 
 // Keep the landing workspace light; editors and administrative tools load on entry.
 const ArticleEditor = lazy(() => import('./pages/ArticleEditor/ArticleEditor'))
@@ -27,19 +29,24 @@ const CanvasStudio = lazy(() => import('./pages/CanvasStudio/CanvasStudio'))
 const TopicInsights = lazy(() => import('./pages/TopicInsights/TopicInsights'))
 const FirstSetupPage = lazy(() => import('./pages/FirstSetupPage/FirstSetupPage'))
 
-
-
-
+function HomeRoute() {
+  const { initialized, isLoggedIn } = useAuth()
+  if (!initialized) return <div className="route-loading" role="status">正在打开工作区...</div>
+  return isLoggedIn ? <DashboardPage /> : <PublicHomePage />
+}
 export default function App() {
+  const { initialized, isLoggedIn } = useAuth()
+
   useEffect(() => {
     // 先恢复登录态，再同步 AI 配置
-    initAuth().then(() => {
-      syncAIConfigFromServer().catch(() => {})
+    initAuth().then((isAuthenticated) => {
+      if (isAuthenticated) syncAIConfigFromServer().catch(() => {})
     })
   }, [])
 
   return (
     <BrowserRouter>
+      <SeoMetadata rootIsPrivate={initialized && isLoggedIn} />
       <ToastProvider />
       <IconTooltipProvider />
       <Suspense fallback={<div className="route-loading" role="status">正在打开工作区...</div>}>
@@ -49,7 +56,7 @@ export default function App() {
         <Route path="/register" element={<RegisterPage />} />
 
         {/* 登录保护路由 */}
-        <Route path="/" element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
+        <Route path="/" element={<HomeRoute />} />
         <Route path="/setup" element={<PrivateRoute><FirstSetupPage /></PrivateRoute>} />
         <Route path="/editor/:articleId" element={<PrivateRoute><ArticleEditor /></PrivateRoute>} />
         <Route path="/preview/:articleId" element={<PrivateRoute><WeChatPreview /></PrivateRoute>} />

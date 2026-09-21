@@ -49,6 +49,12 @@ app.disable("x-powered-by")
 // 生产拓扑只有一层本机 Nginx；仅信任 loopback，避免公网伪造 X-Forwarded-For 绕过限流。
 app.set("trust proxy", "loopback")
 
+const PRIVATE_SPA_ROUTE_PATTERNS = [
+  /^\/(?:login|register|setup|drafts|styles|settings|rag|token-usage|prompts|cron|scores|insights|account|canvas|admin|monitoring)\/?$/,
+  /^\/(?:editor|preview)\/[^/]+\/?$/,
+  /^\/wechat\/materials\/?$/,
+]
+
 const CACHE_TTL_DAYS = 7
 const CLEANUP_HOUR = 2
 
@@ -161,6 +167,16 @@ if (process.env.NODE_ENV === "production") {
   })
   app.use(express.static(STATIC_DIR))
   app.get("*", (_req, res) => {
+    const isPrivateSpaRoute = PRIVATE_SPA_ROUTE_PATTERNS.some((pattern) => pattern.test(_req.path))
+    if (_req.path !== "/" && !isPrivateSpaRoute) {
+      res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive")
+      res.status(404).sendFile("404.html", { root: STATIC_DIR })
+      return
+    }
+    if (isPrivateSpaRoute) {
+      res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive")
+      res.setHeader("Cache-Control", "no-store")
+    }
     res.sendFile("index.html", { root: STATIC_DIR })
   })
 }

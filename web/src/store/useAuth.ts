@@ -101,11 +101,11 @@ export function logout() {
 }
 
 // ── 应用启动时从 localStorage 恢复 token，并验证有效性 ──
-export async function initAuth(): Promise<void> {
+export async function initAuth(): Promise<boolean> {
   const token = localStorage.getItem(TOKEN_KEY)
   if (!token) {
     setState({ initialized: true })
-    return
+    return false
   }
   // 先预填 token，让拦截器能带上
   setState({ token, initialized: false })
@@ -114,10 +114,12 @@ export async function initAuth(): Promise<void> {
     // /api/auth/me 返回 { user: AuthUser }
     const user = (res.data.user ?? res.data) as AuthUser
     setState({ user, initialized: true })
+    return true
   } catch {
     // token 无效，清除
     localStorage.removeItem(TOKEN_KEY)
     setState({ token: null, user: null, initialized: true })
+    return false
   }
 }
 
