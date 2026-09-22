@@ -559,9 +559,9 @@ export default function ArticleEditor() {
         actions={<div className="header-actions">
           <button
             className="btn btn-ghost"
-            onClick={() => navigate('/account?tab=profile')}
-            title="设置账号受众、语气和禁用表达"
-            aria-label="写作档案"
+            onClick={() => navigate('/account?tab=writing')}
+            title="管理写作 DNA、长期背景和创作证据"
+            aria-label="写作资产"
           >
             <User size={16} />
           </button>

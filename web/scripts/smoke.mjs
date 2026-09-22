@@ -519,8 +519,11 @@ cases.push({
       audience: 'Smoke 读者',
       stance: '区分事实与观点',
       tone: '直接',
+      languageStyle: '短句为主，不使用破折号',
       bannedPhrases: ['赋能'],
       preferredStructure: '结论先行',
+      anglePreference: '从具体问题切入',
+      materialPreference: '优先一手材料',
       defaultPlatforms: ['wechat', 'toutiao'],
       visualStyle: '少装饰',
     }
@@ -531,8 +534,20 @@ cases.push({
     const readResponse = await fetch(`${BASE}/api/creator-profile`, { headers })
     if (!readResponse.ok) throw new Error(`读取失败 status=${readResponse.status}`)
     const stored = await readResponse.json()
-    if (stored.audience !== profile.audience || stored.defaultPlatforms.length !== 2) {
+    if (
+      stored.audience !== profile.audience
+      || stored.languageStyle !== profile.languageStyle
+      || stored.anglePreference !== profile.anglePreference
+      || stored.materialPreference !== profile.materialPreference
+      || stored.defaultPlatforms.length !== 2
+    ) {
       throw new Error('写作档案读写内容不一致')
+    }
+    const overviewResponse = await fetch(`${BASE}/api/creator-profile/assets`, { headers })
+    if (!overviewResponse.ok) throw new Error(`写作资产概览读取失败 status=${overviewResponse.status}`)
+    const overview = await overviewResponse.json()
+    if (overview.summary?.dnaLayersCompleted !== 6 || !Array.isArray(overview.recentConfirmedChoices)) {
+      throw new Error('写作资产概览结构不完整')
     }
 
     const otherUser = { username: `smoke_profile_other_${Date.now()}`, password: 'smoke_pw_9999' }
@@ -656,6 +671,25 @@ cases.push({
   name: '创作反馈接口应返回可解释统计结构',
   run: async () => {
     const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+    const articleResponse = await fetch(`${BASE}/api/articles/feedback-smoke`, {
+      method: 'POST', headers, body: JSON.stringify({
+        title: '高表现 Smoke 文章',
+        task: '验证作者确认的写作取舍',
+        materials: '测试素材只用于隔离环境',
+        article: '# 高表现 Smoke 文章\n\n保留这句。\n\n删掉空泛开场。',
+      }),
+    })
+    if (!articleResponse.ok) throw new Error(`文章保存失败 status=${articleResponse.status}`)
+    const feedbackResponse = await fetch(`${BASE}/api/articles/feedback-smoke/feedback`, {
+      method: 'POST', headers, body: JSON.stringify({
+        layer: 'structure',
+        note: '删掉空泛开场，直接进入问题。',
+        retainedExpressions: ['保留这句。'],
+      }),
+    })
+    if (!feedbackResponse.ok) throw new Error(`写作取舍保存失败 status=${feedbackResponse.status}`)
+    const workflow = await feedbackResponse.json()
+    if (workflow.feedback?.layer !== 'structure') throw new Error('写作取舍没有保存六层分类')
     const scoreResponse = await fetch(`${BASE}/api/scores/feedback-smoke`, {
       method: 'POST', headers, body: JSON.stringify({ title: '高表现 Smoke 文章', platform: 'wechat', views: 12000, composite: 88 }),
     })
@@ -668,7 +702,9 @@ cases.push({
     if (!Array.isArray(data.topArticles) || typeof data.patterns !== 'object' || data.topArticles[0]?.title !== '高表现 Smoke 文章') {
       throw new Error('创作反馈结构不完整')
     }
+    if (data.creatorExperiences?.[0]?.layer !== 'structure') throw new Error('创作反馈没有返回六层分类')
     await fetch(`${BASE}/api/scores/feedback-smoke/wechat`, { method: 'DELETE', headers })
+    await fetch(`${BASE}/api/articles/feedback-smoke`, { method: 'DELETE', headers })
   },
 })
 cases.push({

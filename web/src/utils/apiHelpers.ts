@@ -18,6 +18,7 @@ import type { WechatAnalyticsSnapshot } from '../../shared/wechatAnalytics'
 import type { WechatBrowserPublishOptions } from '../../shared/wechatPublish'
 import {
   normalizeCreatorWritingProfile,
+  type CreatorFeedbackLayer,
   type CreatorWritingProfile,
 } from '../../shared/contentProduction'
 
@@ -266,6 +267,7 @@ export interface ProductionInsights {
   creatorExperiences?: Array<{
     articleId: string
     candidateId?: string
+    layer: CreatorFeedbackLayer
     note: string
     retainedExpressions: string[]
     retainedParagraphs: number
@@ -314,8 +316,17 @@ export async function recordEditingActivity(articleId: string, sessionId: string
   await axios.post(`/api/articles/${encodeURIComponent(articleId)}/activity`, { sessionId, totalMs })
 }
 
-export async function saveCreatorFeedback(articleId: string, note: string, retainedExpressions: string[]): Promise<ArticleWorkflow> {
-  return (await axios.post<ArticleWorkflow>(`/api/articles/${encodeURIComponent(articleId)}/feedback`, { note, retainedExpressions })).data
+export async function saveCreatorFeedback(
+  articleId: string,
+  layer: CreatorFeedbackLayer,
+  note: string,
+  retainedExpressions: string[],
+): Promise<ArticleWorkflow> {
+  return (await axios.post<ArticleWorkflow>(`/api/articles/${encodeURIComponent(articleId)}/feedback`, {
+    layer,
+    note,
+    retainedExpressions,
+  })).data
 }
 
 export async function generateArticleOutline(articleId: string, task: string, aiConfig: AIConfig): Promise<string> {
@@ -360,6 +371,43 @@ export async function collectWechatAnalytics(cookies: string): Promise<{ snapsho
 export async function fetchCreatorWritingProfile(): Promise<CreatorWritingProfile> {
   const response = await axios.get('/api/creator-profile')
   return normalizeCreatorWritingProfile(response.data)
+}
+
+export interface WritingAssetOverview {
+  summary: {
+    dnaLayersCompleted: number
+    memoryCharacters: number
+    promptCount: number
+    materialArticleCount: number
+    candidateCount: number
+    completedCandidateCount: number
+    confirmedChoiceCount: number
+    highPerformanceCount: number
+    lowPerformanceCount: number
+  }
+  recentConfirmedChoices: Array<{
+    articleId: string
+    candidateId?: string
+    layer: CreatorFeedbackLayer
+    note: string
+    retainedExpressions: string[]
+    retainedParagraphs: number
+    changedParagraphs: number
+    updatedAt: string
+  }>
+}
+
+export async function fetchWritingAssetOverview(): Promise<WritingAssetOverview> {
+  return (await axios.get<WritingAssetOverview>('/api/creator-profile/assets')).data
+}
+
+export async function fetchGlobalMemory(): Promise<string> {
+  const response = await axios.get<{ value: unknown }>('/api/settings/global_memory')
+  return typeof response.data.value === 'string' ? response.data.value : ''
+}
+
+export async function saveGlobalMemory(value: string): Promise<void> {
+  await axios.put('/api/settings/global_memory', { value })
 }
 
 export async function fetchGenerationCandidates(articleId: string): Promise<GenerationCandidate[]> {

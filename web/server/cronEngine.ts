@@ -16,7 +16,7 @@ import {
   updateCronJobRunStats,
   getSetting,
 } from './db.ts'
-import { SERVER_AI_CONFIG, DRAFTS_DIR, getWritingGuideContent } from './config.ts'
+import { SERVER_AI_CONFIG, DRAFTS_DIR } from './config.ts'
 import { 
   buildLLMRequest, 
   callLLMWithRetry,
@@ -26,6 +26,8 @@ import {
 } from './utils/index.ts'
 import { nowDay } from './utils'
 import type { AIConfig, MaterialsDataset } from './types.ts'
+import { stripEmoji } from '../shared/contentProduction.ts'
+import { buildWritingContext } from './writingContext.ts'
 // 调度实例 Map<jobId, ScheduledTask>
 const _scheduledTasks = new Map()
 
@@ -146,11 +148,9 @@ async function fetchTrending(job, aiConfig) {
 
 // ── 步骤 2：生成文章 ─────────────────────────────────────────────────────────
 
-async function generateArticle(topic: string, aiConfig: AIConfig, materialsDataset: MaterialsDataset | null = null) {
-  // 写作规范：可选注入，没配置就跳过整段
-  const writingGuide = getWritingGuideContent()
-  const writingGuideSection = writingGuide ? `# 写作规范（必须严格遵守）\n${writingGuide}\n\n` : ''
-  
+async function generateArticle(userId: string, topic: string, aiConfig: AIConfig, materialsDataset: MaterialsDataset | null = null) {
+  const writingContext = await buildWritingContext(userId)
+
   // 素材数据集：如果有，注入到提示词中
   let materialsSection = ''
   if (materialsDataset) {
@@ -170,7 +170,7 @@ async function generateArticle(topic: string, aiConfig: AIConfig, materialsDatas
       },
       {
         role: 'user',
-        content: `${writingGuideSection}${materialsSection}# 今日选题
+        content: `${writingContext}${materialsSection}# 今日选题
 ${topic}
 
 # 写作要求
@@ -183,14 +183,14 @@ ${materialsDataset ? '- 充分利用上面提供的参考素材，但要用自�
 
 ---
 
-请直接输出完整文章（纯 Markdown，只有 1 个 H1，所有 H2 带 emoji）：`,
+请直接输出完整文章。使用纯 Markdown，只保留 1 个 H1，全文不得使用 emoji、表情包或装饰性表情符号：`,
       },
     ],
     temperature: 0.85,
     max_tokens: 4096,
   }, headers)
 
-  return resp.data.choices[0].message.content.trim()
+  return stripEmoji(resp.data.choices[0].message.content.trim())
 }
 
 // ── 步骤 3：生成 CSS 样式 ─────────────────────────────────────────────────────
@@ -380,7 +380,7 @@ export async function runCronJob(jobId) {
     addStep('generate', 'running', '正在生成文章...')
     let articleMd
     try {
-      articleMd = await generateArticle(topic, aiConfig, materialsDataset)
+      articleMd = await generateArticle(job.userId, topic, aiConfig, materialsDataset)
       const firstLine = articleMd.split('\n')[0].replace(/^#+\s*/, '').trim()
       addStep('generate', 'success', `文章已生成（${articleMd.length} 字）`, { title: firstLine })
     } catch (e) {

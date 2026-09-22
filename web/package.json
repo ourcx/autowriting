@@ -27,6 +27,7 @@
     "test:rag": "node --import tsx scripts/test-rag-ranking.ts",
     "test:canvas": "node --import tsx scripts/test-canvas-design.ts",
     "test:production": "node --import tsx scripts/test-content-production.ts",
+    "test:writing-assets": "node scripts/test-writing-assets.mjs",
     "test:workers": "node --import tsx scripts/test-workers.ts",
     "test:wechat-collector": "node --import tsx scripts/test-wechat-collector.ts",
     "test:wechat-publish": "node --import tsx --test scripts/test-wechat-publishing.ts",

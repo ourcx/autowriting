@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 // @ts-ignore
 import { useNavigate } from 'react-router-dom'
 import {
   Save, Check, Eye, EyeOff, AlertCircle, CheckCircle2,
-  Zap, Image, Search, ChevronRight, ShieldAlert, Brain,
+  Zap, Image, Search, ChevronRight, ShieldAlert,
 } from 'lucide-react'
 import {
   AIConfig,
@@ -14,18 +14,16 @@ import {
 } from '../../utils/aiConfig'
 import PageHeader from '../../components/PageHeader/PageHeader'
 import { useConfigStore, setLocalConfig, fetchServerStatus } from '../../store/useConfigStore'
-import axios from 'axios'
 import { testAIConnection } from '../../utils/apiHelpers'
 import './AISettings.css'
 
-type Section = 'article' | 'cover' | 'search' | 'cdn' | 'memory'
+type Section = 'article' | 'cover' | 'search' | 'cdn'
 
 const NAV_ITEMS: { id: Section; icon: React.ReactNode; label: string; sub: string }[] = [
   { id: 'article', icon: <Zap size={16} />, label: '文章生成', sub: '大语言模型 API' },
   { id: 'cover', icon: <Image size={16} />, label: '封面生成', sub: '图片生成 API' },
   { id: 'search', icon: <Search size={16} />, label: '素材搜索', sub: '搜索引擎 API' },
   { id: 'cdn', icon: <Image size={16} />, label: '图床配置', sub: 'Imgur 图片 CDN' },
-  { id: 'memory', icon: <Brain size={16} />, label: '个人记忆', sub: '仅当前账号使用' },
 ]
 
 export default function AISettings() {
@@ -40,38 +38,10 @@ export default function AISettings() {
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
   const [activeSection, setActiveSection] = useState<Section>('article')
 
-  // ── 永久记忆 ──────────────────────────────────────────────────────────────
-  const [globalMemory, setGlobalMemory] = useState('')
-  const [memorySaving, setMemorySaving] = useState(false)
-  const [memorySaved, setMemorySaved] = useState(false)
-  const [memoryLoadError, setMemoryLoadError] = useState('')
-
-  const loadGlobalMemory = useCallback(async () => {
-    try {
-      const response = await axios.get<{ value: unknown }>('/api/settings/global_memory')
-      setGlobalMemory(typeof response.data.value === 'string' ? response.data.value : '')
-    } catch {
-      setMemoryLoadError('加载失败')
-    }
-  }, [])
-
-  const saveGlobalMemory = async () => {
-    setMemorySaving(true)
-    try {
-      await axios.put('/api/settings/global_memory', { value: globalMemory })
-      setMemorySaved(true)
-      setTimeout(() => setMemorySaved(false), 2500)
-    } catch {
-      setMemoryLoadError('保存失败，请重试')
-    }
-    setMemorySaving(false)
-  }
-
   useEffect(() => {
     setConfig(loadAIConfig())
     fetchServerStatus()
-    loadGlobalMemory()
-  }, [loadGlobalMemory])
+  }, [])
 
   const handleSave = () => {
     setLocalConfig(config)
@@ -932,72 +902,6 @@ export default function AISettings() {
                   </p>
                 </div>
               )}
-            </div>
-          )}
-
-          {/* ════ 永久记忆 ════ */}
-          {activeSection === 'memory' && (
-            <div className="as-panel">
-              <div className="as-panel-header">
-                <h2 className="as-panel-title">个人永久记忆</h2>
-                <p className="as-panel-desc">仅当前登录账号可见，并会在该账号每次生成文章时自动注入到 AI 提示词中，适合放置写作背景、账号定位、常用素材模板等固定信息</p>
-              </div>
-
-              <div className="as-card">
-                <div className="as-card-section-label">当前账号的背景内容</div>
-                <p className="as-card-desc">
-                  支持 Markdown 格式。建议包含：账号定位、目标读者、写作风格偏好、常见禁忌词、固定参考数据等。
-                </p>
-
-                {memoryLoadError && (
-                  <div className="as-memory-error">
-                    <AlertCircle size={13} />
-                    {memoryLoadError}
-                  </div>
-                )}
-
-                <textarea
-                  className="as-memory-editor"
-                  value={globalMemory}
-                  onChange={e => { setGlobalMemory(e.target.value); setMemoryLoadError('') }}
-                  placeholder={`## 账号定位\n- 面向：大学生家长、教师群体\n- 风格：真诚实用，避免官腔\n\n## 常用背景\n- 平台：微信公众号\n- 字数目标：1500-2000 字\n\n## 禁忌词\n- 不得使用「首先其次」「总而言之」等套话\n- 不用「深度」「全面」等空洞修饰词`}
-                  rows={16}
-                />
-
-                <div className="as-memory-footer">
-                  <span className="as-memory-count">
-                    {globalMemory.length} 字
-                    {globalMemory.length > 0 && ' · 已启用，每次生成文章时自动注入'}
-                  </span>
-                  <div className="as-memory-actions">
-                    {globalMemory && (
-                      <button
-                        className="as-btn-ghost"
-                        onClick={() => { if (confirm('清空全部永久记忆内容？')) setGlobalMemory('') }}
-                      >
-                        清空
-                      </button>
-                    )}
-                    <button
-                      className={`as-btn-test${memorySaved ? ' as-btn-test--ok' : ''}`}
-                      onClick={saveGlobalMemory}
-                      disabled={memorySaving}
-                    >
-                      {memorySaving ? '保存中...' : memorySaved ? <><Check size={13} />已保存</> : <><Save size={13} />保存记忆</>}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="as-card as-card--hint">
-                <div className="as-card-section-label">使用建议</div>
-                <ul className="as-memory-tips">
-                  <li>账号定位、目标读者群体放这里，不用每篇文章重复填</li>
-                  <li>常用的竞品对比、行业数据可以放这里作为参考背景</li>
-                  <li>禁止使用的表述方式或必须遵守的格式规则可以在这里强调</li>
-                  <li>内容越精炼越好，控制在 500 字以内效果最佳</li>
-                </ul>
-              </div>
             </div>
           )}
 

@@ -1,3 +1,5 @@
+import type { CreatorFeedbackLayer } from "./contentProduction.ts"
+
 export type ArticleWorkflowStage =
   | "brief"
   | "materials"
@@ -25,7 +27,7 @@ export interface ArticleWorkflow {
   reworkCount?: number
   selectedCandidateId?: string
   selectionCount?: number
-  feedback?: { note: string; retainedExpressions: string[]; updatedAt: string }
+  feedback?: { layer: CreatorFeedbackLayer; note: string; retainedExpressions: string[]; updatedAt: string }
   draftReceipt?: {
     status: "sending" | "succeeded" | "unknown" | "failed"
     fingerprint: string
@@ -93,7 +95,11 @@ export function normalizeArticleWorkflow(
   }
   if (source.feedback && typeof source.feedback === "object") {
     const feedback = source.feedback as Record<string, unknown>
+    const layer = ["general", "language", "structure", "angle", "material", "cognition", "visual"].includes(String(feedback.layer))
+      ? feedback.layer as CreatorFeedbackLayer
+      : "general"
     workflow.feedback = {
+      layer,
       note: typeof feedback.note === "string" ? feedback.note.slice(0, 1000) : "",
       retainedExpressions: Array.isArray(feedback.retainedExpressions)
         ? feedback.retainedExpressions.filter((value): value is string => typeof value === "string").slice(0, 10).map(value => value.slice(0, 300)) : [],

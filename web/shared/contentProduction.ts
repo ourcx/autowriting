@@ -1,11 +1,44 @@
 export type PublishingPlatform = "wechat" | "toutiao" | "xiaohongshu"
 
+export type WritingDnaLayer =
+  | "language"
+  | "structure"
+  | "angle"
+  | "material"
+  | "cognition"
+  | "visual"
+
+export type CreatorFeedbackLayer = WritingDnaLayer | "general"
+
+export const WRITING_DNA_LAYER_LABELS: Record<WritingDnaLayer, string> = {
+  language: "词句与节奏",
+  structure: "篇章结构",
+  angle: "切入视角",
+  material: "素材选择",
+  cognition: "观点与判断",
+  visual: "图文与视觉",
+}
+
+export const ARTICLE_WRITING_BASELINE = `# 中文成文底线
+- 全文禁止使用 emoji、表情包和装饰性符号，标题与各级小标题也不例外。
+- 保留素材中的事实、数字、专有名词、关系和条件；没有依据的经历、数据、人物与判断不得补写。
+- 从具体事实、问题或场景进入正文，不写“在当今时代”“随着不断发展”“大家好”等空洞开场。
+- 删除“总而言之”“综上所述”“希望本文对你有所帮助”“让我们一起”等机器人式收尾。
+- 少用“首先、其次、最后”“值得注意的是”“不得不说”等机械过渡，章节标题直接表达本节判断。
+- 避免连续使用“不是……而是……”、整齐三连句、口号式排比和同义反复。能一句说清的，不扩成三句。
+- 优先使用准确动词和具体事实，少用“赋能、深度、全面、显著提升”等没有证据的抽象表达。
+- 不为生动而编造比喻。比喻只用于解释确实难懂的概念，不能代替事实和推理。
+- 输出前自行通读，检查事实、结构、套话和节奏；只输出最终正文，不解释修改过程。`
+
 export interface CreatorWritingProfile {
   audience: string
   stance: string
   tone: string
+  languageStyle: string
   bannedPhrases: string[]
   preferredStructure: string
+  anglePreference: string
+  materialPreference: string
   defaultPlatforms: PublishingPlatform[]
   visualStyle: string
 }
@@ -14,8 +47,11 @@ export const EMPTY_CREATOR_WRITING_PROFILE: CreatorWritingProfile = {
   audience: "",
   stance: "",
   tone: "",
+  languageStyle: "",
   bannedPhrases: [],
   preferredStructure: "",
+  anglePreference: "",
+  materialPreference: "",
   defaultPlatforms: ["wechat"],
   visualStyle: "",
 }
@@ -43,23 +79,75 @@ export function normalizeCreatorWritingProfile(value: unknown): CreatorWritingPr
     audience: text(source.audience),
     stance: text(source.stance),
     tone: text(source.tone),
+    languageStyle: text(source.languageStyle, 800),
     bannedPhrases,
     preferredStructure: text(source.preferredStructure, 500),
+    anglePreference: text(source.anglePreference, 500),
+    materialPreference: text(source.materialPreference, 500),
     defaultPlatforms: defaultPlatforms.length ? defaultPlatforms : ["wechat"],
     visualStyle: text(source.visualStyle),
   }
 }
 
+export function getCompletedWritingDnaLayers(profile: CreatorWritingProfile): WritingDnaLayer[] {
+  const completion: Record<WritingDnaLayer, boolean> = {
+    language: Boolean(profile.tone || profile.languageStyle || profile.bannedPhrases.length),
+    structure: Boolean(profile.preferredStructure),
+    angle: Boolean(profile.anglePreference),
+    material: Boolean(profile.materialPreference),
+    cognition: Boolean(profile.stance),
+    visual: Boolean(profile.visualStyle),
+  }
+  return (Object.keys(completion) as WritingDnaLayer[]).filter(layer => completion[layer])
+}
+
 export function formatCreatorProfileForPrompt(profile: CreatorWritingProfile): string {
-  const rows = [
-    profile.audience && `- 目标读者：${profile.audience}`,
-    profile.stance && `- 内容立场：${profile.stance}`,
-    profile.tone && `- 语气：${profile.tone}`,
-    profile.preferredStructure && `- 常用结构：${profile.preferredStructure}`,
-    profile.visualStyle && `- 视觉倾向：${profile.visualStyle}`,
-    profile.bannedPhrases.length && `- 禁用表达：${profile.bannedPhrases.join("、")}`,
-  ].filter(Boolean)
-  return rows.length ? `\n# 账号写作档案（在不冲突时遵守，本篇任务要求优先）\n${rows.join("\n")}\n` : ""
+  const layers = [
+    {
+      title: "L1 词句与节奏",
+      rows: [
+        profile.tone && `- 语气：${profile.tone}`,
+        profile.languageStyle && `- 句式、节奏与标点：${profile.languageStyle}`,
+        profile.bannedPhrases.length && `- 禁用表达：${profile.bannedPhrases.join("、")}`,
+      ].filter(Boolean),
+    },
+    {
+      title: "L2 篇章结构",
+      rows: [profile.preferredStructure && `- 常用结构：${profile.preferredStructure}`].filter(Boolean),
+    },
+    {
+      title: "L3 切入视角",
+      rows: [profile.anglePreference && `- 常用切入：${profile.anglePreference}`].filter(Boolean),
+    },
+    {
+      title: "L4 素材选择",
+      rows: [profile.materialPreference && `- 素材偏好：${profile.materialPreference}`].filter(Boolean),
+    },
+    {
+      title: "L5 观点与判断",
+      rows: [profile.stance && `- 长期立场：${profile.stance}`].filter(Boolean),
+    },
+    {
+      title: "L6 图文与视觉",
+      rows: [profile.visualStyle && `- 视觉倾向：${profile.visualStyle}`].filter(Boolean),
+    },
+  ].filter(layer => layer.rows.length)
+  if (!layers.length && !profile.audience) return ""
+  return `
+# 账号写作 DNA
+适用情境：${profile.audience ? `主要读者为${profile.audience}` : "以本篇任务指定的读者为准"}。
+${layers.map(layer => `## ${layer.title}\n${layer.rows.join("\n")}`).join("\n")}
+
+这些是长期偏好，只在当前情境适用时采用。本篇任务和素材优先。缺少作者观点或真实经历时明确指出，不得代替作者编造。
+`
+}
+
+const EMOJI_PATTERN = /(?:[#*0-9]\uFE0F?\u20E3)|(?:\p{Regional_Indicator}|\p{Emoji_Modifier})|(?:\p{Extended_Pictographic}(?:\uFE0E|\uFE0F)?(?:\u200D\p{Extended_Pictographic}(?:\uFE0E|\uFE0F)?)*)/gu
+
+export function stripEmoji(value: string): string {
+  return value
+    .replace(EMOJI_PATTERN, "")
+    .replace(/(?:\u200D|\u20E3|\uFE0E|\uFE0F)/g, "")
 }
 
 function plainText(markdown: string): string {

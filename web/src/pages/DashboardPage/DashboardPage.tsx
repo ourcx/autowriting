@@ -88,9 +88,9 @@ export default function DashboardPage() {
                 管理
               </button>
             )}
-            <button className="dp-nav-btn dp-nav-btn--account" onClick={() => navigate('/account')} title={`${user?.username || '当前用户'}的发布账号与写作档案`}>
+            <button className="dp-nav-btn dp-nav-btn--account" onClick={() => navigate('/account')} title={`${user?.username || '当前用户'}的发布账号与写作资产`}>
               <User size={14} />
-              <span>账号与发布</span>
+              <span>账号与资产</span>
               <small className={connectedPlatforms ? 'is-ready' : ''}>{connectedPlatforms}/3</small>
             </button>
             <button className="dp-nav-btn dp-nav-btn--icon" title="查看当前页引导" aria-label="查看当前页引导" onClick={() => setShowOnboarding(true)}>

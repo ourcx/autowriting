@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { loadAIConfig } from '../../utils/aiConfig'
 import { sanitizeHtml } from '../../utils/sanitizeHtml'
+import { stripEmoji } from '../../../shared/contentProduction'
 import './ContentStats.css'
 
 interface ContentStatsProps {
@@ -193,15 +194,13 @@ function runChecks(text: string, title?: string, task = '') {
       detail: text.includes(term) ? `正文仍出现「${term}」` : `正文未出现「${term}」`,
     })
   }
-  if (/(?:不要|禁止)(?:生成|使用)?\s*emoji/i.test(task)) {
-    const hasEmoji = /\p{Extended_Pictographic}/u.test(text)
-    taskRules.push({
-      label: '任务要求：不使用 emoji',
-      passed: !hasEmoji,
-      required: true,
-      detail: hasEmoji ? '正文仍包含 emoji' : '正文未使用 emoji',
-    })
-  }
+  const hasEmoji = stripEmoji(text) !== text
+  taskRules.push({
+    label: '全局要求：不使用 emoji',
+    passed: !hasEmoji,
+    required: true,
+    detail: hasEmoji ? '正文仍包含 emoji' : '正文未使用 emoji',
+  })
 
   return {
     foundCliches,

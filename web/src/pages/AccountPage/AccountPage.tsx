@@ -1,18 +1,20 @@
 import { FormEvent, useCallback, useEffect, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import {
-  BarChart3, BookOpen, Edit3, Eye, EyeOff, ExternalLink, Link2, Link2Off,
-  Newspaper, RefreshCw, ShieldCheck,
+  BarChart3, BookOpen, Brain, CheckCircle2, Database, Eye, EyeOff, ExternalLink,
+  FileText, GitBranch, Link2, Link2Off, Newspaper, RefreshCw, ShieldCheck, Sparkles, Zap,
 } from "lucide-react"
 import PageHeader from "../../components/PageHeader/PageHeader"
 import {
-  extractErrorMessage, fetchCreatorWritingProfile, fetchToutiaoAccount, fetchWechatAccount,
-  collectWechatAnalytics, saveCreatorWritingProfile,
-  ToutiaoAccount, WechatAccount,
+  collectWechatAnalytics, extractErrorMessage, fetchCreatorWritingProfile, fetchGlobalMemory,
+  fetchToutiaoAccount, fetchWechatAccount, fetchWritingAssetOverview, saveCreatorWritingProfile,
+  saveGlobalMemory, type ToutiaoAccount, type WechatAccount, type WritingAssetOverview,
 } from "../../utils/apiHelpers"
 import { toast } from "../../components/Toast/Toast"
 import {
   EMPTY_CREATOR_WRITING_PROFILE,
+  WRITING_DNA_LAYER_LABELS,
+  type CreatorFeedbackLayer,
   type CreatorWritingProfile,
   type PublishingPlatform,
 } from "../../../shared/contentProduction"
@@ -28,9 +30,19 @@ import { useAuth } from "../../store/useAuth"
 import "./AccountPage.css"
 
 type Platform = "wechat" | "toutiao" | "xiaohongshu"
+type WritingProfileTextField =
+  | "preferredStructure"
+  | "anglePreference"
+  | "materialPreference"
+  | "stance"
+  | "visualStyle"
 
 function formatNumber(value: number | null): string {
   return value === null ? "—" : value.toLocaleString("zh-CN")
+}
+
+function feedbackLayerLabel(layer: CreatorFeedbackLayer): string {
+  return layer === "general" ? "综合取舍" : WRITING_DNA_LAYER_LABELS[layer]
 }
 
 function AccountAvatar({ name, imageUrl, platform }: { name: string; imageUrl: string | null; platform: Platform }) {
@@ -64,6 +76,8 @@ export default function AccountPage() {
   const [wechatAnalyticsError, setWechatAnalyticsError] = useState("")
   const [bindingWechatAnalytics, setBindingWechatAnalytics] = useState(false)
   const [writingProfile, setWritingProfile] = useState<CreatorWritingProfile>(EMPTY_CREATOR_WRITING_PROFILE)
+  const [globalMemory, setGlobalMemory] = useState("")
+  const [assetOverview, setAssetOverview] = useState<WritingAssetOverview | null>(null)
   const [profileLoading, setProfileLoading] = useState(true)
   const [profileSaving, setProfileSaving] = useState(false)
 
@@ -102,10 +116,19 @@ export default function AccountPage() {
   }, [refreshToutiao, refreshWechat, toutiaoBound, wechatBound])
 
   useEffect(() => {
-    fetchCreatorWritingProfile()
-      .then(setWritingProfile)
-      .catch(error => toast.error(extractErrorMessage(error, "写作档案加载失败")))
+    Promise.all([
+      fetchCreatorWritingProfile(),
+      fetchGlobalMemory(),
+    ])
+      .then(([profile, memory]) => {
+        setWritingProfile(profile)
+        setGlobalMemory(memory)
+      })
+      .catch(error => toast.error(extractErrorMessage(error, "写作资产加载失败")))
       .finally(() => setProfileLoading(false))
+    fetchWritingAssetOverview()
+      .then(setAssetOverview)
+      .catch(() => toast.warn("资产统计暂时无法读取，文风与长期背景仍可正常编辑"))
   }, [])
 
   useEffect(() => {
@@ -120,13 +143,22 @@ export default function AccountPage() {
     setWritingProfile(previous => ({ ...previous, defaultPlatforms: [platform] }))
   }
 
-  async function saveWritingProfile() {
+  async function saveWritingAssets() {
     setProfileSaving(true)
     try {
-      setWritingProfile(await saveCreatorWritingProfile(writingProfile))
-      toast.success("账号写作档案已保存，之后生成文章会自动使用")
+      const [profile] = await Promise.all([
+        saveCreatorWritingProfile(writingProfile),
+        saveGlobalMemory(globalMemory),
+      ])
+      setWritingProfile(profile)
+      try {
+        setAssetOverview(await fetchWritingAssetOverview())
+      } catch {
+        toast.warn("写作资产已保存，统计稍后刷新")
+      }
+      toast.success("写作 DNA 与长期背景已保存")
     } catch (error) {
-      toast.error(extractErrorMessage(error, "写作档案保存失败"))
+      toast.error(extractErrorMessage(error, "写作资产保存失败"))
     } finally {
       setProfileSaving(false)
     }
@@ -252,14 +284,14 @@ export default function AccountPage() {
     setWechatAnalyticsError("")
   }
 
-  const activeTab = searchParams.get("tab") === "profile" ? "profile" : "connections"
+  const activeTab = ["profile", "writing"].includes(searchParams.get("tab") || "") ? "writing" : "connections"
   const connectedPlatformCount = Number(wechatBound || wechatAnalyticsBound)
     + Number(toutiaoBound)
     + Number(xiaohongshuBound)
   const fromSetup = searchParams.get("from") === "setup"
-  const changeTab = (tab: "connections" | "profile") => {
+  const changeTab = (tab: "connections" | "writing") => {
     const next = new URLSearchParams(searchParams)
-    if (tab === "profile") next.set("tab", "profile")
+    if (tab === "writing") next.set("tab", "writing")
     else next.delete("tab")
     setSearchParams(next, { replace: true })
   }
@@ -267,8 +299,8 @@ export default function AccountPage() {
   return (
     <main className="ap-root">
       <PageHeader
-        title="账号与发布"
-        subtitle="管理平台连接、发布能力和写作偏好"
+        title="账号与资产"
+        subtitle="管理平台连接、发布能力和可复用写作资产"
         backLabel={fromSetup ? "返回首次设置" : "返回工作台"}
         onBack={() => navigate(fromSetup ? "/setup" : "/")}
         actions={<div className="ap-header-note"><ShieldCheck size={14} /> 凭据仅保存在当前浏览器</div>}
@@ -277,10 +309,10 @@ export default function AccountPage() {
       <section className="ap-content">
         <div className="ap-heading">
           <div>
-            <h1>{activeTab === "connections" ? "平台连接" : "写作档案"}</h1>
+            <h1>{activeTab === "connections" ? "平台连接" : "写作资产"}</h1>
             <p>{activeTab === "connections"
               ? "按平台管理发布能力，需要哪项就连接哪项。"
-              : "这些偏好会作为生成参考，单篇任务要求仍然优先。"}</p>
+              : "文风、背景、反馈与历史表现各司其职，生成时按固定顺序读取。"}</p>
           </div>
           {activeTab === "connections" && <div className="ap-summary"><strong>{connectedPlatformCount}/3</strong><span>平台已连接</span></div>}
         </div>
@@ -289,8 +321,8 @@ export default function AccountPage() {
           <button role="tab" aria-selected={activeTab === "connections"} onClick={() => changeTab("connections")}>
             <Link2 size={16} />账号连接
           </button>
-          <button role="tab" aria-selected={activeTab === "profile"} onClick={() => changeTab("profile")}>
-            <Edit3 size={16} />写作档案
+          <button role="tab" aria-selected={activeTab === "writing"} onClick={() => changeTab("writing")}>
+            <Brain size={16} />写作资产
           </button>
         </div>
 
@@ -448,33 +480,112 @@ export default function AccountPage() {
             </article>
           </div>
         ) : (
-          <section className="ap-writing-profile" aria-label="写作档案">
+          <section className="ap-writing-profile" aria-label="写作资产">
             <div className="ap-writing-profile-head">
               <div>
-                <h2>生成时默认使用的写作偏好</h2>
-                <p>单篇文章里的任务要求优先级更高，这里只补充长期不变的信息。</p>
+                <h2>写作资产总览</h2>
+                <p>长期规则只保存你明确确认的内容，任务、素材和当次选择仍以单篇文章为准。</p>
               </div>
-              <button className="ap-btn ap-btn--dark" onClick={() => void saveWritingProfile()} disabled={profileLoading || profileSaving}>
-                {profileSaving ? "保存中…" : "保存写作档案"}
+              <button className="ap-btn ap-btn--dark" onClick={() => void saveWritingAssets()} disabled={profileLoading || profileSaving}>
+                {profileSaving ? "保存中…" : "保存写作资产"}
               </button>
             </div>
-            <div className="ap-writing-profile-grid">
-              <label><span>目标读者</span><input value={writingProfile.audience} onChange={event => updateProfile("audience", event.target.value)} placeholder="如：广州大学城学生和年轻教师" /></label>
-              <label><span>内容立场</span><input value={writingProfile.stance} onChange={event => updateProfile("stance", event.target.value)} placeholder="如：实用、克制，明确区分事实和观点" /></label>
-              <label><span>常用语气</span><input value={writingProfile.tone} onChange={event => updateProfile("tone", event.target.value)} placeholder="如：像熟悉校园的学长，直接但不油腻" /></label>
-              <label><span>视觉倾向</span><input value={writingProfile.visualStyle} onChange={event => updateProfile("visualStyle", event.target.value)} placeholder="如：阅读型、少装饰、青绿色" /></label>
-              <label className="ap-writing-profile-wide"><span>常用结构</span><textarea value={writingProfile.preferredStructure} onChange={event => updateProfile("preferredStructure", event.target.value)} rows={3} placeholder="如：场景开头 → 背景解释 → 分步建议 → 风险提醒 → 结论" /></label>
-              <label className="ap-writing-profile-wide"><span>禁用表达</span><input value={writingProfile.bannedPhrases.join("、")} onChange={event => updateProfile("bannedPhrases", event.target.value.split(/[，,、]/).map(item => item.trim()).filter(Boolean))} placeholder="用顿号分隔，如：众所周知、赋能、闭眼冲" /></label>
+
+            <div className="ap-asset-metrics" aria-label="写作资产统计">
+              <div><Sparkles size={17} /><strong>{assetOverview?.summary.dnaLayersCompleted ?? 0}/6</strong><span>文风层级</span></div>
+              <div><FileText size={17} /><strong>{assetOverview?.summary.memoryCharacters ?? 0}</strong><span>背景记忆字数</span></div>
+              <div><CheckCircle2 size={17} /><strong>{assetOverview?.summary.confirmedChoiceCount ?? 0}</strong><span>确认取舍</span></div>
+              <div><Zap size={17} /><strong>{assetOverview?.summary.promptCount ?? 0}</strong><span>提示词</span></div>
+              <div><Database size={17} /><strong>{assetOverview?.summary.materialArticleCount ?? 0}</strong><span>素材文章</span></div>
+              <div><GitBranch size={17} /><strong>{assetOverview?.summary.completedCandidateCount ?? 0}/{assetOverview?.summary.candidateCount ?? 0}</strong><span>完成候选</span></div>
+              <div><BarChart3 size={17} /><strong>{assetOverview?.summary.highPerformanceCount ?? 0}/{assetOverview?.summary.lowPerformanceCount ?? 0}</strong><span>高 / 低表现</span></div>
             </div>
-            <fieldset className="ap-platform-defaults">
-              <legend>默认生成平台</legend>
-              <p>生成弹窗会按当前编辑位置优先选择；没有明确上下文时使用这里的设置。</p>
-              <div>
-                {([["wechat", "公众号母稿"], ["toutiao", "今日头条版本"], ["xiaohongshu", "小红书发布"]] as Array<[PublishingPlatform, string]>).map(([platform, label]) => (
-                  <button type="button" key={platform} aria-pressed={writingProfile.defaultPlatforms[0] === platform} onClick={() => selectDefaultPlatform(platform)}>{label}</button>
+
+            <section className="ap-asset-section" aria-labelledby="ap-dna-title">
+              <div className="ap-asset-section-head">
+                <div><span>长期表达规则</span><h3 id="ap-dna-title">六层写作 DNA</h3></div>
+                <p>情境决定规则是否适用，字段留空不会阻塞生成。</p>
+              </div>
+              <div className="ap-writing-context">
+                <label><span>主要读者</span><input value={writingProfile.audience} onChange={event => updateProfile("audience", event.target.value)} placeholder="稳定的核心读者，不写本篇临时受众" /></label>
+                <fieldset className="ap-platform-defaults">
+                  <legend>默认平台</legend>
+                  <div>
+                    {([["wechat", "公众号"], ["toutiao", "今日头条"], ["xiaohongshu", "小红书"]] as Array<[PublishingPlatform, string]>).map(([platform, label]) => (
+                      <button type="button" key={platform} aria-pressed={writingProfile.defaultPlatforms[0] === platform} onClick={() => selectDefaultPlatform(platform)}>{label}</button>
+                    ))}
+                  </div>
+                </fieldset>
+              </div>
+              <div className="ap-dna-list">
+                <div className="ap-dna-row">
+                  <div className="ap-dna-label"><b>L1</b><div><h4>词句与节奏</h4><p>用词、句长、断句与明确禁用项</p></div></div>
+                  <div className="ap-dna-fields">
+                    <label><span>常用语气</span><input value={writingProfile.tone} onChange={event => updateProfile("tone", event.target.value)} placeholder="如：直接、克制，像熟悉业务的同事" /></label>
+                    <label><span>句式与节奏</span><textarea value={writingProfile.languageStyle} onChange={event => updateProfile("languageStyle", event.target.value)} rows={3} placeholder="如：短句占多数；结论后补解释；不用破折号和分号" /></label>
+                    <label><span>禁用表达</span><input value={writingProfile.bannedPhrases.join("、")} onChange={event => updateProfile("bannedPhrases", event.target.value.split(/[，,、]/).map(item => item.trim()).filter(Boolean))} placeholder="用顿号分隔" /></label>
+                  </div>
+                </div>
+                {([
+                  ["L2", "篇章结构", "文章怎样建立全貌、展开难点并收束", "preferredStructure", "如：问题切入 → 全貌 → 难点 → 判断 → 具体收束"],
+                  ["L3", "切入视角", "面对同一题目时优先追问什么", "anglePreference", "如：从一个反常识问题或亲历困扰切入"],
+                  ["L4", "素材选择", "倾向用什么材料证明、解释或唤起感受", "materialPreference", "如：优先一手经历、具体数据和可核对原文"],
+                  ["L5", "观点与判断", "长期相信什么，以及判断的边界", "stance", "如：区分事实、推测和价值判断，不替读者下结论"],
+                  ["L6", "图文与视觉", "图片、截图与排版分别承担什么职责", "visualStyle", "如：阅读型排版；图只用于解释结构或提供证据"],
+                ] as Array<[string, string, string, WritingProfileTextField, string]>).map(([code, title, description, field, placeholder]) => (
+                  <div className="ap-dna-row" key={code}>
+                    <div className="ap-dna-label"><b>{code}</b><div><h4>{title}</h4><p>{description}</p></div></div>
+                    <label className="ap-dna-single"><span>{title}规则</span><textarea value={writingProfile[field]} onChange={event => updateProfile(field, event.target.value)} rows={3} placeholder={placeholder} /></label>
+                  </div>
                 ))}
               </div>
-            </fieldset>
+            </section>
+
+            <section className="ap-asset-section" aria-labelledby="ap-memory-title">
+              <div className="ap-asset-section-head">
+                <div><span>稳定事实</span><h3 id="ap-memory-title">长期背景记忆</h3></div>
+                <p>{globalMemory.length} 字，生成时最多读取前 12000 字</p>
+              </div>
+              <textarea
+                className="ap-memory-editor"
+                aria-label="长期背景记忆"
+                value={globalMemory}
+                onChange={event => setGlobalMemory(event.target.value)}
+                maxLength={100000}
+                rows={9}
+                placeholder={"## 账号定位\n- 长期关注的领域\n- 可公开引用的个人经历\n\n## 固定背景\n- 稳定业务事实与术语\n- 需要长期保持一致的信息"}
+              />
+              <p className="ap-asset-note">这里只保存身份、领域和稳定事实。文风规则放在六层 DNA，本篇资料放在文章素材。</p>
+            </section>
+
+            <section className="ap-asset-section" aria-labelledby="ap-sources-title">
+              <div className="ap-asset-section-head">
+                <div><span>生产资料</span><h3 id="ap-sources-title">素材、候选与表现证据</h3></div>
+                <p>历史表现用于提出假设，不直接改写文风规则。</p>
+              </div>
+              <div className="ap-asset-links">
+                <button onClick={() => navigate("/prompts")}><Zap size={18} /><span><strong>提示词</strong><small>{assetOverview?.summary.promptCount ?? 0} 条，管理生成与审核指令</small></span><ExternalLink size={14} /></button>
+                <button onClick={() => navigate("/rag")}><Database size={18} /><span><strong>素材与往期文章</strong><small>{assetOverview?.summary.materialArticleCount ?? 0} 篇含素材，可按主题检索</small></span><ExternalLink size={14} /></button>
+                <button onClick={() => navigate("/")}><GitBranch size={18} /><span><strong>候选池</strong><small>{assetOverview?.summary.candidateCount ?? 0} 篇候选，在对应文章中选用</small></span><ExternalLink size={14} /></button>
+                <button onClick={() => navigate("/insights")}><BarChart3 size={18} /><span><strong>高低表现文章</strong><small>{assetOverview?.summary.highPerformanceCount ?? 0} 篇高表现，{assetOverview?.summary.lowPerformanceCount ?? 0} 篇低表现</small></span><ExternalLink size={14} /></button>
+              </div>
+            </section>
+
+            <section className="ap-asset-section" aria-labelledby="ap-decisions-title">
+              <div className="ap-asset-section-head">
+                <div><span>人工确认</span><h3 id="ap-decisions-title">作者已确认的取舍</h3></div>
+                <p>{assetOverview?.summary.confirmedChoiceCount ?? 0} 条</p>
+              </div>
+              <div className="ap-decision-list">
+                {assetOverview?.recentConfirmedChoices.length ? assetOverview.recentConfirmedChoices.map(item => (
+                  <a key={`${item.articleId}-${item.updatedAt}`} href={`/editor/${encodeURIComponent(item.articleId)}?tab=analysis`}>
+                    <span>{feedbackLayerLabel(item.layer)}</span>
+                    <strong>{item.note || item.retainedExpressions[0] || "已确认保留表达"}</strong>
+                    <small>{new Date(item.updatedAt).toLocaleDateString("zh-CN")} · 修改或新增 {item.changedParagraphs} 段</small>
+                  </a>
+                )) : <div className="ap-decision-empty">还没有确认过写作取舍。文章手改后，可在审核页记录可复用选择。</div>}
+              </div>
+            </section>
           </section>
         )}
       </section>

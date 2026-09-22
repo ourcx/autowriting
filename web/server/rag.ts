@@ -17,6 +17,7 @@ import type { AIConfig, SearchResult } from "./types.ts"
 import { logger } from "./logger.ts"
 import { replaceDirectoryAtomically } from "./utils/atomicDirectory.ts"
 import { formatWechatAudienceEvidence } from "./wechatAnalyticsStore.ts"
+import { getExampleArticles } from "./db.ts"
 
 // ── 本地向量模型默认配置 ───────────────────────────────────────────────────────
 const LOCAL_EMBED_MODEL = "Xenova/multilingual-e5-small"
@@ -910,7 +911,27 @@ export function formatRetrievedContext(docs: SearchResult[]): string {
 export async function formatExampleContext(userId: string, draftsDir?: string): Promise<string> {
   try {
     void draftsDir
-    return formatWechatAudienceEvidence(userId)
+    const audienceEvidence = formatWechatAudienceEvidence(userId).trim()
+    const examples = getExampleArticles(userId)
+    const scoredEvidence = examples.good.length || examples.bad.length
+      ? `# 作者标注的历史表现
+以下分组来自作者录入的数据或综合评分，只能用于提出内容假设。不得把相关性当因果，也不得因为低表现就否定文章中的事实或作者立场。
+${JSON.stringify({
+  high: examples.good.map(item => ({
+    title: item.title,
+    platform: item.platform,
+    score: item.composite,
+    note: item.note,
+  })),
+  low: examples.bad.map(item => ({
+    title: item.title,
+    platform: item.platform,
+    score: item.composite,
+    note: item.note,
+  })),
+})}`
+      : ""
+    return [audienceEvidence, scoredEvidence].filter(Boolean).join("\n\n")
   } catch (e: unknown) {
     logger.warn("RAG", "formatExampleContext 失败", { error: (e as Error).message })
     return ""

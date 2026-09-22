@@ -22,13 +22,13 @@ import {
   writeArticleSafely,
   resolveArticleFiles,
 } from '../articleStorage.js'
-import { listCreatorExperiences, recordCreatorFeedback, recordEditingActivity, selectCandidate, formatCreatorExperiences } from '../productionJournal.ts'
+import { listCreatorExperiences, recordCreatorFeedback, recordEditingActivity, selectCandidate } from '../productionJournal.ts'
 import { getWechatAnalyticsSnapshots } from '../wechatAnalyticsStore.ts'
 import { rankWechatArticles } from '../../shared/wechatAnalytics.ts'
 import { ensureDir, buildLLMRequest, callLLMWithRetry } from '../utils'
-import { retrieveRelevant, formatRetrievedContext, formatExampleContext, extractSearchQuery } from '../rag.js'
-import { saveAnalysis, getLatestAnalysis, listAnalyses, recordTokenUsage, getEffectivePrompt, getSetting, listArticleScores } from '../db.js'
-import { formatCreatorProfileForPrompt, normalizeCreatorWritingProfile } from '../../shared/contentProduction.ts'
+import { retrieveRelevant, formatRetrievedContext, extractSearchQuery } from '../rag.js'
+import { saveAnalysis, getLatestAnalysis, listAnalyses, recordTokenUsage, getEffectivePrompt, listArticleScores } from '../db.js'
+import { ARTICLE_WRITING_BASELINE, stripEmoji } from '../../shared/contentProduction.ts'
 import { authMiddleware } from '../authMiddleware.js'
 import { logger } from '../logger.js'
 import { startSseHeartbeat } from '../sseHeartbeat.js'
@@ -36,6 +36,7 @@ import { consumeOpenAiContentStream } from '../utils/openAiStream.js'
 import { triggerBuildIndex } from './rag.js'
 import { CandidateError, createCandidates, listCandidates, parseCandidateInput, readCandidate, saveCandidate } from '../generationCandidates.ts'
 import { streamCandidate } from '../utils/candidateGeneration.ts'
+import { buildWritingContext } from '../writingContext.ts'
 
 const router = Router()
 
@@ -486,13 +487,6 @@ router.post('/:articleId/generate', async (req, res) => {
       return res.status(400).json({ error: '未配置 MaaS API Key，请前往「AI 配置」页面设置后重试' })
     }
 
-    // 写作规范：仅在用户配置了「写作规范.md」时注入，没配置就不发，节省 token
-    const writingGuide = getWritingGuideContent()
-    const writingGuideSection = writingGuide ? `\n# 写作规范（必须严格遵守）\n${writingGuide}\n` : ''
-    const creatorProfileSection = formatCreatorProfileForPrompt(normalizeCreatorWritingProfile(
-      getSetting(`creator_writing_profile:${req.user.id}`),
-    ))
-
     // 从数据库读取文章生成提示词（支持用户自定义覆盖）
     const generatePromptData = getEffectivePrompt('prompt-article-generate')
     const generateSystemInstruction = generatePromptData?.content || '你是一个专业的内容创作助手，擅长按照规范和要求生成高质量的文章内容。'
@@ -506,11 +500,8 @@ router.post('/:articleId/generate', async (req, res) => {
     })
     const currentDateTimeGen = formatterGen.format(nowGen)
 
-    // 当前用户的永久记忆
-    const globalMemoryGen = getSetting(`global_memory:${req.user.id}`)
-    const globalMemorySectionGen = globalMemoryGen ? `\n# 个人背景信息（永久记忆）\n${globalMemoryGen}\n` : ''
-
-    const userPrompt = `${writingGuideSection}${creatorProfileSection}${formatCreatorExperiences(req.user.id)}${globalMemorySectionGen}
+    const writingContext = await buildWritingContext(req.user.id)
+    const userPrompt = `${writingContext}
 # 当前时间
 ${currentDateTimeGen}
 
@@ -522,7 +513,7 @@ ${materials}
 
 ---
 
-现在请直接输出完整的文章内容（纯 Markdown，只有 1 个 H1，所有 H2 带 emoji）：`
+现在请直接输出完整的文章内容。使用纯 Markdown，只保留 1 个 H1，全文不得使用 emoji、表情包或装饰性表情符号：`
 
     const { url, model, headers } = buildLLMRequest(cfg)
 
@@ -537,7 +528,7 @@ ${materials}
       stream: false,
     }, headers)
 
-    const article = response.data.choices[0].message.content
+    const article = stripEmoji(response.data.choices[0].message.content)
     const articlePath = getArticlePath(articleId, 'article', req.user.id)
     writeArticleSafely({ articlePath, articleId, userId: req.user.id, content: article })
     recordArticleWorkflowEvent({
@@ -672,26 +663,7 @@ router.post('/:articleId/generate/stream', async (req, res) => {
       }
     }
 
-    // ── 1b. 评分示例注入（有评分的文章才注入，控制 token 消耗） ──────────────
-    let exampleSection = ''
-    try {
-      exampleSection = await formatExampleContext(req.user.id)
-      if (exampleSection) {
-        send('status', { step: 'examples', message: '已注入历史文章表现参考' })
-      }
-    } catch (e) {
-      // 非致命，忽略
-    }
-
-    // ── 2. 读取写作规范 + 数据库提示词 ──────────────────────────────────────
-    // 写作规范：仅在用户配置了「写作规范.md」时注入，否则跳过整段
-    const writingGuide = getWritingGuideContent()
-    const writingGuideSection = writingGuide ? `\n# 写作规范（必须严格遵守）\n${writingGuide}\n` : ''
-    const creatorProfileSection = formatCreatorProfileForPrompt(normalizeCreatorWritingProfile(
-      getSetting(`creator_writing_profile:${req.user.id}`),
-    ))
-
-    // 从数据库读取文章生成提示词（支持用户自定义覆盖），用作 system 消息
+    // ── 2. 读取写作资产 + 数据库提示词 ──────────────────────────────────────
     const streamGeneratePromptData = getEffectivePrompt('prompt-article-generate')
     const streamGenerateInstruction = streamGeneratePromptData?.content || '你是一个专业的内容创作助手，擅长按照规范和要求生成高质量的文章内容。'
 
@@ -708,12 +680,11 @@ router.post('/:articleId/generate/stream', async (req, res) => {
     })
     const currentDateTime = formatter.format(now)
 
-    // 当前用户的永久记忆
-    const globalMemory = getSetting(`global_memory:${req.user.id}`)
-    const globalMemorySection = globalMemory ? `\n# 个人背景信息（永久记忆）\n${globalMemory}\n` : ''
+    const wechatWritingContext = await buildWritingContext(req.user.id, { referenceContext: ragSection })
+    const toutiaoWritingContext = await buildWritingContext(req.user.id, { includeWritingGuide: false })
 
     // ── 公众号 prompt ──────────────────────────────────────────────────────────
-    const wechatPrompt = `${writingGuideSection}${creatorProfileSection}${formatCreatorExperiences(req.user.id)}${ragSection}${exampleSection ? '\n' + exampleSection + '\n' : ''}${globalMemorySection}
+    const wechatPrompt = `${wechatWritingContext}
 # 当前时间
 ${currentDateTime}
 
@@ -728,7 +699,7 @@ ${materials}
 现在请直接输出完整的文章内容（纯 Markdown，只有 1 个 H1，不使用 emoji 或表情包）：`
 
     // ── 今日头条 prompt（注入评分示例，不注入 RAG / 写作规范，平台风格不同）─
-    const buildToutiaoPrompt = motherDraft => `${creatorProfileSection}${exampleSection ? exampleSection + '\n\n' : ''}${globalMemorySection}
+    const buildToutiaoPrompt = motherDraft => `${toutiaoWritingContext}
 # 当前时间
 ${currentDateTime}
 
@@ -770,19 +741,21 @@ ${materials}
       )
 
       const fullContent = await consumeOpenAiContentStream(res2.data, content => {
-        if (platformKey === 'wechat') fullText += content
-        else fullTextToutiao += content
-        send('chunk', { text: content, platform: platformKey })
+        const cleanContent = stripEmoji(content)
+        if (platformKey === 'wechat') fullText += cleanContent
+        else fullTextToutiao += cleanContent
+        if (cleanContent) send('chunk', { text: cleanContent, platform: platformKey })
       })
+      const cleanFullContent = stripEmoji(fullContent)
 
       // 两个平台分别持久化；只有完整消费上游流后才发送 done。
       {
         const articlePath = getArticlePath(articleId, 'article', req.user.id)
         if (platformKey === 'wechat') {
-          writeArticleSafely({ articlePath, articleId, userId: req.user.id, content: fullContent })
+          writeArticleSafely({ articlePath, articleId, userId: req.user.id, content: cleanFullContent })
           recordArticleWorkflowEvent({
             articlePath,
-            content: { task, materials, article: fullContent },
+            content: { task, materials, article: cleanFullContent },
             event: 'generated',
             metadata: {
               platforms: platforms === 'both' ? ['wechat', 'toutiao'] : ['wechat'],
@@ -793,15 +766,15 @@ ${materials}
         } else {
           const toutiaoPath = getArticleSidecarPath(articlePath, 'article_toutiao')
           ensureDir(path.dirname(toutiaoPath))
-          fs.writeFileSync(toutiaoPath, fullContent, 'utf-8')
+          fs.writeFileSync(toutiaoPath, cleanFullContent, 'utf-8')
         }
       }
       recordTokenUsage({
         articleId, userId: req.user.id, operation: 'generate', model,
-        outputTokens: Math.ceil(fullContent.length / 1.5),
+        outputTokens: Math.ceil(cleanFullContent.length / 1.5),
       })
       const ragCount = platformKey === 'wechat' ? (selectedRagContext ? selectedRagContext.split('###').length - 1 : autoRagCount) : 0
-      send('done', { article: fullContent, platform: platformKey, ragCount })
+      send('done', { article: cleanFullContent, platform: platformKey, ragCount })
       if (isLast) res.end()
     }
 
@@ -1161,7 +1134,7 @@ router.post('/:articleId/inline-edit', async (req, res) => {
       messages: [
         {
           role: 'system',
-          content: '你是专业的文字编辑。严格按要求处理文字，只输出处理后的内容，不加任何解释、前缀或引号。风格规范：真诚、实用、人性化，像朋友聊天，不用 AI 套话。',
+          content: `你是专业的文字编辑。严格按要求处理文字，只输出处理后的内容，不加任何解释、前缀或引号。\n\n${ARTICLE_WRITING_BASELINE}`,
         },
         { role: 'user', content: prompt },
       ],
@@ -1178,7 +1151,7 @@ router.post('/:articleId/inline-edit', async (req, res) => {
       })
     }
 
-    res.json({ result: llmRes.data.choices[0].message.content.trim() })
+    res.json({ result: stripEmoji(llmRes.data.choices[0].message.content.trim()) })
   } catch (error) {
     const msg = error.response?.data?.error?.message || error.message
     console.error('[InlineEdit] 失败:', msg)
@@ -1218,7 +1191,8 @@ ${task}
 1. 用 Markdown 格式输出，H2 为主章节，H3 为小节
 2. 每个章节标题后用 1-2 句话说明该节要写什么、核心论点是什么
 3. 总共 3-5 个主章节，结构符合任务要求
-4. 不要写"大纲如下"等废话，直接输出大纲内容`
+4. 不要写"大纲如下"等废话，直接输出大纲内容
+5. 不使用 emoji、表情包或装饰性表情符号`
 
     const llmRes = await callLLMWithRetry(url, {
       model,
@@ -1239,7 +1213,7 @@ ${task}
       })
     }
 
-    res.json({ outline: llmRes.data.choices[0].message.content.trim() })
+    res.json({ outline: stripEmoji(llmRes.data.choices[0].message.content.trim()) })
   } catch (error) {
     const msg = error.response?.data?.error?.message || error.message
     console.error('[Outline] 失败:', msg)
@@ -1381,7 +1355,7 @@ ${article}`
       {
         model,
         messages: [
-          { role: 'system', content: '你是专业的文字编辑，只输出修改后的完整文章（Markdown 格式），不加任何解释或对比说明。' },
+          { role: 'system', content: `你是专业的文字编辑，只输出修改后的完整文章（Markdown 格式），不加任何解释或对比说明。\n\n${ARTICLE_WRITING_BASELINE}` },
           { role: 'user',   content: userPrompt },
         ],
         temperature: 0.6,
@@ -1406,14 +1380,16 @@ ${article}`
           const json    = JSON.parse(trimmed.slice(5).trim())
           const content = json.choices?.[0]?.delta?.content
           if (content) {
-            fullText += content
-            send('chunk', { text: content })
+            const cleanContent = stripEmoji(content)
+            fullText += cleanContent
+            if (cleanContent) send('chunk', { text: cleanContent })
           }
         } catch { /* 忽略解析失败的行 */ }
       }
     })
 
     upstreamRes.data.on('end', () => {
+      fullText = stripEmoji(fullText)
       recordTokenUsage({
         articleId, userId: req.user.id, operation: 'deai', model,
         outputTokens: Math.ceil(fullText.length / 1.5),

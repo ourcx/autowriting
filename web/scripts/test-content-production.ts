@@ -3,7 +3,9 @@ import {
   auditArticleSources,
   comparePlatformVersions,
   formatCreatorProfileForPrompt,
+  getCompletedWritingDnaLayers,
   normalizeCreatorWritingProfile,
+  stripEmoji,
 } from "../shared/contentProduction.ts"
 import { acquireCandidate, CandidateError } from "../server/generationCandidates.ts"
 import { rankWechatArticles, wechatAnalyticsSchema } from "../shared/wechatAnalytics.ts"
@@ -12,14 +14,26 @@ import { parseWechatDailyMetrics } from "../server/utils/wechatAnalyticsParser.t
 
 const profile = normalizeCreatorWritingProfile({
   audience: "大学生",
+  stance: "区分事实和观点",
   tone: "直接",
+  languageStyle: "短句为主，不使用破折号",
   bannedPhrases: "赋能、闭眼冲",
+  preferredStructure: "问题切入后给出判断",
+  anglePreference: "追问常见做法遗漏了什么",
+  materialPreference: "优先一手经历和可核对数据",
   defaultPlatforms: ["wechat", "toutiao", "unknown"],
   visualStyle: "少装饰",
 })
 assert.deepEqual(profile.bannedPhrases, ["赋能", "闭眼冲"])
 assert.deepEqual(profile.defaultPlatforms, ["wechat", "toutiao"])
-assert.match(formatCreatorProfileForPrompt(profile), /视觉倾向：少装饰/)
+assert.equal(getCompletedWritingDnaLayers(profile).length, 6)
+const profilePrompt = formatCreatorProfileForPrompt(profile)
+assert.match(profilePrompt, /L1 词句与节奏/)
+assert.match(profilePrompt, /L6 图文与视觉/)
+assert.match(profilePrompt, /不得代替作者编造/)
+assert.equal(stripEmoji("# 标题 🎉\n\n保留数字 2026 和标点。✅"), "# 标题 \n\n保留数字 2026 和标点。")
+assert.equal(stripEmoji("开发者👨‍💻正在测试🇨🇳版本1️⃣"), "开发者正在测试版本")
+assert.equal(stripEmoji("分片残留🏻\u20E3也要清理"), "分片残留也要清理")
 
 const comparison = comparePlatformVersions(
   "# 标题\n\n第一段内容保持完全一致。\n\n第二段内容需要进行平台改写。",
@@ -131,4 +145,4 @@ try {
   releaseCandidates.forEach(release => release())
 }
 
-console.log("账号写作档案、平台版本对比与事实来源检查通过")
+console.log("写作 DNA、emoji 清理、平台版本对比与事实来源检查通过")

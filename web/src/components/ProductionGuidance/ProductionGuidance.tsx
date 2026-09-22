@@ -3,6 +3,8 @@ import { AlertTriangle, BarChart3, CheckCircle2, ExternalLink, FileSearch, GitCo
 import {
   auditArticleSources,
   comparePlatformVersions,
+  WRITING_DNA_LAYER_LABELS,
+  type CreatorFeedbackLayer,
 } from "../../../shared/contentProduction"
 import { fetchProductionInsights, saveCreatorFeedback, type ProductionInsights } from "../../utils/apiHelpers"
 import { toast } from "../Toast/Toast"
@@ -10,6 +12,10 @@ import type { ArticleWorkflow } from "../../../shared/articleWorkflow"
 import "./ProductionGuidance.css"
 
 const PLATFORM_LABEL = { wechat: "公众号", toutiao: "今日头条", xiaohongshu: "小红书" }
+const FEEDBACK_LAYER_OPTIONS: Array<[CreatorFeedbackLayer, string]> = [
+  ["general", "综合取舍"],
+  ...Object.entries(WRITING_DNA_LAYER_LABELS) as Array<[CreatorFeedbackLayer, string]>,
+]
 
 export function PlatformVersionSummary({ source, target, platform }: {
   source: string
@@ -46,6 +52,7 @@ export default function ProductionGuidance({ article, materials, articleToutiao,
 }) {
   const sourceAudit = useMemo(() => auditArticleSources(article, materials), [article, materials])
   const [insights, setInsights] = useState<ProductionInsights | null>(null)
+  const [layer, setLayer] = useState<CreatorFeedbackLayer>(workflow.feedback?.layer || "general")
   const [note, setNote] = useState(workflow.feedback?.note || "")
   const [expressions, setExpressions] = useState(workflow.feedback?.retainedExpressions.join("\n") || "")
   const [savingFeedback, setSavingFeedback] = useState(false)
@@ -54,7 +61,7 @@ export default function ProductionGuidance({ article, materials, articleToutiao,
     setSavingFeedback(true)
     try {
       if (onBeforeFeedback && !await onBeforeFeedback()) return
-      onWorkflow?.(await saveCreatorFeedback(articleId, note, expressions.split("\n").map(value => value.trim()).filter(Boolean)))
+      onWorkflow?.(await saveCreatorFeedback(articleId, layer, note, expressions.split("\n").map(value => value.trim()).filter(Boolean)))
       setInsights(await fetchProductionInsights())
       toast.success("已记录你的取舍，下一篇生成时会说明参考依据")
     } catch { toast.error("反馈未保存，请确认保留表达出现在正文中，每条不超过 300 字") }
@@ -114,6 +121,11 @@ export default function ProductionGuidance({ article, materials, articleToutiao,
       <section className="pg-card pg-card--wide" aria-label="我的写作取舍">
         <div className="pg-card-head"><h3>我的写作取舍</h3><span>只记录你明确确认的偏好</span></div>
         <p className="pg-help">{workflow.selectedCandidateId ? `本稿来自候选 ${workflow.selectedCandidateId.slice(0, 8)}，原始候选稿和素材仍保留。` : "本稿未关联候选稿，仍可记录修改原因。"} 原样保留的段落只表示没有修改，不自动等同于偏好。</p>
+        <label className="pg-feedback-label">这次修改主要影响
+          <select value={layer} onChange={event => setLayer(event.target.value as CreatorFeedbackLayer)}>
+            {FEEDBACK_LAYER_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </label>
         <label className="pg-feedback-label">这次为什么这样改
           <textarea value={note} onChange={event => setNote(event.target.value)} maxLength={1000} placeholder="例如：删掉泛泛的开场，先写自己的亲身观察。"/>
         </label>
@@ -123,7 +135,7 @@ export default function ProductionGuidance({ article, materials, articleToutiao,
         <button className="btn btn-secondary" onClick={() => void saveFeedback()} disabled={!articleId || savingFeedback}>{savingFeedback ? "保存中…" : "保存写作取舍"}</button>
         {!articleId && <p className="pg-help">此稿仅保存在浏览器中，移到服务器后可积累账号经验。</p>}
         {insights?.creatorExperiences?.slice(0, 3).map(item => <p className="pg-help" key={item.articleId}>
-          <a href={`/article/${encodeURIComponent(item.articleId)}?tab=analysis`}>{item.articleId}</a>：{item.note || "已记录保留表达"}
+          <a href={`/editor/${encodeURIComponent(item.articleId)}?tab=analysis`}>{item.articleId}</a> · {item.layer === "general" ? "综合取舍" : WRITING_DNA_LAYER_LABELS[item.layer]}：{item.note || "已记录保留表达"}
           {item.candidateId ? ` · 原样保留 ${item.retainedParagraphs} 段，修改或新增 ${item.changedParagraphs} 段` : ""}
         </p>)}
       </section>

@@ -3,6 +3,7 @@ import { authMiddleware } from "../authMiddleware.ts"
 import { getSetting, setSetting } from "../db.ts"
 import { logger } from "../logger.ts"
 import { normalizeCreatorWritingProfile } from "../../shared/contentProduction.ts"
+import { getWritingAssetOverview } from "../writingAssets.ts"
 
 const router = Router()
 router.use(authMiddleware)
@@ -10,6 +11,18 @@ router.use(authMiddleware)
 function profileKey(userId: string): string {
   return `creator_writing_profile:${userId}`
 }
+
+router.get("/assets", (req, res) => {
+  try {
+    res.json(getWritingAssetOverview(req.user.id))
+  } catch (error: unknown) {
+    logger.error("CREATOR_PROFILE", "读取写作资产概览失败", {
+      error: error instanceof Error ? error.message : String(error),
+      userId: req.user.id,
+    })
+    res.status(500).json({ error: "读取写作资产概览失败" })
+  }
+})
 
 router.get("/", (req, res) => {
   try {

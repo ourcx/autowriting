@@ -18,9 +18,9 @@ export async function smokeCandidates(base, token) {
       maxActive = Math.max(maxActive, active)
       response.on('close', () => { active-- })
       response.writeHead(200, { 'Content-Type': 'text/event-stream' })
-      response.write(`data: ${JSON.stringify({ choices: [{ delta: { content: '# 候选正文\n\n保留内容。' } }] })}\n\n`)
+      response.write(`data: ${JSON.stringify({ choices: [{ delta: { content: '# 候选正文 🎉\n\n保留内容。' } }] })}\n\n`)
       setTimeout(() => response.end(`data: ${JSON.stringify({
-        choices: [{ delta: { content: '完整结尾。' }, finish_reason: mode === 'length' ? 'length' : 'stop' }],
+        choices: [{ delta: { content: '完整结尾✅。' }, finish_reason: mode === 'length' ? 'length' : 'stop' }],
       })}`), 300)
     })
   })
@@ -59,11 +59,14 @@ export async function smokeCandidates(base, token) {
     const partial = stored.find(row => row.id === fourth.id)
     assert.equal(partial.status, 'interrupted')
     assert.ok(partial.content.includes('保留内容'))
+    assert.doesNotMatch(partial.content, /\p{Extended_Pictographic}/u)
     mode = 'normal'
     assert.match(await (await stream(fourth)).text(), /event: done/)
     assert.equal(prompts.at(-1).messages.at(-2).content, partial.content)
     stored = await json(`${root}/candidates`)
     assert.ok(stored.every(row => row.status === 'complete'))
+    assert.ok(stored.every(row => !/\p{Extended_Pictographic}/u.test(row.content)), '候选稿不得保存 emoji')
+    assert.match(JSON.stringify(prompts[0]), /全文禁止使用 emoji/, '生成提示词应包含统一中文成文底线')
     assert.equal((await stream(rows[0])).status, 409, 'completed candidates must not rerun')
     assert.ok(!JSON.stringify(stored).includes('smoke-only'))
     const otherUser = { username: `candidate_other_${Date.now()}`, password: 'candidate-test-only' }

@@ -1,16 +1,15 @@
 import axios from "axios"
 import type { Response } from "express"
-import { SERVER_AI_CONFIG, getWritingGuideContent } from "../config.ts"
-import { getEffectivePrompt, getSetting, recordTokenUsage } from "../db.ts"
-import { formatCreatorProfileForPrompt, normalizeCreatorWritingProfile } from "../../shared/contentProduction.ts"
+import { SERVER_AI_CONFIG } from "../config.ts"
+import { getEffectivePrompt, recordTokenUsage } from "../db.ts"
+import { stripEmoji } from "../../shared/contentProduction.ts"
 import { acquireCandidate, CandidateError, publicCandidate, readCandidate, saveCandidate } from "../generationCandidates.ts"
 import { buildLLMRequest } from "./public.ts"
 import { consumeOpenAiContentStream } from "./openAiStream.ts"
 import { startSseHeartbeat } from "../sseHeartbeat.ts"
 import { logger } from "../logger.ts"
 import type { AIConfig } from "../types.ts"
-import { formatExampleContext } from "../rag.ts"
-import { formatCreatorExperiences } from "../productionJournal.ts"
+import { buildWritingContext } from "../writingContext.ts"
 
 export async function streamCandidate(userId: string, articleId: string, id: string, rawConfig: unknown, response: Response): Promise<void> {
   const candidate = readCandidate(userId, articleId, id)
@@ -46,20 +45,18 @@ export async function streamCandidate(userId: string, articleId: string, id: str
     checkpoint()
     send("candidate", { candidate: publicCandidate(candidate) })
     const { input } = candidate
-    const profile = formatCreatorProfileForPrompt(normalizeCreatorWritingProfile(getSetting(`creator_writing_profile:${userId}`)))
-    const examples = await formatExampleContext(userId).catch(() => "")
-    const memory = getSetting(`global_memory:${userId}`)
     const promptId = input.platform === "wechat" ? "prompt-article-generate" : "prompt-article-generate-toutiao"
     candidate.promptIds = [promptId]
     const instruction = getEffectivePrompt(promptId)?.content || "你是专业的文章创作者。"
-    const prompt = `${getWritingGuideContent()}\n${profile}\n${formatCreatorExperiences(userId)}\n${examples}
-${typeof memory === "string" && memory ? `# 个人背景信息（永久记忆）\n${memory}` : ""}
+    const writingContext = await buildWritingContext(userId, {
+      includeWritingGuide: input.platform === "wechat",
+      referenceContext: input.selectedRagContext,
+    })
+    const prompt = `${writingContext}
 # 本次任务
 ${input.task}
 # 素材
 ${input.materials}
-# 往期风格参考
-${input.selectedRagContext}
 ${input.platform === "toutiao" ? `# 公众号事实与观点母稿\n${input.sourceArticle}` : ""}
 # 写作要求
 当前日期：${new Date().toISOString().slice(0, 10)}。
@@ -80,12 +77,14 @@ ${input.platform === "toutiao" ? "按今日头条阅读节奏改写母稿，不�
       headers, responseType: "stream", timeout: 120000, signal: controller.signal,
     })
     await consumeOpenAiContentStream(upstream.data, text => {
-      if (candidate.content.length + text.length > 100000) throw new Error("候选稿超过长度限制，请缩短任务")
+      const cleanText = stripEmoji(text)
+      if (candidate.content.length + cleanText.length > 100000) throw new Error("候选稿超过长度限制，请缩短任务")
       candidate.firstChunkAt ||= new Date().toISOString()
-      candidate.content += text
+      candidate.content += cleanText
       if (Date.now() - lastSaved >= 1000) checkpoint()
-      send("chunk", { text })
+      if (cleanText) send("chunk", { text: cleanText })
     }, { requireCompletion: true })
+    candidate.content = stripEmoji(candidate.content)
     candidate.status = "complete"
     candidate.message = "生成完成"
     candidate.finishedAt = new Date().toISOString()
