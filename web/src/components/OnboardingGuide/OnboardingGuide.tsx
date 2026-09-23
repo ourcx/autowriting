@@ -38,8 +38,8 @@ const PAGE_STEPS: Record<GuidePage, Step[]> = {
   editor: [
     {
       target: '[data-onboarding="editor-workflow"]',
-      title: "四段主流程",
-      content: "先准备主题和素材，再生成母稿、审核定稿，最后选择平台发布。",
+      title: "五步主流程",
+      content: "任务、素材、写作、审核和发布各占一步。生成候选稿是独立操作，不会覆盖已经填写的正文。",
       placement: "bottom",
     },
     {

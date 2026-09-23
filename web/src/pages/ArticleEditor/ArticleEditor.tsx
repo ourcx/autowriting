@@ -60,15 +60,18 @@ const PUBLISH_PLATFORMS = [
 ] as const
 
 const MAIN_FLOW_STEPS = [
-  { id: 'prepare', label: '准备主题与素材' },
-  { id: 'draft', label: '生成母稿' },
-  { id: 'review', label: '审核定稿' },
-  { id: 'publish', label: '选择平台发布' },
+  { id: 'task', label: '任务' },
+  { id: 'materials', label: '素材' },
+  { id: 'draft', label: '写作' },
+  { id: 'review', label: '审核' },
+  { id: 'publish', label: '发布' },
 ] as const
 
 type MainFlowStep = typeof MAIN_FLOW_STEPS[number]['id']
 
-const FLOW_TAB: Record<Exclude<MainFlowStep, 'prepare'>, TabId> = {
+const FLOW_TAB: Record<MainFlowStep, TabId> = {
+  task: 'task',
+  materials: 'materials',
   draft: 'article',
   review: 'analysis',
   publish: 'publish',
@@ -102,13 +105,13 @@ export default function ArticleEditor() {
   // URL records the workspace, not production progress. Refreshing never marks a step complete.
   const activeTab = resolveEditorTab(searchParams.get('tab'), workflow.currentStage)
   const publishPlatform = resolvePublishPlatform(searchParams.get('platform'))
-  const setActiveTab = (tab: TabId) => {
+  const setActiveTab = useCallback((tab: TabId) => {
     setSearchParams(previous => {
       const next = new URLSearchParams(previous)
       next.set('tab', tab)
       return next
     }, { replace: true })
-  }
+  }, [setSearchParams])
   const selectPublishPlatform = (platform: PublishPlatform) => {
     setSearchParams({ tab: 'publish', platform }, { replace: true })
   }
@@ -294,13 +297,23 @@ export default function ArticleEditor() {
   }, [data.article, data.articleToutiao, handleSave, handleWorkflowEvent, setSearchParams])
 
   const handleGenerate = useCallback(() => {
+    if (!data.task.trim()) {
+      setGenerateError('请先填写写作任务，再生成候选稿。')
+      setActiveTab('task')
+      return
+    }
+    if (!data.materials.trim()) {
+      setGenerateError('请先填写或采集素材，再生成候选稿。')
+      setActiveTab('materials')
+      return
+    }
     if (!apiKeyReady) {
       setGenerateError('未配置 AI API Key，请先前往「AI 配置」页面填写后再生成。')
       return
     }
     setGenerateError(null)
     setShowGenerateModal(true)
-  }, [apiKeyReady])
+  }, [apiKeyReady, data.materials, data.task, setActiveTab])
 
   useEffect(() => {
     if (!articleId) return
@@ -412,8 +425,10 @@ export default function ArticleEditor() {
     : activeTab === 'article'
       ? 'wechat'
       : defaultGenerationPlatform
-  const activeFlowStep: MainFlowStep | null = activeTab === 'task' || activeTab === 'materials'
-    ? 'prepare'
+  const activeFlowStep: MainFlowStep | null = activeTab === 'task'
+    ? 'task'
+    : activeTab === 'materials'
+      ? 'materials'
     : activeTab === 'article'
       ? 'draft'
       : activeTab === 'analysis'
@@ -428,17 +443,14 @@ export default function ArticleEditor() {
       : hasXiaohongshuCookies()
 
   const flowStepDone = (step: MainFlowStep) => {
-    if (step === 'prepare') return data.task.trim().length >= 20 && data.materials.trim().length >= 30
-    if (step === 'draft') return data.article.trim().length > 100
+    if (step === 'task') return Boolean(data.task.trim())
+    if (step === 'materials') return Boolean(data.materials.trim())
+    if (step === 'draft') return Boolean(data.article.trim())
     if (step === 'review') return reviewDone
     return publishDone
   }
 
   const openFlowStep = (step: MainFlowStep) => {
-    if (step === 'prepare') {
-      setActiveTab(data.task.trim().length >= 20 ? 'materials' : 'task')
-      return
-    }
     if (step === 'publish') {
       void handlePreview()
       return
@@ -447,11 +459,11 @@ export default function ArticleEditor() {
   }
 
   const nextActionLabel = activeTab === 'task'
-    ? '下一步：准备素材'
+    ? '下一步：填写素材'
     : activeTab === 'materials'
-      ? `生成${generationPlatform === 'wechat' ? '公众号母稿' : '今日头条版本'}`
+      ? '下一步：进入写作'
       : activeTab === 'article'
-        ? data.article.trim().length > 100 ? '下一步：审核定稿' : '生成公众号母稿'
+        ? '下一步：审核定稿'
         : activeTab === 'analysis'
           ? '下一步：选择平台发布'
           : activeTab === 'toutiao'
@@ -460,11 +472,11 @@ export default function ArticleEditor() {
               ? '下一步：发布小红书'
               : ''
   const nextActionDisabled = activeTab === 'task'
-    ? data.task.trim().length < 20
+    ? !data.task.trim()
     : activeTab === 'materials'
-      ? data.materials.trim().length < 30 || !apiKeyReady
+      ? !data.materials.trim()
       : activeTab === 'article'
-        ? data.article.trim().length <= 100 && (!data.task.trim() || !data.materials.trim() || !apiKeyReady)
+        ? !data.article.trim()
         : activeTab === 'analysis' || activeTab === 'xiaohongshu'
           ? !data.article.trim()
           : activeTab === 'toutiao'
@@ -472,14 +484,27 @@ export default function ArticleEditor() {
               ? false
               : !data.task.trim() || !data.materials.trim() || !apiKeyReady
             : false
+  const showGenerateAction = activeTab === 'materials'
+    || activeTab === 'article'
+    || activeTab === 'analysis'
+    || activeTab === 'toutiao'
+  const generationReady = Boolean(data.task.trim() && data.materials.trim() && apiKeyReady)
+  const generationActionLabel = generationPlatform === 'toutiao'
+    ? data.articleToutiao.trim() ? '继续生成头条候选稿' : '生成头条候选稿'
+    : data.article.trim() ? '继续生成候选稿' : '生成候选稿'
+  const generationActionTitle = !data.task.trim()
+    ? '请先填写写作任务'
+    : !data.materials.trim()
+      ? '请先填写或采集素材'
+      : !apiKeyReady
+        ? '请先配置 AI API Key'
+        : generationActionLabel
 
   function handleNextAction() {
     if (activeTab === 'task') setActiveTab('materials')
-    else if (activeTab === 'materials') handleGenerate()
-    else if (activeTab === 'article') {
-      if (data.article.trim().length > 100) setActiveTab('analysis')
-      else handleGenerate()
-    } else if (activeTab === 'analysis') void handlePreview()
+    else if (activeTab === 'materials') setActiveTab('article')
+    else if (activeTab === 'article') setActiveTab('analysis')
+    else if (activeTab === 'analysis') void handlePreview()
     else if (activeTab === 'toutiao') {
       if (data.articleToutiao.trim()) void handlePreview('toutiao')
       else handleGenerate()
@@ -649,13 +674,6 @@ export default function ArticleEditor() {
               </details>
             </div>
           </div>
-          {activeFlowStep === 'prepare' && (
-            <div className="editor-prepare-tabs" data-onboarding="editor-prepare">
-              <span>准备内容</span>
-              <button aria-pressed={activeTab === 'task'} onClick={() => setActiveTab('task')}>任务</button>
-              <button aria-pressed={activeTab === 'materials'} onClick={() => setActiveTab('materials')}>素材</button>
-            </div>
-          )}
         </div>
 
         <div className="editor-tabs" style={{ display: 'none' }}>
@@ -961,7 +979,18 @@ export default function ArticleEditor() {
           )}
         </div>
         {nextActionLabel && (
-          <div className="editor-next-dock">
+          <div className={`editor-next-dock ${showGenerateAction ? 'editor-next-dock--with-generate' : ''}`}>
+            {showGenerateAction && (
+              <button
+                className="flow-generate-action"
+                onClick={handleGenerate}
+                disabled={saving || !generationReady}
+                title={generationActionTitle}
+              >
+                <Zap size={16} />
+                {generationActionLabel}
+              </button>
+            )}
             <button
               className="flow-next-action"
               onClick={handleNextAction}

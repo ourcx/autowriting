@@ -1034,9 +1034,13 @@
   right: 24px;
   bottom: 18px;
   z-index: 24;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.flow-next-action {
+.flow-next-action,
+.flow-generate-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1055,8 +1059,19 @@
   white-space: nowrap;
 }
 
+.flow-generate-action {
+  border: 1px solid var(--color-brand-teal);
+  background: var(--color-canvas);
+  color: var(--color-brand-teal);
+  box-shadow: 0 4px 14px rgb(26 58 58 / 8%);
+}
+
 .flow-next-action:hover:not(:disabled) {
   background: var(--color-surface-dark-elevated);
+}
+
+.flow-generate-action:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-brand-mint) 35%, var(--color-canvas));
 }
 
 .editor-panel--publish {
@@ -1293,12 +1308,12 @@
 .publish-workbench-body .wr-cover-btn { background: var(--color-canvas); color: var(--color-body); border: 1px solid var(--color-surface-strong); }
 .publish-workbench-body .wr-copy-btn { background: var(--color-canvas); color: var(--color-ink); border: 1px solid var(--color-surface-strong); }
 .publish-workbench-body .wr-copy-hint { display: none; }
-.editor :is(.flow-step, .flow-next-action) { min-height: 32px; }
-.editor .flow-next-action { min-height: 44px; }
-.editor :is(.flow-step, .flow-next-action, .btn):disabled { cursor: not-allowed; opacity: .5; }
-.editor :is(.flow-step, .flow-next-action, .publish-platform, .btn):focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.editor :is(.flow-step, .flow-next-action, .flow-generate-action) { min-height: 32px; }
+.editor :is(.flow-next-action, .flow-generate-action) { min-height: 44px; }
+.editor :is(.flow-step, .flow-next-action, .flow-generate-action, .btn):disabled { cursor: not-allowed; opacity: .5; }
+.editor :is(.flow-step, .flow-next-action, .flow-generate-action, .publish-platform, .btn):focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .editor-flow-bar, .publish-workbench-body, .publish-workbench-body .wr-toolbar, .publish-workbench-body .wr-sidebar { border-color: var(--color-surface-strong); }
-.editor :is(.flow-step, .flow-next-action, .publish-platform, .btn) { transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease; }
+.editor :is(.flow-step, .flow-next-action, .flow-generate-action, .publish-platform, .btn) { transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease; }
 .editor :is(.flow-step:not(.flow-step--active), .publish-platform):hover { background: var(--color-surface-soft); }
 .editor .header-actions .btn-success:hover:not(:disabled), .publish-workbench-body .wr-push-btn:hover:not(:disabled) { background: var(--color-surface-dark-elevated); box-shadow: 0 3px 8px rgb(26 58 58 / 12%); }
 .editor .header-actions .btn-primary:hover:not(:disabled) { background: var(--color-surface-strong); box-shadow: none; }
@@ -1306,7 +1321,7 @@
 @keyframes editor-panel-reveal { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
   .editor-panel { animation: none; }
-  .editor :is(.flow-step, .flow-next-action, .publish-platform, .btn) { transition: none; }
+  .editor :is(.flow-step, .flow-next-action, .flow-generate-action, .publish-platform, .btn) { transition: none; }
 }
 
 @media (max-width: 1100px) {
@@ -1322,7 +1337,7 @@
   .editor-container, .editor-content, .editor-panel { overflow: visible; }
   .editor-panel { height: auto; min-height: 320px; }
   .editor-flow-bar { padding: 4px 12px; align-items: stretch; }
-  .flow-step { padding: 6px 4px; flex: 1 1 22%; justify-content: center; }
+  .flow-step { padding: 6px 4px; flex: 1 1 18%; justify-content: center; }
   .flow-step-label { max-width: 64px; white-space: normal; line-height: 1.25; }
   .flow-step-sep { display: none; }
   .editor-secondary-nav { flex: 1 1 100%; justify-content: flex-end; margin-left: 0; padding: 4px 0 0; border-top: 1px solid var(--color-hairline-soft); border-left: 0; }
@@ -1341,6 +1356,14 @@
     backdrop-filter: blur(12px);
   }
   .editor-next-dock .flow-next-action { width: 100%; }
+  .editor-next-dock--with-generate {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .editor-next-dock--with-generate :is(.flow-next-action, .flow-generate-action) {
+    width: 100%;
+    padding-inline: 10px;
+  }
   .publish-platforms { gap: 20px; }
   .publish-platform { justify-content: center; font-size: 13px; text-align: center; min-height: 36px; }
   .publish-platform span { display: none; }
