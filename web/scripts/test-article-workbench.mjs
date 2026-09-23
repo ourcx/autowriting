@@ -12,6 +12,7 @@ try {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   const workflowEvents = []
   let savedProfile = null
+  let savedMemory = ''
   let saveFails = false
   let listFails = false
   let savedArticle = null
@@ -62,7 +63,9 @@ try {
   page.on('request', request => requestedModules.push(new URL(request.url()).pathname))
   await page.addInitScript(() => {
     localStorage.setItem('auth_token', 'workbench-test-token')
-    localStorage.setItem('onboarding-completed', 'true')
+    localStorage.setItem('dashy:guide:fixture:v2:dashboard', 'complete')
+    localStorage.setItem('dashy:guide:fixture:v2:editor', 'complete')
+    localStorage.setItem('dashy:guide:fixture:v2:publish', 'complete')
     localStorage.setItem('wechat_credentials', JSON.stringify({ appId: 'wx-fixture', appSecret: 'secret-fixture' }))
     localStorage.setItem('toutiao_cookies', JSON.stringify([{ name: 'sessionid', value: 'fixture', domain: '.toutiao.com' }]))
     localStorage.setItem('wechat_analytics_cookies:fixture', JSON.stringify([{ name: 'slave_sid', value: 'fixture', domain: '.mp.weixin.qq.com' }]))
@@ -124,15 +127,44 @@ try {
       coverSavedWithAuth = request.headers().authorization === 'Bearer workbench-test-token'
       return route.fulfill({ json: { id: 'cover-fixture', url: '/api/images/uploads/cover-fixture.png', originalName: 'cover-fixture.png' } })
     }
+    if (url.pathname === '/api/creator-profile/assets') return route.fulfill({ json: {
+      summary: {
+        dnaLayersCompleted: savedProfile ? 6 : 0,
+        memoryCharacters: savedMemory.length,
+        promptCount: 11,
+        materialArticleCount: 3,
+        candidateCount: 4,
+        completedCandidateCount: 3,
+        confirmedChoiceCount: 1,
+        highPerformanceCount: 2,
+        lowPerformanceCount: 2,
+      },
+      recentConfirmedChoices: [{
+        articleId: 'workbench-test',
+        layer: 'structure',
+        note: '删掉空泛开场，直接进入问题。',
+        retainedExpressions: [],
+        retainedParagraphs: 2,
+        changedParagraphs: 3,
+        updatedAt: '2026-09-20T10:00:00.000Z',
+      }],
+    } })
     if (url.pathname === '/api/creator-profile') {
       if (request.method() === 'PUT') {
         savedProfile = request.postDataJSON()
         return route.fulfill({ json: savedProfile })
       }
       return route.fulfill({ json: {
-        audience: '', stance: '', tone: '', bannedPhrases: [], preferredStructure: '',
-        defaultPlatforms: ['wechat'], visualStyle: '',
+        audience: '', stance: '', tone: '', languageStyle: '', bannedPhrases: [], preferredStructure: '',
+        anglePreference: '', materialPreference: '', defaultPlatforms: ['wechat'], visualStyle: '',
       } })
+    }
+    if (url.pathname === '/api/settings/global_memory') {
+      if (request.method() === 'PUT') {
+        savedMemory = request.postDataJSON().value
+        return route.fulfill({ json: { key: 'global_memory', value: savedMemory } })
+      }
+      return route.fulfill({ json: { key: 'global_memory', value: savedMemory } })
     }
     if (url.pathname === '/api/articles/production-insights') return route.fulfill({ json: {
       audienceEvidence: {
@@ -244,19 +276,24 @@ try {
   await page.getByText('任务要求：禁止第一人称', { exact: false }).waitFor()
   await page.getByText('正文出现了「我」', { exact: false }).waitFor()
   await page.getByText('任务要求：不出现「评论区」', { exact: false }).waitFor()
-  await page.getByText('任务要求：不使用 emoji', { exact: false }).waitFor()
+  await page.getByText('全局要求：不使用 emoji', { exact: false }).waitFor()
   await page.getByText('需增加到 1200 字以上', { exact: false }).waitFor()
   await page.getByText('1 条待核对', { exact: true }).waitFor()
   await page.getByText('校园跑新规值得继续追踪 · 8,000 人', { exact: true }).waitFor()
   await page.getByText('已有平台改写', { exact: true }).waitFor()
 
   saveFails = true
-  await page.getByRole('button', { name: '预览并推送', exact: true }).click()
-  await page.getByText('保存失败，请重试', { exact: true }).waitFor()
+  await page.getByRole('button', { name: '下一步：选择平台发布', exact: true }).click()
+  const saveFailureToast = page.getByText('保存失败，请重试', { exact: true })
+  await saveFailureToast.waitFor()
   assert.equal(await page.locator('.flow-step[aria-current="step"] .flow-step-label').innerText(), '审核')
   assert.deepEqual(workflowEvents, [])
   saveFails = false
-  await page.getByRole('button', { name: '预览并推送', exact: true }).click()
+  await page.evaluate(() => document.querySelectorAll('.toast-error .toast-close').forEach(button => {
+    if (button instanceof HTMLElement) button.click()
+  }))
+  await page.waitForFunction(() => !document.querySelector('.toast-error'))
+  await page.getByRole('button', { name: '下一步：选择平台发布', exact: true }).click()
   await page.getByRole('heading', { name: '公众号预览与推送' }).waitFor()
   assert.equal(new URL(page.url()).pathname, '/editor/workbench-test')
   assert.deepEqual(workflowEvents, ['wechat_draft_opened'])
@@ -388,20 +425,30 @@ try {
   await page.goto(`${baseUrl}/editor/workbench-test`)
   await page.locator('.flow-step').first().waitFor()
 
-  await page.getByRole('button', { name: '写作档案', exact: true }).click()
-  await page.getByLabel('账号写作档案').waitFor()
-  await page.getByText('目标读者', { exact: true }).locator('..').locator('input').fill('校园内容读者')
-  await page.getByRole('button', { name: '保存写作档案', exact: true }).click()
-  await page.waitForFunction(() => document.body.textContent?.includes('账号写作档案'))
+  await page.getByRole('button', { name: '写作资产', exact: true }).click()
+  await page.getByLabel('写作资产').waitFor()
+  await page.getByText('主要读者', { exact: true }).locator('..').locator('input').fill('校园内容读者')
+  await page.getByText('句式与节奏', { exact: true }).locator('..').locator('textarea').fill('短句为主，不使用装饰性表达')
+  await page.getByText('切入视角规则', { exact: true }).locator('..').locator('textarea').fill('从具体问题切入')
+  await page.getByLabel('长期背景记忆').fill('长期关注校园内容')
+  await page.getByRole('button', { name: '保存写作资产', exact: true }).click()
+  await page.waitForFunction(() => document.body.textContent?.includes('写作资产'))
   assert.equal(savedProfile.audience, '校园内容读者')
+  assert.equal(savedProfile.languageStyle, '短句为主，不使用装饰性表达')
+  assert.equal(savedMemory, '长期关注校园内容')
+  await page.screenshot({ path: join(screenshots, 'writing-assets-desktop.png'), fullPage: true })
+  await page.setViewportSize({ width: 390, height: 844 })
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
+  await page.screenshot({ path: join(screenshots, 'writing-assets-mobile.png'), fullPage: true })
+  await page.setViewportSize({ width: 1440, height: 960 })
   await page.goto(`${baseUrl}/account`)
-  await page.getByText('微信内容分析', { exact: true }).waitFor()
-  await page.getByText('内容分析 Cookie', { exact: true }).waitFor()
+  await page.getByText('后台自动化', { exact: true }).waitFor()
+  await page.getByText('微信后台会话已就绪', { exact: true }).waitFor()
   await page.screenshot({ path: join(screenshots, 'account-cookie-binding.png'), fullPage: true })
   assert.deepEqual(pageErrors, [])
   assert.deepEqual(unexpectedWrites, [])
   console.log(`截图：${screenshots}`)
-  console.log('文章工作台、创作反馈、来源边界与账号写作档案通过')
+  console.log('文章工作台、创作反馈、来源边界与写作资产通过')
 } finally {
   await browser.close()
 }
