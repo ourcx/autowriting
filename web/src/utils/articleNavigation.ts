@@ -1,4 +1,5 @@
 import type { ArticleWorkflowStage } from "../../shared/articleWorkflow"
+import { articleWorkspacePath } from "../../shared/articleUrl"
 
 export type EditorTab = "task" | "materials" | "article" | "analysis" | "publish" | "toutiao" | "xiaohongshu" | "cover" | "library"
 export type PublishPlatform = "wechat" | "toutiao" | "xiaohongshu"
@@ -21,7 +22,17 @@ export function resolvePublishPlatform(value: string | null): PublishPlatform {
   return value === "toutiao" || value === "xiaohongshu" ? value : "wechat"
 }
 
-export function articleEditorUrl(articleId: string, platform?: PublishPlatform): string {
-  const path = `/editor/${encodeURIComponent(articleId)}`
-  return platform ? `${path}?tab=publish&platform=${platform}` : path
+interface ArticleUrlOptions {
+  title?: string
+  platform?: PublishPlatform
+}
+
+export function articleEditorUrl(articleId: string, options: ArticleUrlOptions = {}): string {
+  const path = articleWorkspacePath("editor", articleId, options.title)
+  return options.platform ? `${path}?tab=publish&platform=${options.platform}` : path
+}
+
+export function articlePreviewUrl(articleId: string, title?: string, platform?: PublishPlatform): string {
+  const path = articleWorkspacePath("preview", articleId, title)
+  return platform ? `${path}?platform=${platform}` : path
 }

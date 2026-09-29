@@ -8,13 +8,34 @@ Dashy 同时包含公开产品首页和登录后的内容创作工作台。SEO �
 | --- | --- | --- |
 | `/` | `index, follow` | 未登录时展示公开产品首页，已登录时进入创作工作台 |
 | `/login`、`/register` | `noindex` | 账号操作页 |
-| 文章、素材、配置、数据和管理路由 | `noindex` | 登录后的私有工作台 |
+| `/articles/:article-id/:title-slug`、`/previews/:article-id/:title-slug` | `noindex` | 登录后的文章编辑与预览页 |
+| 素材、配置、数据和管理路由 | `noindex` | 登录后的私有工作台 |
 | `/api/*` | robots 禁止抓取 | 接口没有可收录内容 |
 | 未知地址 | HTTP 404 + `noindex` | 返回独立的 `404.html` |
 
 公开首页在 [`web/index.html`](../index.html) 中保留了可直接抓取的正文。即使搜索引擎不执行 JavaScript，也能读取产品名称、定位和账号入口。浏览器执行 React 后，会由 [`PublicHomePage`](../src/pages/PublicHomePage/PublicHomePage.tsx) 展示完整首页。
 
 已登录用户访问 `/` 时仍进入原有工作台，不改变现有使用习惯。
+
+## 语义化文章地址
+
+文章编辑和预览地址统一使用小写、连字符分隔的标题 slug：
+
+```text
+/articles/20260929-writing-urls/writing-better-urls
+/previews/20260929-writing-urls/writing-better-urls
+```
+
+文章 ID 继续作为稳定主键，标题 slug 负责可读性。标题修改并保存后，前端会用 `replace` 更新 slug，不新增浏览历史，也不移动或重命名草稿文件。
+
+生产环境中的旧地址由 Node 直接返回 301，并保留查询参数：
+
+```text
+/editor/:article-id  -> /articles/:article-id/:title-slug
+/preview/:article-id -> /previews/:article-id/:title-slug
+```
+
+旧地址首次重定向时只能从文章 ID 推导 slug，因为浏览器的登录令牌保存在 `localStorage`，不会随页面请求发送给 Node。SPA 完成鉴权并读取文章后，会再按真实标题校正 slug。文章页面仍是私有页面，不加入 sitemap。
 
 ## 元信息
 
@@ -29,6 +50,12 @@ React 路由切换后，[`SeoMetadata`](../src/components/SeoMetadata/SeoMetadat
 - Twitter URL、标题和描述
 
 结构化数据使用 `SoftwareApplication`，只保留项目中能确认的产品信息。不要写入无法核验的评分、用户数、价格或效率提升比例。
+
+## 图片语义
+
+封面、图库照片、正文配图等承载内容的图片必须使用 `<img>` 或 SVG `<image>`，并提供能说明画面用途的 `alt`。编辑器会保留 Markdown 和 HTML 图片中的原始描述；描述缺失时使用“文章配图”兜底，上传工具复制出的 Markdown 和 HTML 也会写入图片文件名。
+
+纯边框、分隔和纸张装饰不参与正文含义，可以保留空 `alt`，但必须同时设置 `aria-hidden="true"`。需要表达内容或支持交互的图片不能只放在 CSS `background-image` 中。
 
 ## robots 与 sitemap
 
@@ -57,6 +84,8 @@ React 路由切换后，[`SeoMetadata`](../src/components/SeoMetadata/SeoMetadat
 ## Nginx 要求
 
 Nginx 如果直接托管 `web/dist`，不能使用无条件的 `try_files $uri $uri/ /index.html`。这条规则会把未知地址和缺失图片都变成 HTTP 200。
+
+公网入口应把 HTTP 永久重定向到 HTTPS。应用 canonical、Open Graph 和 sitemap 中的站点地址也统一使用 `https://0oq8he.site/`。
 
 推荐让所有页面请求交给 Express，由 Express 负责合法 SPA 路由和 404：
 
@@ -94,6 +123,7 @@ pnpm --dir web smoke
 ```bash
 curl -I https://0oq8he.site/
 curl -I https://0oq8he.site/login
+curl -I 'https://0oq8he.site/editor/20260929-writing-urls?tab=article'
 curl -I https://0oq8he.site/does-not-exist
 curl https://0oq8he.site/robots.txt
 curl https://0oq8he.site/sitemap.xml
@@ -103,6 +133,7 @@ curl https://0oq8he.site/sitemap.xml
 
 - `/` 返回 200，没有 `X-Robots-Tag: noindex`
 - `/login` 返回 200，并带有 `X-Robots-Tag: noindex, nofollow, noarchive`
+- 旧文章地址返回 301，`Location` 指向 `/articles/.../...` 并保留查询参数
 - 未知地址返回 404
 - sitemap 只有真实公开页面
 - 分享图地址返回图片内容，不能返回 HTML

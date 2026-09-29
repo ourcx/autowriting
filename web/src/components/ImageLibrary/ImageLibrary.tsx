@@ -177,7 +177,7 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({ onImageSelect }) => 
               <div className="image-preview">
                 <img
                   src={image.imageUrl}
-                  alt={image.title}
+                  alt={`${image.title || '未命名'}图片素材`}
                   onClick={() => onImageSelect?.(image)}
                 />
                 <div className="image-overlay">

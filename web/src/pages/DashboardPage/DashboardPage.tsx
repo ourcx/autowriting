@@ -106,9 +106,9 @@ export default function DashboardPage() {
       {/* ── 主体内容（占满剩余高度） ── */}
       <div className="dp-body">
         <Dashboard
-          onCreateArticle={id => navigate(articleEditorUrl(id))}
-          onEditArticle={id => navigate(articleEditorUrl(id))}
-          onPublishArticle={(id, platform) => navigate(articleEditorUrl(id, platform))}
+          onCreateArticle={(id, title) => navigate(articleEditorUrl(id, { title }))}
+          onEditArticle={(id, title) => navigate(articleEditorUrl(id, { title }))}
+          onPublishArticle={(id, title, platform) => navigate(articleEditorUrl(id, { title, platform }))}
         />
       </div>
 

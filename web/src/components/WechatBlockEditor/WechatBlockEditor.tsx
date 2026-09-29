@@ -164,6 +164,14 @@ function generatedAssetUrl(block: WechatAssetBlock): string {
   return generatedImageUrl(prompt, block.imageSize, "Concrete editorial illustration with a clear composition.")
 }
 
+function generatedAssetAlt(block: WechatAssetBlock): string {
+  const material = getCanvasMaterial(block.materialId)
+  if (material) return `${material.name}文章装饰`
+  if (block.libraryImage?.title) return block.libraryImage.title
+  const prompt = block.prompt.trim().replace(/\s+/g, " ").slice(0, 80)
+  return prompt ? `${prompt}文章插画` : "文章配图"
+}
+
 function generatedAssetRatio(block: WechatAssetBlock): string {
   return getCanvasMaterial(block.materialId)?.ratio || (block.libraryImage ? "auto" : generatedImageRatio(block.imageSize))
 }
@@ -709,7 +717,7 @@ function SourceContent({
       <figure style={contentStyle(block)}>
         <img
           src={source.src}
-          alt={source.alt || ""}
+          alt={source.alt || "文章配图"}
           style={{
             display: "block",
             width: "100%",
@@ -850,7 +858,7 @@ function GeneratedAsset({ block }: { block: WechatAssetBlock }) {
         data-wechat-material="true"
         data-wechat-library-image={block.libraryImage ? "true" : undefined}
         src={generatedAssetUrl(block)}
-        alt={block.libraryImage?.title || ""}
+        alt={generatedAssetAlt(block)}
         style={{
           display: "block",
           width: "100%",
@@ -877,6 +885,11 @@ function Switcher({ block }: { block: WechatSwitcherBlock }) {
     block.imageSize,
     "Second state of the same composition, clearly changed but visually consistent.",
   )
+  const description = [block.beforePrompt, block.afterPrompt]
+    .map(prompt => prompt.trim())
+    .filter(Boolean)
+    .join("与")
+    .slice(0, 120) || "点击切换前后状态的文章对比图"
   return (
     <figure
       style={{
@@ -894,30 +907,36 @@ function Switcher({ block }: { block: WechatSwitcherBlock }) {
     >
       <svg
         data-wechat-interactive="switcher"
+        role="img"
+        aria-label={description}
         viewBox={`0 0 ${viewBoxWidth} ${viewBoxHeight}`}
         width="100%"
         xmlns="http://www.w3.org/2000/svg"
         style={{
           display: "block",
           width: "100%",
-          backgroundImage: `url("${beforeUrl}")`,
-          backgroundSize: "100% 100%",
-          backgroundRepeat: "no-repeat",
         }}
       >
-        <svg
+        <title>{description}</title>
+        <image
+          href={beforeUrl}
+          width={viewBoxWidth}
+          height={viewBoxHeight}
+          preserveAspectRatio="xMidYMid slice"
+        />
+        <g
           data-wechat-interactive="switcher-state"
-          viewBox={`0 0 ${viewBoxWidth} ${viewBoxHeight}`}
-          width="100%"
-          height="100%"
           opacity="0"
           style={{
-            backgroundImage: `url("${afterUrl}")`,
-            backgroundSize: "100% 100%",
-            backgroundRepeat: "no-repeat",
             pointerEvents: "all",
           }}
         >
+          <image
+            href={afterUrl}
+            width={viewBoxWidth}
+            height={viewBoxHeight}
+            preserveAspectRatio="xMidYMid slice"
+          />
           <rect width="100%" height="100%" fill="transparent" style={{ pointerEvents: "all" }} />
           <animate
             attributeName="opacity"
@@ -928,7 +947,7 @@ function Switcher({ block }: { block: WechatSwitcherBlock }) {
             keyTimes="0;0.000001;1"
             calcMode="discrete"
           />
-        </svg>
+        </g>
       </svg>
     </figure>
   )

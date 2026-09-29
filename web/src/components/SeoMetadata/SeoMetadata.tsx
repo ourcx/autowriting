@@ -17,6 +17,10 @@ interface SeoMetadataProps {
 
 const PRIVATE_ROUTE_TITLES: Array<[RegExp, string]> = [
   [/^\/setup\/?$/, '初始化设置'],
+  [/^\/articles\/[^/]+\/[^/]+\/?$/, '文章编辑'],
+  [/^\/previews\/[^/]+\/[^/]+\/?$/, '文章预览'],
+  [/^\/articles\/[^/]+\/?$/, '文章编辑'],
+  [/^\/previews\/[^/]+\/?$/, '文章预览'],
   [/^\/editor\/[^/]+\/?$/, '文章编辑'],
   [/^\/preview\/[^/]+\/?$/, '文章预览'],
   [/^\/drafts\/?$/, '微信草稿'],

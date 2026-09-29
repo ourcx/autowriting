@@ -16,6 +16,7 @@ import {
 } from '../../utils/accountBindings'
 import { useAuth } from '../../store/useAuth'
 import type { WechatBrowserPublishOptions, WechatCommentMode } from '../../../shared/wechatPublish'
+import { articleEditorUrl } from '../../utils/articleNavigation'
 import './WeChatDrafts.css'
 
 /* ── HTML → Markdown（导入用）── */
@@ -208,7 +209,7 @@ export default function WeChatDrafts() {
         article: mdContent,
       })
       toast.success(`「${item.title}」已导入编辑器`)
-      navigate(`/editor/${articleId}`)
+      navigate(articleEditorUrl(articleId, { title: item.title }))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '导入失败')
     } finally { setImporting(null) }
@@ -472,7 +473,7 @@ export default function WeChatDrafts() {
                   <div key={item.media_id} className="wd-card">
                     <div className="wd-card-thumb">
                       {item.thumb_url
-                        ? <img src={wxImg(item.thumb_url)!} alt="封面" />
+                        ? <img src={wxImg(item.thumb_url)!} alt={`《${item.title || '未命名文章'}》草稿封面`} />
                         : <div className="wd-card-thumb-placeholder"><FileText size={18} /></div>
                       }
                     </div>
@@ -616,7 +617,7 @@ export default function WeChatDrafts() {
                     <div key={item.article_id} className="wd-card">
                       <div className="wd-card-thumb">
                         {item.thumb_url
-                          ? <img src={wxImg(item.thumb_url)!} alt="封面" />
+                          ? <img src={wxImg(item.thumb_url)!} alt={`《${item.title || '未命名文章'}》已发布封面`} />
                           : <div className="wd-card-thumb-placeholder"><BookOpen size={18} /></div>
                         }
                       </div>
@@ -729,7 +730,7 @@ export default function WeChatDrafts() {
                     /* 图片网格 */
                     <div key={item.media_id} className="wd-mat-img-card">
                       <div className="wd-mat-img-wrap">
-                        <img src={wxImg(item.url)!} alt={item.name} loading="lazy" />
+                        <img src={wxImg(item.url)!} alt={`${item.name || '未命名'}图片素材预览`} loading="lazy" />
                         <div className="wd-mat-img-overlay">
                           <button
                             className="wd-mat-del-btn"

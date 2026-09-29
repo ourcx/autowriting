@@ -2,6 +2,7 @@
  * 服务入口
  */
 import express from "express"
+import type { RequestHandler } from "express"
 import { PORT, HOST, PROJECT_ROOT, DRAFTS_DIR, CACHE_DIR, SERVER_AI_CONFIG, STATIC_DIR } from "./server/config.ts"
 import { logger } from "./server/logger.ts"
 import { performanceMonitorMiddleware } from "./server/performanceMonitor.ts"
@@ -43,6 +44,7 @@ import {
   requestBodyLimits,
   securityHeaders,
 } from "./server/security.ts"
+import { articleWorkspacePath, type ArticleWorkspace } from "./shared/articleUrl.ts"
 
 const app = express()
 app.disable("x-powered-by")
@@ -51,6 +53,7 @@ app.set("trust proxy", "loopback")
 
 const PRIVATE_SPA_ROUTE_PATTERNS = [
   /^\/(?:login|register|setup|drafts|styles|settings|rag|token-usage|prompts|cron|scores|insights|account|canvas|admin|monitoring)\/?$/,
+  /^\/(?:articles|previews)\/[^/]+\/[^/]+\/?$/,
   /^\/(?:editor|preview)\/[^/]+\/?$/,
   /^\/wechat\/materials\/?$/,
 ]
@@ -78,6 +81,17 @@ function scheduleCleanup(): void {
     scheduleCleanup()
   }, delay)
   logger.info("CLEANUP", "已安排下次清理", { nextCleanup: nextCleanup.toISOString() })
+}
+
+function redirectLegacyArticleRoute(workspace: ArticleWorkspace): RequestHandler {
+  return (req, res): void => {
+    const queryIndex = req.originalUrl.indexOf("?")
+    const query = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : ""
+    const destination = `${articleWorkspacePath(workspace, String(req.params.articleId))}${query}`
+    res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive")
+    res.setHeader("Cache-Control", "private, no-store")
+    res.redirect(301, destination)
+  }
 }
 
 try {
@@ -162,6 +176,10 @@ app.get("/api/config/status", (_req, res) => {
 })
 
 if (process.env.NODE_ENV === "production") {
+  app.get("/editor/:articleId", redirectLegacyArticleRoute("editor"))
+  app.get("/preview/:articleId", redirectLegacyArticleRoute("preview"))
+  app.get("/articles/:articleId", redirectLegacyArticleRoute("editor"))
+  app.get("/previews/:articleId", redirectLegacyArticleRoute("preview"))
   app.use("/api", (_req, res) => {
     res.status(404).json({ error: "接口不存在" })
   })

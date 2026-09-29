@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import type { CanvasSource } from "../shared/canvasArticle.ts"
+import { extractCanvasSources, type CanvasSource } from "../shared/canvasArticle.ts"
 import {
   assessCanvasVisualQuality,
   compileCanvasDesignSystem,
@@ -29,6 +29,19 @@ const sources: CanvasSource[] = [
   { id: "source-11", kind: "paragraph", text: "示意图用于解释两侧操纵输入无法被另一侧直接感知。" },
   { id: "source-12", kind: "paragraph", text: "技术故障最终演变为训练、协作与人机界面的共同失败。" },
 ]
+
+const extractedImages = extractCanvasSources({
+  title: "图片语义夹具",
+  article: [
+    "![蓝莓煎饼上的糖粉](/uploads/pancake.png)",
+    '<img class="reference" alt="书桌上的写作手稿" src="/uploads/writing-desk.png" />',
+  ].join("\n"),
+}).filter(source => source.kind === "image")
+assert.deepEqual(
+  extractedImages.map(source => source.alt),
+  ["蓝莓煎饼上的糖粉", "书桌上的写作手稿"],
+  "Markdown 与 HTML 图片描述必须进入画布内容源",
+)
 
 const expectedSignatures: Partial<Record<CanvasDesignTemplateId, {
   primary: string

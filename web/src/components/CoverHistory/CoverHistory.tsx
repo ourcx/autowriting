@@ -168,7 +168,7 @@ export const CoverHistory: React.FC = () => {
               onClick={() => setSelectedId(item.id)}
             >
               <div className="item-preview">
-                <img src={item.imageUrl} alt={item.title} />
+                <img src={item.imageUrl} alt={`《${item.title || '未命名文章'}》历史封面`} />
                 {item.cached && <span className="cached-badge">缓存</span>}
               </div>
               <div className="item-info">

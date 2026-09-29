@@ -12,7 +12,9 @@ export interface CanvasSource {
 }
 
 const IMAGE_MARKDOWN = /!\[([^\]]*)\]\((https?:\/\/[^)\s]+|\/[^)\s]+|data:image\/(?:png|jpe?g|webp|gif);[^)]+)\)/gi
-const HTML_IMAGE = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi
+const HTML_IMAGE = /<img\b[^>]*>/gi
+const HTML_IMAGE_SRC = /\bsrc=["']([^"']+)["']/i
+const HTML_IMAGE_ALT = /\balt=["']([^"']*)["']/i
 
 function cleanMarkdownText(value: string): string {
   return value
@@ -72,6 +74,12 @@ export function extractCanvasSources(input: {
     if (!safeSrc || sources.some(source => source.kind === "image" && source.src === safeSrc)) return
     sources.push({ id: `source-${sequence++}`, kind: "image", src: safeSrc, alt: cleanMarkdownText(alt) })
   }
+  const addHtmlImages = (value: string) => {
+    for (const match of value.matchAll(HTML_IMAGE)) {
+      const src = match[0].match(HTML_IMAGE_SRC)?.[1]
+      if (src) addImage(src, match[0].match(HTML_IMAGE_ALT)?.[1])
+    }
+  }
 
   addText("title", input.title || "未命名文章")
 
@@ -101,7 +109,7 @@ export function extractCanvasSources(input: {
     }
 
     for (const match of line.matchAll(IMAGE_MARKDOWN)) addImage(match[2], match[1])
-    for (const match of line.matchAll(HTML_IMAGE)) addImage(match[1])
+    addHtmlImages(line)
     const withoutImages = line.replace(IMAGE_MARKDOWN, "").replace(HTML_IMAGE, "").trim()
     if (!withoutImages) {
       flushParagraph()
@@ -138,7 +146,7 @@ export function extractCanvasSources(input: {
 
   const imageText = `${input.article}\n${input.materials || ""}`
   for (const match of imageText.matchAll(IMAGE_MARKDOWN)) addImage(match[2], match[1])
-  for (const match of imageText.matchAll(HTML_IMAGE)) addImage(match[1])
+  addHtmlImages(imageText)
   for (const image of input.extraImages || []) addImage(image.src, image.alt)
 
   return sources.slice(0, 100)

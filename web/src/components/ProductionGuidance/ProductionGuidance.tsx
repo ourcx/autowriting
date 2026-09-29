@@ -9,6 +9,7 @@ import {
 import { fetchProductionInsights, saveCreatorFeedback, type ProductionInsights } from "../../utils/apiHelpers"
 import { toast } from "../Toast/Toast"
 import type { ArticleWorkflow } from "../../../shared/articleWorkflow"
+import { articleEditorUrl } from "../../utils/articleNavigation"
 import "./ProductionGuidance.css"
 
 const PLATFORM_LABEL = { wechat: "公众号", toutiao: "今日头条", xiaohongshu: "小红书" }
@@ -135,7 +136,7 @@ export default function ProductionGuidance({ article, materials, articleToutiao,
         <button className="btn btn-secondary" onClick={() => void saveFeedback()} disabled={!articleId || savingFeedback}>{savingFeedback ? "保存中…" : "保存写作取舍"}</button>
         {!articleId && <p className="pg-help">此稿仅保存在浏览器中，移到服务器后可积累账号经验。</p>}
         {insights?.creatorExperiences?.slice(0, 3).map(item => <p className="pg-help" key={item.articleId}>
-          <a href={`/editor/${encodeURIComponent(item.articleId)}?tab=analysis`}>{item.articleId}</a> · {item.layer === "general" ? "综合取舍" : WRITING_DNA_LAYER_LABELS[item.layer]}：{item.note || "已记录保留表达"}
+          <a href={`${articleEditorUrl(item.articleId)}?tab=analysis`}>{item.articleId}</a> · {item.layer === "general" ? "综合取舍" : WRITING_DNA_LAYER_LABELS[item.layer]}：{item.note || "已记录保留表达"}
           {item.candidateId ? ` · 原样保留 ${item.retainedParagraphs} 段，修改或新增 ${item.changedParagraphs} 段` : ""}
         </p>)}
       </section>

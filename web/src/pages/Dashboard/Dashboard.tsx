@@ -4,6 +4,7 @@ import { fetchArticleList, fetchArticleWorkflowMetrics, deleteArticle, type Work
 import { showConfirm, toast } from '../../components/Toast/Toast'
 import './Dashboard.css'
 import type { PublishPlatform } from '../../utils/articleNavigation'
+import { slugifyArticleTitle } from '../../../shared/articleUrl'
 
 // ── 本地文章（localStorage）工具 ─────────────────────────────────────────────
 const LOCAL_ARTICLES_KEY = 'local_articles'
@@ -43,9 +44,9 @@ interface Article {
 }
 
 interface DashboardProps {
-  onCreateArticle: (articleId: string) => void
-  onEditArticle?: (articleId: string) => void
-  onPublishArticle: (articleId: string, platform: PublishPlatform) => void
+  onCreateArticle: (articleId: string, title?: string) => void
+  onEditArticle?: (articleId: string, title?: string) => void
+  onPublishArticle: (articleId: string, title: string, platform: PublishPlatform) => void
 }
 
 const STATUS_META: Record<string, { label: string; className: string }> = {
@@ -153,7 +154,7 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
     }
     const dateStr = newDate.replace(/-/g, '')
     const title = titleRef.current?.value.trim() || ''
-    const slug = title ? title.replace(/[^\w\u4e00-\u9fff]/g, '').substring(0, 20) : ''
+    const slug = title ? slugifyArticleTitle(title).slice(0, 48).replace(/-+$/g, '') : ''
     const articleId = slug ? `${dateStr}-${slug}` : `${dateStr}-${Date.now()}`
 
     if (storageMode === 'local') {
@@ -169,13 +170,13 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
       addLocalArticle(newArticle)
       setLocalArticles(loadLocalArticles())
       setCreating(true)
-      onCreateArticle(localId)
+      onCreateArticle(localId, newArticle.title)
     } else {
       if (title) {
         localStorage.setItem(`article_title_${articleId}`, title)
       }
       setCreating(true)
-      onCreateArticle(articleId)
+      onCreateArticle(articleId, title || undefined)
     }
   }
 
@@ -252,7 +253,7 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
               key={article.id}
               className="dash-article-item"
             >
-              <button className="dash-article-left" onClick={() => onEditArticle?.(article.id)} aria-label={`继续编辑：${article.title || '未命名文章'}`}>
+              <button className="dash-article-left" onClick={() => onEditArticle?.(article.id, article.title)} aria-label={`继续编辑：${article.title || '未命名文章'}`}>
                 <div className="dash-article-dot" data-status={article.status} />
                 <div>
                   <p className="dash-article-title">
@@ -276,9 +277,9 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
               <div className="dash-article-right">
                 {['review', 'ready', 'wechat_draft', 'generated', 'published'].includes(article.status) && (
                   <div className="dash-platform-actions">
-                    <button title="公众号预览与推送" aria-label={`公众号：${article.title}`} onClick={() => onPublishArticle(article.id, 'wechat')}><MessageCircle size={16} /></button>
-                    <button title="今日头条预览与发布" aria-label={`今日头条：${article.title}`} onClick={() => onPublishArticle(article.id, 'toutiao')}><Newspaper size={16} /></button>
-                    <button title="小红书预览与发布" aria-label={`小红书：${article.title}`} onClick={() => onPublishArticle(article.id, 'xiaohongshu')}><BookOpen size={16} /></button>
+                    <button title="公众号预览与推送" aria-label={`公众号：${article.title}`} onClick={() => onPublishArticle(article.id, article.title, 'wechat')}><MessageCircle size={16} /></button>
+                    <button title="今日头条预览与发布" aria-label={`今日头条：${article.title}`} onClick={() => onPublishArticle(article.id, article.title, 'toutiao')}><Newspaper size={16} /></button>
+                    <button title="小红书预览与发布" aria-label={`小红书：${article.title}`} onClick={() => onPublishArticle(article.id, article.title, 'xiaohongshu')}><BookOpen size={16} /></button>
                   </div>
                 )}
                 <button
@@ -430,7 +431,7 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
         {!loading && !loadError && resumeArticle && (
           <section className="dash-resume" aria-label="继续创作">
             <div><span>{STATUS_META[resumeArticle.status]?.label || '继续创作'}</span><h2>{resumeArticle.title || '未命名文章'}</h2></div>
-            <button onClick={() => onEditArticle?.(resumeArticle.id)}>继续处理<ArrowRight size={16} /></button>
+            <button onClick={() => onEditArticle?.(resumeArticle.id, resumeArticle.title)}>继续处理<ArrowRight size={16} /></button>
           </section>
         )}
         {/* 本地存储警告横幅 */}

@@ -255,7 +255,7 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
   await page.getByRole('button', { name: '继续处理', exact: true }).click()
   await page.getByRole('heading', { name: '公众号预览与推送' }).waitFor()
-  assert.equal(new URL(page.url()).pathname, '/editor/ready-test')
+  assert.equal(decodeURIComponent(new URL(page.url()).pathname), '/articles/ready-test/工作台验收文章')
   await page.goto(`${baseUrl}/`)
   await page.getByRole('textbox', { name: '搜索文章' }).fill('无匹配')
   await page.getByText('没有匹配的文章', { exact: true }).waitFor()
@@ -295,7 +295,7 @@ try {
   await page.waitForFunction(() => !document.querySelector('.toast-error'))
   await page.getByRole('button', { name: '下一步：选择平台发布', exact: true }).click()
   await page.getByRole('heading', { name: '公众号预览与推送' }).waitFor()
-  assert.equal(new URL(page.url()).pathname, '/editor/workbench-test')
+  assert.equal(decodeURIComponent(new URL(page.url()).pathname), '/articles/workbench-test/工作台验收文章')
   assert.deepEqual(workflowEvents, ['wechat_draft_opened'])
   assert.equal(savedArticle.title, '工作台验收文章')
   for (const label of ['任务', '素材', '写作', '审核', '发布']) {
@@ -326,7 +326,7 @@ try {
   await page.screenshot({ path: join(screenshots, 'publish-desktop.png'), fullPage: true })
   await page.getByRole('group', { name: '发布平台' }).getByRole('button', { name: '小红书', exact: false }).click()
   await page.getByRole('heading', { name: '小红书预览与发布' }).waitFor()
-  assert.equal(new URL(page.url()).pathname, '/editor/workbench-test')
+  assert.equal(decodeURIComponent(new URL(page.url()).pathname), '/articles/workbench-test/工作台验收文章')
   assert.equal(new URL(page.url()).searchParams.get('platform'), 'xiaohongshu')
   assert.equal(await page.locator('input').evaluateAll(inputs => inputs.some(input => input.value === '小红书独立标题')), true)
   assert.equal(
@@ -334,7 +334,7 @@ try {
     'https://creator.xiaohongshu.com/publish/publish?from=menu&target=video',
   )
   await page.getByRole('button', { name: '打开独立预览', exact: true }).click()
-  await page.waitForURL('**/preview/workbench-test?platform=xiaohongshu')
+  await page.waitForURL('**/previews/workbench-test/*?platform=xiaohongshu')
   await page.goto(`${baseUrl}/editor/workbench-test?tab=publish&platform=xiaohongshu`)
   await page.getByRole('heading', { name: '小红书预览与发布' }).waitFor()
   await page.getByRole('group', { name: '发布平台' }).getByRole('button', { name: '今日头条', exact: false }).click()

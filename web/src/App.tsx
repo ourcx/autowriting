@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom'
 import DashboardPage from './pages/DashboardPage/DashboardPage'
 import LoginPage from './pages/LoginPage/LoginPage'
 import PublicHomePage from './pages/PublicHomePage/PublicHomePage'
@@ -9,6 +9,7 @@ import IconTooltipProvider from './components/IconTooltipProvider/IconTooltipPro
 import SeoMetadata from './components/SeoMetadata/SeoMetadata'
 import { syncAIConfigFromServer } from './utils/aiConfig'
 import { initAuth, useAuth } from './store/useAuth'
+import { articleWorkspacePath, type ArticleWorkspace } from '../shared/articleUrl'
 
 // Keep the landing workspace light; editors and administrative tools load on entry.
 const ArticleEditor = lazy(() => import('./pages/ArticleEditor/ArticleEditor'))
@@ -34,6 +35,13 @@ function HomeRoute() {
   if (!initialized) return <div className="route-loading" role="status">正在打开工作区...</div>
   return isLoggedIn ? <DashboardPage /> : <PublicHomePage />
 }
+
+function LegacyArticleRoute({ workspace }: { workspace: ArticleWorkspace }) {
+  const { articleId = '' } = useParams<{ articleId: string }>()
+  const { search } = useLocation()
+  return <Navigate to={`${articleWorkspacePath(workspace, articleId)}${search}`} replace />
+}
+
 export default function App() {
   const { initialized, isLoggedIn } = useAuth()
 
@@ -58,8 +66,12 @@ export default function App() {
         {/* 登录保护路由 */}
         <Route path="/" element={<HomeRoute />} />
         <Route path="/setup" element={<PrivateRoute><FirstSetupPage /></PrivateRoute>} />
-        <Route path="/editor/:articleId" element={<PrivateRoute><ArticleEditor /></PrivateRoute>} />
-        <Route path="/preview/:articleId" element={<PrivateRoute><WeChatPreview /></PrivateRoute>} />
+        <Route path="/articles/:articleId/:articleSlug" element={<PrivateRoute><ArticleEditor /></PrivateRoute>} />
+        <Route path="/previews/:articleId/:articleSlug" element={<PrivateRoute><WeChatPreview /></PrivateRoute>} />
+        <Route path="/articles/:articleId" element={<PrivateRoute><LegacyArticleRoute workspace="editor" /></PrivateRoute>} />
+        <Route path="/previews/:articleId" element={<PrivateRoute><LegacyArticleRoute workspace="preview" /></PrivateRoute>} />
+        <Route path="/editor/:articleId" element={<PrivateRoute><LegacyArticleRoute workspace="editor" /></PrivateRoute>} />
+        <Route path="/preview/:articleId" element={<PrivateRoute><LegacyArticleRoute workspace="preview" /></PrivateRoute>} />
         <Route path="/drafts" element={<PrivateRoute><WeChatDrafts /></PrivateRoute>} />
         <Route path="/wechat/materials" element={<PrivateRoute><WeChatMaterials /></PrivateRoute>} />
         <Route path="/styles" element={<PrivateRoute><StyleEditor /></PrivateRoute>} />

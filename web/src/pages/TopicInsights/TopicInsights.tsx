@@ -34,6 +34,7 @@ import { analyzeTopic, rankWechatArticles, topicBrief, wechatAnalyticsSchema, ty
 import Button from "../../components/Button/Button"
 import PageHeader from "../../components/PageHeader/PageHeader"
 import { toast } from "../../components/Toast/Toast"
+import { articleEditorUrl } from "../../utils/articleNavigation"
 import "./TopicInsights.css"
 
 const CHART_COLORS = {
@@ -167,8 +168,9 @@ export default function TopicInsights() {
     setBusy(true)
     try {
       const id = `${new Date().toLocaleDateString("sv-SE").replace(/-/g, "")}-选题-${crypto.randomUUID().slice(0, 8)}`
-      await saveArticle(id, topicBrief(snapshot, keyword, question, materials))
-      navigate(`/editor/${encodeURIComponent(id)}?tab=materials`)
+      const brief = topicBrief(snapshot, keyword, question, materials)
+      await saveArticle(id, brief)
+      navigate(`${articleEditorUrl(id, { title: brief.title })}?tab=materials`)
     } catch { setError("任务保存失败，选题和素材仍保留在此页，可以重试。") }
     finally { setBusy(false) }
   }
@@ -288,7 +290,9 @@ export default function TopicInsights() {
               <select disabled={busy} aria-label={`关联稿件：${item.title}`} value={item.localArticleId || ""} onChange={event => void linkArticle(item.id, event.target.value)}>
                 <option value="">关联候选稿、素材和写作取舍…</option>{drafts.map(draft => <option value={draft.id} key={draft.id}>{draft.title}</option>)}
               </select>
-              {item.localArticleId && <a href={`/editor/${encodeURIComponent(item.localArticleId)}?tab=analysis`}>查看写作取舍 ↗</a>}
+              {item.localArticleId && <a href={`${articleEditorUrl(item.localArticleId, {
+                title: drafts.find(draft => draft.id === item.localArticleId)?.title,
+              })}?tab=analysis`}>查看写作取舍 ↗</a>}
             </td><td><span className={`topic-band topic-band--${item.band}`}>{item.band === "high" ? "高关注" : item.band === "low" ? "低关注" : "中段"}</span><small>第 {item.rank}/{snapshot.articles.length}</small></td><td>{item.publishedAt}</td><td>{item.reads.toLocaleString()}<small>后台占比 {item.shareOfReads}%</small></td></tr>)}
           </tbody></table></div>
           {!analysis.articles.length && <p>没有匹配的标题，换一个关键词试试。</p>}

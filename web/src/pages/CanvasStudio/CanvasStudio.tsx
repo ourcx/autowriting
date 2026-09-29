@@ -574,8 +574,8 @@ export default function CanvasStudio() {
         throw new Error("画板 PNG 超过 32MB，请缩短画布或分段后再推送")
       }
       const dataUrls = await Promise.all(blobs.map(blobToDataUrl))
-      const html = `<section style="margin:0;padding:0;width:100%;background:#ffffff;">${dataUrls.map(url => (
-        `<p style="margin:0;padding:0;line-height:0;"><img src="${url}" style="display:block;width:100%;max-width:100%;height:auto;margin:0;" /></p>`
+      const html = `<section style="margin:0;padding:0;width:100%;background:#ffffff;">${dataUrls.map((url, index) => (
+        `<p style="margin:0;padding:0;line-height:0;"><img src="${url}" alt="文章视觉排版第 ${index + 1} 页" style="display:block;width:100%;max-width:100%;height:auto;margin:0;" /></p>`
       )).join("")}</section>`
       await submitWechatHtml(
         html,

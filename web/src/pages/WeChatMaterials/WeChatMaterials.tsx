@@ -134,6 +134,18 @@ function materialDisplayName(item: WechatMaterialItem, type: MaterialType): stri
   return item.name || '未命名素材'
 }
 
+function uploadedImageAlt(file: File | null): string {
+  return file?.name.replace(/\.[^.]+$/, '').trim() || '文章正文配图'
+}
+
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
 function MaterialDropzone({
   accept,
   file,
@@ -270,6 +282,7 @@ export default function WeChatMaterials() {
   const [contentImageFile, setContentImageFile] = useState<File | null>(null)
   const [contentImageUploading, setContentImageUploading] = useState(false)
   const [contentImageUrl, setContentImageUrl] = useState('')
+  const contentImageAlt = uploadedImageAlt(contentImageFile)
 
   const revokeDetailFileUrl = useCallback(() => {
     setDetailFileUrl(prev => {
@@ -555,11 +568,11 @@ export default function WeChatMaterials() {
                     <Link2 size={13} />
                     复制 URL
                   </button>
-                  <button className="wm-chip-btn" onClick={() => copyText(`![](${contentImageUrl})`, '已复制 Markdown 图片语法')}>
+                  <button className="wm-chip-btn" onClick={() => copyText(`![${contentImageAlt.replace(/[[\]]/g, '')}](${contentImageUrl})`, '已复制 Markdown 图片语法')}>
                     <Copy size={13} />
                     复制 Markdown
                   </button>
-                  <button className="wm-chip-btn" onClick={() => copyText(`<img src="${contentImageUrl}" alt="" />`, '已复制 HTML 图片代码')}>
+                  <button className="wm-chip-btn" onClick={() => copyText(`<img src="${contentImageUrl}" alt="${escapeHtmlAttribute(contentImageAlt)}" />`, '已复制 HTML 图片代码')}>
                     <Copy size={13} />
                     复制 HTML
                   </button>
@@ -735,7 +748,7 @@ export default function WeChatMaterials() {
                         <strong>{formatSize(detail.size)}</strong>
                       </div>
                       {detailFileUrl && detail.type === 'image' ? (
-                        <img className="wm-detail-preview" src={detailFileUrl} alt="素材详情" />
+                        <img className="wm-detail-preview" src={detailFileUrl} alt={`${selectedMaterialName || detail.media_id}图片素材详情`} />
                       ) : null}
                       {detailFileUrl && detail.type === 'voice' ? (
                         <audio className="wm-audio-player" controls src={detailFileUrl} />
@@ -768,7 +781,7 @@ export default function WeChatMaterials() {
                             ) : null}
                           </div>
                           {entry.thumb_url ? (
-                            <img className="wm-news-thumb" src={wxImg(entry.thumb_url) || entry.thumb_url} alt={entry.title || '封面'} />
+                            <img className="wm-news-thumb" src={wxImg(entry.thumb_url) || entry.thumb_url} alt={`《${entry.title || `图文 ${index + 1}`}》封面`} />
                           ) : null}
                           {entry.digest ? <p className="wm-news-digest">{entry.digest}</p> : null}
                         </article>
@@ -808,7 +821,7 @@ export default function WeChatMaterials() {
                   <article key={item.media_id} className="wm-image-card">
                     <button className="wm-image-frame" onClick={() => openDetail(item)}>
                       {item.url ? (
-                        <img src={wxImg(item.url) || item.url} alt={item.name || item.media_id} loading="lazy" />
+                        <img src={wxImg(item.url) || item.url} alt={`${item.name || item.media_id}图片素材预览`} loading="lazy" />
                       ) : (
                         <div className="wm-image-placeholder"><FileImage size={20} /></div>
                       )}

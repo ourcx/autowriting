@@ -36,6 +36,7 @@ import {
   completeFirstSetup,
   getSetupSessionKey,
 } from "../../utils/userExperience"
+import { articleEditorUrl } from "../../utils/articleNavigation"
 import "./FirstSetupPage.css"
 
 type SetupStep = "ai" | "accounts"
@@ -109,7 +110,7 @@ export default function FirstSetupPage() {
       await saveArticle(articleId, { title: "我的第一篇文章" })
       completeFirstSetup(user.id)
       if (sessionKey) sessionStorage.removeItem(sessionKey)
-      navigate(`/editor/${encodeURIComponent(articleId)}?tab=task`, { replace: true })
+      navigate(`${articleEditorUrl(articleId, { title: "我的第一篇文章" })}?tab=task`, { replace: true })
     } catch (error) {
       toast.error(extractErrorMessage(error, "首篇文章创建失败，请重试"))
     } finally {

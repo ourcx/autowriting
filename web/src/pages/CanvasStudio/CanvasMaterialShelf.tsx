@@ -45,7 +45,7 @@ export default function CanvasMaterialShelf({ disabled, onInsert }: CanvasMateri
     </div>
     <div className="cs-material-grid">
       {visibleMaterials.map(material => <button key={material.id} disabled={disabled} onClick={() => onInsert(material.id)}>
-        <img src={material.src} alt="" /><strong>{material.name}</strong><small>{material.category}</small>
+        <img src={material.src} alt={`${material.name}装饰素材预览`} /><strong>{material.name}</strong><small>{material.category}</small>
       </button>)}
     </div>
     {visibleMaterials.length === 0 ? <p className="cs-material-empty">没有匹配的素材，换个关键词试试。</p> : null}
@@ -61,7 +61,7 @@ export default function CanvasMaterialShelf({ disabled, onInsert }: CanvasMateri
       <div className="cs-material-grid">
         {images?.filter(image => image.title.toLowerCase().includes(query.trim().toLowerCase())).map(image =>
           <button key={image.url} disabled={disabled} onClick={() => onInsert(undefined, image)}>
-            <img src={image.url} alt="" loading="lazy" /><strong>{image.title}</strong><small>插入照片</small>
+            <img src={image.url} alt={`${image.title}图片预览`} loading="lazy" /><strong>{image.title}</strong><small>插入照片</small>
           </button>)}
       </div>
     </details></>

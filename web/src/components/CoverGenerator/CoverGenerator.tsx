@@ -462,7 +462,7 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
         {generatedImage ? (
           <>
             <div className="cg-preview-frame">
-              <img src={generatedImage} alt="封面预览" className="cg-preview-img" />
+              <img src={generatedImage} alt={`《${title.trim() || '未命名文章'}》封面预览`} className="cg-preview-img" />
             </div>
             <div className="cg-preview-actions">
               <button className="cg-action-btn cg-action-btn--primary" onClick={handleDownload}>

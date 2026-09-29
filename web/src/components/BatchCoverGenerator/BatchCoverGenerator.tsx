@@ -128,7 +128,7 @@ export const BatchCoverGenerator: React.FC<BatchCoverGeneratorProps> = ({
           <div className="results-container">
             {results.map((result) => (
               <div key={result.index} className="result-item">
-                <img src={result.imageUrl} alt={result.title} />
+                <img src={result.imageUrl} alt={`《${result.title || '未命名文章'}》候选封面`} />
                 <div className="result-info">
                   <h4>{result.title}</h4>
                   {result.cached && <span className="cached-badge">缓存</span>}

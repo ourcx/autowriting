@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { toast } from '../../components/Toast/Toast'
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { Zap, Save, Edit3, Palette, Settings, AlertTriangle, Plus, Trash2, Pencil, Sparkles, LayoutList, CheckCircle, ChevronRight, ChevronDown, GripVertical, User, Newspaper, BookOpen, MessageCircle, HelpCircle, Image, Link2, Link2Off } from 'lucide-react'
 import { useAIReadiness, fetchServerStatus } from '../../store/useConfigStore'
 import { useAuth } from '../../store/useAuth'
@@ -36,7 +36,7 @@ import {
   deleteCustomTaskTemplate,
 } from '../../utils/taskTemplateStore'
 import './ArticleEditor.css'
-import { resolveEditorTab, resolvePublishPlatform, type EditorTab, type PublishPlatform } from '../../utils/articleNavigation'
+import { articleEditorUrl, resolveEditorTab, resolvePublishPlatform, type EditorTab, type PublishPlatform } from '../../utils/articleNavigation'
 import {
   normalizeArticleWorkflow,
   type ArticleWorkflow,
@@ -77,9 +77,23 @@ const FLOW_TAB: Record<MainFlowStep, TabId> = {
   publish: 'publish',
 }
 
+function titleFromArticle(data: ArticleData): string {
+  return data.title.trim() || data.article.split('\n')[0]?.replace(/^#+\s*/, '').trim() || ''
+}
+
+function localArticleTitle(articleId: string): string {
+  try {
+    const articles: Array<{ id: string; title?: string }> = JSON.parse(localStorage.getItem('local_articles') || '[]')
+    return articles.find(article => article.id === articleId)?.title?.trim() || ''
+  } catch {
+    return ''
+  }
+}
+
 export default function ArticleEditor() {
-  const { articleId = '' } = useParams<{ articleId: string }>()
+  const { articleId = '', articleSlug } = useParams<{ articleId: string; articleSlug: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [data, setData] = useState<ArticleData>(createEmptyArticleData)
@@ -101,6 +115,7 @@ export default function ArticleEditor() {
   const [savedArticle, setSavedArticle] = useState("")
   const [dirty, setDirty] = useState(false)
   const [recovery, setRecovery] = useState<ArticleData | null>(null)
+  const [urlTitle, setUrlTitle] = useState('')
   const recoveryKey = `article_recovery:${user?.id || "anonymous"}:${articleId}`
   // URL records the workspace, not production progress. Refreshing never marks a step complete.
   const activeTab = resolveEditorTab(searchParams.get('tab'), workflow.currentStage)
@@ -202,16 +217,22 @@ export default function ArticleEditor() {
       setLoadError(null)
       if (isLocalArticle) {
         const localData = loadLocalArticleData(articleId)
+        if (!localData.title) localData.title = localArticleTitle(articleId)
         setData(localData)
         savedData.current = localData
         setSavedArticle(localData.article)
+        setUrlTitle(titleFromArticle(localData))
         const stored = localStorage.getItem(`article_workflow_${articleId}`)
         setWorkflow(normalizeArticleWorkflow(stored ? JSON.parse(stored) : null, localData))
       } else {
         const d = await fetchArticle(articleId)
-        setData(normalizeArticleData(d))
-        savedData.current = normalizeArticleData(d)
-        setSavedArticle(normalizeArticleData(d).article)
+        const normalized = normalizeArticleData(d)
+        const pendingTitle = localStorage.getItem(`article_title_${articleId}`)?.trim()
+        if (!normalized.title && pendingTitle) normalized.title = pendingTitle
+        setData(normalized)
+        savedData.current = normalized
+        setSavedArticle(normalized.article)
+        setUrlTitle(titleFromArticle(normalized))
         setWorkflow(normalizeArticleWorkflow(d.workflow, d))
       }
       try {
@@ -242,9 +263,11 @@ export default function ArticleEditor() {
       }
       savedData.current = data
       setSavedArticle(data.article)
+      setUrlTitle(titleFromArticle(data))
       setDirty(false)
       setRecovery(null)
       sessionStorage.removeItem(recoveryKey)
+      localStorage.removeItem(`article_title_${articleId}`)
       return true
     } catch {
       toast.error('保存失败，请重试')
@@ -415,7 +438,16 @@ export default function ArticleEditor() {
     if (platforms !== 'toutiao' && isLocalArticle) void handleWorkflowEvent('generated')
   }
 
-  const articleTitle = data.title || data.article.split('\n')[0]?.replace(/^#+\s*/, '') || `文章 ${articleId}`
+  const articleTitle = titleFromArticle(data) || `文章 ${articleId}`
+
+  useEffect(() => {
+    if (loading || loadError || !articleId || !articleSlug || !urlTitle) return
+    const canonicalPath = articleEditorUrl(articleId, { title: urlTitle })
+    if (location.pathname !== canonicalPath) {
+      navigate(`${canonicalPath}${location.search}`, { replace: true })
+    }
+  }, [articleId, articleSlug, loadError, loading, location.pathname, location.search, navigate, urlTitle])
+
   const bodyChanged = data.article !== savedArticle
   const reviewDone = Boolean(workflow.lastReviewedAt) && !bodyChanged
   const publishDone = Boolean(workflow.wechatDraftAt) && !bodyChanged

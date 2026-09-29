@@ -193,16 +193,38 @@ cases.push({
 })
 
 cases.push({
+  name: '旧文章 ID 路由应在 Node 层 301 到语义化地址',
+  run: async () => {
+    const editor = await fetch(`${BASE}/editor/20260929-SEO_URL?tab=analysis`, { redirect: 'manual' })
+    if (editor.status !== 301) throw new Error(`编辑路由期望 301，实际 ${editor.status}`)
+    if (editor.headers.get('location') !== '/articles/20260929-SEO_URL/seo-url?tab=analysis') {
+      throw new Error(`编辑路由 Location 不正确：${editor.headers.get('location')}`)
+    }
+    if (editor.headers.get('x-robots-tag') !== 'noindex, nofollow, noarchive') {
+      throw new Error('旧编辑路由缺少 X-Robots-Tag')
+    }
+
+    const preview = await fetch(`${BASE}/preview/20260929-%E4%B8%AD%E6%96%87%E6%A0%87%E9%A2%98?platform=wechat`, { redirect: 'manual' })
+    if (preview.status !== 301) throw new Error(`预览路由期望 301，实际 ${preview.status}`)
+    if (preview.headers.get('location') !== '/previews/20260929-%E4%B8%AD%E6%96%87%E6%A0%87%E9%A2%98/%E4%B8%AD%E6%96%87%E6%A0%87%E9%A2%98?platform=wechat') {
+      throw new Error(`预览路由 Location 不正确：${preview.headers.get('location')}`)
+    }
+  },
+})
+
+cases.push({
   name: '生产模式私有前端路由应回退到 index.html 并禁止索引',
   run: async () => {
-    const r = await fetch(`${BASE}/settings`)
-    if (!r.ok) throw new Error(`status=${r.status}`)
-    if (r.headers.get('x-robots-tag') !== 'noindex, nofollow, noarchive') {
-      throw new Error('私有前端路由缺少 X-Robots-Tag')
+    for (const path of ['/settings', '/articles/20260929-writing/writing-better-urls']) {
+      const r = await fetch(`${BASE}${path}`)
+      if (!r.ok) throw new Error(`${path} status=${r.status}`)
+      if (r.headers.get('x-robots-tag') !== 'noindex, nofollow, noarchive') {
+        throw new Error(`${path} 缺少 X-Robots-Tag`)
+      }
+      if (r.headers.get('cache-control') !== 'no-store') throw new Error(`${path} 缺少 no-store`)
+      const body = await r.text()
+      if (!body.includes(SMOKE_INDEX_MARKER)) throw new Error(`${path} 未回退到 index.html`)
     }
-    if (r.headers.get('cache-control') !== 'no-store') throw new Error('私有前端路由缺少 no-store')
-    const body = await r.text()
-    if (!body.includes(SMOKE_INDEX_MARKER)) throw new Error('SPA 路由未回退到 index.html')
   },
 })
 

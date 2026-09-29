@@ -98,6 +98,7 @@ function enhanceImages(root: HTMLElement): void {
   root.querySelectorAll<HTMLImageElement>("p > img:only-child").forEach(image => {
     const paragraph = image.parentElement
     if (!paragraph) return
+    const existingAlt = image.getAttribute("alt")?.trim() || ""
 
     const figure = document.createElement("figure")
     paragraph.replaceWith(figure)
@@ -107,12 +108,22 @@ function enhanceImages(root: HTMLElement): void {
     const captionEmphasis = captionParagraph?.matches("p")
       ? captionParagraph.querySelector(":scope > em:only-child")
       : null
-    if (!captionEmphasis || !captionParagraph) return
+    if (!captionEmphasis || !captionParagraph) {
+      if (!existingAlt) image.setAttribute("alt", "文章配图")
+      return
+    }
 
     const caption = document.createElement("figcaption")
     caption.innerHTML = captionEmphasis.innerHTML
     figure.appendChild(caption)
+    if (!existingAlt) image.setAttribute("alt", caption.textContent?.trim() || "文章配图")
     captionParagraph.remove()
+  })
+}
+
+function ensureImageAlt(root: HTMLElement): void {
+  root.querySelectorAll<HTMLImageElement>("img").forEach(image => {
+    if (!image.getAttribute("alt")?.trim()) image.setAttribute("alt", "文章配图")
   })
 }
 
@@ -131,6 +142,7 @@ export function renderWechatMarkdown(markdown: string): string {
   enhanceQuotes(root)
   enhanceTaskLists(root)
   enhanceImages(root)
+  ensureImageAlt(root)
 
   return root.innerHTML
 }

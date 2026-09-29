@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { AlertTriangle, Palette, Shapes } from 'lucide-react'
 import WeChatRenderer from '../../components/WeChatRenderer/WeChatRenderer'
 import PageHeader from '../../components/PageHeader/PageHeader'
@@ -11,18 +11,18 @@ import {
   normalizeArticleData,
 } from '../../utils/articleData'
 import './WeChatPreview.css'
-import { articleEditorUrl, resolvePublishPlatform, type PublishPlatform } from '../../utils/articleNavigation'
+import { articleEditorUrl, articlePreviewUrl, resolvePublishPlatform, type PublishPlatform } from '../../utils/articleNavigation'
 
 export default function WeChatPreview() {
-  const { articleId } = useParams<{ articleId: string }>()
+  const { articleId, articleSlug } = useParams<{ articleId: string; articleSlug: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const [data, setData] = useState<ArticleData>(createEmptyArticleData)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
   const platformMode = resolvePublishPlatform(searchParams.get('platform'))
   const setPlatformMode = (platform: PublishPlatform) => setSearchParams({ platform }, { replace: true })
-  const returnToEditor = () => navigate(articleEditorUrl(articleId || '', platformMode))
 
   useEffect(() => {
     if (!articleId) return
@@ -57,6 +57,15 @@ export default function WeChatPreview() {
   const title = platformMode === 'xiaohongshu'
     ? data.xiaohongshuTitle || articleTitle
     : articleTitle
+  const returnToEditor = () => navigate(articleEditorUrl(articleId || '', { title: articleTitle, platform: platformMode }))
+
+  useEffect(() => {
+    if (loading || loadError || !articleId || !articleSlug) return
+    const canonicalPath = articlePreviewUrl(articleId, articleTitle)
+    if (location.pathname !== canonicalPath) {
+      navigate(`${canonicalPath}${location.search}`, { replace: true })
+    }
+  }, [articleId, articleSlug, articleTitle, loadError, loading, location.pathname, location.search, navigate])
 
   return (
     <div className="wechat-preview-page">
@@ -129,7 +138,7 @@ export default function WeChatPreview() {
         ) : platformMode === 'toutiao' && !data.articleToutiao ? (
           <div className="preview-empty-toutiao">
             <p>今日头条版本尚未生成</p>
-            <button onClick={() => navigate(`${articleEditorUrl(articleId || '')}?tab=toutiao`)}>返回编辑器生成</button>
+            <button onClick={() => navigate(`${articleEditorUrl(articleId || '', { title: articleTitle })}?tab=toutiao`)}>返回编辑器生成</button>
           </div>
         ) : (
           <WeChatRenderer content={activeContent} title={title} articleId={articleId} platformMode={platformMode} />

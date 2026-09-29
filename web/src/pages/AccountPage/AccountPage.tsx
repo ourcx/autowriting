@@ -27,6 +27,7 @@ import {
   saveWechatAnalyticsCookies,
 } from "../../utils/accountBindings"
 import { useAuth } from "../../store/useAuth"
+import { articleEditorUrl } from "../../utils/articleNavigation"
 import "./AccountPage.css"
 
 type Platform = "wechat" | "toutiao" | "xiaohongshu"
@@ -46,7 +47,7 @@ function feedbackLayerLabel(layer: CreatorFeedbackLayer): string {
 }
 
 function AccountAvatar({ name, imageUrl, platform }: { name: string; imageUrl: string | null; platform: Platform }) {
-  if (imageUrl) return <img className="ap-avatar" src={imageUrl} alt={`${name}头像`} />
+  if (imageUrl) return <img className="ap-avatar" src={imageUrl} alt={`${name}的${platform === "wechat" ? "微信公众号" : platform === "toutiao" ? "今日头条" : "小红书"}头像`} />
   return <div className={`ap-avatar ap-avatar--${platform}`}>{name.slice(0, 1) || "?"}</div>
 }
 
@@ -578,7 +579,7 @@ export default function AccountPage() {
               </div>
               <div className="ap-decision-list">
                 {assetOverview?.recentConfirmedChoices.length ? assetOverview.recentConfirmedChoices.map(item => (
-                  <a key={`${item.articleId}-${item.updatedAt}`} href={`/editor/${encodeURIComponent(item.articleId)}?tab=analysis`}>
+                  <a key={`${item.articleId}-${item.updatedAt}`} href={`${articleEditorUrl(item.articleId)}?tab=analysis`}>
                     <span>{feedbackLayerLabel(item.layer)}</span>
                     <strong>{item.note || item.retainedExpressions[0] || "已确认保留表达"}</strong>
                     <small>{new Date(item.updatedAt).toLocaleDateString("zh-CN")} · 修改或新增 {item.changedParagraphs} 段</small>
