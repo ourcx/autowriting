@@ -271,7 +271,9 @@ export default function PublicHomePage() {
 
       <footer className="ph-footer">
         <span>Dashy</span>
-        <span className="ph-footer-filing" aria-label="ICP备案信息">ICP备案号待更新</span>
+        <a className="ph-footer-filing" href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer" aria-label="ICP备案信息">
+          粤ICP备2025430004号-2
+        </a>
         <span className="ph-footer-description">AI 公众号写作与内容发布工作台</span>
       </footer>
     </div>

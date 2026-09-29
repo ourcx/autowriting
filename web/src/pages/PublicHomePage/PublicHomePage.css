@@ -778,7 +778,21 @@
 .ph-footer-filing {
   justify-self: center;
   min-width: 160px;
+  color: inherit;
   text-align: center;
+  text-decoration: none;
+}
+
+.ph-footer-filing:hover {
+  color: var(--ph-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.ph-footer-filing:focus-visible {
+  border-radius: 2px;
+  outline: 2px solid var(--ph-accent);
+  outline-offset: 4px;
 }
 
 .ph-footer-description {
