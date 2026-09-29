@@ -227,7 +227,7 @@ try {
   })
 
   await page.goto(`${baseUrl}/`)
-  await page.getByRole('heading', { name: '创作工作台' }).waitFor()
+  await page.getByRole('heading', { name: '微信公众号、今日头条创作工作台' }).waitFor()
   await page.getByRole('button', { name: '继续编辑：工作台验收文章' }).waitFor()
   assert.equal(requestedModules.some(path => /\/pages\/ArticleEditor\/|\/assets\/ArticleEditor-/.test(path)), false, 'home must not eagerly load the editor')
   for (const label of ['微信草稿', '知识库', '提示词', '定时任务', '数据看板', '素材库', '样式', '画布', 'AI 配置']) {

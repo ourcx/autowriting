@@ -42,7 +42,7 @@ function getRouteMetadata(pathname: string, isLoggedIn: boolean): RouteMetadata 
   if (pathname === '/') {
     if (isLoggedIn) {
       return {
-        title: '创作工作台 | Dashy',
+        title: '微信公众号、今日头条 | 创作工作台 | Dashy',
         description: DEFAULT_DESCRIPTION,
         robots: 'noindex, nofollow, noarchive',
         canonicalPath: '/',
@@ -68,7 +68,7 @@ function getRouteMetadata(pathname: string, isLoggedIn: boolean): RouteMetadata 
   if (pathname === '/register') {
     return {
       title: '注册 | Dashy',
-      description: '注册 Dashy 内容创作工作台。',
+      description: '注册 Dashy 公众号、今日头条内容创作工作台。',
       robots: 'noindex, nofollow, noarchive',
       canonicalPath: '/register',
     }
