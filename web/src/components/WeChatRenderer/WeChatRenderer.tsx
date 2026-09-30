@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { toast } from '../Toast/Toast'
-import { Copy, Check, Minus, Plus, ExternalLink, Send, Loader2, Image as ImageIcon, Settings, Palette, Sparkles, Wand2, Code2, ChevronDown } from 'lucide-react'
+import { Copy, Check, Minus, Plus, ExternalLink, Send, Loader2, Image as ImageIcon, Settings, Palette, Sparkles, Wand2, Code2, ChevronDown, ClipboardPaste } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import MarkdownIt from 'markdown-it'
 import { fetchAllTemplates, BUILTIN_TEMPLATES, TemplateItem } from '../../utils/templateStore'
@@ -19,6 +19,7 @@ import {
 import type { ArticleWorkflow } from '../../../shared/articleWorkflow'
 import { hasXiaohongshuCookies, loadXiaohongshuCookies } from '../../utils/accountBindings'
 import { loadAIConfig } from '../../utils/aiConfig'
+import { normalizePlatformCookieInput } from '../../utils/platformCookieInput'
 import { sanitizeHtml } from '../../utils/sanitizeHtml'
 import './WeChatRenderer.css'
 
@@ -509,19 +510,43 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
       return
     }
     try {
-      const arr = JSON.parse(raw)
-      if (!Array.isArray(arr) || arr.length === 0) {
-        toast.warn('Cookie 格式不正确，需要是 JSON 数组格式')
-        return
-      }
-      saveTtCookies(raw)
+      const normalized = normalizePlatformCookieInput(raw, 'toutiao')
+      saveTtCookies(normalized.cookiesJson)
       setTtCookieBound(true)
       setShowTtCookieModal(false)
-      toast.success(`已保存 ${arr.length} 个 Cookie`)
-    } catch {
-      toast.warn('Cookie 格式不正确，请粘贴从浏览器导出的 JSON 数组')
+      toast.success(`已保存 ${normalized.count} 个 Cookie`)
+    } catch (error) {
+      toast.warn(error instanceof Error ? error.message : '登录信息格式不正确')
     }
   }, [ttCookieDraft])
+
+  const pasteTtCookie = useCallback(async () => {
+    if (!navigator.clipboard?.readText) {
+      toast.warn('当前浏览器不支持读取剪贴板，请在输入框中直接粘贴')
+      return
+    }
+    try {
+      const normalized = normalizePlatformCookieInput(await navigator.clipboard.readText(), 'toutiao')
+      setTtCookieDraft(normalized.cookiesJson)
+      toast.success(`已识别 ${normalized.count} 个 Cookie`)
+    } catch (error) {
+      toast.warn(error instanceof Error ? error.message : '剪贴板内容无法识别')
+    }
+  }, [])
+
+  const handleTtCookiePaste = useCallback((event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const pasted = event.clipboardData.getData('text')
+    try {
+      const normalized = normalizePlatformCookieInput(pasted, 'toutiao')
+      event.preventDefault()
+      setTtCookieDraft(normalized.cookiesJson)
+    } catch (error) {
+      if (/^\s*curl(?:\s|$)/i.test(pasted)) {
+        event.preventDefault()
+        toast.warn(error instanceof Error ? error.message : 'cURL 中没有找到 Cookie')
+      }
+    }
+  }, [])
 
   // 今日头条：自动推送
   const handleTtPublish = useCallback(async () => {
@@ -969,22 +994,27 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                 </div>
                 <div className="wr-tt-cookie-body">
                   <div className="wr-tt-cookie-guide">
-                    <p className="wr-tt-cookie-guide-title">如何获取 Cookie？</p>
+                    <p className="wr-tt-cookie-guide-title">无需安装插件</p>
                     <ol>
                       <li>在浏览器中登录 <a href="https://mp.toutiao.com" target="_blank" rel="noopener noreferrer">mp.toutiao.com</a></li>
-                      <li>安装浏览器插件 <strong>EditThisCookie</strong> 或 <strong>Cookie-Editor</strong></li>
-                      <li>在头条后台页面点击插件图标 → 选择「导出」→ 复制 JSON</li>
-                      <li>将 JSON 粘贴到下方文本框</li>
+                      <li>按 F12（Mac 按 ⌥⌘I），在 Network 面板刷新页面</li>
+                      <li>右键任一头条请求，选择 Copy → Copy as cURL</li>
+                      <li>点击下方“从剪贴板粘贴”，系统只会提取 Cookie</li>
                     </ol>
                   </div>
                   <textarea
                     className="wr-tt-cookie-textarea"
-                    placeholder={'粘贴 Cookie JSON 数组，格式如：\n[{"name":"sessionid","value":"xxx","domain":".toutiao.com",...}]'}
+                    placeholder="粘贴“复制为 cURL”的内容，也兼容 Cookie 请求头或 JSON"
                     value={ttCookieDraft}
                     onChange={e => setTtCookieDraft(e.target.value)}
+                    onPaste={handleTtCookiePaste}
                     spellCheck={false}
                   />
                   <div className="wr-tt-cookie-actions">
+                    <button className="wr-tt-cookie-paste" onClick={() => void pasteTtCookie()}>
+                      <ClipboardPaste size={14} />
+                      从剪贴板粘贴
+                    </button>
                     {ttCookieBound && (
                       <button
                         className="wr-tt-cookie-clear"

@@ -282,6 +282,47 @@
   font-weight: 600;
 }
 
+.ap-cookie-field {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ap-cookie-field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ap-cookie-field-head label {
+  color: var(--color-body);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ap-cookie-paste {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--color-surface-strong);
+  border-radius: var(--rounded-xs);
+  background: var(--color-canvas);
+  color: var(--color-brand-teal);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ap-cookie-paste:hover {
+  border-color: var(--color-brand-mint);
+  background: var(--color-surface-card);
+}
+
 .ap-bind-form input,
 .ap-bind-form textarea,
 .ap-writing-profile-grid input,
@@ -309,10 +350,89 @@
   resize: vertical;
 }
 
+.ap-cookie-field textarea {
+  min-height: 112px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
 .ap-bind-form :is(input, textarea):focus,
 .ap-writing-profile-grid :is(input, textarea):focus {
   border-color: var(--color-brand-teal);
   box-shadow: 0 0 0 3px rgb(26 58 58 / 8%);
+}
+
+.ap-cookie-meta {
+  min-height: 18px;
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.ap-cookie-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ap-cookie-recognized {
+  color: #176542;
+  font-weight: 600;
+}
+
+.ap-cookie-help {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.ap-cookie-help summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  color: var(--color-body);
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.ap-cookie-help summary::-webkit-details-marker {
+  display: none;
+}
+
+.ap-cookie-help summary svg {
+  transition: transform .16s ease;
+}
+
+.ap-cookie-help[open] summary svg {
+  transform: rotate(180deg);
+}
+
+.ap-cookie-help ol {
+  display: grid;
+  gap: 5px;
+  margin: 6px 0 0;
+  padding: 10px 0 0 20px;
+  border-top: 1px solid var(--color-surface-strong);
+  line-height: 1.55;
+}
+
+.ap-cookie-help a {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--color-brand-teal);
+  font-weight: 600;
+}
+
+.ap-cookie-help :is(kbd, code) {
+  padding: 1px 4px;
+  border: 1px solid var(--color-surface-strong);
+  border-radius: 3px;
+  background: var(--color-canvas);
+  color: var(--color-body);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 10px;
 }
 
 .ap-password {
@@ -857,6 +977,16 @@
   .ap-bind-form--horizontal,
   .ap-writing-profile-grid {
     grid-template-columns: 1fr;
+  }
+
+  .ap-cookie-field-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .ap-cookie-paste {
+    min-height: 38px;
   }
 
   .ap-asset-metrics {

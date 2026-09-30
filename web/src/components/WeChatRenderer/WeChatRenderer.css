@@ -1331,11 +1331,13 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
 /* ── 清除按钮 ───────────────────────────────────────────────── */
-.wr-tt-cookie-clear {
+.wr-tt-cookie-clear,
+.wr-tt-cookie-paste {
   height: 44px;
   padding: 0 18px;
   background: transparent;
@@ -1346,6 +1348,19 @@
   font-family: 'Inter', system-ui, sans-serif;
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.wr-tt-cookie-paste {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #1a3a3a;
+  border-color: #a4d4c5;
+}
+
+.wr-tt-cookie-paste:hover {
+  border-color: #68aa96;
+  background: #eef8f4;
 }
 
 .wr-tt-cookie-clear:hover {

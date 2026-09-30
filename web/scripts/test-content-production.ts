@@ -11,6 +11,7 @@ import { acquireCandidate, CandidateError } from "../server/generationCandidates
 import { rankWechatArticles, wechatAnalyticsSchema } from "../shared/wechatAnalytics.ts"
 import { parseWechatCookieJson } from "../server/utils/platformCookies.ts"
 import { parseWechatDailyMetrics } from "../server/utils/wechatAnalyticsParser.ts"
+import { normalizePlatformCookieInput } from "../src/utils/platformCookieInput.ts"
 
 const profile = normalizeCreatorWritingProfile({
   audience: "大学生",
@@ -129,6 +130,79 @@ assert.throws(
 assert.throws(
   () => parseWechatCookieJson('[{"name":"session","value":null,"domain":"mp.weixin.qq.com"}]'),
   /缺少 name\/value/,
+)
+const toutiaoHeader = normalizePlatformCookieInput(
+  "sessionid=fixture%3D%3D; csrftoken=csrf-fixture; empty=",
+  "toutiao",
+)
+assert.equal(toutiaoHeader.source, "cookie-header")
+assert.equal(toutiaoHeader.count, 3)
+assert.deepEqual(JSON.parse(toutiaoHeader.cookiesJson), [
+  {
+    name: "sessionid",
+    value: "fixture%3D%3D",
+    domain: ".toutiao.com",
+    path: "/",
+    secure: true,
+    httpOnly: false,
+    sameSite: "Lax",
+  },
+  {
+    name: "csrftoken",
+    value: "csrf-fixture",
+    domain: ".toutiao.com",
+    path: "/",
+    secure: true,
+    httpOnly: false,
+    sameSite: "Lax",
+  },
+  {
+    name: "empty",
+    value: "",
+    domain: ".toutiao.com",
+    path: "/",
+    secure: true,
+    httpOnly: false,
+    sameSite: "Lax",
+  },
+])
+const xiaohongshuCurl = normalizePlatformCookieInput(
+  "curl 'https://creator.xiaohongshu.com' -H 'accept: application/json' -H 'cookie: web_session=fixture; a1=fixture-two'",
+  "xiaohongshu",
+)
+assert.equal(xiaohongshuCurl.source, "curl")
+assert.equal(xiaohongshuCurl.count, 2)
+assert.equal(JSON.parse(xiaohongshuCurl.cookiesJson)[0].domain, ".xiaohongshu.com")
+const wechatJson = normalizePlatformCookieInput(JSON.stringify({
+  cookies: [
+    {
+      name: "slave_sid",
+      value: "fixture",
+      domain: ".mp.weixin.qq.com",
+      expirationDate: 1800000000,
+      sameSite: "no_restriction",
+    },
+    { name: "unrelated", value: "discarded", domain: ".example.com" },
+  ],
+}), "wechat")
+assert.equal(wechatJson.count, 1)
+assert.deepEqual(parseWechatCookieJson(wechatJson.cookiesJson)[0], {
+  name: "slave_sid",
+  value: "fixture",
+  domain: ".mp.weixin.qq.com",
+  path: "/",
+  secure: true,
+  httpOnly: false,
+  sameSite: "None",
+  expires: 1800000000,
+})
+assert.throws(
+  () => normalizePlatformCookieInput("curl 'https://mp.toutiao.com' -H 'accept: text/html'", "toutiao"),
+  /没有找到 Cookie/,
+)
+assert.throws(
+  () => normalizePlatformCookieInput('[{"name":"session","value":"fixture","domain":".example.com"}]', "toutiao"),
+  /没有找到当前平台的 Cookie/,
 )
 
 const releaseCandidates = [

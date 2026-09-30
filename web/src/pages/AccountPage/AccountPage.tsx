@@ -1,8 +1,8 @@
-import { FormEvent, useCallback, useEffect, useState } from "react"
+import { ClipboardEvent, FormEvent, useCallback, useEffect, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import {
-  BarChart3, BookOpen, Brain, CheckCircle2, Database, Eye, EyeOff, ExternalLink,
-  FileText, GitBranch, Link2, Link2Off, Newspaper, RefreshCw, ShieldCheck, Sparkles, Zap,
+  BarChart3, BookOpen, Brain, CheckCircle2, ChevronDown, ClipboardPaste, Database, Eye, EyeOff,
+  ExternalLink, FileText, GitBranch, Link2, Link2Off, Newspaper, RefreshCw, ShieldCheck, Sparkles, Zap,
 } from "lucide-react"
 import PageHeader from "../../components/PageHeader/PageHeader"
 import {
@@ -28,6 +28,12 @@ import {
 } from "../../utils/accountBindings"
 import { useAuth } from "../../store/useAuth"
 import { articleEditorUrl } from "../../utils/articleNavigation"
+import {
+  cookieInputSourceLabel,
+  normalizePlatformCookieInput,
+  type CookiePlatform,
+  type NormalizedCookieInput,
+} from "../../utils/platformCookieInput"
 import "./AccountPage.css"
 
 type Platform = "wechat" | "toutiao" | "xiaohongshu"
@@ -37,6 +43,102 @@ type WritingProfileTextField =
   | "materialPreference"
   | "stance"
   | "visualStyle"
+
+const COOKIE_PLATFORM_DETAILS: Record<CookiePlatform, { label: string; url: string; host: string }> = {
+  wechat: { label: "微信公众平台", url: "https://mp.weixin.qq.com", host: "mp.weixin.qq.com" },
+  toutiao: { label: "头条创作中心", url: "https://mp.toutiao.com/profile_v4/index", host: "mp.toutiao.com" },
+  xiaohongshu: { label: "小红书创作服务平台", url: "https://creator.xiaohongshu.com", host: "creator.xiaohongshu.com" },
+}
+
+interface CookieImportFieldProps {
+  id: string
+  platform: CookiePlatform
+  value: string
+  onChange: (value: string) => void
+  onInput: () => void
+}
+
+function CookieImportField({ id, platform, value, onChange, onInput }: CookieImportFieldProps) {
+  const [recognized, setRecognized] = useState<NormalizedCookieInput | null>(null)
+  const details = COOKIE_PLATFORM_DETAILS[platform]
+
+  useEffect(() => {
+    if (!value) setRecognized(null)
+  }, [value])
+
+  const applyInput = useCallback((raw: string) => {
+    const normalized = normalizePlatformCookieInput(raw, platform)
+    onChange(normalized.cookiesJson)
+    onInput()
+    setRecognized(normalized)
+    return normalized
+  }, [onChange, onInput, platform])
+
+  async function pasteFromClipboard() {
+    if (!navigator.clipboard?.readText) {
+      toast.warn("当前浏览器不支持读取剪贴板，请在输入框中直接粘贴")
+      return
+    }
+    try {
+      const normalized = applyInput(await navigator.clipboard.readText())
+      toast.success(`已识别 ${normalized.count} 项 Cookie`)
+    } catch (error) {
+      toast.warn(error instanceof Error ? error.message : "剪贴板内容无法识别")
+    }
+  }
+
+  function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const pasted = event.clipboardData.getData("text")
+    try {
+      applyInput(pasted)
+      event.preventDefault()
+    } catch (error) {
+      setRecognized(null)
+      if (/^\s*curl(?:\s|$)/i.test(pasted)) {
+        event.preventDefault()
+        toast.warn(error instanceof Error ? error.message : "cURL 中没有找到 Cookie")
+      }
+    }
+  }
+
+  return (
+    <div className="ap-cookie-field">
+      <div className="ap-cookie-field-head">
+        <label htmlFor={id}>登录信息</label>
+        <button type="button" className="ap-cookie-paste" onClick={() => void pasteFromClipboard()}>
+          <ClipboardPaste size={14} />从剪贴板粘贴
+        </button>
+      </div>
+      <textarea
+        id={id}
+        value={value}
+        onChange={event => {
+          onChange(event.target.value)
+          onInput()
+          setRecognized(null)
+        }}
+        onPaste={handlePaste}
+        placeholder="粘贴“复制为 cURL”的内容，也兼容 Cookie 请求头或 JSON"
+        rows={4}
+        spellCheck={false}
+      />
+      <div className="ap-cookie-meta" aria-live="polite">
+        {recognized
+          ? <span className="ap-cookie-recognized"><CheckCircle2 size={13} />已识别 {cookieInputSourceLabel(recognized.source)}，共 {recognized.count} 项</span>
+          : <span>支持 cURL、Cookie 请求头和 Cookie-Editor JSON</span>}
+      </div>
+      <details className="ap-cookie-help">
+        <summary>无需安装插件，查看复制步骤<ChevronDown size={14} /></summary>
+        <ol>
+          <li>在电脑浏览器登录 <a href={details.url} target="_blank" rel="noreferrer">{details.label}<ExternalLink size={12} /></a></li>
+          <li>按 <kbd>F12</kbd>（Mac 按 <kbd>⌥⌘I</kbd>）打开开发者工具，选择 Network 后刷新页面</li>
+          <li>右键任一发往 <code>{details.host}</code> 的请求，选择 Copy → Copy as cURL</li>
+          <li>回到这里点击“从剪贴板粘贴”，系统只提取 Cookie，其他请求头会被丢弃</li>
+        </ol>
+      </details>
+    </div>
+  )
+}
 
 function formatNumber(value: number | null): string {
   return value === null ? "—" : value.toLocaleString("zh-CN")
@@ -193,12 +295,12 @@ export default function AccountPage() {
 
   async function bindToutiao(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const value = cookies.trim()
+    let value: string
     try {
-      const parsed: unknown = JSON.parse(value)
-      if (!Array.isArray(parsed) || parsed.length === 0) throw new Error("Cookie 必须是非空 JSON 数组")
+      value = normalizePlatformCookieInput(cookies, "toutiao").cookiesJson
+      setCookies(value)
     } catch (error) {
-      setToutiaoError(error instanceof Error ? error.message : "Cookie 格式不正确")
+      setToutiaoError(error instanceof Error ? error.message : "登录信息格式不正确")
       return
     }
     setBindingToutiao(true)
@@ -232,16 +334,15 @@ export default function AccountPage() {
 
   function bindXiaohongshu(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const value = xiaohongshuCookies.trim()
     try {
-      const parsed: unknown = JSON.parse(value)
-      if (!Array.isArray(parsed) || parsed.length === 0) throw new Error("Cookie 必须是非空 JSON 数组")
-      saveXiaohongshuCookies(value)
+      const normalized = normalizePlatformCookieInput(xiaohongshuCookies, "xiaohongshu")
+      saveXiaohongshuCookies(normalized.cookiesJson)
       setXiaohongshuBound(true)
       setXiaohongshuCookies("")
       setXiaohongshuError("")
+      toast.success(`已保存 ${normalized.count} 项小红书 Cookie`)
     } catch (error) {
-      setXiaohongshuError(error instanceof Error ? error.message : "Cookie 格式不正确")
+      setXiaohongshuError(error instanceof Error ? error.message : "登录信息格式不正确")
     }
   }
 
@@ -255,12 +356,12 @@ export default function AccountPage() {
   async function bindWechatAnalytics(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!user) return
-    const value = wechatAnalyticsCookies.trim()
+    let value: string
     try {
-      const parsed: unknown = JSON.parse(value)
-      if (!Array.isArray(parsed) || parsed.length === 0) throw new Error("Cookie 必须是非空 JSON 数组")
+      value = normalizePlatformCookieInput(wechatAnalyticsCookies, "wechat").cookiesJson
+      setWechatAnalyticsCookies(value)
     } catch (error) {
-      setWechatAnalyticsError(error instanceof Error ? error.message : "Cookie 格式不正确")
+      setWechatAnalyticsError(error instanceof Error ? error.message : "登录信息格式不正确")
       return
     }
     setBindingWechatAnalytics(true)
@@ -380,7 +481,7 @@ export default function AccountPage() {
                 <section className="ap-capability">
                   <div className="ap-capability-title">
                     <BarChart3 size={17} />
-                    <div><h3>后台自动化</h3><p>数据看板与草稿发表共用 Cookie JSON</p></div>
+                    <div><h3>后台自动化</h3><p>数据看板与草稿发表共用同一登录信息</p></div>
                     <span className={wechatAnalyticsBound ? "ready" : ""}>{wechatAnalyticsBound ? "已连接" : "未连接"}</span>
                   </div>
                   {wechatAnalyticsBound ? (
@@ -396,7 +497,13 @@ export default function AccountPage() {
                     </>
                   ) : (
                     <form className="ap-bind-form" onSubmit={bindWechatAnalytics}>
-                      <textarea value={wechatAnalyticsCookies} onChange={event => { setWechatAnalyticsCookies(event.target.value); setWechatAnalyticsError("") }} placeholder='[{"name":"slave_sid","value":"…","domain":".mp.weixin.qq.com"}]' rows={4} />
+                      <CookieImportField
+                        id="wechat-analytics-login"
+                        platform="wechat"
+                        value={wechatAnalyticsCookies}
+                        onChange={setWechatAnalyticsCookies}
+                        onInput={() => setWechatAnalyticsError("")}
+                      />
                       {wechatAnalyticsError ? <p className="ap-error">{wechatAnalyticsError}</p> : null}
                       <div className="ap-actions">
                         <button className="ap-btn ap-btn--dark" disabled={bindingWechatAnalytics}>{bindingWechatAnalytics ? "验证并同步中…" : <><Link2 size={15} />连接微信后台</>}</button>
@@ -435,9 +542,15 @@ export default function AccountPage() {
                   </>
                 ) : (
                   <form className="ap-bind-form ap-bind-form--horizontal" onSubmit={bindToutiao}>
-                    <label><span>Cookie JSON</span><textarea value={cookies} onChange={event => { setCookies(event.target.value); setToutiaoError("") }} placeholder='[{"name":"sessionid","value":"…","domain":".toutiao.com"}]' rows={4} /></label>
+                    <CookieImportField
+                      id="toutiao-login"
+                      platform="toutiao"
+                      value={cookies}
+                      onChange={setCookies}
+                      onInput={() => setToutiaoError("")}
+                    />
                     <div className="ap-bind-side">
-                      <p>从已登录的头条创作中心导出，验证通过后保存在当前浏览器。</p>
+                      <p>无需安装 Cookie 插件。登录头条后复制一个网络请求，即可提取登录信息。</p>
                       {toutiaoError ? <p className="ap-error">{toutiaoError}</p> : null}
                       <button className="ap-btn ap-btn--dark" disabled={bindingToutiao}>{bindingToutiao ? "验证中…" : <><Newspaper size={15} />连接今日头条</>}</button>
                       <a href="https://mp.toutiao.com/profile_v4/index" target="_blank" rel="noreferrer">打开创作中心<ExternalLink size={13} /></a>
@@ -468,9 +581,15 @@ export default function AccountPage() {
                   </>
                 ) : (
                   <form className="ap-bind-form ap-bind-form--horizontal" onSubmit={bindXiaohongshu}>
-                    <label><span>Cookie JSON</span><textarea value={xiaohongshuCookies} onChange={event => { setXiaohongshuCookies(event.target.value); setXiaohongshuError("") }} placeholder='[{"name":"web_session","value":"…","domain":".xiaohongshu.com"}]' rows={4} /></label>
+                    <CookieImportField
+                      id="xiaohongshu-login"
+                      platform="xiaohongshu"
+                      value={xiaohongshuCookies}
+                      onChange={setXiaohongshuCookies}
+                      onInput={() => setXiaohongshuError("")}
+                    />
                     <div className="ap-bind-side">
-                      <p>从已登录的小红书创作服务平台导出，仅用于图文笔记发布。</p>
+                      <p>无需安装 Cookie 插件。登录创作服务平台后复制一个网络请求即可。</p>
                       {xiaohongshuError ? <p className="ap-error">{xiaohongshuError}</p> : null}
                       <button className="ap-btn ap-btn--dark"><BookOpen size={15} />连接小红书</button>
                       <a href="https://creator.xiaohongshu.com" target="_blank" rel="noreferrer">打开创作服务平台<ExternalLink size={13} /></a>
