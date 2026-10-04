@@ -1,4 +1,5 @@
 export type CandidatePlatform = "wechat" | "toutiao"
+export type CandidateTarget = CandidatePlatform | "both"
 export type CandidateStatus = "queued" | "generating" | "complete" | "interrupted"
 
 export interface GenerationCandidate {
@@ -15,6 +16,7 @@ export interface GenerationCandidate {
   finishedAt?: string
   model?: string
   promptIds?: string[]
+  pairId?: string
 }
 
 export interface CandidateInput {
@@ -23,8 +25,10 @@ export interface CandidateInput {
   sourceArticle: string
   selectedRagContext: string
   referenceArticleIds: string[]
-  platform: CandidatePlatform
+  platform: CandidateTarget
   count: number
+  /** 仅由服务端为成对生成的头条稿设置，保证它读取同组公众号母稿。 */
+  sourceCandidateId?: string
 }
 
 export interface CandidateEvent {

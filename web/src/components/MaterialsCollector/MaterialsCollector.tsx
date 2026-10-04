@@ -99,7 +99,8 @@ export default function MaterialsCollector({
   const [defaultDateTag, setDefaultDateTag] = useState('')
 
   // 是否可以使用搜索（SearXNG 不需要 key）
-  const canSearch = searchProvider === 'searxng' || !!searchApiKey
+  const canSearch = searchProvider === 'searxng'
+    || (searchProvider === 'zhipu' ? !!(glmApiKey || searchApiKey) : !!searchApiKey)
   const canSearchWechat = wechatCollectorReady[wechatProvider]
 
   useEffect(() => {
@@ -150,7 +151,9 @@ export default function MaterialsCollector({
     const query = searchQuery.trim()
     if (!query) return
     if (!canSearch) {
-      toast.error('未配置搜索 API Key，请先在「AI 配置」页面填写，或切换到 SearXNG（免费）')
+      toast.error(searchProvider === 'zhipu'
+        ? '未配置智谱 API Key，请先在「AI 配置」页面填写'
+        : '未配置搜索 API Key，请先在「AI 配置」页面填写，或切换到 SearXNG（免费）')
       return
     }
     setLoading(true)

@@ -45,6 +45,14 @@ export async function streamCandidate(userId: string, articleId: string, id: str
     checkpoint()
     send("candidate", { candidate: publicCandidate(candidate) })
     const { input } = candidate
+    let sourceArticle = input.sourceArticle
+    if (input.platform === "toutiao" && input.sourceCandidateId) {
+      const motherDraft = readCandidate(userId, articleId, input.sourceCandidateId)
+      if (motherDraft.status !== "complete" || !motherDraft.content.trim()) {
+        throw new CandidateError("请先完成同组公众号母稿", 409)
+      }
+      sourceArticle = motherDraft.content
+    }
     const promptId = input.platform === "wechat" ? "prompt-article-generate" : "prompt-article-generate-toutiao"
     candidate.promptIds = [promptId]
     const instruction = getEffectivePrompt(promptId)?.content || "你是专业的文章创作者。"
@@ -57,7 +65,7 @@ export async function streamCandidate(userId: string, articleId: string, id: str
 ${input.task}
 # 素材
 ${input.materials}
-${input.platform === "toutiao" ? `# 公众号事实与观点母稿\n${input.sourceArticle}` : ""}
+${input.platform === "toutiao" ? `# 公众号事实与观点母稿\n${sourceArticle}` : ""}
 # 写作要求
 当前日期：${new Date().toISOString().slice(0, 10)}。
 ${candidate.label}，独立组织开头和结构，严格依据素材，不新增未经支持的事实。

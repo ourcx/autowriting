@@ -73,7 +73,7 @@ export function parseCandidateInput(value: unknown): CandidateInput {
     }
     return value
   }
-  if (data.platform !== "wechat" && data.platform !== "toutiao") throw new CandidateError("生成平台不正确")
+  if (data.platform !== "wechat" && data.platform !== "toutiao" && data.platform !== "both") throw new CandidateError("生成平台不正确")
   const count = data.count ?? 1
   if (typeof count !== "number" || !Number.isInteger(count) || count < 1 || count > 3) throw new CandidateError("一次只能生成 1–3 篇")
   const references = data.referenceArticleIds ?? []
@@ -89,15 +89,32 @@ export function parseCandidateInput(value: unknown): CandidateInput {
 
 export function createCandidates(userId: string, articleId: string, input: CandidateInput): GenerationCandidate[] {
   const batchId = crypto.randomUUID()
-  return Array.from({ length: input.count }, (_, index) => {
+  const candidates: StoredCandidate[] = []
+  for (let index = 0; index < input.count; index += 1) {
     const now = new Date().toISOString()
-    const candidate: StoredCandidate = {
-      id: crypto.randomUUID(), batchId, label: `候选 ${index + 1}`, platform: input.platform,
-      status: "queued", content: "", message: "等待生成", createdAt: now, updatedAt: now, input,
+    const pairId = input.platform === "both" ? crypto.randomUUID() : undefined
+    const wechatId = crypto.randomUUID()
+    const platforms: Array<"wechat" | "toutiao"> = input.platform === "both" ? ["wechat", "toutiao"] : [input.platform]
+    for (const platform of platforms) {
+      const candidateInput: CandidateInput = {
+        ...input,
+        platform,
+        ...(platform === "toutiao" && pairId ? { sourceCandidateId: wechatId } : {}),
+      }
+      const candidate: StoredCandidate = {
+        id: platform === "wechat" && pairId ? wechatId : crypto.randomUUID(),
+        batchId,
+        pairId,
+        label: input.platform === "both" ? `方案 ${index + 1} · ${platform === "wechat" ? "公众号" : "头条"}` : `候选 ${index + 1}`,
+        platform,
+        status: "queued", content: "", message: platform === "toutiao" && pairId ? "等待公众号母稿" : "等待生成",
+        createdAt: now, updatedAt: now, input: candidateInput,
+      }
+      saveCandidate(userId, articleId, candidate)
+      candidates.push(candidate)
     }
-    saveCandidate(userId, articleId, candidate)
-    return publicCandidate(candidate)
-  })
+  }
+  return candidates.map(publicCandidate)
 }
 
 const running = new Set<string>()

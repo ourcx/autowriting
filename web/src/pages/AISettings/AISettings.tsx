@@ -90,7 +90,8 @@ export default function AISettings() {
   const localSiliconflow = !!config.siliconflowApiKey
   const localDoubao = !!config.doubaoApiKey && !!config.doubaoModel
   const localCoverKey = !!config.coverApiKey
-  const localSearchKey = config.searchProvider === 'searxng' || !!config.searchApiKey
+  const localSearchKey = config.searchProvider === 'searxng'
+    || (config.searchProvider === 'zhipu' ? !!(config.glmApiKey || config.searchApiKey || config.articleApiKey) : !!config.searchApiKey)
   const localCdn = (config.cdnProvider === 'imgur' && !!config.imgurClientId)
     || (config.cdnProvider === 'github' && !!config.githubToken && !!config.githubRepo)
 
@@ -565,10 +566,10 @@ export default function AISettings() {
 
               <div className="as-card">
                 <div className="as-card-section-label">搜索服务商</div>
-                <p className="as-card-desc">SearXNG 无需 API Key 即可使用，适合入门；Serper / Bing 需注册获取 Key</p>
+                <p className="as-card-desc">智谱搜索适合中文素材，可复用文章模型的智谱 Key；SearXNG 无需 API Key；Serper / Bing 需单独注册</p>
                 <div className="as-provider-grid">
                   {[
-                    { id: 'zhipu', name: '智谱搜索（推荐）', desc: '与 LLM 共用 GLM_API_KEY，零额外配置', url: 'https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys', tip: '登录智谱开放平台获取 API Key' },
+                    { id: 'zhipu', name: '智谱搜索（推荐）', desc: '中文检索，支持摘要、来源和发布日期', url: 'https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys', tip: '可复用智谱文章模型 Key' },
                     { id: 'searxng', name: 'SearXNG', desc: '开源聚合，231 个搜索引擎，无需 Key', url: 'https://docs.searxng.org/admin/installation-docker.html', tip: 'Docker 一键部署，零成本' },
                     { id: 'serper', name: 'Serper.dev', desc: '支持 Google / 百度，2500 次/月免费', url: 'https://serper.dev', tip: '免费注册，2500 次/月' },
                     { id: 'bing', name: 'Bing Search', desc: 'Microsoft，1000 次/月免费', url: 'https://portal.azure.com', tip: 'Azure Portal 创建资源' },
@@ -639,26 +640,28 @@ export default function AISettings() {
                   </>
                 )}
 
-                {/* Serper / Bing API Key */}
+                {/* 智谱 / Serper / Bing API Key */}
                 {config.searchProvider !== 'searxng' && (
                   <>
                     <div className="as-card-divider" />
                     <div className="as-field">
-                      <label className="as-label">{config.searchProvider === 'serper' ? 'Serper' : 'Bing'} API Key</label>
+                      <label className="as-label">{config.searchProvider === 'zhipu' ? '智谱' : config.searchProvider === 'serper' ? 'Serper' : 'Bing'} API Key</label>
                       <div className="as-key-wrap">
                         <input
                           className="as-input as-input-mono"
                           type={showKeys['search'] ? 'text' : 'password'}
                           value={config.searchApiKey}
                           onChange={e => set({ searchApiKey: e.target.value })}
-                          placeholder={config.searchProvider === 'serper' ? 'serper.dev 注册后获取' : 'Azure Portal 获取'}
+                          placeholder={config.searchProvider === 'zhipu' ? '留空时复用智谱文章模型 Key' : config.searchProvider === 'serper' ? 'serper.dev 注册后获取' : 'Azure Portal 获取'}
                         />
                         <button className="as-eye-btn" onClick={() => toggleKey('search')}>
                           {showKeys['search'] ? <EyeOff size={14} /> : <Eye size={14} />}
                         </button>
                       </div>
                       <p className="as-hint">
-                        {config.searchProvider === 'serper'
+                        {config.searchProvider === 'zhipu'
+                          ? <><a href="https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys" target="_blank" rel="noreferrer">智谱开放平台</a> 获取 Key；若文章模型也使用智谱，可留空复用文章 API Key</>
+                          : config.searchProvider === 'serper'
                           ? <><a href="https://serper.dev" target="_blank" rel="noreferrer">serper.dev</a> 免费注册，赠 2500 次额度，支持 Google / 百度 / Bing</>
                           : <><a href="https://portal.azure.com" target="_blank" rel="noreferrer">Azure Portal</a> 创建「Bing Search v7」资源，每月 1000 次免费</>
                         }

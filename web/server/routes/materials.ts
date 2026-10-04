@@ -312,7 +312,7 @@ router.post('/search', async (req, res) => {
       // 智谱搜索 — 与 LLM 共用 GLM_API_KEY，零额外配置
       const zhipuKey = glmApiKey || apiKey
       if (!zhipuKey) return res.status(400).json({ error: '未配置智谱 API Key（GLM_API_KEY），请在「AI 配置」页面填写' })
-      const resp = await fetch('https://open.bigmodel.cn/api/paas/v4/tools/web_search', {
+      const resp = await fetch('https://open.bigmodel.cn/api/paas/v4/web_search', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -320,8 +320,10 @@ router.post('/search', async (req, res) => {
         },
         body: JSON.stringify({
           search_engine: 'search_std',
-          search_query: query,
-          count: Math.min(num, 20),
+          search_query: String(query).slice(0, 70),
+          search_intent: false,
+          count: Math.min(Math.max(Number(num) || 10, 1), 50),
+          search_recency_filter: 'noLimit',
           content_size: 'medium',
         }),
         signal: AbortSignal.timeout(30000),
@@ -336,7 +338,8 @@ router.post('/search', async (req, res) => {
         title:   item.title   || '',
         snippet: item.content || '',
         url:     item.link    || '',
-        source:  (() => { try { return new URL(item.link || 'https://unknown').hostname } catch { return 'unknown' } })(),
+        source:  item.media || (() => { try { return new URL(item.link || 'https://unknown').hostname } catch { return 'unknown' } })(),
+        datePublished: item.publish_date || null,
       }))
 
     } else {

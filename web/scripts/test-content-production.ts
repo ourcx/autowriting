@@ -7,7 +7,7 @@ import {
   normalizeCreatorWritingProfile,
   stripEmoji,
 } from "../shared/contentProduction.ts"
-import { acquireCandidate, CandidateError } from "../server/generationCandidates.ts"
+import { acquireCandidate, CandidateError, parseCandidateInput } from "../server/generationCandidates.ts"
 import { rankWechatArticles, wechatAnalyticsSchema } from "../shared/wechatAnalytics.ts"
 import { parseWechatCookieJson } from "../server/utils/platformCookies.ts"
 import { parseWechatDailyMetrics } from "../server/utils/wechatAnalyticsParser.ts"
@@ -35,6 +35,15 @@ assert.match(profilePrompt, /不得代替作者编造/)
 assert.equal(stripEmoji("# 标题 🎉\n\n保留数字 2026 和标点。✅"), "# 标题 \n\n保留数字 2026 和标点。")
 assert.equal(stripEmoji("开发者👨‍💻正在测试🇨🇳版本1️⃣"), "开发者正在测试版本")
 assert.equal(stripEmoji("分片残留🏻\u20E3也要清理"), "分片残留也要清理")
+assert.equal(parseCandidateInput({
+  task: "双平台生成任务",
+  materials: "同一份事实素材",
+  sourceArticle: "",
+  selectedRagContext: "",
+  referenceArticleIds: [],
+  platform: "both",
+  count: 1,
+}).platform, "both")
 
 const comparison = comparePlatformVersions(
   "# 标题\n\n第一段内容保持完全一致。\n\n第二段内容需要进行平台改写。",

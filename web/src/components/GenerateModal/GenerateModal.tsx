@@ -4,7 +4,7 @@ import {
   createGenerationCandidates, extractErrorMessage, fetchGenerationCandidates,
   fetchJson, streamGenerationCandidate,
 } from "../../utils/apiHelpers"
-import type { CandidatePlatform, GenerationCandidate } from "../../../shared/generationCandidate"
+import type { CandidatePlatform, CandidateTarget, GenerationCandidate } from "../../../shared/generationCandidate"
 import "./GenerateModal.css"
 
 interface Props {
@@ -28,7 +28,7 @@ interface ReferenceArticle {
 const STATUS = { queued: "排队中", generating: "生成中", complete: "已完成", interrupted: "已中断" }
 
 export default function GenerateModal({ articleId, task, materials, sourceArticle = "", aiConfig, initialPlatform = "wechat", onComplete, onClose }: Props) {
-  const [platform, setPlatform] = useState<CandidatePlatform>(initialPlatform)
+  const [platform, setPlatform] = useState<CandidateTarget>(initialPlatform)
   const [count, setCount] = useState(1)
   const [rows, setRows] = useState<GenerationCandidate[]>([])
   const [activeId, setActiveId] = useState("")
@@ -118,14 +118,18 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
     } finally { if (mounted.current) setReferencesLoading(false) }
   }
 
-  const run = async (candidate: GenerationCandidate) => {
-    if (controllers.current.has(candidate.id)) return
+  const run = async (candidate: GenerationCandidate): Promise<GenerationCandidate | null> => {
+    if (controllers.current.has(candidate.id)) return null
     const controller = new AbortController()
+    let completed: GenerationCandidate | null = null
     controllers.current.set(candidate.id, controller)
     update(candidate.id, { status: "generating", finishedAt: undefined, message: "等待模型输出" })
     try {
       await streamGenerationCandidate(articleId, candidate.id, aiConfig, controller.signal, event => {
-        if (event.candidate) update(candidate.id, event.candidate)
+        if (event.candidate) {
+          update(candidate.id, event.candidate)
+          if (event.event === "done") completed = event.candidate
+        }
         if (event.event === "chunk" && event.text && mounted.current) {
           setRows(previous => previous.map(row => row.id === candidate.id
             ? { ...row, content: row.content + event.text, firstChunkAt: row.firstChunkAt || new Date().toISOString(), message: "正在写作" } : row))
@@ -135,6 +139,7 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
     } catch (cause) {
       update(candidate.id, { status: "interrupted", finishedAt: new Date().toISOString(), message: controller.signal.aborted ? "已停止，可继续生成" : extractErrorMessage(cause) })
     } finally { controllers.current.delete(candidate.id) }
+    return completed
   }
 
   const start = async () => {
@@ -165,7 +170,18 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
       setRows(previous => [...created, ...previous])
       setActiveId(created[0].id)
       clearTimeout(preparationTimeout)
-      await Promise.all(created.map(candidate => run(candidate)))
+      if (platform === "both") {
+        // 同组头条稿必须等公众号母稿完成，再读取母稿改写，不能并行生成两份事实源。
+        const mothers = created.filter(candidate => candidate.platform === "wechat")
+        const completedMothers = await Promise.all(mothers.map(candidate => run(candidate)))
+        await Promise.all(completedMothers.map(mother => {
+          if (!mother?.pairId) return Promise.resolve(null)
+          const toutiao = created.find(candidate => candidate.pairId === mother.pairId && candidate.platform === "toutiao")
+          return toutiao ? run(toutiao) : Promise.resolve(null)
+        }))
+      } else {
+        await Promise.all(created.map(candidate => run(candidate)))
+      }
     } catch (cause) { if (mounted.current) setError(extractErrorMessage(cause)) }
     finally {
       clearTimeout(preparationTimeout)
@@ -184,7 +200,14 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
     setApplying(true)
     setError("")
     try {
-      await onComplete(candidate.platform === "wechat" ? candidate.content : "", candidate.platform === "toutiao" ? candidate.content : "", candidate.platform, candidate.id)
+      const pair = candidate.pairId ? rows.find(row => row.pairId === candidate.pairId && row.id !== candidate.id) : undefined
+      if (candidate.pairId && pair?.status === "complete") {
+        const wechat = candidate.platform === "wechat" ? candidate : pair
+        const toutiao = candidate.platform === "toutiao" ? candidate : pair
+        await onComplete(wechat.content, toutiao.content, "both", wechat.id)
+      } else {
+        await onComplete(candidate.platform === "wechat" ? candidate.content : "", candidate.platform === "toutiao" ? candidate.content : "", candidate.platform, candidate.id)
+      }
       stop()
       onClose()
     } catch (cause) { setError(extractErrorMessage(cause, "选用失败，候选稿仍保留")) }
@@ -211,6 +234,7 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
           <legend>生成平台</legend>
           <div className="gc-segmented" role="group" aria-label="生成平台">
             <button type="button" aria-pressed={platform === "wechat"} disabled={busy} onClick={() => setPlatform("wechat")}>公众号母稿</button>
+            <button type="button" aria-pressed={platform === "both"} disabled={busy} onClick={() => setPlatform("both")}>公众号 + 今日头条</button>
             <button type="button" aria-pressed={platform === "toutiao"} disabled={busy} onClick={() => setPlatform("toutiao")}>今日头条版本</button>
           </div>
         </fieldset>
@@ -224,7 +248,7 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
         </fieldset>
         <button className="gm-btn-primary gc-generate-button" disabled={busy || loading || applying} onClick={() => void start()}>
           <Zap size={14} />
-          {busy ? "生成中" : `生成${platform === "wechat" ? "公众号母稿" : "今日头条版本"}`}
+          {busy ? "生成中" : platform === "both" ? "生成双平台版本" : `生成${platform === "wechat" ? "公众号母稿" : "今日头条版本"}`}
         </button>
       </div>
       <details className="gc-references">
@@ -233,7 +257,7 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
           {references.length > 0 && <span className="gc-reference-total">{references.length} 篇相关</span>}
         </summary>
         <div className="gc-reference-body">
-          <p className="gc-cost">本次会调用模型 {count} 次。候选越多，等待时间和费用会按实际用量增加。</p>
+          <p className="gc-cost">本次会调用模型 {platform === "both" ? count * 2 : count} 次。双平台会先生成公众号母稿，再基于母稿改写今日头条版。</p>
           <div className="gc-reference-actions">
             <div><strong>参考文章</strong><span>只影响本次生成，不会修改原文</span></div>
             <button className="gc-reference-search" disabled={referencesLoading || busy} onClick={() => void loadReferences()}>
@@ -297,7 +321,11 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
             <pre>{row.content || "等待正文输出"}</pre>
             <footer>
               {(row.status === "interrupted" || row.status === "queued") && <button className="gm-btn-secondary" disabled={busy || applying} onClick={() => { stopped.current = false; void run(row) }}><RefreshCw size={14} />{row.content ? "继续生成" : "重试生成"}</button>}
-              <button className="gm-btn-primary" disabled={row.status !== "complete" || applying} onClick={() => void apply(row)}><CheckCircle size={14} />{applying ? "保存中" : "选用此稿"}</button>
+              <button
+                className="gm-btn-primary"
+                disabled={row.status !== "complete" || applying || Boolean(row.pairId && !rows.some(item => item.pairId === row.pairId && item.id !== row.id && item.status === "complete"))}
+                onClick={() => void apply(row)}
+              ><CheckCircle size={14} />{applying ? "保存中" : row.pairId ? "选用这一组" : "选用此稿"}</button>
             </footer>
           </article>)}
           {!active && <div className="gc-empty"><FileText size={30} /><span>{loading ? "读取中" : "暂无候选稿"}</span></div>}

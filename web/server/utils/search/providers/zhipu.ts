@@ -2,20 +2,20 @@
  * 智谱搜索 Provider
  *
  * 使用智谱 GLM 联网搜索 API，与 LLM 共用 GLM_API_KEY，零额外配置。
- * 调用 POST https://open.bigmodel.cn/api/paas/v4/tools/web_search
+ * 调用 POST https://open.bigmodel.cn/api/paas/v4/web_search
  *
  * 引擎选项：
  *   search_std  - 标准版 0.01 元/次
  *   search_pro  - 增强版 0.03 元/次
- *   sougou_pro  - 搜狗 Pro 0.05 元/次
- *   quake_pro   - 夸克 Pro 0.05 元/次
+ *   search_pro_sogou - 搜狗 Pro
+ *   search_pro_quark - 夸克 Pro
  */
 
 import { logger } from "../../../logger.ts"
 import type { SearchProvider } from "./types.ts"
 import type { SearchResult } from "../types.ts"
 
-const ENDPOINT = "https://open.bigmodel.cn/api/paas/v4/tools/web_search"
+const ENDPOINT = "https://open.bigmodel.cn/api/paas/v4/web_search"
 
 export function createZhipuProvider(apiKey: string, engine = "search_std"): SearchProvider {
   return {
@@ -44,8 +44,10 @@ export function createZhipuProvider(apiKey: string, engine = "search_std"): Sear
           },
           body: JSON.stringify({
             search_engine: engine,
-            search_query: query,
-            count: Math.min(topK, 20),
+            search_query: query.slice(0, 70),
+            search_intent: false,
+            count: Math.min(Math.max(topK, 1), 50),
+            search_recency_filter: "noLimit",
             content_size: "medium",
           }),
           signal: AbortSignal.timeout(30000),
@@ -61,6 +63,8 @@ export function createZhipuProvider(apiKey: string, engine = "search_std"): Sear
             title?: string
             link?: string
             content?: string
+            media?: string
+            publish_date?: string
           }>
         }
 
@@ -70,7 +74,8 @@ export function createZhipuProvider(apiKey: string, engine = "search_std"): Sear
           title: item.title || "",
           snippet: item.content || "",
           url: item.link || "",
-          source: extractDomain(item.link || ""),
+          source: item.media || extractDomain(item.link || ""),
+          datePublished: item.publish_date || null,
         }))
 
         logger.info("SEARCH-ZHIPU", `搜索完成: ${query}`, { count: results.length })

@@ -15,6 +15,7 @@ try {
   let maxActive = 0
   let rows = []
   let article = '# 原有正文\n\n原文不应被候选稿替换。'
+  let articleToutiao = ''
   let failSave = false
   let prematureEof = false
   let referenceCalls = 0
@@ -28,10 +29,16 @@ try {
     if (pathname === '/api/articles/fixture/candidates') {
       if (request.method() === 'GET') return route.fulfill({ json: rows })
       const input = request.postDataJSON()
-      rows = Array.from({ length: input.count }, (_, index) => ({
-        id: `candidate-${index}`, batchId: 'batch', label: `候选 ${index + 1}`, platform: input.platform,
-        status: 'queued', content: '', message: '排队中', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-      }))
+      rows = input.platform === 'both'
+        ? Array.from({ length: input.count }, (_, index) => ['wechat', 'toutiao'].map(platform => ({
+          id: `pair-${index}-${platform}`, batchId: 'pair-batch', pairId: `pair-${index}`,
+          label: `方案 ${index + 1} · ${platform === 'wechat' ? '公众号' : '头条'}`, platform,
+          status: 'queued', content: '', message: platform === 'wechat' ? '排队中' : '等待公众号母稿', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+        }))).flat()
+        : Array.from({ length: input.count }, (_, index) => ({
+          id: `candidate-${index}`, batchId: 'batch', label: `候选 ${index + 1}`, platform: input.platform,
+          status: 'queued', content: '', message: '排队中', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+        }))
       return route.fulfill({ json: rows })
     }
     if (pathname.endsWith('/stream')) {
@@ -57,10 +64,12 @@ try {
     if (pathname === '/api/articles/fixture') {
       if (request.method() === 'POST') {
         if (failSave) return route.fulfill({ status: 500, json: { error: 'fixture save failure' } })
-        article = request.postDataJSON().article
+        const body = request.postDataJSON()
+        article = body.article
+        articleToutiao = body.articleToutiao || ''
         return route.fulfill({ json: { success: true } })
       }
-      return route.fulfill({ json: { title: '候选验收', task: '校园选题', materials: '本篇素材', article, articleToutiao: '', workflow: {} } })
+      return route.fulfill({ json: { title: '候选验收', task: '校园选题', materials: '本篇素材', article, articleToutiao, workflow: {} } })
     }
     if (pathname === '/api/rag/candidates') {
       referenceCalls++
@@ -78,12 +87,14 @@ try {
   assert.equal(await page.getByRole('button', { name: '下一步：进入写作', exact: true }).isEnabled(), true)
   await page.getByRole('button', { name: '下一步：进入写作', exact: true }).click()
   assert.equal(await page.locator('.flow-step').count(), 5)
+  await page.locator('.flow-step[aria-current="step"] .flow-step-label', { hasText: '写作' }).waitFor()
   assert.equal(await page.locator('.flow-step[aria-current="step"] .flow-step-label').innerText(), '写作')
   assert.equal(await page.getByRole('button', { name: '继续生成候选稿', exact: true }).isVisible(), true)
   assert.equal(await page.getByRole('button', { name: '下一步：审核定稿', exact: true }).isVisible(), true)
   await page.screenshot({ path: join(screenshots, 'editor-flow-desktop.png'), fullPage: true })
   await page.getByRole('button', { name: '继续生成候选稿', exact: true }).click()
   await page.getByRole('dialog', { name: '生成候选稿' }).waitFor()
+  assert.equal(await page.getByRole('button', { name: '公众号 + 今日头条', exact: true }).isVisible(), true)
   await page.getByText('更多设置', { exact: true }).click()
   const referenceSearch = page.getByRole('button', { name: '检索往期文章', exact: true })
   await referenceSearch.click()
@@ -136,6 +147,16 @@ try {
   await page.getByRole('button', { name: '关闭生成窗口' }).click()
   assert.equal(await page.getByRole('button', { name: '继续生成候选稿', exact: true }).isVisible(), true)
   assert.equal(await page.getByRole('button', { name: '下一步：审核定稿', exact: true }).isVisible(), true)
+  await page.getByRole('button', { name: '继续生成候选稿', exact: true }).click()
+  await page.getByRole('button', { name: '公众号 + 今日头条', exact: true }).click()
+  const pairedCallStart = calls.length
+  await page.getByRole('button', { name: '生成双平台版本', exact: true }).click()
+  await page.getByText('2 篇已完成', { exact: true }).waitFor()
+  assert.deepEqual(calls.slice(pairedCallStart), ['pair-0-wechat', 'pair-0-toutiao'])
+  await page.getByRole('button', { name: '选用这一组', exact: true }).first().click()
+  await page.getByRole('dialog').waitFor({ state: 'hidden' })
+  assert.match(article, /方案 1 · 公众号标题/)
+  assert.match(articleToutiao, /方案 1 · 头条标题/)
   if (await page.locator('.toast-success .toast-close').count()) {
     await page.locator('.toast-success .toast-close').first().click()
     await page.locator('.toast-success').waitFor({ state: 'detached' })
