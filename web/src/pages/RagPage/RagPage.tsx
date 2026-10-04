@@ -51,6 +51,7 @@ const TYPE_CONFIG: Record<string, { label: string; color: string; icon: React.Re
 }
 
 const PRESET_MODELS = [
+  'embedding-3',
   'text-embedding-3-small',
   'text-embedding-3-large',
   'qwen3-embedding',
@@ -108,7 +109,11 @@ export default function RagPage() {
   const [searching, setSearching] = useState(false)
   const [results,   setResults]   = useState<RagDoc[] | null>(null)
 
-  const effectiveKey = embKey || localConfig.articleApiKey || ''
+  const usesZhipuEmbedding = embUrl.includes('open.bigmodel.cn') || /^embedding-[23]$/i.test(embModel)
+  const effectiveKey = embKey
+    || (usesZhipuEmbedding ? localConfig.zhipuApiKey : '')
+    || localConfig.articleApiKey
+    || ''
   const hasKey       = !!effectiveKey
 
   const headersValid = !embHeaders || (() => {
@@ -279,12 +284,12 @@ export default function RagPage() {
                 <div className="rp-field rp-field--span2">
                   <label className="rp-field-label">
                     API Key
-                    <span className="rp-field-hint">留空则回落到「AI 配置」中的 OpenAI Key</span>
+                    <span className="rp-field-hint">留空时仅复用同服务商公共 Key；智谱端点会复用智谱公共 Key</span>
                   </label>
                   <input
                     className="rp-input rp-input-mono"
                     type="password"
-                    placeholder={localConfig.articleApiKey ? '留空使用文章 Key（已配置）' : 'sk-...'}
+                    placeholder={usesZhipuEmbedding && localConfig.zhipuApiKey ? '留空使用智谱公共 Key（已配置）' : localConfig.articleApiKey ? '留空使用文章 Key（已配置）' : 'sk-...'}
                     value={embKey}
                     onChange={e => { setEmbKey(e.target.value); mark() }}
                   />
@@ -319,6 +324,15 @@ export default function RagPage() {
                     {PRESET_MODELS.map(m => <option key={m} value={m} />)}
                   </datalist>
                   <div className="rp-preset-pills">
+                    <button
+                      className={`rp-preset-pill${usesZhipuEmbedding ? ' rp-preset-pill--active' : ''}`}
+                      onClick={() => {
+                        setEmbUrl('https://open.bigmodel.cn/api/paas/v4')
+                        setEmbModel('embedding-3')
+                        setEmbDims('2048')
+                        mark()
+                      }}
+                    >智谱 Embedding-3</button>
                     {PRESET_MODELS.map(m => (
                       <button
                         key={m}

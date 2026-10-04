@@ -151,6 +151,7 @@ app.get("/health", (_req, res) => { res.json({ status: "ok" }) })
 app.get("/api/config/status", (_req, res) => {
   const hasMaasKey = !!(SERVER_AI_CONFIG.maasApiKey)
   const hasOpenaiKey = !!(SERVER_AI_CONFIG.articleApiKey)
+  const hasZhipuKey = !!(SERVER_AI_CONFIG.zhipuApiKey)
   const hasCoverKey = !!(SERVER_AI_CONFIG.coverApiKey)
   const hasStabilityKey = !!(SERVER_AI_CONFIG.stabilityApiKey)
   const hasSiliconflowKey = !!(SERVER_AI_CONFIG.siliconflowApiKey)
@@ -162,12 +163,12 @@ app.get("/api/config/status", (_req, res) => {
     else provider = null
   }
   res.json({
-    articleProvider: provider, articleReady: hasMaasKey || hasOpenaiKey,
+    articleProvider: provider, articleReady: hasMaasKey || hasOpenaiKey || (provider === "zhipu" && hasZhipuKey),
     maasReady: hasMaasKey, maasEmail: hasMaasKey ? SERVER_AI_CONFIG.maasUserEmail : null,
     openaiReady: hasOpenaiKey, coverProvider: (SERVER_AI_CONFIG.coverProvider as string) || "local",
     coverReady: !!(hasCoverKey || hasStabilityKey || hasSiliconflowKey || hasDoubaoKey || (SERVER_AI_CONFIG.coverProvider === "local")),
     dalleReady: hasCoverKey, stabilityReady: hasStabilityKey, siliconflowReady: hasSiliconflowKey,
-    doubaoReady: hasDoubaoKey,
+    doubaoReady: hasDoubaoKey, zhipuReady: hasZhipuKey,
     wechatCollectorReady: {
       tikhub: !!SERVER_AI_CONFIG.tikhubApiKey,
       dajiala: !!SERVER_AI_CONFIG.dajialaApiKey,

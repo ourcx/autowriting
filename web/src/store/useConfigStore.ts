@@ -8,17 +8,18 @@ import { loadAIConfig, saveAIConfig, AIConfig } from '../utils/aiConfig'
 
 // ── 服务端配置状态（从 /api/config/status 拉取）──
 export interface ServerConfigStatus {
-  articleProvider: 'maas' | 'openai' | 'openai-compat' | null
+  articleProvider: 'maas' | 'openai' | 'openai-compat' | 'zhipu' | null
   articleReady: boolean
   maasReady: boolean
   maasEmail: string | null
   openaiReady: boolean
-  coverProvider: 'local' | 'openai' | 'stability' | 'siliconflow' | 'z-image' | 'qwen-edit' | 'doubao'
+  coverProvider: 'local' | 'openai' | 'stability' | 'siliconflow' | 'z-image' | 'qwen-edit' | 'doubao' | 'zhipu'
   coverReady: boolean
   dalleReady: boolean
   stabilityReady: boolean
   siliconflowReady: boolean
   doubaoReady: boolean
+  zhipuReady: boolean
   wechatCollectorReady: {
     tikhub: boolean
     dajiala: boolean
@@ -89,7 +90,9 @@ export function isArticleReady(s: ConfigState): boolean {
   // 本地有 Key
   const localReady = localConfig.articleProvider === 'maas'
     ? !!localConfig.maasApiKey
-    : !!localConfig.articleApiKey
+    : localConfig.articleProvider === 'zhipu'
+      ? Boolean(localConfig.articleApiKey || localConfig.zhipuApiKey)
+      : !!localConfig.articleApiKey
   if (localReady) return true
   // 服务端已配置
   return serverStatus?.articleReady ?? false
@@ -102,7 +105,9 @@ export function isCoverReady(s: ConfigState): boolean {
     ? Boolean(localConfig.doubaoApiKey && localConfig.doubaoModel)
     : ['siliconflow', 'z-image', 'qwen-edit'].includes(localConfig.coverProvider)
       ? Boolean(localConfig.siliconflowApiKey)
-      : Boolean(localConfig.coverApiKey)
+      : localConfig.coverProvider === 'zhipu'
+        ? Boolean(localConfig.zhipuImageApiKey || localConfig.zhipuApiKey)
+        : Boolean(localConfig.coverApiKey)
   if (localReady) return true
   return serverStatus?.coverReady ?? false
 }

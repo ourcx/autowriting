@@ -17,9 +17,10 @@ import { useConfigStore, setLocalConfig, fetchServerStatus } from '../../store/u
 import { testAIConnection } from '../../utils/apiHelpers'
 import './AISettings.css'
 
-type Section = 'article' | 'cover' | 'search' | 'cdn'
+type Section = 'providers' | 'article' | 'cover' | 'search' | 'cdn'
 
 const NAV_ITEMS: { id: Section; icon: React.ReactNode; label: string; sub: string }[] = [
+  { id: 'providers', icon: <ShieldAlert size={16} />, label: '公共 Key', sub: '按服务商统一复用' },
   { id: 'article', icon: <Zap size={16} />, label: '文章生成', sub: '大语言模型 API' },
   { id: 'cover', icon: <Image size={16} />, label: '封面生成', sub: '图片生成 API' },
   { id: 'search', icon: <Search size={16} />, label: '素材搜索', sub: '搜索引擎 API' },
@@ -36,7 +37,7 @@ export default function AISettings() {
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({})
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
-  const [activeSection, setActiveSection] = useState<Section>('article')
+  const [activeSection, setActiveSection] = useState<Section>('providers')
 
   useEffect(() => {
     setConfig(loadAIConfig())
@@ -86,16 +87,25 @@ export default function AISettings() {
 
   // ── 配置状态（每个 key 的状态） ──────────────────────────────────────────
   const localMaas = config.articleProvider === 'maas' && !!config.maasApiKey
-  const localOpenai = config.articleProvider !== 'maas' && !!config.articleApiKey
+  const localOpenai = config.articleProvider !== 'maas' && config.articleProvider !== 'zhipu' && !!config.articleApiKey
+  const localZhipu = !!config.zhipuApiKey
   const localSiliconflow = !!config.siliconflowApiKey
   const localDoubao = !!config.doubaoApiKey && !!config.doubaoModel
   const localCoverKey = !!config.coverApiKey
   const localSearchKey = config.searchProvider === 'searxng'
-    || (config.searchProvider === 'zhipu' ? !!(config.glmApiKey || config.searchApiKey || config.articleApiKey) : !!config.searchApiKey)
+    || (config.searchProvider === 'zhipu' ? !!(config.searchApiKey || config.zhipuApiKey || config.glmApiKey || config.articleApiKey) : !!config.searchApiKey)
   const localCdn = (config.cdnProvider === 'imgur' && !!config.imgurClientId)
     || (config.cdnProvider === 'github' && !!config.githubToken && !!config.githubRepo)
 
   const STATUS_CARDS = [
+    {
+      label: '智谱公共 Key',
+      local: localZhipu,
+      server: !!serverStatus?.zhipuReady,
+      serverNote: '服务端',
+      color: 'teal',
+      section: 'providers' as Section,
+    },
     {
       label: 'MaaS',
       local: localMaas,
@@ -269,6 +279,43 @@ export default function AISettings() {
         {/* ── 右侧内容 ── */}
         <main className="as-content">
 
+          {/* ════ 服务商公共 Key ════ */}
+          {activeSection === 'providers' && (
+            <div className="as-panel">
+              <div className="as-panel-header">
+                <h2 className="as-panel-title">服务商公共 Key</h2>
+                <p className="as-panel-desc">同一服务商的多个工具默认复用一个 Key；工具自己的 Key 非空时优先使用工具 Key</p>
+              </div>
+              <div className="as-card">
+                <div className="as-card-label-row">
+                  <span className="as-card-section-label">智谱 AI</span>
+                  <span className="as-card-tag as-card-tag--teal">文章 · GLM-Image · 搜索 · 向量</span>
+                </div>
+                <p className="as-card-desc">
+                  这里填写一次，智谱文章模型、GLM-Image、Web Search 和 Embedding 默认复用。其他服务商的工具不会读取这个 Key。
+                </p>
+                <div className="as-field">
+                  <label className="as-label">智谱公共 API Key</label>
+                  <div className="as-key-wrap">
+                    <input
+                      className="as-input as-input-mono"
+                      type={showKeys['zhipu-common'] ? 'text' : 'password'}
+                      value={config.zhipuApiKey}
+                      onChange={e => set({ zhipuApiKey: e.target.value })}
+                      placeholder="填写一次，供智谱系列工具复用"
+                    />
+                    <button className="as-eye-btn" onClick={() => toggleKey('zhipu-common')}>
+                      {showKeys['zhipu-common'] ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                  <p className="as-hint">
+                    前往 <a href="https://bigmodel.cn/usercenter/proj-mgmt/apikeys" target="_blank" rel="noreferrer">智谱开放平台</a> 获取。旧的工具级 Key 保留并优先，不会被公共 Key 覆盖。
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ════ 文章生成 ════ */}
           {activeSection === 'article' && (
             <div className="as-panel">
@@ -389,7 +436,7 @@ export default function AISettings() {
                           type={showKeys['article'] ? 'text' : 'password'}
                           value={config.articleApiKey}
                           onChange={e => set({ articleApiKey: e.target.value })}
-                          placeholder="sk-..."
+                          placeholder={config.articleProvider === 'zhipu' ? '选填；留空复用智谱公共 Key' : 'sk-...'}
                         />
                         <button className="as-eye-btn" onClick={() => toggleKey('article')}>
                           {showKeys['article'] ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -420,6 +467,29 @@ export default function AISettings() {
               <div className="as-panel-header">
                 <h2 className="as-panel-title">封面生成</h2>
                 <p className="as-panel-desc">封面生成器支持多种图片服务，Key 填了才能用对应服务</p>
+              </div>
+
+              <div className="as-card">
+                <div className="as-card-label-row">
+                  <span className="as-card-section-label">智谱 GLM-Image</span>
+                  <span className="as-card-tag as-card-tag--teal">复用智谱公共 Key</span>
+                </div>
+                <p className="as-card-desc">支持社交媒体封面、海报和多格图画，生成结果会保存到封面历史和图片库。</p>
+                <div className="as-field">
+                  <label className="as-label">图片工具专用 Key <span className="as-label-opt">选填</span></label>
+                  <div className="as-key-wrap">
+                    <input
+                      className="as-input as-input-mono"
+                      type={showKeys['zhipu-image'] ? 'text' : 'password'}
+                      value={config.zhipuImageApiKey}
+                      onChange={e => set({ zhipuImageApiKey: e.target.value })}
+                      placeholder="留空复用智谱公共 Key"
+                    />
+                    <button className="as-eye-btn" onClick={() => toggleKey('zhipu-image')}>
+                      {showKeys['zhipu-image'] ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div className="as-card">
@@ -652,7 +722,7 @@ export default function AISettings() {
                           type={showKeys['search'] ? 'text' : 'password'}
                           value={config.searchApiKey}
                           onChange={e => set({ searchApiKey: e.target.value })}
-                          placeholder={config.searchProvider === 'zhipu' ? '留空时复用智谱文章模型 Key' : config.searchProvider === 'serper' ? 'serper.dev 注册后获取' : 'Azure Portal 获取'}
+                          placeholder={config.searchProvider === 'zhipu' ? '选填；留空复用智谱公共 Key' : config.searchProvider === 'serper' ? 'serper.dev 注册后获取' : 'Azure Portal 获取'}
                         />
                         <button className="as-eye-btn" onClick={() => toggleKey('search')}>
                           {showKeys['search'] ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -660,7 +730,7 @@ export default function AISettings() {
                       </div>
                       <p className="as-hint">
                         {config.searchProvider === 'zhipu'
-                          ? <><a href="https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys" target="_blank" rel="noreferrer">智谱开放平台</a> 获取 Key；若文章模型也使用智谱，可留空复用文章 API Key</>
+                          ? <><a href="https://bigmodel.cn/usercenter/proj-mgmt/apikeys" target="_blank" rel="noreferrer">智谱开放平台</a> 获取 Key；留空时复用“公共 Key”中的智谱 Key</>
                           : config.searchProvider === 'serper'
                           ? <><a href="https://serper.dev" target="_blank" rel="noreferrer">serper.dev</a> 免费注册，赠 2500 次额度，支持 Google / 百度 / Bing</>
                           : <><a href="https://portal.azure.com" target="_blank" rel="noreferrer">Azure Portal</a> 创建「Bing Search v7」资源，每月 1000 次免费</>

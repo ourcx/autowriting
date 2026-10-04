@@ -38,12 +38,15 @@ export interface AIConfig {
   articleApiKey?: string
   articleBaseUrl?: string
   articleModel?: string
+  zhipuApiKey?: string
+  glmApiKey?: string
   maasApiKey?: string
   maasBaseUrl?: string
   maasUserEmail?: string
   maasModel?: string
   coverProvider?: string
   coverApiKey?: string
+  zhipuImageApiKey?: string
   stabilityApiKey?: string
   stabilityBaseUrl?: string
   siliconflowApiKey?: string

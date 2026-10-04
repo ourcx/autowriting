@@ -18,6 +18,7 @@ import { logger } from "./logger.ts"
 import { replaceDirectoryAtomically } from "./utils/atomicDirectory.ts"
 import { formatWechatAudienceEvidence } from "./wechatAnalyticsStore.ts"
 import { getExampleArticles } from "./db.ts"
+import { resolveEmbeddingApiKey } from "./utils/providerKeys.ts"
 
 // ── 本地向量模型默认配置 ───────────────────────────────────────────────────────
 const LOCAL_EMBED_MODEL = "Xenova/multilingual-e5-small"
@@ -70,7 +71,7 @@ function loadIndexMeta(indexDir: string): IndexMeta | null {
 }
 
 function getEmbeddingKey(cfg: AIConfig): string {
-  const apiKey = (cfg.embeddingApiKey || cfg.articleApiKey || cfg.coverApiKey || "") as string
+  const apiKey = resolveEmbeddingApiKey(cfg)
   if (!apiKey) {
     const model = (cfg.localEmbeddingModel || LOCAL_EMBED_MODEL) as string
     return `local:${model}`
@@ -294,7 +295,7 @@ function getLocalEmbeddings(cfg: AIConfig = {}): LocalEmbeddings {
 }
 
 function getRemoteEmbeddings(cfg: AIConfig): RawEmbeddings | null {
-  const apiKey = (cfg.embeddingApiKey || cfg.articleApiKey || cfg.coverApiKey || "") as string
+  const apiKey = resolveEmbeddingApiKey(cfg)
   if (!apiKey) return null
 
   const baseURL = (cfg.embeddingBaseUrl || (

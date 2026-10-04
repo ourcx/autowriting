@@ -257,6 +257,8 @@ A: 目前需要逐个创建，但可以通过 API 批量导入。
 
 “素材采集”中的智谱搜索调用官方 `POST /api/paas/v4/web_search`，返回标题、摘要、链接、来源和发布日期。可在“AI 配置 → 素材搜索”单独填写智谱 API Key，并优先使用该 Key；文章模型同样使用智谱时，也可以留空复用文章 API Key。搜索结果仍是写作素材，不等同于事实核验，发布前需要打开原始链接确认。
 
+智谱能力统一使用“AI 配置 → 公共 Key”中的智谱 API Key，包括 GLM 文本模型、GLM-Image、Web Search 和 Embedding-3。文章、封面、搜索与向量页面保留工具级 Key；工具级 Key 非空时优先，留空才回落到智谱公共 Key。公共 Key 只会在明确选择智谱服务或 `open.bigmodel.cn` 端点时使用，不会发送给其他服务商。服务端部署也可通过 `ZHIPU_API_KEY` 配置同一公共 Key，旧的 `GLM_API_KEY` 继续兼容；GLM-Image 如需独立账号可配置 `ZHIPU_IMAGE_API_KEY`。
+
 ## 最佳实践
 
 1. **定期审查**：定期审查和更新提示词，确保质量

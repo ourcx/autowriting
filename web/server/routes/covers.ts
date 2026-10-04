@@ -21,6 +21,7 @@ import { mapWithConcurrency } from '../utils/concurrency.ts'
 import { authMiddleware } from '../authMiddleware.ts'
 import { logger } from '../logger.ts'
 import { generateWithDoubao } from '../utils/doubaoImage.ts'
+import { resolveZhipuApiKey } from '../utils/providerKeys.ts'
 
 const router = Router()
 router.use([
@@ -58,6 +59,7 @@ router.post('/generate-cover', async (req, res) => {
     const doubaoModel = String(cfg.doubaoModel || '')
     const doubaoBaseUrl = String(cfg.doubaoBaseUrl || 'https://ark.cn-beijing.volces.com/api/v3')
     const coverApiKey = String(cfg.coverApiKey || cfg.stabilityApiKey || '')
+    const zhipuKey = resolveZhipuApiKey(cfg, provider === 'zhipu' ? cfg.zhipuImageApiKey : '')
 
     logger.debug('COVERS', '准备生成封面', {
       provider,
@@ -94,6 +96,9 @@ router.post('/generate-cover', async (req, res) => {
     }
     if (provider === 'doubao' && (!doubaoKey || !doubaoModel)) {
       return res.status(400).json({ error: '豆包方舟 API Key 或图片模型未配置。请前往「AI 配置」页面填写。' })
+    }
+    if (provider === 'zhipu' && !zhipuKey) {
+      return res.status(400).json({ error: '智谱公共 API Key 未配置。请前往「AI 配置 → 公共 Key」填写。' })
     }
 
     // ── 缓存检查（仅非自定义 prompt，provider 参与 key 避免跨 provider 污染） ──
@@ -137,6 +142,21 @@ router.post('/generate-cover', async (req, res) => {
       cacheImage(cacheKey, imageUrl, { title, style, color, provider: 'openai' })
       const historyItem = addToHistory(title, style, color, provider, imageUrl, cacheKey)
       addImageToLibrary(imageUrl, title, 'cover', [style, color], 'openai')
+      return res.json({ imageUrl, historyId: historyItem.id })
+    }
+
+    // ── 智谱 GLM-Image ─────────────────────────────────────────────────────
+    if (provider === 'zhipu') {
+      const response = await axios.post(
+        'https://open.bigmodel.cn/api/paas/v4/images/generations',
+        { model: 'glm-image', prompt: finalPrompt.slice(0, 1000), size: '1728x960' },
+        { headers: { Authorization: `Bearer ${zhipuKey}`, 'Content-Type': 'application/json' } },
+      )
+      const imageUrl = response.data?.data?.[0]?.url
+      if (!imageUrl) throw new Error('智谱 GLM-Image 未返回图片 URL')
+      cacheImage(cacheKey, imageUrl, { title, style, color, provider: 'zhipu', model: 'glm-image' })
+      const historyItem = addToHistory(title, style, color, provider, imageUrl, cacheKey)
+      addImageToLibrary(imageUrl, title, 'cover', [style, color], 'zhipu')
       return res.json({ imageUrl, historyId: historyItem.id })
     }
 

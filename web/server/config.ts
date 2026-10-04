@@ -167,6 +167,8 @@ export function getWritingGuideContent() {
 // ── 服务端 AI 配置 ───────────────────────────────────────────────────────────
 
 export const SERVER_AI_CONFIG = {
+  // 服务商公共 Key：同一智谱账号下的文本、图片、搜索和向量工具默认复用。
+  zhipuApiKey: process.env.ZHIPU_API_KEY || process.env.GLM_API_KEY || '',
   // 文章生成
   articleProvider: process.env.ARTICLE_PROVIDER || 'openai',
   articleApiKey: process.env.OPENAI_API_KEY || process.env.ARTICLE_API_KEY || '',
@@ -179,6 +181,7 @@ export const SERVER_AI_CONFIG = {
   // 封面
   coverProvider: process.env.COVER_PROVIDER || 'local',
   coverApiKey: process.env.COVER_API_KEY || process.env.OPENAI_API_KEY || '',
+  zhipuImageApiKey: process.env.ZHIPU_IMAGE_API_KEY || '',
   // Stability（保留兼容）
   stabilityApiKey: process.env.STABILITY_API_KEY || '',
   stabilityBaseUrl: process.env.STABILITY_BASE_URL || 'https://api.stability.ai/v1',
@@ -195,7 +198,7 @@ export const SERVER_AI_CONFIG = {
   imgurClientId: process.env.IMGUR_CLIENT_ID || '',
 
   // 搜索
-  glmApiKey: process.env.GLM_API_KEY || process.env.OPENAI_API_KEY || '',
+  glmApiKey: process.env.GLM_API_KEY || process.env.ZHIPU_API_KEY || '',
   searchProvider: process.env.SEARCH_PROVIDER || '',
   searchApiKey: process.env.SEARCH_API_KEY || process.env.SERPER_API_KEY || process.env.SERPAPI_KEY || '',
   searchEngine: process.env.SEARCH_ENGINE || 'bing',

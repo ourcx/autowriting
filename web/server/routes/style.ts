@@ -7,6 +7,7 @@ import { SERVER_AI_CONFIG } from '../config.js'
 import { buildLLMRequest, callLLMWithRetry } from '../utils'
 import { recordTokenUsage, getEffectivePrompt } from '../db.js'
 import { authMiddleware } from '../authMiddleware.ts'
+import { hasArticleApiKey } from '../utils/providerKeys.ts'
 
 const router = Router()
 router.use('/generate-style', authMiddleware)
@@ -76,7 +77,7 @@ router.post('/generate-style', async (req, res) => {
 
     const aiConfig = { ...SERVER_AI_CONFIG, ...clientAiConfig }
 
-    if (!aiConfig.articleApiKey && aiConfig.articleProvider !== 'maas') {
+    if (!hasArticleApiKey(aiConfig) && aiConfig.articleProvider !== 'maas') {
       return res.status(400).json({ error: '未配置 AI API Key' })
     }
     if (aiConfig.articleProvider === 'maas' && !aiConfig.maasApiKey) {

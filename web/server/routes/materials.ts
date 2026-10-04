@@ -12,8 +12,9 @@
 import { Router } from 'express'
 import fs from 'fs'
 import path from 'path'
-import { DRAFTS_DIR } from '../config.js'
+import { DRAFTS_DIR, SERVER_AI_CONFIG } from '../config.js'
 import { logger } from '../logger.js'
+import { resolveZhipuApiKey } from '../utils/providerKeys.ts'
 import { authMiddleware } from '../authMiddleware.js'
 import { webFetch } from '../utils/search/webFetcher.js'
 import { assertPublicHttpUrl } from '../utils/networkPolicy.ts'
@@ -311,7 +312,7 @@ router.post('/search', async (req, res) => {
     } else if (provider === 'zhipu') {
       // 智谱搜索 — 与 LLM 共用 GLM_API_KEY，零额外配置
       // 单独填写的素材搜索 Key 必须优先；只有留空时才复用文章模型的智谱 Key。
-      const zhipuKey = apiKey || glmApiKey
+      const zhipuKey = resolveZhipuApiKey({ ...SERVER_AI_CONFIG, ...(req.body.aiConfig || {}), glmApiKey }, apiKey)
       if (!zhipuKey) return res.status(400).json({ error: '未配置智谱 API Key（GLM_API_KEY），请在「AI 配置」页面填写' })
       const resp = await fetch('https://open.bigmodel.cn/api/paas/v4/web_search', {
         method: 'POST',

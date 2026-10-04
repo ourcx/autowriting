@@ -15,10 +15,13 @@ function authFetch(url: string, init: RequestInit = {}): Promise<Response> {
   return fetch(url, { ...init, headers })
 }
 
-export type ArticleProvider = 'maas' | 'openai' | 'openai-compat'
-export type CoverProvider = 'local' | 'openai' | 'stability' | 'siliconflow' | 'z-image' | 'qwen-edit' | 'doubao'
+export type ArticleProvider = 'maas' | 'openai' | 'openai-compat' | 'zhipu'
+export type CoverProvider = 'local' | 'openai' | 'stability' | 'siliconflow' | 'z-image' | 'qwen-edit' | 'doubao' | 'zhipu'
 
 export interface AIConfig {
+  // 服务商公共 Key（工具自己的 Key 非空时仍优先使用工具 Key）
+  zhipuApiKey: string
+
   // 文章生成
   articleProvider: ArticleProvider
   articleModel: string
@@ -28,6 +31,7 @@ export interface AIConfig {
   // 封面生成
   coverProvider: CoverProvider
   coverApiKey: string
+  zhipuImageApiKey: string
 
   // SiliconFlow / Kolors
   siliconflowApiKey: string
@@ -74,6 +78,7 @@ export interface AIConfig {
 }
 
 export const DEFAULT_CONFIG: AIConfig = {
+  zhipuApiKey: '',
   articleProvider: 'openai',
   articleModel: 'gpt-4o',
   articleApiKey: '',
@@ -81,6 +86,7 @@ export const DEFAULT_CONFIG: AIConfig = {
 
   coverProvider: 'siliconflow',
   coverApiKey: '',
+  zhipuImageApiKey: '',
 
   siliconflowApiKey: '',
   siliconflowModel: 'Kwai-Kolors/Kolors',
@@ -226,6 +232,18 @@ export function getEffectiveArticleConfig(config: AIConfig) {
           'x-maas-app-id': 'qs-api',
         }
       }
+    case 'zhipu': {
+      const apiKey = config.articleApiKey || config.zhipuApiKey
+      return {
+        baseUrl: config.articleBaseUrl || 'https://open.bigmodel.cn/api/paas/v4',
+        apiKey,
+        model: config.articleModel || 'glm-5.3',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        }
+      }
+    }
     case 'openai':
     case 'openai-compat':
     default:
@@ -251,6 +269,15 @@ export const PROVIDER_PRESETS: Array<{
   tip: string
   url: string
 }> = [
+  {
+    id: 'zhipu',
+    name: '智谱 GLM',
+    desc: '智谱官方 OpenAI 兼容接口',
+    defaultBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    models: ['glm-5.3', 'glm-5.3-flash'],
+    tip: '可复用“公共 Key”中的智谱 Key',
+    url: 'https://docs.bigmodel.cn/cn/guide/develop/openai/introduction'
+  },
   {
     id: 'openai',
     name: 'OpenAI',
@@ -283,6 +310,7 @@ export const PROVIDER_PRESETS: Array<{
 export const COVER_PROVIDER_PRESETS = [
   { id: 'local'       as CoverProvider, name: 'SVG 占位',      desc: '无需 API，免费即时生成' },
   { id: 'doubao'      as CoverProvider, name: '豆包 Seedream', desc: '火山方舟，中文提示词友好' },
+  { id: 'zhipu'       as CoverProvider, name: '智谱 GLM-Image', desc: '文字与复杂版式表现更好' },
   { id: 'siliconflow' as CoverProvider, name: 'Kolors 可图',   desc: 'SiliconFlow，性价比高' },
   { id: 'z-image'     as CoverProvider, name: 'Z-Image 造相',  desc: 'SiliconFlow，支持复杂提示词' },
   { id: 'qwen-edit'   as CoverProvider, name: 'Qwen 图片编辑', desc: 'SiliconFlow，对已有封面精修' },

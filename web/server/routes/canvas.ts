@@ -29,6 +29,7 @@ import {
 } from "../../shared/canvasDesignSystem.ts"
 
 import { readXiumiReference, validateXiumiUrl } from "../utils/xiumiReference.ts"
+import { hasArticleApiKey } from "../utils/providerKeys.ts"
 
 const router = Router()
 router.use(authMiddleware)
@@ -1157,7 +1158,7 @@ router.post("/generate", async (req: AuthedRequest, res) => {
     ? req.body.aiConfig as AIConfig
     : {}
   const aiConfig: AIConfig = { ...SERVER_AI_CONFIG, ...clientAiConfig }
-  if (!aiConfig.articleApiKey && aiConfig.articleProvider !== "maas") {
+  if (!hasArticleApiKey(aiConfig) && aiConfig.articleProvider !== "maas") {
     res.status(400).json({ error: "请先在 AI 配置中填写文章模型的 API Key" })
     return
   }
@@ -1228,7 +1229,7 @@ router.post("/generate/stream", async (req: AuthedRequest, res) => {
     ? req.body.aiConfig as AIConfig
     : {}
   const aiConfig: AIConfig = { ...SERVER_AI_CONFIG, ...clientAiConfig }
-  if (!aiConfig.articleApiKey && aiConfig.articleProvider !== "maas") {
+  if (!hasArticleApiKey(aiConfig) && aiConfig.articleProvider !== "maas") {
     res.status(400).json({ error: "请先在 AI 配置中填写文章模型的 API Key" })
     return
   }
@@ -1322,7 +1323,7 @@ router.post("/generate-block/stream", async (req: AuthedRequest, res) => {
     ? req.body.aiConfig as AIConfig
     : {}
   const aiConfig: AIConfig = { ...SERVER_AI_CONFIG, ...clientAiConfig }
-  if (!aiConfig.articleApiKey && aiConfig.articleProvider !== "maas") {
+  if (!hasArticleApiKey(aiConfig) && aiConfig.articleProvider !== "maas") {
     res.status(400).json({ error: "请先在 AI 配置中填写文章模型的 API Key" })
     return
   }

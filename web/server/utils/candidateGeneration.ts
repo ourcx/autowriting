@@ -10,13 +10,14 @@ import { startSseHeartbeat } from "../sseHeartbeat.ts"
 import { logger } from "../logger.ts"
 import type { AIConfig } from "../types.ts"
 import { buildWritingContext } from "../writingContext.ts"
+import { hasArticleApiKey } from "./providerKeys.ts"
 
 export async function streamCandidate(userId: string, articleId: string, id: string, rawConfig: unknown, response: Response): Promise<void> {
   const candidate = readCandidate(userId, articleId, id)
   if (candidate.status === "complete") throw new CandidateError("候选稿已完成，无需重复生成", 409)
   if (rawConfig !== undefined && (!rawConfig || typeof rawConfig !== "object" || Array.isArray(rawConfig))) throw new CandidateError("AI 配置不正确")
   const config: AIConfig = { ...SERVER_AI_CONFIG, ...rawConfig as AIConfig }
-  if (!(config.articleProvider === "maas" ? config.maasApiKey : config.articleApiKey)) throw new CandidateError("请先配置 AI API Key")
+  if (!hasArticleApiKey(config)) throw new CandidateError("请先配置 AI API Key")
   const release = acquireCandidate(userId, id)
   const controller = new AbortController()
   const deadline = setTimeout(() => controller.abort(), 600000)

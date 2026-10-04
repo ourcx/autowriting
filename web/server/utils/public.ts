@@ -23,6 +23,7 @@ import {
 } from "../db.ts"
 import type { AIConfig } from "../types.ts"
 import { logger } from "../logger.ts"
+import { resolveArticleApiKey } from "./providerKeys.ts"
 
 // ── LLM 请求构建（统一入口）────────────────────────────────────────────────────
 
@@ -34,7 +35,7 @@ interface LLMRequest {
 
 /**
  * 根据 cfg 构造 LLM 请求所需的 url、model、headers
- * 支持 maas / openai / openai-compat 三种 provider
+ * 支持 maas / openai / openai-compat / zhipu provider
  */
 export function buildLLMRequest(cfg: AIConfig): LLMRequest {
   const headers: Record<string, string> = { "Content-Type": "application/json" }
@@ -50,7 +51,7 @@ export function buildLLMRequest(cfg: AIConfig): LLMRequest {
   } else {
     url = `${cfg.articleBaseUrl}/chat/completions`
     model = (cfg.articleModel as string) || "gpt-4o"
-    headers["Authorization"] = `Bearer ${cfg.articleApiKey}`
+    headers["Authorization"] = `Bearer ${resolveArticleApiKey(cfg)}`
   }
 
   return { url, model, headers }

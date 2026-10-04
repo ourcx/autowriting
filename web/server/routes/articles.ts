@@ -37,6 +37,7 @@ import { triggerBuildIndex } from './rag.js'
 import { CandidateError, createCandidates, listCandidates, parseCandidateInput, readCandidate, saveCandidate } from '../generationCandidates.ts'
 import { streamCandidate } from '../utils/candidateGeneration.ts'
 import { buildWritingContext } from '../writingContext.ts'
+import { hasArticleApiKey } from '../utils/providerKeys.ts'
 
 const router = Router()
 
@@ -480,7 +481,7 @@ router.post('/:articleId/generate', async (req, res) => {
 
     const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
 
-    if (!cfg.articleApiKey && cfg.articleProvider !== 'maas') {
+    if (!hasArticleApiKey(cfg) && cfg.articleProvider !== 'maas') {
       return res.status(400).json({ error: '未配置 API Key，请前往「AI 配置」页面设置后重试' })
     }
     if (cfg.articleProvider === 'maas' && !cfg.maasApiKey) {
@@ -626,7 +627,7 @@ router.post('/:articleId/generate/stream', async (req, res) => {
 
     const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
 
-    if (!cfg.articleApiKey && cfg.articleProvider !== 'maas') {
+    if (!hasArticleApiKey(cfg) && cfg.articleProvider !== 'maas') {
       send('error', { message: '未配置 API Key，请前往「AI 配置」页面设置后重试' })
       return res.end()
     }
@@ -1327,7 +1328,7 @@ router.post('/:articleId/deai/stream', async (req, res) => {
 
     const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
 
-    if (!cfg.articleApiKey && cfg.articleProvider !== 'maas') {
+    if (!hasArticleApiKey(cfg) && cfg.articleProvider !== 'maas') {
       send('error', { message: '未配置 API Key，请前往「AI 配置」页面设置后重试' })
       return res.end()
     }

@@ -30,7 +30,7 @@ interface ProviderOption {
   name: string
   desc: string
   /** 哪个 key 字段必须非空 */
-  requiresKey: 'siliconflowApiKey' | 'coverApiKey' | 'doubaoApiKey' | null
+  requiresKey: 'siliconflowApiKey' | 'coverApiKey' | 'doubaoApiKey' | 'zhipuApiKey' | null
   /** 配置页的描述 */
   keyLabel: string
 }
@@ -54,6 +54,13 @@ const COVER_COLORS: ColorOption[] = [
 ]
 
 const PROVIDERS: ProviderOption[] = [
+  {
+    id: 'zhipu',
+    name: '智谱 GLM-Image',
+    desc: '中文文字与复杂版式',
+    requiresKey: 'zhipuApiKey',
+    keyLabel: '智谱公共 API Key',
+  },
   {
     id: 'local',
     name: 'SVG 占位',
@@ -148,7 +155,9 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
       setMissingKey(null)
       return
     }
-    const keyVal = (cfg[prov.requiresKey] as string | undefined) || ''
+    const keyVal = provider === 'zhipu'
+      ? cfg.zhipuImageApiKey || cfg.zhipuApiKey
+      : (cfg[prov.requiresKey] as string | undefined) || ''
     const modelReady = provider !== 'doubao' || Boolean(cfg.doubaoModel.trim())
     setMissingKey(keyVal.trim() && modelReady ? null : prov.keyLabel)
   }, [provider])
@@ -193,6 +202,9 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
           doubaoModel:       aiConfig.doubaoModel,
           coverApiKey:       aiConfig.coverApiKey,
           articleApiKey:     aiConfig.articleApiKey,
+          zhipuApiKey:       aiConfig.zhipuApiKey,
+          zhipuImageApiKey:  aiConfig.zhipuImageApiKey,
+          glmApiKey:         aiConfig.glmApiKey,
         },
       }
       // Qwen-Edit：带入当前封面作为基图

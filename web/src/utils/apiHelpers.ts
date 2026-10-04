@@ -106,6 +106,7 @@ export function extractErrorMessage(err: unknown, fallback = '请求失败，请
 // ── 判断用户本地配置是否已填写 API Key ──
 export function isLocalApiKeyConfigured(cfg: AIConfig): boolean {
   if (cfg.articleProvider === 'maas') return !!cfg.maasApiKey
+  if (cfg.articleProvider === 'zhipu') return Boolean(cfg.articleApiKey || cfg.zhipuApiKey)
   return !!cfg.articleApiKey
 }
 
@@ -113,6 +114,7 @@ export function isLocalApiKeyConfigured(cfg: AIConfig): boolean {
 export function isLocalCoverKeyConfigured(cfg: AIConfig): boolean {
   if (cfg.coverProvider === 'local') return true
   if (cfg.coverProvider === 'doubao') return Boolean(cfg.doubaoApiKey && cfg.doubaoModel)
+  if (cfg.coverProvider === 'zhipu') return Boolean(cfg.zhipuImageApiKey || cfg.zhipuApiKey)
   if (['siliconflow', 'z-image', 'qwen-edit'].includes(cfg.coverProvider)) return Boolean(cfg.siliconflowApiKey)
   return !!cfg.coverApiKey
 }
@@ -822,7 +824,11 @@ export async function fetchBlob(url: string, init: RequestInit = {}): Promise<Bl
 export async function testAIConnection(cfg: AIConfig): Promise<{ ok: boolean; msg: string }> {
   const isMaas = cfg.articleProvider === 'maas'
   const baseUrl = isMaas ? cfg.maasBaseUrl : cfg.articleBaseUrl
-  const apiKey  = isMaas ? cfg.maasApiKey  : cfg.articleApiKey
+  const apiKey  = isMaas
+    ? cfg.maasApiKey
+    : cfg.articleProvider === 'zhipu'
+      ? cfg.articleApiKey || cfg.zhipuApiKey
+      : cfg.articleApiKey
   const model   = isMaas ? 'deepseek-v4-pro' : (cfg.articleModel || 'gpt-4o-mini')
 
   if (!baseUrl || !apiKey) {
