@@ -215,6 +215,19 @@ export async function fetchMaterialUrl(url: string, jinaApiKey: string): Promise
   return response.data as { content: string; url: string; method: string }
 }
 
+export async function parseMaterialFile(
+  file: File,
+  mode: 'document' | 'handwriting',
+  apiKey: string,
+): Promise<{ title: string; content: string; method: string }> {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('mode', mode)
+  if (apiKey) form.append('apiKey', apiKey)
+  const response = await axios.post('/api/materials/parse-file', form)
+  return response.data as { title: string; content: string; method: string }
+}
+
 export async function searchMaterials(input: {
   query: string
   provider: AIConfig['searchProvider']

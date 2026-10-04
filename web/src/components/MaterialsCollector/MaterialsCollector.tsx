@@ -8,6 +8,7 @@ import {
   Link, Search, ClipboardPaste, Plus, Check,
   Loader2, ExternalLink, ChevronDown, ChevronUp, AlertCircle,
   Calendar, X, BookOpen, Globe, MessageCircle,
+  Upload,
 } from 'lucide-react'
 import { toast } from '../Toast/Toast'
 import {
@@ -16,6 +17,7 @@ import {
   fetchMaterialUrl,
   fetchMaterialUrls,
   fetchWechatArticle,
+  parseMaterialFile,
   searchMaterials,
   searchWechatArticles,
   type MaterialSearchResult,
@@ -27,7 +29,7 @@ import './MaterialsCollector.css'
 
 interface CollectedItem {
   id:           string
-  type:         'url' | 'search' | 'wechat' | 'paste'
+  type:         'url' | 'search' | 'wechat' | 'paste' | 'file'
   title:        string
   content:      string
   url?:         string
@@ -80,7 +82,7 @@ export default function MaterialsCollector({
   wechatCollectorReady = { tikhub: false, dajiala: false },
   onSaved,
 }: Props) {
-  const [mode, setMode]               = useState<'url' | 'search' | 'wechat' | 'paste'>('search')
+  const [mode, setMode]               = useState<'url' | 'search' | 'wechat' | 'paste' | 'file'>('search')
   const [urlInput, setUrlInput]       = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [wechatQuery, setWechatQuery] = useState('')
@@ -95,6 +97,7 @@ export default function MaterialsCollector({
   const [saving, setSaving]           = useState(false)
   const [batchFetching, setBatchFetching] = useState(false)
   const [items, setItems]             = useState<CollectedItem[]>([])
+  const [parseMode, setParseMode]     = useState<'document' | 'handwriting'>('document')
 
   // 新增素材时的默认时间（可以不填）
   const [defaultDateTag, setDefaultDateTag] = useState('')
@@ -103,6 +106,34 @@ export default function MaterialsCollector({
   const canSearch = searchProvider === 'searxng'
     || (searchProvider === 'zhipu' ? !!(glmApiKey || searchApiKey) : !!searchApiKey)
   const canSearchWechat = wechatCollectorReady[wechatProvider]
+
+  async function handleParseFile(file: File | null) {
+    if (!file) return
+    if (!glmApiKey) {
+      toast.error('未配置智谱公共 API Key，请先到「AI 配置」填写')
+      return
+    }
+    setLoading(true)
+    try {
+      const data = await parseMaterialFile(file, parseMode, glmApiKey)
+      setItems(prev => [{
+        id: nextId(),
+        type: 'file',
+        title: data.title,
+        content: data.content,
+        source: parseMode === 'handwriting' ? '智谱手写 OCR' : '智谱文件解析',
+        selected: true,
+        expanded: false,
+        dateTag: defaultDateTag,
+        fullFetched: true,
+      }, ...prev])
+      toast.success(`已解析 ${data.title}`)
+    } catch (error: unknown) {
+      toast.error(extractErrorMessage(error, '文件解析失败'))
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (wechatCollectorReady[wechatProvider]) return
@@ -495,6 +526,7 @@ export default function MaterialsCollector({
           ['search', <Search size={13} />,         '搜索采集'],
           ['wechat', <MessageCircle size={13} />,  '公众号采集'],
           ['url',    <Link size={13} />,            'URL 解析'],
+          ['file',   <Upload size={13} />,          '文件 / OCR'],
           ['paste',  <ClipboardPaste size={13} />,  '手动粘贴'],
         ] as [typeof mode, React.ReactNode, string][]).map(([id, icon, label]) => (
           <button
@@ -653,6 +685,52 @@ export default function MaterialsCollector({
           </div>
         )}
 
+        {mode === 'file' && (
+          <div className="mc-paste-area">
+            <div className="mc-provider-toggle" aria-label="智谱文件解析类型">
+              <button
+                type="button"
+                className={`mc-provider-option${parseMode === 'document' ? ' mc-provider-option--active' : ''}`}
+                onClick={() => setParseMode('document')}
+              >
+                <span>文档解析</span>
+                <small>PDF / Office / 图片 / 文本</small>
+              </button>
+              <button
+                type="button"
+                className={`mc-provider-option${parseMode === 'handwriting' ? ' mc-provider-option--active' : ''}`}
+                onClick={() => setParseMode('handwriting')}
+              >
+                <span>手写 OCR</span>
+                <small>PNG / JPG / JPEG</small>
+              </button>
+            </div>
+            <label className={`mc-btn mc-btn--primary${loading ? ' mc-btn--loading' : ''}`}>
+              {loading ? <Loader2 size={14} className="mc-spin" /> : <Upload size={14} />}
+              {loading ? '解析中...' : '选择文件并解析'}
+              <input
+                type="file"
+                hidden
+                disabled={loading || !glmApiKey}
+                accept={parseMode === 'handwriting'
+                  ? '.png,.jpg,.jpeg,image/png,image/jpeg'
+                  : '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.md,.html,.png,.jpg,.jpeg,.webp,.tiff'}
+                onChange={event => {
+                  const file = event.target.files?.[0] || null
+                  event.target.value = ''
+                  void handleParseFile(file)
+                }}
+              />
+            </label>
+            <div className={`mc-search-tip${glmApiKey ? ' mc-search-tip--hint' : ' mc-search-tip--warn'}`}>
+              {glmApiKey ? <BookOpen size={12} /> : <AlertCircle size={12} />}
+              {glmApiKey
+                ? '文件会发送到智谱解析，返回文本后再由你确认是否写入素材库'
+                : '请先在「AI 配置 → 公共 Key」配置智谱 API Key'}
+            </div>
+          </div>
+        )}
+
         {mode === 'paste' && (
           <div className="mc-paste-area">
             <input
@@ -734,6 +812,7 @@ export default function MaterialsCollector({
                       {item.type === 'search' && <Search size={11} />}
                       {item.type === 'wechat' && <MessageCircle size={11} />}
                       {item.type === 'paste'  && <ClipboardPaste size={11} />}
+                      {item.type === 'file'   && <Upload size={11} />}
                       {item.source || (item.type === 'paste' ? '粘贴' : item.type)}
                     </span>
                     {/* 全文标记 */}
@@ -864,6 +943,13 @@ export default function MaterialsCollector({
             <div className="mc-empty-inner">
               <ClipboardPaste size={28} className="mc-empty-icon" />
               <p>粘贴任意文本内容，如小红书笔记、公众号摘录</p>
+            </div>
+          )}
+          {mode === 'file' && (
+            <div className="mc-empty-inner">
+              <Upload size={28} className="mc-empty-icon" />
+              <p>上传 PDF、Office、图片或手写稿，解析为可编辑素材</p>
+              <span className="mc-empty-badge">复用智谱公共 Key</span>
             </div>
           )}
         </div>

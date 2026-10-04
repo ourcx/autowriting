@@ -48,6 +48,7 @@ const TYPE_CONFIG: Record<string, { label: string; color: string; icon: React.Re
   task:     { label: '任务参考', color: 'lavender', icon: <Layers size={13} /> },
   materials:{ label: '素材参考', color: 'ochre',    icon: <BookOpen size={13} /> },
   task_sub: { label: '任务参考', color: 'lavender', icon: <Layers size={13} /> },
+  zhipu_knowledge: { label: '智谱云知识库', color: 'mint', icon: <Database size={13} /> },
 }
 
 const PRESET_MODELS = [
@@ -94,6 +95,10 @@ export default function RagPage() {
 
   // ── 本地模型配置 ─────────────────────────────────────────────────────────────
   const [localModel, setLocalModel] = useState(localConfig.localEmbeddingModel || '')
+  const [knowledgeMode, setKnowledgeMode] = useState(localConfig.zhipuKnowledgeMode || 'off')
+  const [knowledgeIds, setKnowledgeIds] = useState(localConfig.zhipuKnowledgeIds || '')
+  const [knowledgeRecall, setKnowledgeRecall] = useState(localConfig.zhipuKnowledgeRecallMethod || 'mixed')
+  const [knowledgeRerank, setKnowledgeRerank] = useState(localConfig.zhipuKnowledgeRerank !== false)
 
   // ── 脏标记 ───────────────────────────────────────────────────────────────────
   const [embDirty, setEmbDirty] = useState(false)
@@ -130,6 +135,11 @@ export default function RagPage() {
     localEmbeddingModel:   localModel|| undefined,
     embeddingBatchSize:    embBatchSize  ? Number(embBatchSize)  : undefined,
     embeddingBatchDelayMs: embBatchDelay ? Number(embBatchDelay) : undefined,
+    zhipuApiKey: localConfig.zhipuApiKey,
+    zhipuKnowledgeMode: knowledgeMode,
+    zhipuKnowledgeIds: knowledgeIds,
+    zhipuKnowledgeRecallMethod: knowledgeRecall,
+    zhipuKnowledgeRerank: knowledgeRerank,
   }
 
   useEffect(() => {
@@ -183,6 +193,10 @@ export default function RagPage() {
       localEmbeddingModel:   localModel,
       embeddingBatchSize:    embBatchSize  || '1',
       embeddingBatchDelayMs: embBatchDelay || '3000',
+      zhipuKnowledgeMode: knowledgeMode,
+      zhipuKnowledgeIds: knowledgeIds,
+      zhipuKnowledgeRecallMethod: knowledgeRecall,
+      zhipuKnowledgeRerank: knowledgeRerank,
     })
     setEmbDirty(false)
     setHeadersErr(false)
@@ -214,7 +228,8 @@ export default function RagPage() {
 
   async function handleSearch() {
     if (!query.trim()) return
-    if (!hasKey && !localModel) { toast.error('请先配置 API Key 或选择本地向量模型'); return }
+    const knowledgeReady = knowledgeMode !== 'off' && !!knowledgeIds.trim() && !!localConfig.zhipuApiKey
+    if (!hasKey && !localModel && !knowledgeReady) { toast.error('请先配置本地索引或智谱云知识库'); return }
     setSearching(true)
     setResults(null)
     try {
@@ -234,6 +249,7 @@ export default function RagPage() {
   }
 
   const canBuild = (hasKey || !!localModel) && !embDirty
+  const cloudReady = knowledgeMode !== 'off' && !!knowledgeIds.trim() && !!localConfig.zhipuApiKey
 
   // 是否是自定义本地模型
   const isCustomLocal = !!localModel && !LOCAL_MODEL_PRESETS.find(m => m.id === localModel)
@@ -518,6 +534,82 @@ export default function RagPage() {
           )}
         </section>
 
+        {/* ══ 智谱云知识库 ══ */}
+        <section className="rp-section">
+          <div className="rp-section-label">智谱云知识库</div>
+          <div className="rp-config-card">
+            <div className="rp-field-grid">
+              <div className="rp-field">
+                <label className="rp-field-label">
+                  召回模式
+                  <span className="rp-field-hint">参与文章生成和本页搜索测试</span>
+                </label>
+                <select
+                  className="rp-input"
+                  value={knowledgeMode}
+                  onChange={event => { setKnowledgeMode(event.target.value as typeof knowledgeMode); mark() }}
+                >
+                  <option value="off">关闭，仅使用本地索引</option>
+                  <option value="remote">仅智谱云知识库</option>
+                  <option value="hybrid">智谱云知识库 + 本地索引</option>
+                </select>
+              </div>
+              <div className="rp-field">
+                <label className="rp-field-label">检索方式</label>
+                <select
+                  className="rp-input"
+                  value={knowledgeRecall}
+                  onChange={event => { setKnowledgeRecall(event.target.value as typeof knowledgeRecall); mark() }}
+                  disabled={knowledgeMode === 'off'}
+                >
+                  <option value="mixed">混合检索</option>
+                  <option value="embedding">向量检索</option>
+                  <option value="keyword">关键词检索</option>
+                </select>
+              </div>
+              <div className="rp-field rp-field--span2">
+                <label className="rp-field-label">
+                  知识库 ID
+                  <span className="rp-field-hint">多个 ID 用逗号或换行分隔，最多 20 个</span>
+                </label>
+                <textarea
+                  className="rp-textarea rp-input-mono"
+                  rows={3}
+                  placeholder="knowledge-id-1, knowledge-id-2"
+                  value={knowledgeIds}
+                  onChange={event => { setKnowledgeIds(event.target.value); mark() }}
+                  disabled={knowledgeMode === 'off'}
+                />
+              </div>
+              <label className="rp-local-model-item" style={{ gridColumn: 'span 2' }}>
+                <input
+                  type="checkbox"
+                  checked={knowledgeRerank}
+                  onChange={event => { setKnowledgeRerank(event.target.checked); mark() }}
+                  disabled={knowledgeMode === 'off'}
+                />
+                <div className="rp-local-model-info">
+                  <div className="rp-local-model-name">启用智谱 Rerank 重排</div>
+                  <div className="rp-local-model-meta">提高最终召回排序质量，会产生对应服务费用</div>
+                </div>
+              </label>
+            </div>
+            <div className="rp-config-footer">
+              <span className="rp-config-status">
+                {cloudReady
+                  ? '已就绪；文章生成会自动召回云知识片段'
+                  : knowledgeMode === 'off'
+                    ? '未启用'
+                    : '需要智谱公共 Key 和知识库 ID'}
+              </span>
+              <a className="rp-inline-link" href="https://open.bigmodel.cn/console/knowledge" target="_blank" rel="noreferrer">
+                管理智谱知识库 <ExternalLink size={12} />
+              </a>
+              <button className="rp-btn-primary" onClick={saveEmbConfig} disabled={!embDirty}>保存配置</button>
+            </div>
+          </div>
+        </section>
+
         {/* ══ 索引状态 ══ */}
         <section className="rp-section">
           <div className="rp-section-label">索引状态</div>
@@ -612,16 +704,16 @@ export default function RagPage() {
           <div className="rp-search-row">
             <input
               className="rp-input"
-              placeholder={status?.indexed ? '输入任意文本，测试向量检索效果...' : '请先构建索引'}
+              placeholder={status?.indexed || cloudReady ? '输入任意文本，测试知识检索效果...' : '请先构建索引或配置智谱云知识库'}
               value={query}
               onChange={e => setQuery(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleSearch() }}
-              disabled={!status?.indexed}
+              disabled={!status?.indexed && !cloudReady}
             />
             <button
               className="rp-btn-primary"
               onClick={handleSearch}
-              disabled={searching || !status?.indexed || !query.trim()}
+              disabled={searching || (!status?.indexed && !cloudReady) || !query.trim()}
             >
               <Search size={14} />
               {searching ? '检索中...' : '搜索'}
@@ -643,7 +735,7 @@ export default function RagPage() {
                           <div className="rp-result-header">
                             <span className="rp-result-badge">{cfg.icon}{cfg.label}</span>
                             <span className="rp-result-dir">{doc.dir}</span>
-                            <span className="rp-result-sim">{Math.round((1 - doc.score) * 100)}% 相似</span>
+                            <span className="rp-result-sim">{Math.round(doc.type === 'zhipu_knowledge' ? 100 - doc.score * 100 : (1 - doc.score) * 100)}% 相似</span>
                           </div>
                           <p className="rp-result-content">{doc.content}</p>
                         </div>
@@ -673,7 +765,7 @@ export default function RagPage() {
             <div className="rp-guide-card rp-guide-card--lavender">
               <div className="rp-guide-step">03</div>
               <div className="rp-guide-title">自动召回</div>
-              <p>生成文章时自动检索 top-4 相关片段注入 prompt，让 AI 风格保持一致。写完新文章后重建索引。</p>
+              <p>生成文章时自动检索本地索引或智谱云知识库，把相关片段注入 prompt。写完新文章后按需重建本地索引。</p>
             </div>
           </div>
         </section>

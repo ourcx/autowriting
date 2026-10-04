@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Save, Check, Eye, EyeOff, AlertCircle, CheckCircle2,
   Zap, Image, Search, ChevronRight, ShieldAlert,
+  ExternalLink, Layers,
 } from 'lucide-react'
 import {
   AIConfig,
@@ -17,13 +18,14 @@ import { useConfigStore, setLocalConfig, fetchServerStatus } from '../../store/u
 import { testAIConnection } from '../../utils/apiHelpers'
 import './AISettings.css'
 
-type Section = 'providers' | 'article' | 'cover' | 'search' | 'cdn'
+type Section = 'providers' | 'article' | 'cover' | 'search' | 'advanced' | 'cdn'
 
 const NAV_ITEMS: { id: Section; icon: React.ReactNode; label: string; sub: string }[] = [
   { id: 'providers', icon: <ShieldAlert size={16} />, label: '公共 Key', sub: '按服务商统一复用' },
   { id: 'article', icon: <Zap size={16} />, label: '文章生成', sub: '大语言模型 API' },
   { id: 'cover', icon: <Image size={16} />, label: '封面生成', sub: '图片生成 API' },
   { id: 'search', icon: <Search size={16} />, label: '素材搜索', sub: '搜索引擎 API' },
+  { id: 'advanced', icon: <Layers size={16} />, label: '智谱高级服务', sub: '知识库与模型管理' },
   { id: 'cdn', icon: <Image size={16} />, label: '图床配置', sub: 'Imgur 图片 CDN' },
 ]
 
@@ -312,6 +314,59 @@ export default function AISettings() {
                     前往 <a href="https://bigmodel.cn/usercenter/proj-mgmt/apikeys" target="_blank" rel="noreferrer">智谱开放平台</a> 获取。旧的工具级 Key 保留并优先，不会被公共 Key 覆盖。
                   </p>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* ════ 智谱高级服务 ════ */}
+          {activeSection === 'advanced' && (
+            <div className="as-panel">
+              <div className="as-panel-header">
+                <h2 className="as-panel-title">智谱高级服务</h2>
+                <p className="as-panel-desc">文章工作台直接接入知识检索和文件解析；平台长任务从智谱控制台管理</p>
+              </div>
+              <div className="as-card">
+                <div className="as-card-label-row">
+                  <span className="as-card-section-label">已接入文章流程</span>
+                  <span className="as-card-tag as-card-tag--teal">复用智谱公共 Key</span>
+                </div>
+                <div className="as-provider-grid">
+                  <button className="as-provider-tile" onClick={() => navigate('/rag')}>
+                    <span className="as-pt-name">GLM 全模态知识库</span>
+                    <span className="as-pt-desc">配置云知识库 ID，参与文章生成自动召回</span>
+                  </button>
+                  <button className="as-provider-tile" onClick={() => navigate('/drafts')}>
+                    <span className="as-pt-name">文件解析与 OCR</span>
+                    <span className="as-pt-desc">在文章素材采集器上传 PDF、Office、图片或手写稿</span>
+                  </button>
+                </div>
+              </div>
+              <div className="as-card">
+                <div className="as-card-section-label">智谱平台管理能力</div>
+                <p className="as-card-desc">
+                  这些能力会创建计费资源或异步任务，因此仍在智谱控制台完成。部署或微调得到的模型编码，可以直接填入“文章生成 → 模型”。
+                </p>
+                <div className="as-provider-grid">
+                  {[
+                    ['模型部署', '创建私有实例，完成后复制模型编码', 'https://open.bigmodel.cn/console/modelcenter/deploy'],
+                    ['模型微调', '上传训练集并创建 SFT / DPO 任务', 'https://bigmodel.cn/console/modelft/finetuning'],
+                    ['模型评测', '对基础模型、微调模型进行数据集评测', 'https://docs.bigmodel.cn/cn/guide/tools/evaluation'],
+                    ['Batch 批量处理', '适合非实时大批量任务，通常异步完成', 'https://www.bigmodel.cn/console/batch/task'],
+                  ].map(([name, desc, url]) => (
+                    <a className="as-provider-tile" href={url} target="_blank" rel="noreferrer" key={name}>
+                      <span className="as-pt-name">{name} <ExternalLink size={12} /></span>
+                      <span className="as-pt-desc">{desc}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+              <div className="as-card as-card--hint">
+                <div className="as-card-section-label">为什么 Batch 不替代当前生成按钮</div>
+                <ul className="as-memory-tips">
+                  <li>当前文章、封面和改写流程需要即时返回，继续使用实时 API。</li>
+                  <li>智谱 Batch 只适合无需立即查看结果的海量任务，并通过 JSONL 文件异步提交。</li>
+                  <li>模型部署、微调和评测涉及算力、训练数据及费用，不由应用自动创建或取消。</li>
+                </ul>
               </div>
             </div>
           )}

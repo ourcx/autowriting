@@ -58,6 +58,12 @@ export interface AIConfig {
   embeddingBatchSize:    string  // 可选，每批并发数，默认 "16"（遇到 429 可调小）
   embeddingBatchDelayMs: string  // 可选，批次间延迟 ms，默认 "200"
 
+  // 智谱云知识库（与本地索引可独立或混合使用）
+  zhipuKnowledgeMode: 'off' | 'remote' | 'hybrid'
+  zhipuKnowledgeIds: string
+  zhipuKnowledgeRecallMethod: 'embedding' | 'keyword' | 'mixed'
+  zhipuKnowledgeRerank: boolean
+
   // 素材搜索
   searchProvider: 'serper' | 'bing' | 'searxng' | 'zhipu'  // 搜索引擎服务商（zhipu 可复用 GLM_API_KEY）
   searchApiKey:   string                          // 搜索 API Key（serper 需要单独的 Key；zhipu 复用 articleApiKey 时可不填）
@@ -108,6 +114,11 @@ export const DEFAULT_CONFIG: AIConfig = {
   localEmbeddingModel:    '',
   embeddingBatchSize:     '1',
   embeddingBatchDelayMs:  '3000',
+
+  zhipuKnowledgeMode: 'off',
+  zhipuKnowledgeIds: '',
+  zhipuKnowledgeRecallMethod: 'mixed',
+  zhipuKnowledgeRerank: true,
 
   searchProvider: 'serper',
   searchApiKey:   '',

@@ -19,6 +19,7 @@ import { replaceDirectoryAtomically } from "./utils/atomicDirectory.ts"
 import { formatWechatAudienceEvidence } from "./wechatAnalyticsStore.ts"
 import { getExampleArticles } from "./db.ts"
 import { resolveEmbeddingApiKey } from "./utils/providerKeys.ts"
+import { hasZhipuKnowledge, retrieveZhipuKnowledge } from "./utils/zhipuKnowledge.ts"
 
 // ── 本地向量模型默认配置 ───────────────────────────────────────────────────────
 const LOCAL_EMBED_MODEL = "Xenova/multilingual-e5-small"
@@ -761,8 +762,24 @@ export async function retrieveRelevant(query: string, { topK = DEFAULT_TOP_K, ai
   const cfg = { ...SERVER_AI_CONFIG as unknown as AIConfig, ...aiConfig }
   const indexDir = getUserIndexDir(userId)
 
+  // 候选文章面板依赖本地目录元数据，云知识库结果不能冒充本地文章。
+  const useCloud = !types?.length && hasZhipuKnowledge(cfg)
+  const cloudMode = cfg.zhipuKnowledgeMode || "off"
+  let cloudResults: SearchResult[] = []
+  if (useCloud) {
+    try {
+      cloudResults = await retrieveZhipuKnowledge(query, cfg, topK)
+      if (cloudMode === "remote") return cloudResults.slice(0, topK)
+    } catch (error: unknown) {
+      logger.warn("RAG", "智谱云知识库检索失败，继续使用本地索引", {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      if (cloudMode === "remote") throw error
+    }
+  }
+
   if (!fs.existsSync(path.join(indexDir, "hnswlib.index"))) {
-    return []
+    return cloudResults.slice(0, topK)
   }
 
   const meta = loadIndexMeta(indexDir)
@@ -825,7 +842,7 @@ export async function retrieveRelevant(query: string, { topK = DEFAULT_TOP_K, ai
       `检索完成 | query="${query.slice(0, 40)}" | 向量候选:${vectorResults.length} 关键词候选:${kwResults.length} 混合后:${merged.length} 返回:${results.length}\n${topDetails}`
     )
 
-    return results.map((r) => ({
+    const localResults = results.map((r) => ({
       content: r.content,
       source: r.source,
       type: r.type,
@@ -836,9 +853,12 @@ export async function retrieveRelevant(query: string, { topK = DEFAULT_TOP_K, ai
       kwScore: r.kwScore || 0,
       finalScore: parseFloat((r.finalScore * 100).toFixed(1)),
     }))
+    return [...cloudResults, ...localResults]
+      .sort((a, b) => (b.finalScore || 0) - (a.finalScore || 0))
+      .slice(0, topK)
   } catch (e: unknown) {
     logger.error("RAG", "检索失败", { error: (e as Error).message })
-    return []
+    return cloudResults.slice(0, topK)
   }
 }
 

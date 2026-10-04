@@ -205,6 +205,12 @@ export const SERVER_AI_CONFIG = {
   searxngUrl: process.env.SEARXNG_URL || '',
   jinaApiKey: process.env.JINA_API_KEY || '',
 
+  // 智谱云知识库；可与本地 HNSW 索引混合召回。
+  zhipuKnowledgeMode: process.env.ZHIPU_KNOWLEDGE_MODE || 'off',
+  zhipuKnowledgeIds: process.env.ZHIPU_KNOWLEDGE_IDS || '',
+  zhipuKnowledgeRecallMethod: process.env.ZHIPU_KNOWLEDGE_RECALL_METHOD || 'mixed',
+  zhipuKnowledgeRerank: process.env.ZHIPU_KNOWLEDGE_RERANK !== 'false',
+
   // 公众号文章采集。密钥仅保存在服务端，避免付费凭证进入浏览器或接口响应。
   tikhubApiKey: process.env.TIKHUB_API_KEY || '',
   dajialaApiKey: process.env.DAJIALA_API_KEY || '',

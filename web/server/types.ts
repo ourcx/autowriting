@@ -65,6 +65,10 @@ export interface AIConfig {
   embeddingBatchSize?: number
   embeddingBatchDelayMs?: number
   localEmbeddingModel?: string
+  zhipuKnowledgeMode?: 'off' | 'remote' | 'hybrid'
+  zhipuKnowledgeIds?: string | string[]
+  zhipuKnowledgeRecallMethod?: 'embedding' | 'keyword' | 'mixed'
+  zhipuKnowledgeRerank?: boolean
   [key: string]: unknown
 }
 

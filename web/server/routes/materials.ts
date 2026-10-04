@@ -10,7 +10,10 @@
  * GET  /api/materials/:articleId       - 读取当前 materials.md 内容
  */
 import { Router } from 'express'
+import axios from 'axios'
+import FormData from 'form-data'
 import fs from 'fs'
+import multer from 'multer'
 import path from 'path'
 import { DRAFTS_DIR, SERVER_AI_CONFIG } from '../config.js'
 import { logger } from '../logger.js'
@@ -27,9 +30,79 @@ import {
 } from '../utils/wechatCollector.js'
 
 const router = Router()
+const parseUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024, files: 1 },
+})
 
 // 所有路由都需要登录（与 articles.js 保持一致）
 router.use(authMiddleware)
+
+const PARSE_FILE_TYPES = new Set([
+  'pdf', 'docx', 'doc', 'xls', 'xlsx', 'ppt', 'pptx', 'png', 'jpg', 'jpeg',
+  'csv', 'txt', 'md', 'html', 'bmp', 'gif', 'webp', 'heic', 'tiff', 'heif', 'jp2',
+])
+
+// ── POST /api/materials/parse-file ────────────────────────────────────────────
+// 文件仅在内存中转发给智谱，不写入项目运行目录。普通文档走同步解析；手写图走 OCR。
+router.post('/parse-file', parseUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: '请选择要解析的文件' })
+    const mode = req.body.mode === 'handwriting' ? 'handwriting' : 'document'
+    const extension = path.extname(req.file.originalname).slice(1).toLowerCase()
+    if (!PARSE_FILE_TYPES.has(extension)) {
+      return res.status(400).json({ error: `暂不支持 .${extension || '未知'} 文件` })
+    }
+    if (mode === 'handwriting' && !['png', 'jpg', 'jpeg'].includes(extension)) {
+      return res.status(400).json({ error: '手写 OCR 仅支持 PNG、JPG、JPEG 图片' })
+    }
+
+    const apiKey = resolveZhipuApiKey({ ...SERVER_AI_CONFIG, zhipuApiKey: req.body.apiKey || SERVER_AI_CONFIG.zhipuApiKey })
+    if (!apiKey) return res.status(400).json({ error: '未配置智谱公共 API Key' })
+
+    const form = new FormData()
+    form.append('file', req.file.buffer, {
+      filename: req.file.originalname,
+      contentType: req.file.mimetype,
+    })
+    const endpoint = mode === 'handwriting'
+      ? 'https://open.bigmodel.cn/api/paas/v4/files/ocr'
+      : 'https://open.bigmodel.cn/api/paas/v4/files/parser/sync'
+    if (mode === 'handwriting') {
+      form.append('tool_type', 'hand_write')
+      form.append('language_type', 'CHN_ENG')
+      form.append('probability', 'false')
+    } else {
+      form.append('tool_type', 'prime-sync')
+      form.append('file_type', extension.toUpperCase())
+    }
+
+    const response = await axios.post(endpoint, form, {
+      headers: { ...form.getHeaders(), Authorization: `Bearer ${apiKey}` },
+      maxBodyLength: 52 * 1024 * 1024,
+      timeout: 120000,
+    })
+    const content = mode === 'handwriting'
+      ? (Array.isArray(response.data?.words_result)
+        ? response.data.words_result.map((item: { words?: string }) => item.words || '').filter(Boolean).join('\n')
+        : '')
+      : String(response.data?.content || '')
+    if (!content.trim()) {
+      return res.status(502).json({ error: response.data?.message || '智谱未返回可用文本' })
+    }
+    res.json({
+      title: req.file.originalname,
+      content: content.slice(0, 100000),
+      method: mode === 'handwriting' ? 'zhipu-ocr' : 'zhipu-file-parser',
+    })
+  } catch (error: unknown) {
+    const message = axios.isAxiosError(error)
+      ? error.response?.data?.error?.message || error.response?.data?.message || error.message
+      : error instanceof Error ? error.message : String(error)
+    logger.error('MATERIALS', '智谱文件解析失败', { error: message })
+    res.status(502).json({ error: `智谱文件解析失败：${message}` })
+  }
+})
 
 // ── 工具函数（路径规则与 articles.js 的 getArticlePath 保持同步）───────────
 

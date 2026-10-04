@@ -257,7 +257,13 @@ A: 目前需要逐个创建，但可以通过 API 批量导入。
 
 “素材采集”中的智谱搜索调用官方 `POST /api/paas/v4/web_search`，返回标题、摘要、链接、来源和发布日期。可在“AI 配置 → 素材搜索”单独填写智谱 API Key，并优先使用该 Key；文章模型同样使用智谱时，也可以留空复用文章 API Key。搜索结果仍是写作素材，不等同于事实核验，发布前需要打开原始链接确认。
 
-智谱能力统一使用“AI 配置 → 公共 Key”中的智谱 API Key，包括 GLM 文本模型、GLM-Image、Web Search 和 Embedding-3。文章、封面、搜索与向量页面保留工具级 Key；工具级 Key 非空时优先，留空才回落到智谱公共 Key。公共 Key 只会在明确选择智谱服务或 `open.bigmodel.cn` 端点时使用，不会发送给其他服务商。服务端部署也可通过 `ZHIPU_API_KEY` 配置同一公共 Key，旧的 `GLM_API_KEY` 继续兼容；GLM-Image 如需独立账号可配置 `ZHIPU_IMAGE_API_KEY`。
+智谱能力统一使用“AI 配置 → 公共 Key”中的智谱 API Key，包括 GLM 文本模型、GLM-Image、Web Search、文件解析/OCR、Embedding-3 和智谱云知识库。文章、封面、搜索与向量页面保留工具级 Key；工具级 Key 非空时优先，留空才回落到智谱公共 Key。公共 Key 只会在明确选择智谱服务或 `open.bigmodel.cn` 端点时使用，不会发送给其他服务商。服务端部署也可通过 `ZHIPU_API_KEY` 配置同一公共 Key，旧的 `GLM_API_KEY` 继续兼容；GLM-Image 如需独立账号可配置 `ZHIPU_IMAGE_API_KEY`。
+
+素材采集器可以把 PDF、Word、Excel、PPT、文本和图片交给智谱文件解析服务，也可以对 PNG/JPG 手写稿执行 OCR。文件只在后端内存中转发，不落入项目运行目录；解析结果返回浏览器后，仍需用户确认才写入文章素材库。
+
+智谱云知识库支持仅云端召回或与本地 HNSW 索引混合召回，并可选择向量、关键词或混合检索。环境变量可使用 `ZHIPU_KNOWLEDGE_MODE`、`ZHIPU_KNOWLEDGE_IDS`、`ZHIPU_KNOWLEDGE_RECALL_METHOD` 和 `ZHIPU_KNOWLEDGE_RERANK`。
+
+模型部署、微调、评测和 Batch 属于智谱平台侧的计费资源或异步任务，应用提供官方控制台入口。部署或微调完成后，将平台生成的模型编码填入“AI 配置 → 文章生成 → 模型”即可沿用现有生成流程；Batch 不替代需要即时返回的文章和封面生成按钮。
 
 ## 最佳实践
 
