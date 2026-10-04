@@ -310,7 +310,8 @@ router.post('/search', async (req, res) => {
 
     } else if (provider === 'zhipu') {
       // 智谱搜索 — 与 LLM 共用 GLM_API_KEY，零额外配置
-      const zhipuKey = glmApiKey || apiKey
+      // 单独填写的素材搜索 Key 必须优先；只有留空时才复用文章模型的智谱 Key。
+      const zhipuKey = apiKey || glmApiKey
       if (!zhipuKey) return res.status(400).json({ error: '未配置智谱 API Key（GLM_API_KEY），请在「AI 配置」页面填写' })
       const resp = await fetch('https://open.bigmodel.cn/api/paas/v4/web_search', {
         method: 'POST',
@@ -330,7 +331,17 @@ router.post('/search', async (req, res) => {
       })
       if (!resp.ok) {
         const errText = await resp.text().catch(() => '')
-        return res.status(502).json({ error: `智谱搜索 API 返回 ${resp.status}: ${errText.slice(0, 200)}` })
+        let upstreamMessage = ''
+        try {
+          const payload = JSON.parse(errText)
+          upstreamMessage = typeof payload?.error?.message === 'string' ? payload.error.message : ''
+        } catch {
+          upstreamMessage = ''
+        }
+        const error = resp.status === 401
+          ? '智谱搜索 API Key 无效或已过期，请在「AI 配置 → 素材搜索」更新 Key'
+          : `智谱搜索 API 返回 ${resp.status}${upstreamMessage ? `：${upstreamMessage}` : ''}`
+        return res.status(502).json({ error })
       }
       const data = await resp.json()
       const items = data.search_result || []

@@ -12,6 +12,7 @@ import {
 import { toast } from '../Toast/Toast'
 import {
   appendArticleMaterials,
+  extractErrorMessage,
   fetchMaterialUrl,
   fetchMaterialUrls,
   fetchWechatArticle,
@@ -204,7 +205,7 @@ export default function MaterialsCollector({
       setItems(prev => [...newItems, ...prev])
       toast.success(`找到 ${results.length} 条结果，点击「读全文」可获取完整内容`)
     } catch (e: unknown) {
-      toast.error('搜索失败：' + (e as Error).message)
+      toast.error('搜索失败：' + extractErrorMessage(e, '搜索服务暂时不可用，请稍后重试'))
     } finally {
       setLoading(false)
     }

@@ -41,7 +41,8 @@ export function createSearchProvider(config: SearchConfig = {}): SearchProvider 
   const searxngUrl = config.searxngUrl || ""
   const serperKey = searchApiKey
   // 智谱搜索直接复用 GLM_API_KEY（可能来自 articleApiKey）
-  const zhipuKey = glmKey || searchApiKey
+  // 显式配置的搜索 Key 优先；未填写时才复用文章模型的智谱 Key。
+  const zhipuKey = searchApiKey || glmKey
 
   // 1. 显式指定
   if (provider && provider !== "bing") {
