@@ -254,55 +254,6 @@ export function addImageToLibrary(
 
 // ── 封面图生成辅助 ────────────────────────────────────────────────────────────
 
-export function generatePrompt(title: string, content: string, style: string, color: string): string {
-  const stylePrompts: Record<string, string> = {
-    modern:
-      "modern flat design with bold geometric shapes, clean sans-serif typography, strong visual hierarchy, minimalist color blocking, professional and contemporary",
-    minimalist:
-      "minimalist design with generous white space, single bold accent color, thin elegant lines, premium typography, sophisticated and clean",
-    gradient:
-      "smooth gradient background with vibrant two-tone color wash, soft light rays and depth, contemporary aesthetic with subtle texture",
-    illustration:
-      "flat vector illustration style with friendly characters or abstract icons, warm color palette, editorial and approachable feel",
-    photography:
-      "cinematic background photography with shallow depth of field, dramatic directional lighting, magazine cover quality, professional and polished",
-    abstract:
-      "bold abstract geometric shapes with dynamic composition, overlapping forms creating depth, artistic and eye-catching, modern art style",
-  }
-  const colorNames: Record<string, string> = {
-    matcha: "matcha green (#078a52) with white accents",
-    slushie: "cyan blue (#3bd3fd) with light backgrounds",
-    lemon: "golden yellow (#fbbd41) with dark text contrast",
-    ube: "deep purple (#43089f) with bright highlights",
-    pomegranate: "coral red (#fc7981) with soft shadows",
-    blueberry: "navy blue (#01418d) with light accents",
-  }
-  const styleDesc = stylePrompts[style] || stylePrompts.modern
-  const colorDesc = colorNames[color] || "vibrant accent color"
-  const preview = (content || "").substring(0, 80).replace(/[#*[\]`]/g, "").trim()
-  const themeHint = preview ? `Article topic: ${preview}. ` : ""
-  return `Create a high-quality WeChat public account article cover image.
-
-Specifications:
-- Aspect ratio: 2.35:1 (landscape, 1024×576 pixels minimum)
-- Article title: "${title}"
-- ${themeHint}
-
-Visual Direction:
-- Style: ${styleDesc}
-- Color scheme: ${colorDesc}
-- Composition: Balanced, professional, eye-catching
-- Quality: High resolution, sharp details, vibrant colors
-
-Requirements:
-- NO text or typography in the image
-- NO watermarks, logos, or borders
-- Focus on visual impact that matches the article topic
-- Suitable for social media and blog headers
-- Professional quality suitable for publication
-- Ensure good contrast and readability when used as a banner`
-}
-
 export function generatePlaceholderCover(title: string, style: string, color: string): string {
   const colorMap: Record<string, string> = {
     matcha: "#078a52",
@@ -335,7 +286,7 @@ export async function generateWithDallE(prompt: string, apiKey: string): Promise
   if (!key) throw new Error("OpenAI API key not configured. 请前往「AI 配置」页面设置。")
   const response = await axios.post(
     "https://api.openai.com/v1/images/generations",
-    { model: "dall-e-3", prompt, n: 1, size: "1024x1024", quality: "hd", style: "vivid" },
+    { model: "dall-e-3", prompt, n: 1, size: "1792x1024", quality: "hd", style: "vivid" },
     { headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" } },
   )
   if (response.data.data?.length > 0) return response.data.data[0].url

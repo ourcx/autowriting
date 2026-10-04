@@ -440,7 +440,7 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
             placeholder={
               provider === 'qwen-edit'
                 ? '描述你想如何修改这张封面，例如：换成蓝色调，加入科技感元素'
-                : '描述你想要的画面，留空则根据标题和风格自动生成'
+                : `生成一个公众号文章封面，2.35:1，需要简约，不需要实物，给我来点好看的，标题是：${title.trim() || 'xxxx'}。`
             }
             rows={3}
           />
