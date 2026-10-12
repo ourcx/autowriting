@@ -19,7 +19,10 @@ try {
   let emptyToutiao = false
   let coverGeneratedWithAuth = false
   let coverSavedWithAuth = false
+  let delayCoverUpload = false
   let toutiaoPublishPayload = null
+  let wechatThumbUploadCount = 0
+  const wechatDraftPayloads = []
   const authenticatedPageRequests = []
   const unexpectedWrites = []
   const pageErrors = []
@@ -119,12 +122,21 @@ try {
       authenticatedPageRequests.push({ path: url.pathname, headers: request.headers() })
       return route.fulfill({ json: { items: [], total_count: 0, item_count: 0 } })
     }
+    if (url.pathname === '/api/wechat/upload-thumb') {
+      wechatThumbUploadCount += 1
+      return route.fulfill({ json: { media_id: 'wechat-thumb-fixture' } })
+    }
+    if (url.pathname === '/api/wechat/draft') {
+      wechatDraftPayloads.push(request.postDataJSON())
+      return route.fulfill({ json: { success: true, media_id: 'wechat-draft-fixture' } })
+    }
     if (url.pathname === '/api/generate-cover') {
       coverGeneratedWithAuth = request.headers().authorization === 'Bearer workbench-test-token'
       return route.fulfill({ json: { imageUrl: 'data:image/svg+xml;base64,PHN2Zy8+' } })
     }
     if (url.pathname === '/api/images/upload-base64') {
       coverSavedWithAuth = request.headers().authorization === 'Bearer workbench-test-token'
+      if (delayCoverUpload) await new Promise(resolve => setTimeout(resolve, 1200))
       return route.fulfill({ json: { id: 'cover-fixture', url: '/api/images/uploads/cover-fixture.png', originalName: 'cover-fixture.png' } })
     }
     if (url.pathname === '/api/creator-profile/assets') return route.fulfill({ json: {
@@ -227,7 +239,7 @@ try {
   })
 
   await page.goto(`${baseUrl}/`)
-  await page.getByRole('heading', { name: '微信公众号、今日头条创作工作台' }).waitFor()
+  await page.getByRole('heading', { name: '创作工作台', exact: true }).waitFor()
   await page.getByRole('button', { name: '继续编辑：工作台验收文章' }).waitFor()
   assert.equal(requestedModules.some(path => /\/pages\/ArticleEditor\/|\/assets\/ArticleEditor-/.test(path)), false, 'home must not eagerly load the editor')
   for (const label of ['微信草稿', '知识库', '提示词', '定时任务', '数据看板', '素材库', '样式', '画布', 'AI 配置']) {
@@ -308,7 +320,8 @@ try {
   }
   assert.equal(await page.locator('.wr-preview').evaluate(element => getComputedStyle(element).backgroundColor), 'rgb(250, 245, 232)')
   assert.equal(await page.locator('.editor-panel').evaluate(element => getComputedStyle(element).animationName), 'none')
-  await page.getByRole('button', { name: '封面', exact: true }).click()
+  await page.locator('summary').filter({ hasText: '辅助工具' }).click()
+  await page.locator('.editor-menu-popover button').filter({ hasText: '封面' }).click()
   await page.locator('.cg-provider-card').filter({ hasText: 'SVG 占位' }).click()
   await page.getByRole('button', { name: '生成封面', exact: true }).click()
   await page.getByRole('img', { name: '封面预览' }).waitFor()
@@ -319,11 +332,18 @@ try {
   await page.getByText('已保存到图片库', { exact: true }).locator('..').getByRole('button').click()
   await page.locator('.flow-step').filter({ hasText: '发布' }).click()
   await page.getByRole('heading', { name: '公众号预览与推送' }).waitFor()
-  await page.locator('.toast-error .toast-close').first().click()
-  await page.locator('.toast-error .toast-close').first().click()
+  await page.evaluate(() => document.querySelectorAll('.toast-error .toast-close').forEach(button => {
+    if (button instanceof HTMLElement) button.click()
+  }))
   await page.waitForFunction(() => !document.querySelector('.toast-success'))
   await page.locator('.wr-article-card').evaluate(element => Promise.all(element.getAnimations().map(animation => animation.finished)))
   await page.screenshot({ path: join(screenshots, 'publish-desktop.png'), fullPage: true })
+  await page.getByRole('button', { name: '推送草稿', exact: true }).click()
+  await page.getByText('草稿已推送到微信！点击前往公众平台发布', { exact: true }).waitFor()
+  assert.equal(wechatThumbUploadCount, 1, '有封面时应先上传微信永久素材')
+  assert.equal(wechatDraftPayloads.length, 1, '有封面时应创建一次微信草稿')
+  assert.equal(wechatDraftPayloads[0].thumb_media_id, 'wechat-thumb-fixture', '草稿请求必须携带真实封面 media_id')
+  await page.getByText('草稿已推送到微信！点击前往公众平台发布', { exact: true }).locator('..').locator('.toast-close').click()
   await page.getByRole('group', { name: '发布平台' }).getByRole('button', { name: '小红书', exact: false }).click()
   await page.getByRole('heading', { name: '小红书预览与发布' }).waitFor()
   assert.equal(decodeURIComponent(new URL(page.url()).pathname), '/articles/workbench-test/工作台验收文章')
@@ -333,8 +353,6 @@ try {
     await page.getByRole('link', { name: '平台预览', exact: true }).getAttribute('href'),
     'https://creator.xiaohongshu.com/publish/publish?from=menu&target=video',
   )
-  await page.getByRole('button', { name: '打开独立预览', exact: true }).click()
-  await page.waitForURL('**/previews/workbench-test/*?platform=xiaohongshu')
   await page.goto(`${baseUrl}/editor/workbench-test?tab=publish&platform=xiaohongshu`)
   await page.getByRole('heading', { name: '小红书预览与发布' }).waitFor()
   await page.getByRole('group', { name: '发布平台' }).getByRole('button', { name: '今日头条', exact: false }).click()
@@ -407,7 +425,8 @@ try {
   await page.setViewportSize({ width: 1440, height: 960 })
   await page.goto(`${baseUrl}/editor/workbench-test`)
   await page.locator('.flow-step').first().waitFor()
-  await page.getByRole('button', { name: '图片库', exact: true }).click()
+  await page.locator('summary').filter({ hasText: '辅助工具' }).click()
+  await page.locator('.editor-menu-popover button').filter({ hasText: '图片库' }).click()
   await page.getByRole('heading', { name: '图片库', exact: true }).waitFor()
   await page.locator('.flow-step').filter({ hasText: '写作' }).click()
   await page.getByRole('button', { name: '提示词', exact: true }).click()
@@ -430,7 +449,7 @@ try {
   await page.getByText('主要读者', { exact: true }).locator('..').locator('input').fill('校园内容读者')
   await page.getByText('句式与节奏', { exact: true }).locator('..').locator('textarea').fill('短句为主，不使用装饰性表达')
   await page.getByText('切入视角规则', { exact: true }).locator('..').locator('textarea').fill('从具体问题切入')
-  await page.getByLabel('长期背景记忆').fill('长期关注校园内容')
+  await page.getByRole('textbox', { name: '长期背景记忆' }).fill('长期关注校园内容')
   await page.getByRole('button', { name: '保存写作资产', exact: true }).click()
   await page.waitForFunction(() => document.body.textContent?.includes('写作资产'))
   assert.equal(savedProfile.audience, '校园内容读者')
@@ -445,6 +464,26 @@ try {
   await page.getByText('后台自动化', { exact: true }).waitFor()
   await page.getByText('微信后台会话已就绪', { exact: true }).waitFor()
   await page.screenshot({ path: join(screenshots, 'account-cookie-binding.png'), fullPage: true })
+
+  // 粘贴封面后立刻切到发布页，验证图片库上传尚未返回时首轮也能读到封面。
+  await page.evaluate(() => localStorage.removeItem('cover_image_workbench-test'))
+  await page.goto(`${baseUrl}/editor/workbench-test`)
+  await page.locator('summary').filter({ hasText: '辅助工具' }).click()
+  await page.locator('.editor-menu-popover button').filter({ hasText: '封面' }).click()
+  delayCoverUpload = true
+  await page.locator('.cg-paste-zone').evaluate(element => {
+    const transfer = new DataTransfer()
+    transfer.items.add(new File([
+      Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    ], 'instant-cover.png', { type: 'image/png' }))
+    element.dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer: transfer }))
+  })
+  await page.waitForFunction(() => localStorage.getItem('cover_image_workbench-test')?.startsWith('data:image/png'))
+  await page.locator('.flow-step').filter({ hasText: '发布' }).click()
+  await page.getByRole('heading', { name: '公众号预览与推送' }).waitFor()
+  await page.getByRole('button', { name: '已选封面', exact: true }).waitFor()
+  delayCoverUpload = false
+
   assert.deepEqual(pageErrors, [])
   assert.deepEqual(unexpectedWrites, [])
   console.log(`截图：${screenshots}`)

@@ -316,6 +316,18 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
     } catch { /* ignore */ }
     return null
   })
+  useEffect(() => {
+    if (!articleId) {
+      setSelectedCoverImage(null)
+      return
+    }
+    try {
+      const saved = localStorage.getItem(`cover_image_${articleId}`)
+      setSelectedCoverImage(saved ? { id: 'saved', imageUrl: saved } : null)
+    } catch {
+      setSelectedCoverImage(null)
+    }
+  }, [articleId])
 
   // 拖拽分栏宽度
   const [sidebarWidth, setSidebarWidth] = useState(260)
@@ -727,7 +739,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
         try {
           thumb_media_id = await uploadWechatThumb(coverImageUrl, getWxHeaders())
         } catch (error) {
-          toast.warn(`封面图上传失败，将尝试无封面推送：${error instanceof Error ? error.message : ''}`)
+          toast.warn(`封面图上传失败，将使用默认白色封面：${error instanceof Error ? error.message : ''}`)
         }
       }
 
@@ -886,6 +898,9 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                   <ImageLibrary
                     onImageSelect={(image) => {
                       setSelectedCoverImage({ id: image.id, imageUrl: image.imageUrl })
+                      if (articleId) {
+                        try { localStorage.setItem(`cover_image_${articleId}`, image.imageUrl) } catch { /* quota exceeded */ }
+                      }
                       setShowImageLibrary(false)
                       toast.success('已选择封面图片')
                     }}

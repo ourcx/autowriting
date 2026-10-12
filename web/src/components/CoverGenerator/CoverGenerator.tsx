@@ -282,8 +282,10 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
     const reader = new FileReader()
     reader.onload = async (e) => {
       const dataUrl = e.target?.result as string
-      // 先本地预览，让用户立刻看到图片
+      // 先保存浏览器内的图片，再异步上传图片库。用户立即切到发布页时，
+      // 首次草稿也能读取封面，不必等上传接口返回后再推第二次。
       setGeneratedImage(dataUrl)
+      persistCover(dataUrl)
       try {
         const ext = file.type.split('/')[1] || 'png'
         const uploaded = await uploadBase64Image({
@@ -299,7 +301,6 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
         persistCover(serverUrl)
         toast.success('封面已保存到本地图片库，发布预览页将自动使用')
       } catch {
-        persistCover(dataUrl)
         toast.warn('本地图片保存失败，暂时使用浏览器预览（发布时可能无法显示）')
       }
     }
