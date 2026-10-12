@@ -1222,3 +1222,60 @@ export const CSS_RESEARCH_BRIEF = `${editionStyle("#285e8a", "#ffffff", "#374553
 #wemd ol > li { padding-bottom: 8px; border-bottom: 1px solid #e0e8ee; }
 #wemd hr { border-color: #b9cddd; }
 `
+
+export const CSS_CAMPUS_DISPATCH = `${editionStyle("#b42318", "#ffffff", "#292725")}
+#wemd { padding: 22px 18px 30px; border-top: 9px solid #292725; }
+#wemd h1 { margin: 16px 0 38px; padding: 0 0 22px; border-bottom: 4px solid #b42318; font-size: 31px; font-weight: 900; line-height: 1.35; }
+#wemd h2 { margin-top: 38px; padding: 10px 13px; background: #b42318; color: #ffffff; font-size: 19px; }
+#wemd h3 { padding-bottom: 8px; border-bottom: 1px dashed #c9a09b; color: #292725; }
+#wemd blockquote, #wemd .multiquote-1 { padding: 18px 20px; border: 0; border-left: 4px solid #b42318; background: #f8efed; }
+#wemd .callout { border: 1px solid #dbc06b; border-left: 4px solid #dbc06b; background: #fff8d8; }
+#wemd strong { color: #7f1d1d; }
+#wemd mark { background: #f6df7d; color: #292725; }
+#wemd hr { margin: 38px 0; border-top: 3px double #292725; }
+#wemd table tr th { background: #292725; border-color: #292725; }
+`
+
+export const CSS_DATA_LEDGER = `${editionStyle("#146c64", "#f7faf9", "#23312f")}
+#wemd { padding: 24px 20px 32px; border-top: 5px solid #23312f; }
+#wemd h1 { margin: 18px 0 40px; padding-bottom: 22px; border-bottom: 5px solid #146c64; font-size: 30px; font-weight: 850; line-height: 1.4; }
+#wemd h2 { margin-top: 38px; padding: 11px 0 11px 14px; border-left: 5px solid #146c64; border-bottom: 1px solid #b8cfca; }
+#wemd h3 { color: #b34835; font-size: 16px; }
+#wemd blockquote, #wemd .multiquote-1 { border: 1px solid #b8cfca; border-left: 1px solid #b8cfca; background: #ffffff; }
+#wemd .callout { border: 0; border-top: 3px solid #146c64; background: #e8f3f0; }
+#wemd strong { color: #0f5953; }
+#wemd mark { background: #f4df88; color: #23312f; }
+#wemd table { font-variant-numeric: tabular-nums; }
+#wemd table tr th { background: #146c64; border-color: #146c64; }
+#wemd table tr:nth-child(even) td { background: #edf5f3; }
+#wemd hr { border-top: 1px solid #8eb8b1; }
+`
+
+export const CSS_ORAL_ARCHIVE = `${editionStyle("#3d6553", "#fbfcfa", "#303632")}
+#wemd { padding: 30px 24px 38px; font-family: "Songti SC", SimSun, Georgia, serif; }
+#wemd h1 { max-width: 13em; margin: 24px auto 52px; padding: 18px 0 22px; border-top: 1px solid #9eb4aa; border-bottom: 3px double #9eb4aa; text-align: center; font-size: 30px; line-height: 1.55; }
+#wemd h2 { margin-top: 46px; padding-bottom: 10px; border-bottom: 1px solid #c9d5cf; color: #a3483d; font-size: 21px; }
+#wemd h3 { color: #3d6553; font-size: 16px; }
+#wemd p { margin-bottom: 24px; line-height: 2; }
+#wemd blockquote, #wemd .multiquote-1 { margin: 34px 0; padding: 22px 0 22px 22px; border: 0; border-left: 2px solid #a3483d; background: transparent; }
+#wemd blockquote p, #wemd .multiquote-1 p { font-size: 17px; line-height: 2; }
+#wemd .callout { border: 0; background: #edf3ef; }
+#wemd strong { color: #a3483d; }
+#wemd img { padding: 6px; border: 1px solid #c9d5cf; border-radius: 0; background: #ffffff; }
+#wemd figcaption { color: #68766f; }
+#wemd hr { width: 46px; margin: 48px auto; border-top: 3px double #9eb4aa; }
+`
+
+export const CSS_FIELD_NOTES = `${editionStyle("#1f513f", "#fffdf5", "#292b29")}
+#wemd { padding: 22px 18px 34px; border-left: 6px solid #e0c34f; }
+#wemd h1 { margin: 12px 0 42px; padding: 22px 18px; background: #292b29; color: #ffffff; border-bottom: 6px solid #e0c34f; font-size: 29px; font-weight: 850; line-height: 1.4; }
+#wemd h2 { margin-top: 40px; padding: 10px 0; border-top: 1px solid #292b29; border-bottom: 1px solid #292b29; color: #1f513f; }
+#wemd h3 { padding-left: 12px; border-left: 4px solid #e0c34f; color: #292b29; }
+#wemd blockquote, #wemd .multiquote-1 { border: 0; border-bottom: 2px solid #292b29; background: #f5e9a9; }
+#wemd .callout { border: 1px solid #cfc8a7; border-left: 5px solid #1f513f; background: #ffffff; }
+#wemd strong { padding: 0 2px; background: #f2dc75; color: #292b29; }
+#wemd mark { background: #1f513f; color: #ffffff; }
+#wemd table tr th { background: #292b29; border-color: #292b29; }
+#wemd table tr:nth-child(even) td { background: #f8f3dc; }
+#wemd hr { margin: 42px 0; border-top: 2px dashed #1f513f; }
+`

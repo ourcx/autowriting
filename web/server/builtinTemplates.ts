@@ -7,8 +7,12 @@
 import type { StyleTemplate } from "./types.ts"
 import {
   CSS_BEST_PRACTICE,
+  CSS_CAMPUS_DISPATCH,
+  CSS_DATA_LEDGER,
   CSS_EASTERN_LETTER,
+  CSS_FIELD_NOTES,
   CSS_GALLERY_STORY,
+  CSS_ORAL_ARCHIVE,
   CSS_RECEIPT_NOTE,
   CSS_SUNSET_FILM,
   DEFAULT_WECHAT_TEMPLATE_ID,
@@ -150,6 +154,10 @@ export const BUILTIN_TEMPLATES_DATA: StyleTemplate[] = [
   { id: "receipt-note", name: "黑白小票", desc: "清单感与打印纸质感，适合教程和复盘", accentColor: "#171717", css: CSS_RECEIPT_NOTE, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: "sunset-film", name: "落日胶片", desc: "暖红与琥珀色调，适合故事和观点长文", accentColor: "#b33d25", css: CSS_SUNSET_FILM, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: "gallery-story", name: "留白画册", desc: "大留白与图片叙事，适合人物和品牌故事", accentColor: "#80503f", css: CSS_GALLERY_STORY, isBuiltin: true, createdAt: 0, updatedAt: 0 },
+  { id: "campus-dispatch", name: "校园快讯", desc: "红黑快讯结构，适合突发、政策和校内通知", accentColor: "#b42318", css: CSS_CAMPUS_DISPATCH, isBuiltin: true, createdAt: 0, updatedAt: 0 },
+  { id: "data-ledger", name: "数据账本", desc: "青绿表头与数字重点，适合排名、对比和就业数据", accentColor: "#146c64", css: CSS_DATA_LEDGER, isBuiltin: true, createdAt: 0, updatedAt: 0 },
+  { id: "oral-archive", name: "口述档案", desc: "衬线标题与对话引文，适合人物、校友和校园回忆", accentColor: "#3d6553", css: CSS_ORAL_ARCHIVE, isBuiltin: true, createdAt: 0, updatedAt: 0 },
+  { id: "field-notes", name: "调查手记", desc: "黑黄索引与问题清单，适合设施、权益和现场观察", accentColor: "#1f513f", css: CSS_FIELD_NOTES, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: "default", name: "经典蓝", desc: "清爽专业，适合大多数文章", accentColor: "#1e6bb8", css: CSS_DEFAULT, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: "morandi", name: "莫兰迪", desc: "低饱和自然色调，文艺感强", accentColor: "#4F6F52", css: CSS_MORANDI, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: "minimal", name: "极简黑", desc: "干净有力，排版纯粹", accentColor: "#111111", css: CSS_MINIMAL, isBuiltin: true, createdAt: 0, updatedAt: 0 },

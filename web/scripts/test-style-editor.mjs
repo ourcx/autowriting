@@ -45,8 +45,12 @@ try {
  })
  await page.goto('http://127.0.0.1:5173/styles')
  await page.locator('#wemd h1').waitFor()
- const editions = ['海盐日记', '紫藤诗页', '朱砂文录', '柠檬小报', '咖啡札记', '青瓷雅集', '城市杂志', '研究简报']
- assert.equal(await page.locator('.se-tmpl-item').count(), 22)
+ const editions = [
+  '海盐日记', '紫藤诗页', '朱砂文录', '柠檬小报',
+  '咖啡札记', '青瓷雅集', '城市杂志', '研究简报',
+  '校园快讯', '数据账本', '口述档案', '调查手记',
+ ]
+ assert.equal(await page.locator('.se-tmpl-item').count(), 26)
  for (const name of editions) {
   await page.locator('.se-tmpl-item').filter({ hasText: name }).click()
   await page.waitForFunction(name => document.querySelector('.se-header-name')?.textContent === name, name)
