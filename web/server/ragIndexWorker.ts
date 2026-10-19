@@ -32,11 +32,9 @@ function rejectPending(message: string): void {
 function getWorker(): Worker {
   if (worker) return worker
 
-  const nextWorker = new Worker(new URL("./workers/ragIndexWorker.ts", import.meta.url), {
-    // The tsx CLI does not expose its TypeScript loader through process.execArgv.
-    // Register tsx explicitly so production workers can load the .ts entry file.
-    execArgv: ["--import", "tsx"],
-  })
+  // Node 20 resolves a worker entry before applying --import hooks, so a .ts
+  // entry fails under PM2 even when tsx is registered in execArgv.
+  const nextWorker = new Worker(new URL("./workers/ragIndexWorkerBootstrap.mjs", import.meta.url))
   nextWorker.on("message", (message: WorkerResponse) => {
     const request = pending.get(message.id)
     if (!request) return

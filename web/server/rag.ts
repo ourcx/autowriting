@@ -107,6 +107,10 @@ interface RawEmbeddingsOptions {
   batchDelayMs?: number
 }
 
+export function normalizeEmbeddingBaseUrl(baseURL: string): string {
+  return baseURL.trim().replace(/\/+$/, "").replace(/\/embeddings$/i, "")
+}
+
 class RawEmbeddings extends Embeddings {
   apiKey: string
   baseURL: string
@@ -121,7 +125,7 @@ class RawEmbeddings extends Embeddings {
   constructor({ apiKey, baseURL, model, dimensions, instruction, extraHeaders = {}, batchSize = 4, batchDelayMs = 1000 }: RawEmbeddingsOptions) {
     super({})
     this.apiKey = apiKey
-    this.baseURL = baseURL.replace(/\/$/, "")
+    this.baseURL = normalizeEmbeddingBaseUrl(baseURL)
     this.model = model
     this.dimensions = dimensions
     this.instruction = instruction
@@ -747,6 +751,25 @@ function mergeResults(vectorResults: VectorResult[], kwResults: SearchResult[], 
     .sort((a, b) => b.finalScore - a.finalScore)
 }
 
+function formatLocalResults(results: MergedResult[]): SearchResult[] {
+  return results.map((result) => ({
+    content: result.content,
+    source: result.source,
+    type: result.type,
+    dir: result.dir,
+    score: result.score,
+    sim: parseFloat((result.sim * 100).toFixed(1)),
+    kwScore: result.kwScore || 0,
+    finalScore: parseFloat((result.finalScore * 100).toFixed(1)),
+  }))
+}
+
+function combineSearchResults(cloudResults: SearchResult[], localResults: SearchResult[], topK: number): SearchResult[] {
+  return [...cloudResults, ...localResults]
+    .sort((a, b) => (b.finalScore || 0) - (a.finalScore || 0))
+    .slice(0, topK)
+}
+
 // ── 检索相关文档 ──────────────────────────────────────────────────────────────
 
 interface RetrieveOptions {
@@ -778,9 +801,15 @@ export async function retrieveRelevant(query: string, { topK = DEFAULT_TOP_K, ai
     }
   }
 
-  if (!fs.existsSync(path.join(indexDir, "hnswlib.index"))) {
-    return cloudResults.slice(0, topK)
-  }
+  const chunks = loadChunkStore(indexDir).filter((chunk) => !types?.length || types.includes(chunk.metadata.type))
+  const kwResults = keywordSearch(query, chunks, topK)
+  const keywordFallback = (): SearchResult[] => combineSearchResults(
+    cloudResults,
+    formatLocalResults(mergeResults([], kwResults, threshold).slice(0, topK)),
+    topK,
+  )
+
+  if (!fs.existsSync(path.join(indexDir, "hnswlib.index"))) return keywordFallback()
 
   const meta = loadIndexMeta(indexDir)
 
@@ -797,7 +826,7 @@ export async function retrieveRelevant(query: string, { topK = DEFAULT_TOP_K, ai
         "RAG",
         `Embedding 配置已变更，索引需要重建。\n  旧: ${meta.embedKey}\n  新: ${currentKey}\n  请在知识库页面点击「重建索引」`
       )
-      return []
+      return keywordFallback()
     }
     embeddings = getRemoteEmbeddings(aiConfig) || getLocalEmbeddings(cfg)
   } else {
@@ -826,9 +855,6 @@ export async function retrieveRelevant(query: string, { topK = DEFAULT_TOP_K, ai
       score: parseFloat(score.toFixed(4)),
     }))
 
-    const chunks = loadChunkStore(indexDir).filter((chunk) => !types?.length || types.includes(chunk.metadata.type))
-    const kwResults = keywordSearch(query, chunks, topK)
-
     const merged = mergeResults(vectorResults, kwResults, threshold)
     const results = merged.slice(0, topK)
 
@@ -842,23 +868,15 @@ export async function retrieveRelevant(query: string, { topK = DEFAULT_TOP_K, ai
       `检索完成 | query="${query.slice(0, 40)}" | 向量候选:${vectorResults.length} 关键词候选:${kwResults.length} 混合后:${merged.length} 返回:${results.length}\n${topDetails}`
     )
 
-    const localResults = results.map((r) => ({
-      content: r.content,
-      source: r.source,
-      type: r.type,
-      dir: r.dir,
-      score: r.score,
-      // sim 转为百分比展示（余弦相似度）
-      sim: parseFloat((r.sim * 100).toFixed(1)),
-      kwScore: r.kwScore || 0,
-      finalScore: parseFloat((r.finalScore * 100).toFixed(1)),
-    }))
-    return [...cloudResults, ...localResults]
-      .sort((a, b) => (b.finalScore || 0) - (a.finalScore || 0))
-      .slice(0, topK)
+    return combineSearchResults(cloudResults, formatLocalResults(results), topK)
   } catch (e: unknown) {
-    logger.error("RAG", "检索失败", { error: (e as Error).message })
-    return cloudResults.slice(0, topK)
+    const fallbackResults = keywordFallback()
+    logger.warn("RAG", "向量检索失败，已降级为关键词检索", {
+      error: (e as Error).message,
+      keywordCandidates: kwResults.length,
+      returned: fallbackResults.length,
+    })
+    return fallbackResults
   }
 }
 

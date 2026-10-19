@@ -40,8 +40,16 @@ await writeFile(join(articleDirectory, "article_raw.md"), "# Worker 测试文章
 process.env.DRAFTS_DIR = join(workerRoot, "drafts")
 process.env.DATA_DIR = join(workerRoot, "data")
 
+let embeddingAvailable = true
+const embeddingPaths: string[] = []
 const embeddingServer = createServer((request, response) => {
+  embeddingPaths.push(request.url || "")
   request.resume()
+  if (!embeddingAvailable) {
+    response.writeHead(404, { "Content-Type": "application/json" })
+    response.end(JSON.stringify({ error: "embedding unavailable" }))
+    return
+  }
   response.writeHead(200, { "Content-Type": "application/json" })
   response.end(JSON.stringify({ data: [{ embedding: [1, 0, 0] }] }))
 })
@@ -49,16 +57,32 @@ await new Promise<void>(resolve => embeddingServer.listen(0, "127.0.0.1", resolv
 const address = embeddingServer.address()
 if (!address || typeof address === "string") throw new Error("Embedding 测试服务启动失败")
 try {
-  const result = await buildIndexInWorker({
+  const embeddingConfig = {
     embeddingApiKey: "worker-test",
-    embeddingBaseUrl: `http://127.0.0.1:${address.port}/v1`,
+    // 兼容用户粘贴完整 endpoint，服务端不能再拼成 /embeddings/embeddings。
+    embeddingBaseUrl: `http://127.0.0.1:${address.port}/v1/embeddings`,
     embeddingModel: "fixture",
     embeddingBatchSize: 3,
     embeddingBatchDelayMs: 0,
-  }, workerUserId)
+  }
+  const result = await buildIndexInWorker(embeddingConfig, workerUserId)
   assert.equal(result.indexed, 1)
   assert.ok(result.chunks > 0)
   assert.equal(await readFile(join(workerRoot, "data", "rag_index_users", workerUserId, "index_meta.json"), "utf8").then(Boolean), true)
+  assert.ok(embeddingPaths.length > 0)
+  assert.ok(embeddingPaths.every(requestPath => requestPath === "/v1/embeddings"))
+
+  // 向量服务异常时仍应使用已落盘的 chunk_store 做关键词召回。
+  embeddingAvailable = false
+  const { retrieveRelevant } = await import("../server/rag.ts")
+  const fallbackResults = await retrieveRelevant("独立线程 验证索引 正文", {
+    topK: 3,
+    aiConfig: embeddingConfig,
+    userId: workerUserId,
+    types: ["article"],
+  })
+  assert.ok(fallbackResults.length > 0)
+  assert.ok(fallbackResults.some(item => (item.kwScore || 0) > 0))
 } finally {
   await closeRagIndexWorker()
   embeddingServer.closeAllConnections()
@@ -67,3 +91,4 @@ try {
 }
 
 console.log("RAG worker 与受控并发测试通过")
+process.exit(0)
