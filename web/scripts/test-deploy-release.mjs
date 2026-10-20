@@ -14,6 +14,24 @@ const RELEASE_DIR = join(TEMP_ROOT, "release")
 const SERVER_DIR = join(TEMP_ROOT, "server")
 const ARCHIVE = join(TEMP_ROOT, "autowriting-release.tar.gz")
 
+function assertDeployWorkflowSafety() {
+  const workflow = readFileSync(join(REPO_ROOT, ".github/workflows/deploy.yml"), "utf8")
+  const requiredFragments = [
+    "while IFS= read -r -d '' old_backup; do",
+    'if rm -rf -- "$old_backup"; then',
+    "warning: could not remove old backup",
+    '-mtime +30 -print0',
+  ]
+  for (const fragment of requiredFragments) {
+    if (!workflow.includes(fragment)) {
+      throw new Error(`deploy workflow is missing non-blocking backup cleanup: ${fragment}`)
+    }
+  }
+  if (workflow.includes('-mtime +30 -exec rm -rf {} +')) {
+    throw new Error("deploy workflow still aborts on an undeletable old backup")
+  }
+}
+
 function run(command, args, cwd = REPO_ROOT) {
   execFileSync(command, args, { cwd, stdio: "pipe" })
 }
@@ -44,6 +62,7 @@ function applyRelease({ staging, serverDir, fallbackManagedFiles = [] }) {
 }
 
 try {
+  assertDeployWorkflowSafety()
   mkdirSync(RELEASE_DIR, { recursive: true })
   mkdirSync(SERVER_DIR, { recursive: true })
   run("git", [

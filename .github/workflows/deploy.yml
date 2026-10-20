@@ -178,7 +178,14 @@ jobs:
                 rm -f "$UNTRACKED_LIST"
               fi
             fi
-            find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d -mtime +30 -exec rm -rf {} +
+            echo "[deploy] prune backups older than 30 days"
+            while IFS= read -r -d '' old_backup; do
+              if rm -rf -- "$old_backup"; then
+                echo "[deploy] removed old backup: $old_backup"
+              else
+                echo "[deploy] warning: could not remove old backup: $old_backup" >&2
+              fi
+            done < <(find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d -mtime +30 -print0)
 
             echo "[deploy] extract and verify release"
             tar -xzf "$ARCHIVE" -C "$STAGING_DIR"
