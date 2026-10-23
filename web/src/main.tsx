@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import axios from 'axios'
 import App from './App'
 import './index.css'
+import './styles/mobile.css'
 
 // ── Electron 生产模式：file:// 协议下 /api/* 需要重定向到本地 Express ─────────
 // axios：直接设置 baseURL

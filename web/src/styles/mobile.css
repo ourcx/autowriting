@@ -1,0 +1,944 @@
+/*
+ * 手机端不是桌面布局的等比缩小：这里统一约束触控尺寸、主操作触达、
+ * 横向导航和弹层形态；各页面已有的业务配色与桌面契约保持不变。
+ */
+@media (max-width: 720px) {
+  :root {
+    --mobile-gutter: 16px;
+    --mobile-control: 44px;
+    --mobile-bottom-safe: calc(16px + env(safe-area-inset-bottom));
+  }
+
+  body {
+    overscroll-behavior-y: none;
+  }
+
+  :is(button, [role="button"], a, summary, input, select, textarea) {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+    font-size: 16px !important;
+  }
+
+  :is(.page-header__back, .wd-back-btn, .as-back-btn, .se-back-btn, .tu-back-btn, .pp-back-btn, .cp-back, .preview-nav-back) {
+    min-width: var(--mobile-control);
+    min-height: var(--mobile-control);
+  }
+
+  .page-header {
+    min-height: 60px;
+    height: auto;
+    padding: 8px var(--mobile-gutter);
+    gap: 10px;
+  }
+
+  .page-header__title {
+    font-size: 14px;
+  }
+
+  .page-header__actions {
+    max-width: 58%;
+  }
+
+  .page-header__actions :is(button, a) {
+    min-height: var(--mobile-control);
+  }
+
+  /* 公开首页与登录：主动作单列、输入与按钮满足拇指操作。 */
+  .ph-header {
+    padding-inline: var(--mobile-gutter);
+  }
+
+  .ph-nav {
+    gap: 8px;
+  }
+
+  .ph-hero-actions,
+  .ph-account-actions {
+    width: 100%;
+  }
+
+  .ph-hero-actions .ph-button {
+    flex: 1 1 100%;
+    min-height: 48px;
+  }
+
+  .auth-panel {
+    padding: 24px var(--mobile-gutter) var(--mobile-bottom-safe);
+  }
+
+  .auth-card,
+  .auth-submit,
+  .auth-field input {
+    width: 100%;
+  }
+
+  .auth-submit,
+  .auth-field input {
+    min-height: 48px;
+  }
+
+  .auth-footer a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--mobile-control);
+  }
+
+  /* 首次配置：进度导航可横向切换，操作区固定在可触达位置。 */
+  .fsp-progress {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+  }
+
+  .fsp-progress > * {
+    flex-shrink: 0;
+    scroll-snap-align: start;
+  }
+
+  .fsp-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 15;
+    margin-inline: calc(var(--mobile-gutter) * -1);
+    padding: 12px var(--mobile-gutter) var(--mobile-bottom-safe);
+    border-top: 1px solid var(--color-surface-strong);
+    background: color-mix(in srgb, var(--color-canvas) 94%, transparent);
+    backdrop-filter: blur(12px);
+  }
+
+  .fsp-actions :is(button, a) {
+    min-height: 48px;
+  }
+
+  /* 文章编辑与发布：流程导航可扫动，关键操作保持在底部。 */
+  .editor-tabs,
+  .editor-prepare-tabs,
+  .publish-platforms {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  .editor-tabs::-webkit-scrollbar,
+  .editor-prepare-tabs::-webkit-scrollbar,
+  .publish-platforms::-webkit-scrollbar {
+    display: none;
+  }
+
+  :is(.editor-tabs .tab, .editor-prepare-tabs button, .publish-platform) {
+    flex-shrink: 0;
+    min-height: var(--mobile-control);
+    scroll-snap-align: start;
+  }
+
+  .editor .header-actions :is(button, a) {
+    min-height: var(--mobile-control);
+  }
+
+  .editor-panel :is(button, input, select),
+  .publish-workbench-body :is(button, input, select) {
+    min-height: var(--mobile-control);
+  }
+
+  .preview-main {
+    padding: 12px;
+  }
+
+  .preview-nav-styles-btn {
+    min-width: var(--mobile-control);
+    min-height: var(--mobile-control);
+  }
+
+  /* 评分页虽已由洞察页替代路由，仍保留直接访问时的手机可用性。 */
+  .asp-body {
+    padding-inline: var(--mobile-gutter);
+  }
+
+  .asp-header {
+    position: sticky;
+    top: 0;
+    z-index: 25;
+    padding-inline: var(--mobile-gutter);
+  }
+
+  .asp-header :is(button, a),
+  .asp-article-card button,
+  .asp-modal button {
+    min-height: var(--mobile-control);
+  }
+
+  .asp-article-head,
+  .asp-section-header,
+  .asp-modal-footer {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .asp-modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .asp-modal {
+    width: 100%;
+    max-width: none;
+    max-height: calc(100dvh - 20px);
+    border-radius: 16px 16px 0 0;
+  }
+
+  .dash-storage-btn,
+  .dash-resume button {
+    min-height: var(--mobile-control);
+  }
+
+  /* 草稿：卡片动作不再挤成一行，发布弹层使用底部安全区。 */
+  .wd-main {
+    padding-inline: var(--mobile-gutter);
+  }
+
+  .wd-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+  }
+
+  .wd-tab {
+    flex: 0 0 auto;
+    min-height: var(--mobile-control);
+  }
+
+  .wd-card {
+    grid-template-columns: 88px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .wd-card-actions {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .wd-card-actions :is(button, a),
+  .wd-load-more-btn {
+    min-height: var(--mobile-control);
+  }
+
+  /* 素材库：上传与复制动作改成整行按钮，工具栏分两层。 */
+  .wm-main {
+    padding-inline: var(--mobile-gutter);
+  }
+
+  .wm-topbar {
+    min-height: 60px;
+    padding: 8px var(--mobile-gutter);
+  }
+
+  .wm-topbar-subtitle {
+    display: none;
+  }
+
+  .wm-topbar :is(button, a),
+  .wm-upload-footer button,
+  .wm-action-row :is(button, a),
+  .wm-empty .wm-primary-btn {
+    min-height: var(--mobile-control);
+  }
+
+  .wm-upload-footer,
+  .wm-action-row {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .wm-board-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .wm-type-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+
+  .wm-type-tab {
+    min-height: var(--mobile-control);
+    flex-shrink: 0;
+  }
+
+  .wm-search {
+    width: 100%;
+    min-height: var(--mobile-control);
+  }
+
+  /* 样式编辑：模板改为横向选择带，保存动作留在顶部，预览不占固定高屏。 */
+  .se-root {
+    height: auto;
+    min-height: 100dvh;
+  }
+
+  .se-header-actions {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+
+  .se-header-actions button {
+    min-height: var(--mobile-control);
+    flex-shrink: 0;
+  }
+
+  .se-body {
+    overflow: visible;
+  }
+
+  .se-sidebar {
+    height: auto !important;
+    max-height: 260px;
+    overflow-y: auto;
+  }
+
+  .se-sidebar-section {
+    padding-block: 12px;
+  }
+
+  .se-tmpl-item,
+  .se-new-btn {
+    min-height: var(--mobile-control);
+  }
+
+  .se-editor-pane {
+    min-height: 0;
+  }
+
+  .se-meta-bar,
+  .se-ai-actions,
+  .se-editor-actions {
+    gap: 10px;
+  }
+
+  .se-ai-actions button,
+  .se-editor-actions button {
+    flex: 1 1 0;
+    min-height: var(--mobile-control);
+  }
+
+  .se-preview-pane {
+    min-height: 520px;
+  }
+
+  .se-preview-controls button {
+    min-width: var(--mobile-control);
+    min-height: var(--mobile-control);
+  }
+
+  /* AI 配置：侧栏变成水平功能导航，状态摘要留在内容中。 */
+  .as-root {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .as-header {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    min-height: 60px;
+    padding: 8px var(--mobile-gutter);
+  }
+
+  .as-header-title {
+    max-width: 36vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .as-save-btn {
+    min-height: var(--mobile-control);
+  }
+
+  .as-security-banner {
+    padding-inline: var(--mobile-gutter);
+  }
+
+  .as-layout {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .as-sidebar {
+    width: 100%;
+    height: auto;
+    padding: 12px var(--mobile-gutter);
+    border-right: 0;
+    border-bottom: 1px solid var(--color-surface-strong);
+    overflow: visible;
+  }
+
+  .as-status-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .as-status-card {
+    min-width: 0;
+    min-height: var(--mobile-control);
+  }
+
+  .as-status-card-src,
+  .as-status-legend,
+  .as-nav-sub,
+  .as-nav-arrow {
+    display: none;
+  }
+
+  .as-nav {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    padding-bottom: 4px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+  }
+
+  .as-nav-item {
+    flex: 0 0 auto;
+    min-height: var(--mobile-control);
+    padding: 0 14px;
+    scroll-snap-align: start;
+  }
+
+  .as-nav-text {
+    display: block;
+  }
+
+  .as-content {
+    padding: 20px var(--mobile-gutter) 80px;
+    overflow: visible;
+  }
+
+  .as-card,
+  .as-panel {
+    min-width: 0;
+  }
+
+  .as-provider-grid,
+  .as-field-row,
+  .as-test-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  .as-memory-footer,
+  .as-memory-actions,
+  .as-wx-appid-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .as-card button,
+  .as-memory-actions button {
+    min-height: var(--mobile-control);
+  }
+
+  .as-card a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--mobile-control);
+  }
+
+  /* 知识库：标签扫动、保存/重建按钮铺满，降低精细点击要求。 */
+  .rp-body {
+    padding-inline: var(--mobile-gutter);
+  }
+
+  .rp-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+  }
+
+  .rp-tab,
+  .rp-preset-pill {
+    flex-shrink: 0;
+    min-height: var(--mobile-control);
+  }
+
+  .rp-config-footer,
+  .rp-status-card {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .rp-config-footer button,
+  .rp-status-card button {
+    width: 100%;
+    min-height: 48px;
+  }
+
+  :is(.rp-local-model-link, .rp-inline-link) {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--mobile-control);
+  }
+
+  /* Token、洞察、监控：筛选器可扫动，数据卡和操作拆行。 */
+  .tu-body,
+  .topic-content,
+  .monitoring-page {
+    padding-inline: var(--mobile-gutter);
+  }
+
+  .tu-days-switch,
+  .monitoring-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+  }
+
+  .tu-day-btn,
+  .monitoring-tab,
+  .monitoring-filter-btn {
+    flex-shrink: 0;
+    min-height: var(--mobile-control);
+  }
+
+  .tu-card-hd,
+  .tu-peak-row,
+  .topic-sync-controls,
+  .topic-period,
+  .topic-section-heading,
+  .monitoring-filters,
+  .monitoring-endpoint-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .topic-sync-controls :is(button, select),
+  .topic-period-picker select,
+  .topic-search,
+  .monitoring-filters button,
+  .monitoring-btn {
+    min-height: var(--mobile-control);
+  }
+
+  .topic-page :is(.ui-button, details > summary) {
+    min-height: var(--mobile-control);
+  }
+
+  .topic-sync-controls button,
+  .topic-bind-button {
+    width: 100%;
+  }
+
+  .topic-switch,
+  .topic-interval {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .topic-table-wrap,
+  .tu-table-wrap,
+  .monitoring-card {
+    overscroll-behavior-x: contain;
+  }
+
+  .monitoring-card {
+    padding: 16px;
+  }
+
+  .monitoring-log-item,
+  .monitoring-alert-item {
+    overflow-wrap: anywhere;
+  }
+
+  /* 账号：平台 Tab 保持可见，连接/解绑动作分开，避免误触。 */
+  .ap-content {
+    padding-top: 24px;
+  }
+
+  .ap-tabs {
+    position: sticky;
+    top: 60px;
+    z-index: 15;
+    margin-inline: -16px;
+    padding-inline: var(--mobile-gutter);
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    background: var(--color-canvas);
+  }
+
+  .ap-tabs button {
+    flex-shrink: 0;
+    min-height: var(--mobile-control);
+  }
+
+  .ap-platform-row {
+    padding: 18px var(--mobile-gutter);
+  }
+
+  .ap-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    width: 100%;
+  }
+
+  .ap-actions .ap-btn {
+    min-height: var(--mobile-control);
+  }
+
+  .ap-icon-btn {
+    min-width: var(--mobile-control);
+    min-height: var(--mobile-control);
+  }
+
+  .ap-root .ap-cookie-paste {
+    min-height: var(--mobile-control);
+  }
+
+  .ap-root :is(a, details > summary) {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--mobile-control);
+  }
+
+  /* 提示词：列表先选择、编辑动作固定可见；弹层改为底部抽屉。 */
+  .pp-root {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .pp-header {
+    position: sticky;
+    top: 0;
+    z-index: 25;
+    padding-inline: var(--mobile-gutter);
+  }
+
+  .pp-create-btn {
+    min-height: var(--mobile-control);
+  }
+
+  .pp-body {
+    overflow: visible;
+  }
+
+  .pp-sidebar {
+    max-height: 38dvh;
+  }
+
+  .pp-search,
+  .pp-tab,
+  .pp-item {
+    min-height: var(--mobile-control);
+  }
+
+  .pp-main {
+    overflow: visible;
+  }
+
+  .pp-detail {
+    padding: 20px var(--mobile-gutter) 96px;
+  }
+
+  .pp-detail-head,
+  .pp-detail-actions,
+  .pp-editor-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pp-detail-actions button,
+  .pp-editor-actions button {
+    width: 100%;
+    min-height: var(--mobile-control);
+  }
+
+  .pp-editor-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 12;
+    margin-inline: calc(var(--mobile-gutter) * -1);
+    padding: 10px var(--mobile-gutter) var(--mobile-bottom-safe);
+    background: var(--color-canvas);
+  }
+
+  .pp-modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .pp-modal {
+    width: 100%;
+    max-height: calc(100dvh - 24px);
+    border-radius: 16px 16px 0 0;
+  }
+
+  /* 定时任务：流水线可扫动、任务动作拆行、编辑弹窗变底部抽屉。 */
+  .cp-main {
+    padding-inline: var(--mobile-gutter);
+  }
+
+  .cp-topbar-actions :is(button, a) {
+    min-width: var(--mobile-control);
+    min-height: var(--mobile-control);
+  }
+
+  .cp-hero {
+    padding: 24px var(--mobile-gutter);
+  }
+
+  .cp-hero-title {
+    font-size: clamp(28px, 9vw, 40px);
+  }
+
+  .cp-hero-steps {
+    justify-content: flex-start;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+  }
+
+  .cp-hero-step {
+    flex: 0 0 92px;
+    scroll-snap-align: start;
+  }
+
+  .cp-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .cp-stat-sep,
+  .cp-hero-arrow {
+    display: none;
+  }
+
+  .cp-job-head {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .cp-job-right {
+    width: 100%;
+    justify-content: space-between;
+    padding-left: 16px;
+  }
+
+  .cp-job-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .cp-job-actions button,
+  .cp-btn-lg,
+  .cp-banner-btn {
+    min-height: var(--mobile-control);
+  }
+
+  .cp-row-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .cp-modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .cp-modal {
+    width: 100%;
+    max-height: calc(100dvh - 20px);
+    border-radius: 16px 16px 0 0;
+  }
+
+  .cp-modal-foot {
+    position: sticky;
+    bottom: 0;
+    padding-bottom: var(--mobile-bottom-safe);
+    background: var(--color-canvas);
+  }
+
+  .cp-modal-foot button {
+    flex: 1 1 0;
+    min-height: var(--mobile-control);
+  }
+
+  /* 画布：工具条可扫动，图层/属性按钮满足触控。 */
+  .cs-toolbar,
+  .cs-tools {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+  }
+
+  .cs-toolbar :is(button, summary, select),
+  .cs-tools :is(button, summary),
+  .cs-layer-actions button,
+  .cs-inspector-tabs button {
+    min-height: var(--mobile-control);
+  }
+
+  .cs-root :is(button, a, summary) {
+    min-height: var(--mobile-control);
+  }
+
+  .cs-mode-switch,
+  .cs-article-select,
+  .cs-tools-menu {
+    flex-shrink: 0;
+  }
+
+  .cs-tools-popover {
+    position: fixed;
+    right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    left: 12px;
+    max-height: 70dvh;
+    overflow-y: auto;
+  }
+
+  /* 管理：常用动作全宽，表格保留语义但给出明确滑动区域，弹层底部化。 */
+  .admin-content {
+    padding: 24px var(--mobile-gutter) 72px;
+  }
+
+  .admin-header-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .admin-create-btn {
+    justify-content: center;
+    min-height: var(--mobile-control);
+  }
+
+  .admin-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .admin-stat-card {
+    min-width: 0;
+    padding: 16px 10px;
+  }
+
+  .admin-table-wrap {
+    margin-inline: calc(var(--mobile-gutter) * -1);
+    padding-inline: var(--mobile-gutter);
+    scroll-padding-inline: var(--mobile-gutter);
+  }
+
+  .admin-actions :is(button, a),
+  .btn-sm,
+  .btn-icon,
+  .btn-link {
+    min-width: var(--mobile-control);
+    min-height: var(--mobile-control);
+  }
+
+  .admin-nav-brand {
+    min-height: var(--mobile-control);
+  }
+
+  .admin-modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .admin-modal,
+  .admin-modal--form,
+  .admin-modal--confirm {
+    width: 100%;
+    max-width: none;
+    max-height: calc(100dvh - 20px);
+    border-radius: 16px 16px 0 0;
+  }
+
+  .admin-form-actions {
+    position: sticky;
+    bottom: 0;
+    padding-bottom: var(--mobile-bottom-safe);
+    background: var(--color-canvas);
+  }
+
+  .admin-form-actions button {
+    flex: 1 1 0;
+    min-height: var(--mobile-control);
+  }
+
+  /* 跨页面弹层：手机上使用底部抽屉或近全屏工作区，操作栏预留安全区。 */
+  :is(.toast-overlay, .ps-overlay, .ttm-overlay, .gm-overlay) {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .toast-dialog,
+  .ps-modal,
+  .ttm-dialog {
+    width: 100%;
+    max-width: none;
+    max-height: calc(100dvh - 20px);
+    border-radius: 16px 16px 0 0;
+  }
+
+  .gm-modal,
+  .gc-modal {
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+
+  :is(.toast-dialog-actions, .ps-preview-actions, .ttm-actions, .gm-footer-actions) {
+    padding-bottom: var(--mobile-bottom-safe);
+  }
+
+  :is(.toast-dialog-actions, .ps-preview-actions, .ttm-actions, .gm-footer-actions) button {
+    min-height: var(--mobile-control);
+  }
+
+  .toast-dialog-actions button,
+  .ttm-actions button {
+    flex: 1 1 0;
+  }
+}
+
+@media (max-width: 380px) {
+  .page-header__actions {
+    max-width: 54%;
+  }
+
+  .as-status-grid,
+  .admin-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .wd-card {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .wd-card-actions,
+  .admin-header-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  :is(button, a, summary) {
+    touch-action: manipulation;
+  }
+
+  :is(button, a, summary):active {
+    transform: none !important;
+  }
+}
