@@ -111,19 +111,33 @@
 
 @media (max-width: 720px) {
   .dash-root { display: flex; flex-direction: column; height: auto; }
-  .dash-sidebar { order: 1; border-right: 0; border-top: 1px solid var(--color-hairline); overflow: visible; }
+  .dash-sidebar { padding: 16px; gap: 16px; border-right: 0; border-bottom: 1px solid var(--color-hairline); overflow: visible; }
+  .dash-create-card { order: -1; padding: 16px; border: 1px solid var(--color-surface-strong); border-radius: var(--rounded-lg); background: var(--color-surface-soft); }
+  .dash-create-fields { gap: 12px; }
+  .dash-input, .dash-create-btn { min-height: 44px; font-size: 16px; }
+  .dash-storage-btn { min-height: 36px; }
+  .dash-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 8px; padding: 4px 0; }
+  .dash-stat { gap: 5px; }
+  .dash-stat-num { font-size: 20px; }
+  .dash-stat-label { line-height: 1.35; }
   .dash-main { overflow: visible; }
   .dash-workspace-heading, .dash-article-item, .dash-local-warning { padding: 16px; }
+  .dash-workspace-heading { padding-bottom: 10px; }
+  .dash-workspace-heading .dash-text-btn { display: none; }
   .dash-resume { margin: 0 16px; }
   .dash-resume > div { flex-wrap: wrap; gap: 4px; }
   .dash-resume h2 { white-space: normal; overflow-wrap: anywhere; }
   .dash-list-header { padding: 16px 16px 10px; flex-wrap: wrap; }
-  .dash-search { flex: 1; width: auto; }
+  .dash-list-header h3 { flex: 1 1 calc(100% - 44px); }
+  .dash-search { order: 2; flex: 1 1 100%; width: 100%; min-height: 44px; }
+  .dash-refresh-btn { width: 44px; height: 44px; }
   .dash-filters { padding: 0 16px; gap: 8px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
-  .dash-filters button { min-height: 36px; gap: 4px; flex-shrink: 0; }
-  .dash-article-item { flex-wrap: nowrap; gap: 8px; }
+  .dash-filters button { min-height: 44px; gap: 4px; flex-shrink: 0; }
+  .dash-article-item { align-items: stretch; flex-direction: column; gap: 4px; }
   .dash-article-left { gap: 8px; }
-  .dash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dash-article-right { justify-content: flex-end; margin-left: 14px; padding-top: 4px; border-top: 1px solid var(--color-hairline-soft); }
+  .dash-delete-btn, .dash-platform-actions button { width: 44px; height: 44px; }
+  .dash-delete-btn { margin-left: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {
