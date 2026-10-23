@@ -573,4 +573,91 @@
   .admin-page-header h1 { font-size: 24px; }
 
   .admin-create-btn { align-self: flex-start; }
+
+  .admin-header-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .admin-create-btn {
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  .admin-table-wrap {
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .admin-table,
+  .admin-table tbody {
+    display: block;
+    width: 100%;
+  }
+
+  .admin-table thead {
+    display: none;
+  }
+
+  .admin-table tbody tr {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding: 16px;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--rounded-lg);
+    background: var(--color-canvas);
+  }
+
+  .admin-table td {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    padding: 0;
+    border: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .admin-table td::before {
+    color: var(--color-muted);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .admin-table td:nth-child(1)::before { content: "用户名"; }
+  .admin-table td:nth-child(2)::before { content: "角色"; }
+  .admin-table td:nth-child(3)::before { content: "状态"; }
+  .admin-table td:nth-child(4)::before { content: "文章数"; }
+  .admin-table td:nth-child(5)::before { content: "注册时间"; }
+  .admin-table td:nth-child(6)::before { content: "操作"; }
+
+  .admin-table td:last-child > * {
+    min-height: 44px;
+  }
+
+  .admin-modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .admin-modal {
+    width: 100%;
+    max-width: none;
+    max-height: calc(100dvh - 16px);
+    border-radius: 18px 18px 0 0;
+  }
+
+  .admin-form-actions > button {
+    flex: 1;
+    min-height: 44px;
+  }
+
+  .admin-modal-close,
+  .admin-table .btn-icon {
+    width: 44px;
+    height: 44px;
+  }
 }

@@ -1231,6 +1231,30 @@
   }
 }
 
+@media (max-width: 640px) {
+  .ph-header .ph-button,
+  .ph-hero-actions .ph-button,
+  .ph-final-actions .ph-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+  }
+
+  .ph-hero-actions,
+  .ph-final-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .ph-footer a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ph-root *,
   .ph-root *::before,

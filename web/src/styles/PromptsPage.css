@@ -964,12 +964,34 @@
 }
 
 @media (max-width: 768px) {
-  .pp-body { flex-direction: column; }
+  .pp-root { height: auto; min-height: 100dvh; overflow: visible; }
+  .pp-body { flex: none; flex-direction: column; overflow: visible; }
   .pp-sidebar {
     width: 100%;
     border-right: none;
     border-bottom: 1px solid var(--color-hairline);
-    max-height: 42vh;
+    max-height: 36dvh;
+  }
+  .pp-main { min-height: 64dvh; overflow: visible; }
+  .pp-search { min-height: 44px; font-size: 16px; }
+  .pp-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .pp-tab { flex: 0 0 auto; min-height: 44px; }
+  .pp-item { min-height: 72px; }
+  .pp-create-btn { min-height: 44px; }
+  .pp-detail-actions button,
+  .pp-editor-actions button,
+  .pp-copy-btn { min-height: 44px; }
+  .pp-detail-head { align-items: stretch; flex-direction: column; }
+  .pp-detail-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+  .pp-detail-actions button {
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+    padding-inline: 12px;
   }
   .pp-editor-split { flex-direction: column; }
   .pp-info-grid { grid-template-columns: repeat(2, 1fr); }

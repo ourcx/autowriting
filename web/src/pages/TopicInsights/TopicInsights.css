@@ -892,6 +892,7 @@
 
   .topic-interval select {
     flex: 1;
+    min-height: 44px;
   }
 
   .topic-dashboard-kpis,

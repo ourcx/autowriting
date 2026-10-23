@@ -217,6 +217,42 @@
 }
 
 @media (max-width: 720px) {
+  .wechat-preview-page {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .wechat-preview-page > .page-header {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 60px;
+    padding: 8px 16px 10px;
+  }
+
+  .wechat-preview-page > .page-header .page-header__identity {
+    flex-basis: 100%;
+  }
+
+  .wechat-preview-page > .page-header .page-header__actions {
+    width: 100%;
+    max-width: none;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  .wechat-preview-page > .page-header .page-header__actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .wechat-preview-page > .page-header .page-header__actions > * {
+    flex-shrink: 0;
+    min-height: 44px;
+    scroll-snap-align: start;
+  }
+
   .preview-nav-title {
     min-width: 0;
     align-items: flex-start;
@@ -227,7 +263,12 @@
   }
 
   .preview-nav-article {
-    max-width: 88px;
+    max-width: calc(100vw - 100px);
     font-size: 14px;
+  }
+
+  .preview-main {
+    overflow: visible;
+    padding: 0 12px calc(76px + env(safe-area-inset-bottom));
   }
 }

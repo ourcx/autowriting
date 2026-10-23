@@ -1377,3 +1377,132 @@
   padding: 14px 24px;
   border-top: 1px solid #f0ece0;
 }
+
+@media (max-width: 720px) {
+  .cp-banner {
+    align-items: flex-start;
+    padding: 12px 16px;
+  }
+
+  .cp-banner-btn {
+    width: 100%;
+    min-height: 44px;
+    margin-left: 0;
+  }
+
+  .cp-main {
+    padding: 20px 16px calc(72px + env(safe-area-inset-bottom));
+    gap: 16px;
+  }
+
+  .cp-hero {
+    align-items: stretch;
+    padding: 24px 16px;
+    gap: 16px;
+    text-align: left;
+  }
+
+  .cp-hero-title {
+    font-size: 32px;
+    letter-spacing: -1px;
+  }
+
+  .cp-hero-sub {
+    font-size: 14px;
+  }
+
+  .cp-hero-steps {
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    gap: 10px;
+    margin-inline: -16px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    border-right: 0;
+    border-left: 0;
+    border-radius: 0;
+    scrollbar-width: none;
+  }
+
+  .cp-hero-steps::-webkit-scrollbar {
+    display: none;
+  }
+
+  .cp-hero-step {
+    flex: 0 0 92px;
+    scroll-snap-align: start;
+  }
+
+  .cp-hero-arrow {
+    display: none;
+  }
+
+  .cp-hero-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .cp-btn-lg {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .cp-job-head {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .cp-job-right {
+    width: 100%;
+    padding: 0 12px 12px 20px;
+    justify-content: space-between;
+  }
+
+  .cp-job-counters {
+    align-items: flex-start;
+  }
+
+  .cp-job-actions button,
+  .cp-icon-btn,
+  .cp-btn-primary,
+  .cp-btn-cancel,
+  .cp-preset,
+  .cp-eye {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .cp-row-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .cp-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .cp-modal {
+    width: 100%;
+    max-width: none;
+    max-height: calc(100dvh - 16px);
+    border-radius: 18px 18px 0 0;
+  }
+
+  .cp-modal-close {
+    width: 44px;
+    height: 44px;
+  }
+
+  .cp-modal-foot {
+    position: sticky;
+    bottom: 0;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+    background: #fffaf0;
+  }
+
+  .cp-modal-foot > button {
+    flex: 1;
+    justify-content: center;
+  }
+}

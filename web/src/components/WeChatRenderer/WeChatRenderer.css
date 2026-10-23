@@ -1161,15 +1161,70 @@
 }
 
 @media (max-width: 800px) {
-  .wr-toolbar {
-    min-height: 52px;
-    overflow-x: auto;
-    padding: 0 12px;
+  .wr-root {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
   }
 
-  .wr-toolbar-left,
+  .wr-toolbar {
+    display: flex;
+    height: auto;
+    min-height: 52px;
+    padding: 10px 12px;
+    overflow: visible;
+  }
+
+  .wr-toolbar-left {
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .wr-toolbar-left::-webkit-scrollbar {
+    display: none;
+  }
+
+  .wr-copy-hint {
+    display: none;
+  }
+
+  .wr-fontsize {
+    height: 44px;
+  }
+
+  .wr-fontsize-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .wr-manage-styles-btn,
+  .wr-css-editor-toggle {
+    min-height: 44px;
+  }
+
   .wr-toolbar-right {
-    flex: 0 0 auto;
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 120;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--color-surface-strong);
+    background: color-mix(in srgb, var(--color-canvas) 94%, transparent);
+    backdrop-filter: blur(12px);
+  }
+
+  .wr-toolbar-right > button {
+    width: 100%;
+    min-width: 0;
+    min-height: 48px;
+    justify-content: center;
+    padding-inline: 8px;
+    font-size: 12px;
   }
 
   .wr-main {
@@ -1197,7 +1252,7 @@
   .wr-preview {
     min-height: 620px;
     overflow: visible;
-    padding: 20px 12px 48px;
+    padding: 20px 12px calc(92px + env(safe-area-inset-bottom));
   }
 
   .wr-article-card {

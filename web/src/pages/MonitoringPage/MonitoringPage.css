@@ -527,4 +527,37 @@
   .monitoring-health-grid {
     grid-template-columns: 1fr;
   }
+
+  .monitoring-container > .monitoring-header {
+    display: none;
+  }
+
+  .monitoring-tabs {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .monitoring-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .monitoring-tab,
+  .monitoring-filter-btn,
+  .monitoring-btn {
+    flex-shrink: 0;
+    min-height: 44px;
+  }
+
+  .monitoring-filters,
+  .monitoring-endpoint-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .monitoring-log-data,
+  .monitoring-log-message,
+  .monitoring-alert-message {
+    overflow-wrap: anywhere;
+  }
 }

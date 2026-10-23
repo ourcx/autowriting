@@ -189,14 +189,14 @@ export default function MonitoringPage() {
               </div>
               <div className="monitoring-summary-card">
                 <div className="monitoring-summary-label">平均响应时间</div>
-                <p className="monitoring-summary-value">{metrics.summary.avgDuration}ms</p>
+                <p className="monitoring-summary-value">{metrics.summary.avgDuration}</p>
               </div>
               <div className="monitoring-summary-card">
                 <div className="monitoring-summary-label">错误率</div>
                 <p className={`monitoring-summary-value ${
                   parseFloat(metrics.summary.errorRate) > 5 ? 'error' : 'success'
                 }`}>
-                  {metrics.summary.errorRate}%
+                  {metrics.summary.errorRate}
                 </p>
               </div>
             </div>

@@ -142,7 +142,12 @@
   gap: var(--spacing-sm);
 }
 @media (max-width: 800px) { .tu-kpi-grid { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 480px) { .tu-kpi-grid { grid-template-columns: 1fr; } }
+@media (max-width: 480px) {
+  .tu-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tu-kpi { min-height: 132px; padding: 20px 16px; }
+  .tu-kpi-value { font-size: 24px; }
+  .tu-kpi-value--sm { font-size: 17px; }
+}
 
 .tu-kpi {
   border-radius: var(--rounded-xl);  /* feature-card */

@@ -7,6 +7,12 @@
   outline-offset: 2px;
 }
 
+@media (max-width: 720px) {
+  #react-joyride-portal button {
+    min-height: 44px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   #react-joyride-portal * {
     animation: none !important;

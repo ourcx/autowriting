@@ -949,3 +949,166 @@
   color: var(--color-body, #3a3a3a);
   line-height: 1.5;
 }
+
+/* 手机端采用“状态摘要 + 横向分区 + 单列配置”的顺序，避免桌面侧栏挤掉正文。 */
+@media (max-width: 720px) {
+  .as-root {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .as-header {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    height: auto;
+    min-height: 60px;
+    padding: 8px 16px;
+  }
+
+  .as-header-left {
+    min-width: 0;
+    gap: 10px;
+  }
+
+  .as-back-btn,
+  .as-save-btn {
+    min-height: 44px;
+  }
+
+  .as-back-btn {
+    width: 44px;
+    padding: 0;
+    justify-content: center;
+    font-size: 0;
+  }
+
+  .as-header-title {
+    max-width: 36vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .as-security-banner {
+    align-items: flex-start;
+    padding: 12px 16px;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .as-layout {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .as-sidebar {
+    width: 100%;
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 1px solid var(--color-hairline, #e5e5e5);
+  }
+
+  .as-status-block {
+    padding: 18px 16px 12px;
+  }
+
+  .as-status-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .as-status-card {
+    min-width: 0;
+    min-height: 52px;
+  }
+
+  .as-status-card-src,
+  .as-status-legend,
+  .as-nav-sub,
+  .as-nav-arrow {
+    display: none;
+  }
+
+  .as-nav {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 16px 12px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  .as-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .as-nav-item {
+    flex: 0 0 auto;
+    width: auto;
+    min-height: 44px;
+    padding: 6px 12px;
+    scroll-snap-align: start;
+  }
+
+  .as-nav-icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  .as-nav-text {
+    flex: none;
+  }
+
+  .as-content {
+    flex: none;
+    overflow: visible;
+    padding: 20px 16px calc(80px + env(safe-area-inset-bottom));
+  }
+
+  .as-panel {
+    min-width: 0;
+    gap: 16px;
+  }
+
+  .as-panel-title {
+    font-size: 20px;
+  }
+
+  .as-card {
+    min-width: 0;
+    padding: 18px 16px;
+  }
+
+  .as-provider-grid,
+  .as-field-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .as-test-row,
+  .as-memory-footer,
+  .as-memory-actions,
+  .as-wx-appid-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .as-card-divider {
+    margin-inline: -16px;
+  }
+
+  .as-eye-btn,
+  .as-btn-test,
+  .as-btn-ghost,
+  .as-btn-danger-ghost,
+  .as-memory-actions button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

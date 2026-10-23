@@ -555,10 +555,48 @@
 
 @media (max-width: 720px) {
   .cs-root .ui-button {
-    width: 36px;
+    width: 44px;
+    min-height: 44px;
     padding: 0;
     gap: 0;
     font-size: 0;
+  }
+
+  .cs-tools {
+    gap: 8px;
+    padding: 0 12px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .cs-tools::-webkit-scrollbar {
+    display: none;
+  }
+
+  .cs-tools-menu {
+    flex: 0 0 auto;
+  }
+
+  .cs-tools-menu > summary {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 4px;
+  }
+
+  .cs-tools-popover {
+    position: fixed;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 120;
+    width: 100%;
+    max-width: none;
+    max-height: min(70dvh, 620px);
+    padding: 16px 12px calc(20px + env(safe-area-inset-bottom));
+    border-radius: 18px 18px 0 0;
   }
 }
 
@@ -734,4 +772,33 @@
 @media (max-width: 900px) {
   .cs-section-preset-grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
   .cs-material-filters { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 720px) {
+  .cs-root .cs-tools {
+    gap: 8px;
+    padding-inline: 12px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .cs-root .cs-tools-popover {
+    position: fixed;
+    inset: auto auto 0 0;
+    z-index: 120;
+    width: 100vw;
+    max-width: 100vw;
+    max-height: min(70dvh, 620px);
+    padding: 16px 12px calc(20px + env(safe-area-inset-bottom));
+    border-radius: 18px 18px 0 0;
+  }
+
+  .cs-root .cs-material-filters input,
+  .cs-root .cs-material-filters select,
+  .cs-root .cs-material-shelf > input,
+  .cs-root .cs-edit-actions select {
+    min-height: 44px;
+    font-size: 16px;
+  }
 }
