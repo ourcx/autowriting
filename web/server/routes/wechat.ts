@@ -31,7 +31,10 @@ import {
   parseWechatImageUrl,
   WechatImageUrlError,
 } from '../utils/wechatImageCache.ts'
-import { WECHAT_IMAGE_CACHE_DIR } from '../config.ts'
+import {
+  WECHAT_IMAGE_CACHE_DIR,
+  WECHAT_IMAGE_CACHE_MAX_BYTES,
+} from '../config.ts'
 
 const router = Router()
 const WECHAT = 'WECHAT'
@@ -42,8 +45,10 @@ const activeDrafts = new Set<string>()
 const activeWechatPublishes = new Set<string>()
 const wechatImageCache = createWechatImageCache({
   cacheDir: WECHAT_IMAGE_CACHE_DIR,
+  maxDiskBytes: WECHAT_IMAGE_CACHE_MAX_BYTES,
   onCacheError: (operation, error, cacheKey) => {
-    logger.warn(WECHAT, `${operation === 'read' ? '读取' : '写入'}微信图片磁盘缓存失败`, {
+    const action = operation === 'read' ? '读取' : operation === 'write' ? '写入' : '清理'
+    logger.warn(WECHAT, `${action}微信图片磁盘缓存失败`, {
       cacheKey: cacheKey.slice(0, 12),
       error: error instanceof Error ? error.message : 'unknown error',
     })
