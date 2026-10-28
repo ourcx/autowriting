@@ -99,7 +99,8 @@ export function createCandidates(userId: string, articleId: string, input: Candi
       const candidateInput: CandidateInput = {
         ...input,
         platform,
-        ...(platform === "toutiao" && pairId ? { sourceCandidateId: wechatId } : {}),
+        // 双平台候选共享任务与素材并行成稿；单独生成头条时仍可使用传入的公众号正文。
+        ...(input.platform === "both" && platform === "toutiao" ? { sourceArticle: "" } : {}),
       }
       const candidate: StoredCandidate = {
         id: platform === "wechat" && pairId ? wechatId : crypto.randomUUID(),
@@ -107,7 +108,7 @@ export function createCandidates(userId: string, articleId: string, input: Candi
         pairId,
         label: input.platform === "both" ? `方案 ${index + 1} · ${platform === "wechat" ? "公众号" : "头条"}` : `候选 ${index + 1}`,
         platform,
-        status: "queued", content: "", message: platform === "toutiao" && pairId ? "等待公众号母稿" : "等待生成",
+        status: "queued", content: "", message: "等待生成",
         createdAt: now, updatedAt: now, input: candidateInput,
       }
       saveCandidate(userId, articleId, candidate)
@@ -120,8 +121,9 @@ export function createCandidates(userId: string, articleId: string, input: Candi
 const running = new Set<string>()
 const perUser = new Map<string, number>()
 let totalRunning = 0
-const MAX_CONCURRENT_PER_USER = 3
-const MAX_CONCURRENT_TOTAL = 8
+// 一批最多生成 3 组双平台候选，共 6 个模型请求。
+const MAX_CONCURRENT_PER_USER = 6
+const MAX_CONCURRENT_TOTAL = 12
 
 export function acquireCandidate(userId: string, id: string): () => void {
   if (running.has(id)) throw new CandidateError("这篇候选稿正在生成", 409)

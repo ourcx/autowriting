@@ -170,18 +170,7 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
       setRows(previous => [...created, ...previous])
       setActiveId(created[0].id)
       clearTimeout(preparationTimeout)
-      if (platform === "both") {
-        // 同组头条稿必须等公众号母稿完成，再读取母稿改写，不能并行生成两份事实源。
-        const mothers = created.filter(candidate => candidate.platform === "wechat")
-        const completedMothers = await Promise.all(mothers.map(candidate => run(candidate)))
-        await Promise.all(completedMothers.map(mother => {
-          if (!mother?.pairId) return Promise.resolve(null)
-          const toutiao = created.find(candidate => candidate.pairId === mother.pairId && candidate.platform === "toutiao")
-          return toutiao ? run(toutiao) : Promise.resolve(null)
-        }))
-      } else {
-        await Promise.all(created.map(candidate => run(candidate)))
-      }
+      await Promise.all(created.map(candidate => run(candidate)))
     } catch (cause) { if (mounted.current) setError(extractErrorMessage(cause)) }
     finally {
       clearTimeout(preparationTimeout)
@@ -257,7 +246,7 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
           {references.length > 0 && <span className="gc-reference-total">{references.length} 篇相关</span>}
         </summary>
         <div className="gc-reference-body">
-          <p className="gc-cost">本次会调用模型 {platform === "both" ? count * 2 : count} 次。双平台会先生成公众号母稿，再基于母稿改写今日头条版。</p>
+          <p className="gc-cost">本次会调用模型 {platform === "both" ? count * 2 : count} 次。所选公众号与今日头条版本会同时生成。</p>
           <div className="gc-reference-actions">
             <div><strong>参考文章</strong><span>只影响本次生成，不会修改原文</span></div>
             <button className="gc-reference-search" disabled={referencesLoading || busy} onClick={() => void loadReferences()}>

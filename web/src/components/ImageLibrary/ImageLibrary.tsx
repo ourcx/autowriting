@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
+import { Check, Image as ImageIcon, Trash2 } from 'lucide-react'
 import { showConfirm } from '../Toast/Toast'
 import { fetchJson } from '../../utils/apiHelpers'
 import './ImageLibrary.css'
 
-interface ImageItem {
+export interface ImageItem {
   id: string
   title: string
   category: string
@@ -16,6 +17,8 @@ interface ImageItem {
 
 interface ImageLibraryProps {
   onImageSelect?: (image: ImageItem) => void
+  selectedImageUrl?: string | null
+  selectionLabel?: string
 }
 
 interface ImageStats {
@@ -24,7 +27,11 @@ interface ImageStats {
   providers: number
 }
 
-export const ImageLibrary: React.FC<ImageLibraryProps> = ({ onImageSelect }) => {
+export const ImageLibrary: React.FC<ImageLibraryProps> = ({
+  onImageSelect,
+  selectedImageUrl = null,
+  selectionLabel = '设为封面',
+}) => {
   const [images, setImages] = useState<ImageItem[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
@@ -33,20 +40,7 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({ onImageSelect }) => 
   const [loading, setLoading] = useState(false)
   const [stats, setStats] = useState<ImageStats | null>(null)
 
-  // 加载图片库
-  useEffect(() => {
-    loadImages()
-    loadCategories()
-    loadTags()
-    loadStats()
-  }, [])
-
-  // 当分类或标签改变时重新加载
-  useEffect(() => {
-    loadImages()
-  }, [selectedCategory, selectedTags])
-
-  const loadImages = async () => {
+  const loadImages = useCallback(async () => {
     try {
       setLoading(true)
       const params = new URLSearchParams()
@@ -59,31 +53,41 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({ onImageSelect }) => 
     } finally {
       setLoading(false)
     }
-  }
+  }, [selectedCategory, selectedTags])
 
-  const loadCategories = async () => {
+  const loadCategories = useCallback(async () => {
     try {
       setCategories(await fetchJson<string[]>('/api/images/categories'))
     } catch (error) {
       console.error('Error loading categories:', error)
     }
-  }
+  }, [])
 
-  const loadTags = async () => {
+  const loadTags = useCallback(async () => {
     try {
       setAllTags(await fetchJson<string[]>('/api/images/tags'))
     } catch (error) {
       console.error('Error loading tags:', error)
     }
-  }
+  }, [])
 
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
     try {
       setStats(await fetchJson<ImageStats>('/api/images/stats'))
     } catch (error) {
       console.error('Error loading stats:', error)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    void loadCategories()
+    void loadTags()
+    void loadStats()
+  }, [loadCategories, loadStats, loadTags])
+
+  useEffect(() => {
+    void loadImages()
+  }, [loadImages])
 
   const handleDeleteImage = (id: string) => {
     showConfirm({
@@ -172,43 +176,67 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({ onImageSelect }) => 
         </div>
       ) : (
         <div className="images-grid">
-          {images.map((image) => (
-            <div key={image.id} className="image-card">
-              <div className="image-preview">
-                <img
-                  src={image.imageUrl}
-                  alt={`${image.title || '未命名'}图片素材`}
-                  onClick={() => onImageSelect?.(image)}
-                />
-                <div className="image-overlay">
-                  <button
-                    className="btn-delete"
-                    onClick={() => handleDeleteImage(image.id)}
-                    title="删除"
-                  >
-                    🗑️
-                  </button>
+          {images.map((image) => {
+            const selected = image.imageUrl === selectedImageUrl
+            return (
+              <div key={image.id} className={`image-card${selected ? ' is-selected' : ''}`}>
+                <div className="image-preview">
+                  {onImageSelect ? (
+                    <button
+                      className="image-preview-button"
+                      type="button"
+                      onClick={() => onImageSelect(image)}
+                      aria-label={`${selectionLabel}：${image.title || '未命名图片'}`}
+                    >
+                      <img src={image.imageUrl} alt={`${image.title || '未命名'}图片素材`} />
+                    </button>
+                  ) : (
+                    <img src={image.imageUrl} alt={`${image.title || '未命名'}图片素材`} />
+                  )}
+                  {selected && <span className="image-selected-badge"><Check size={13} />当前封面</span>}
+                </div>
+                <div className="image-info">
+                  <h5>{image.title}</h5>
+                  <p className="image-category">{image.category}</p>
+                  {image.tags.length > 0 && (
+                    <div className="image-tags">
+                      {image.tags.map((tag) => (
+                        <span key={tag} className="tag">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <p className="image-provider">{image.provider}</p>
+                  <p className="image-date">
+                    {new Date(image.createdAt).toLocaleDateString('zh-CN')}
+                  </p>
+                  <div className="image-actions">
+                    {onImageSelect && (
+                      <button
+                        className="btn-select-image"
+                        type="button"
+                        onClick={() => onImageSelect(image)}
+                        disabled={selected}
+                      >
+                        {selected ? <Check size={15} /> : <ImageIcon size={15} />}
+                        {selected ? '已设为封面' : selectionLabel}
+                      </button>
+                    )}
+                    <button
+                      className="btn-delete"
+                      type="button"
+                      onClick={() => handleDeleteImage(image.id)}
+                      title="删除图片"
+                      aria-label={`删除图片：${image.title || '未命名图片'}`}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
                 </div>
               </div>
-              <div className="image-info">
-                <h5>{image.title}</h5>
-                <p className="image-category">{image.category}</p>
-                {image.tags.length > 0 && (
-                  <div className="image-tags">
-                    {image.tags.map((tag) => (
-                      <span key={tag} className="tag">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <p className="image-provider">{image.provider}</p>
-                <p className="image-date">
-                  {new Date(image.createdAt).toLocaleDateString('zh-CN')}
-                </p>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

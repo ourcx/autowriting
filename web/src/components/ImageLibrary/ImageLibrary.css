@@ -169,6 +169,11 @@
   box-shadow: 0 2px 8px rgba(26, 58, 58, 0.1);
 }
 
+.image-card.is-selected {
+  border-color: var(--color-brand-teal);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-brand-teal) 18%, transparent);
+}
+
 .image-preview {
   position: relative;
   width: 100%;
@@ -177,11 +182,21 @@
   background: var(--color-canvas);
 }
 
+.image-preview-button {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
 .image-preview img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  cursor: pointer;
   transition: transform 0.2s ease;
 }
 
@@ -189,41 +204,71 @@
   transform: scale(1.05);
 }
 
-.image-overlay {
+.image-selected-badge {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(10, 10, 10, 0.5);
-  display: flex;
+  top: 10px;
+  left: 10px;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.2s ease;
+  gap: 4px;
+  padding: 5px 8px;
+  border-radius: var(--rounded-md);
+  background: var(--color-brand-teal);
+  color: var(--color-on-dark);
+  font-size: 11px;
+  font-weight: 600;
 }
 
-.image-preview:hover .image-overlay {
-  opacity: 1;
+.image-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.btn-select-image,
+.btn-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 34px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-md);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.btn-select-image {
+  gap: 6px;
+  padding: 0 10px;
+  background: var(--color-brand-teal);
+  border-color: var(--color-brand-teal);
+  color: var(--color-on-dark);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.btn-select-image:hover {
+  background: color-mix(in srgb, var(--color-brand-teal) 88%, #000);
+}
+
+.btn-select-image:disabled {
+  background: var(--color-surface-soft);
+  border-color: var(--color-brand-teal);
+  color: var(--color-brand-teal);
+  cursor: default;
 }
 
 .btn-delete {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  background: var(--color-error);
-  border: none;
-  border-radius: var(--rounded-md);
-  cursor: pointer;
-  font-size: 18px;
-  transition: all 0.2s ease;
+  width: 34px;
+  background: var(--color-canvas);
+  color: var(--color-error);
 }
 
 .btn-delete:hover {
-  background: #d32f2f;
-  transform: scale(1.1);
+  background: #fff2f2;
+  border-color: #ffd6d6;
 }
 
 .image-info {

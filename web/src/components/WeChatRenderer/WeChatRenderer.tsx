@@ -896,6 +896,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                 </div>
                 <div className="wr-image-library-content">
                   <ImageLibrary
+                    selectedImageUrl={selectedCoverImage?.imageUrl}
                     onImageSelect={(image) => {
                       setSelectedCoverImage({ id: image.id, imageUrl: image.imageUrl })
                       if (articleId) {

@@ -33,7 +33,7 @@ try {
         ? Array.from({ length: input.count }, (_, index) => ['wechat', 'toutiao'].map(platform => ({
           id: `pair-${index}-${platform}`, batchId: 'pair-batch', pairId: `pair-${index}`,
           label: `方案 ${index + 1} · ${platform === 'wechat' ? '公众号' : '头条'}`, platform,
-          status: 'queued', content: '', message: platform === 'wechat' ? '排队中' : '等待公众号母稿', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+          status: 'queued', content: '', message: '等待生成', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
         }))).flat()
         : Array.from({ length: input.count }, (_, index) => ({
           id: `candidate-${index}`, batchId: 'batch', label: `候选 ${index + 1}`, platform: input.platform,
@@ -150,9 +150,11 @@ try {
   await page.getByRole('button', { name: '继续生成候选稿', exact: true }).click()
   await page.getByRole('button', { name: '公众号 + 今日头条', exact: true }).click()
   const pairedCallStart = calls.length
+  maxActive = 0
   await page.getByRole('button', { name: '生成双平台版本', exact: true }).click()
   await page.getByText('2 篇已完成', { exact: true }).waitFor()
   assert.deepEqual(calls.slice(pairedCallStart), ['pair-0-wechat', 'pair-0-toutiao'])
+  assert.equal(maxActive, 2, '公众号与头条候选稿应同时生成')
   await page.getByRole('button', { name: '选用这一组', exact: true }).first().click()
   await page.getByRole('dialog').waitFor({ state: 'hidden' })
   assert.match(article, /方案 1 · 公众号标题/)

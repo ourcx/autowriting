@@ -109,6 +109,7 @@ export default function ArticleEditor() {
   const [editingTitle, setEditingTitle] = useState(false)
   // 封面是否已存在（从 localStorage 读取，CoverGenerator 生成/粘贴后更新）
   const [hasCover, setHasCover] = useState(false)
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null)
   const [workflow, setWorkflow] = useState<ArticleWorkflow>(() => normalizeArticleWorkflow(null, createEmptyArticleData()))
   const { user } = useAuth()
   const savedData = useRef(createEmptyArticleData())
@@ -140,7 +141,9 @@ export default function ArticleEditor() {
   // articleId 确定后同步检查封面状态（刷新后也能正确勾选）
   useEffect(() => {
     if (!articleId) return
-    setHasCover(!!localStorage.getItem(`cover_image_${articleId}`))
+    const savedCover = localStorage.getItem(`cover_image_${articleId}`)
+    setCoverImageUrl(savedCover)
+    setHasCover(!!savedCover)
   }, [articleId])
 
   // 写作任务模板
@@ -700,7 +703,7 @@ export default function ArticleEditor() {
                     <Image size={15} /><span><strong>封面</strong><small>{hasCover ? '已有封面' : '生成或上传封面'}</small></span>
                   </button>
                   <button className={activeTab === 'library' ? 'active' : ''} onClick={() => setActiveTab('library')}>
-                    <LayoutList size={15} /><span><strong>图片库</strong><small>管理正文图片</small></span>
+                    <LayoutList size={15} /><span><strong>图片库</strong><small>管理图片、选择封面</small></span>
                   </button>
                 </div>
               </details>
@@ -999,14 +1002,29 @@ export default function ArticleEditor() {
                 title={articleTitle}
                 content={data.article}
                 articleId={articleId}
-                onCoverGenerated={() => setHasCover(true)}
+                onCoverGenerated={(imageUrl) => {
+                  setCoverImageUrl(imageUrl)
+                  setHasCover(true)
+                }}
               />
             </div>
           )}
 
           {activeTab === 'library' && (
             <div className="editor-panel">
-              <ImageLibrary />
+              <ImageLibrary
+                selectedImageUrl={coverImageUrl}
+                onImageSelect={(image) => {
+                  try {
+                    localStorage.setItem(`cover_image_${articleId}`, image.imageUrl)
+                    setCoverImageUrl(image.imageUrl)
+                    setHasCover(true)
+                    toast.success('已设为当前文章封面')
+                  } catch {
+                    toast.error('封面保存失败，请清理浏览器存储后重试')
+                  }
+                }}
+              />
             </div>
           )}
         </div>

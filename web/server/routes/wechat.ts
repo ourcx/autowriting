@@ -28,13 +28,60 @@ import {
 import { parseWechatCookieJson } from '../utils/platformCookies.ts'
 
 const router = Router()
-router.use(authMiddleware)
 const WECHAT = 'WECHAT'
 const wechatUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } })
 const WECHAT_MATERIAL_TYPES = new Set(['image', 'voice', 'video', 'news'])
 const WECHAT_UPLOAD_MATERIAL_TYPES = new Set(['image', 'voice', 'video', 'thumb'])
 const activeDrafts = new Set<string>()
 const activeWechatPublishes = new Set<string>()
+
+// 图片标签无法携带前端 API helper 注入的登录头，因此代理必须位于鉴权中间件之前。
+// 该入口只允许固定的微信图片 CDN 域名，避免将公开入口变成任意 URL 代理。
+router.get('/proxy-img', async (req, res) => {
+  const url = req.query.url
+  if (typeof url !== 'string' || !url) return res.status(400).json({ error: 'Missing url' })
+
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return res.status(400).json({ error: 'Invalid url' })
+  }
+
+  const allowed = ['mmbiz.qpic.cn', 'mmbiz.qlogo.cn', 'wx.qlogo.cn']
+  if (parsed.protocol !== 'https:' || !allowed.some(host => parsed.hostname === host || parsed.hostname.endsWith(`.${host}`))) {
+    logger.warn(WECHAT, '图片代理地址被拒', { protocol: parsed.protocol, hostname: parsed.hostname })
+    return res.status(403).json({ error: 'Image source not allowed' })
+  }
+
+  try {
+    logger.debug(WECHAT, '代理图片请求', { hostname: parsed.hostname })
+    const response = await axios.get<ArrayBuffer>(parsed.toString(), {
+      responseType: 'arraybuffer',
+      timeout: 8000,
+      maxRedirects: 0,
+      headers: {
+        Referer: 'https://mp.weixin.qq.com/',
+        'User-Agent': 'Mozilla/5.0 (compatible; WechatProxy/1.0)',
+      },
+    })
+    const contentType = response.headers['content-type'] ?? 'image/jpeg'
+    if (!contentType.startsWith('image/')) {
+      logger.warn(WECHAT, '图片代理收到非图片响应', { hostname: parsed.hostname, contentType })
+      return res.status(502).json({ error: 'Upstream did not return an image' })
+    }
+    res.setHeader('Content-Type', contentType)
+    res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800')
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    return res.send(Buffer.from(response.data))
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'unknown error'
+    logger.error(WECHAT, '图片代理失败', { hostname: parsed.hostname, error: message })
+    return res.status(502).json({ error: '图片代理失败' })
+  }
+})
+
+router.use(authMiddleware)
 // ── Token 缓存（按 appId 隔离，进程重启后重新获取）──────────────────────────
 // Map<appId, { token: string, exp: number }>
 const _tokenCache = new Map()
@@ -787,39 +834,6 @@ router.post('/draft/confirm', async (req, res) => {
     res.json(confirmed)
   } catch {
     res.status(400).json({ error: '草稿核对失败，保留待确认状态，请稍后重试' })
-  }
-})
-
-// ── GET /api/wechat/proxy-img  服务端代理微信图片（绕过防盗链）────────────────
-router.get('/proxy-img', async (req, res) => {
-  const url = req.query.url
-  if (!url) return res.status(400).json({ error: 'Missing url' })
-
-  let parsed
-  try { parsed = new URL(url) } catch { return res.status(400).json({ error: 'Invalid url' }) }
-  const allowed = ['mmbiz.qpic.cn', 'mmbiz.qlogo.cn', 'wx.qlogo.cn']
-  if (!allowed.some(h => parsed.hostname === h || parsed.hostname.endsWith('.' + h))) {
-    logger.warn(WECHAT, '图片代理域名被拒', { hostname: parsed.hostname })
-    return res.status(403).json({ error: 'Domain not allowed' })
-  }
-
-  try {
-    logger.debug(WECHAT, '代理图片请求', { url: String(url).slice(0, 80) })
-    const resp = await axios.get(url, {
-      responseType: 'arraybuffer',
-      timeout: 8000,
-      headers: {
-        Referer: 'https://mp.weixin.qq.com/',
-        'User-Agent': 'Mozilla/5.0 (compatible; WechatProxy/1.0)',
-      },
-    })
-    const ct = resp.headers['content-type'] ?? 'image/jpeg'
-    res.setHeader('Content-Type', ct)
-    res.setHeader('Cache-Control', 'public, max-age=86400')
-    res.send(resp.data)
-  } catch (err) {
-    logger.error(WECHAT, '图片代理失败', { url: String(url).slice(0, 80), error: err.message })
-    res.status(502).json({ error: '图片代理失败' })
   }
 })
 

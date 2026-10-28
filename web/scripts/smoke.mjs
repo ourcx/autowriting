@@ -76,6 +76,7 @@ function startServer() {
       AGENT_API_KEY: SMOKE_AGENT_API_KEY,
       AGENT_USERNAME: 'admin',
       CORS_ALLOWED_ORIGINS: SMOKE_ALLOWED_ORIGIN,
+      EXPENSIVE_RATE_LIMIT_MAX: '60',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
@@ -259,6 +260,19 @@ cases.push({
       body: JSON.stringify({ provider: 'tikhub', query: '测试' }),
     })
     if (![401, 403].includes(r.status)) throw new Error(`status=${r.status}`)
+  },
+})
+cases.push({
+  name: '微信图片代理允许图片标签访问但拒绝非白名单地址',
+  run: async () => {
+    const missingUrl = await fetch(`${BASE}/api/wechat/proxy-img`)
+    if (missingUrl.status !== 400) throw new Error(`缺少 URL 时期望 400，实际 ${missingUrl.status}`)
+
+    const unsafeUrl = await fetch(`${BASE}/api/wechat/proxy-img?url=${encodeURIComponent('https://example.com/image.png')}`)
+    if (unsafeUrl.status !== 403) throw new Error(`非白名单域名期望 403，实际 ${unsafeUrl.status}`)
+
+    const insecureWechatUrl = await fetch(`${BASE}/api/wechat/proxy-img?url=${encodeURIComponent('http://mmbiz.qpic.cn/image.png')}`)
+    if (insecureWechatUrl.status !== 403) throw new Error(`非 HTTPS 微信图片期望 403，实际 ${insecureWechatUrl.status}`)
   },
 })
 cases.push({
@@ -1057,7 +1071,7 @@ cases.push({
   name: '高成本写接口应使用独立限流',
   run: async () => {
     let limited = false
-    for (let attempt = 1; attempt <= 31; attempt++) {
+    for (let attempt = 1; attempt <= 61; attempt++) {
       const r = await fetch(`${BASE}/api/generate-cover`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1070,7 +1084,7 @@ cases.push({
       }
       if (r.status !== 401) throw new Error(`限流前期望 401，实际 ${r.status}`)
     }
-    if (!limited) throw new Error('31 次请求内未触发高成本接口限流')
+    if (!limited) throw new Error('61 次请求内未触发高成本接口限流')
   },
 })
 

@@ -218,10 +218,13 @@ const releaseCandidates = [
   acquireCandidate("concurrency-test-user", "candidate-1"),
   acquireCandidate("concurrency-test-user", "candidate-2"),
   acquireCandidate("concurrency-test-user", "candidate-3"),
+  acquireCandidate("concurrency-test-user", "candidate-4"),
+  acquireCandidate("concurrency-test-user", "candidate-5"),
+  acquireCandidate("concurrency-test-user", "candidate-6"),
 ]
 try {
   assert.throws(
-    () => acquireCandidate("concurrency-test-user", "candidate-4"),
+    () => acquireCandidate("concurrency-test-user", "candidate-7"),
     (error: unknown) => error instanceof CandidateError && error.statusCode === 429,
   )
 } finally {

@@ -27,7 +27,7 @@ export interface CandidateInput {
   referenceArticleIds: string[]
   platform: CandidateTarget
   count: number
-  /** 仅由服务端为成对生成的头条稿设置，保证它读取同组公众号母稿。 */
+  /** 兼容历史候选稿：旧版双平台任务的头条稿会读取同组公众号母稿。 */
   sourceCandidateId?: string
 }
 

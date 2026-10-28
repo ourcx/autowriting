@@ -54,6 +54,7 @@ export async function streamCandidate(userId: string, articleId: string, id: str
       }
       sourceArticle = motherDraft.content
     }
+    const hasSourceArticle = input.platform === "toutiao" && Boolean(sourceArticle.trim())
     const promptId = input.platform === "wechat" ? "prompt-article-generate" : "prompt-article-generate-toutiao"
     candidate.promptIds = [promptId]
     const instruction = getEffectivePrompt(promptId)?.content || "你是专业的文章创作者。"
@@ -66,12 +67,16 @@ export async function streamCandidate(userId: string, articleId: string, id: str
 ${input.task}
 # 素材
 ${input.materials}
-${input.platform === "toutiao" ? `# 公众号事实与观点母稿\n${sourceArticle}` : ""}
+${hasSourceArticle ? `# 公众号事实与观点母稿\n${sourceArticle}` : ""}
 # 写作要求
 当前日期：${new Date().toISOString().slice(0, 10)}。
 ${candidate.label}，独立组织开头和结构，严格依据素材，不新增未经支持的事实。
 直接输出完整 Markdown 文章，只有一个 H1。不要 emoji、表情包或装饰性表情符号。正文必须有完整结尾。
-${input.platform === "toutiao" ? "按今日头条阅读节奏改写母稿，不改变事实。" : ""}`
+${input.platform === "toutiao"
+    ? hasSourceArticle
+      ? "按今日头条阅读节奏改写母稿，不改变事实。"
+      : "直接根据任务和素材生成今日头条版本，保持事实准确，不等待或依赖公众号候选稿。"
+    : ""}`
     const { url, model, headers } = buildLLMRequest(config)
     candidate.model = model
     const messages = [
