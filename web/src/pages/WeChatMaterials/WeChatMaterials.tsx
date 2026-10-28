@@ -362,34 +362,25 @@ export default function WeChatMaterials() {
     if (prefetchAttemptsRef.current.has(pageKey)) return
     prefetchAttemptsRef.current.add(pageKey)
 
-    let cancelled = false
-    const timer = window.setTimeout(() => {
-      const request = fetchMaterialPage(materialType, offset)
-      prefetchRequestsRef.current.set(pageKey, request)
-      request
-        .then(data => {
-          if (cancelled) return
-          prefetchedPagesRef.current.set(pageKey, data)
-          for (const item of (data.items ?? []).slice(0, PAGE_SIZE)) {
-            const src = wxImg(item.url)
-            if (!src) continue
-            const image = new Image()
-            image.decoding = 'async'
-            image.src = src
-          }
-        })
-        .catch(() => {
-          prefetchAttemptsRef.current.delete(pageKey)
-        })
-        .finally(() => {
-          prefetchRequestsRef.current.delete(pageKey)
-        })
-    }, 0)
-
-    return () => {
-      cancelled = true
-      window.clearTimeout(timer)
-    }
+    const request = fetchMaterialPage(materialType, offset)
+    prefetchRequestsRef.current.set(pageKey, request)
+    request
+      .then(data => {
+        prefetchedPagesRef.current.set(pageKey, data)
+        for (const item of (data.items ?? []).slice(0, PAGE_SIZE)) {
+          const src = wxImg(item.url)
+          if (!src) continue
+          const image = new Image()
+          image.decoding = 'async'
+          image.src = src
+        }
+      })
+      .catch(() => {
+        prefetchAttemptsRef.current.delete(pageKey)
+      })
+      .finally(() => {
+        prefetchRequestsRef.current.delete(pageKey)
+      })
   }, [bound, fetchMaterialPage, loading, materialType, offset, total])
 
   const openDetail = useCallback(async (item: WechatMaterialItem) => {
