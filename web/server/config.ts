@@ -84,6 +84,7 @@ export const LEGACY_DATA_DIR = process.env.LEGACY_DATA_DIR || ''
 export const LOG_DIR = process.env.LOG_DIR || path.join(PROJECT_ROOT, 'logs')
 export const STATIC_DIR = process.env.STATIC_DIR || STATIC_DIR_DEFAULT
 export const CACHE_DIR = path.join(DATA_DIR, 'covers')
+export const WECHAT_IMAGE_CACHE_DIR = path.join(DATA_DIR, 'wechat-image-cache')
 export const HISTORY_FILE = path.join(DATA_DIR, 'cover_history.json')
 
 export const IMAGES_DIR = path.join(DATA_DIR, 'images')

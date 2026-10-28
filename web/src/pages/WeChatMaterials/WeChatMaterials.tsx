@@ -55,6 +55,12 @@ interface WechatMaterialItem {
   }
 }
 
+interface MaterialPageResponse {
+  items?: WechatMaterialItem[]
+  total_count?: number
+  item_count?: number
+}
+
 interface MaterialDetail {
   media_id: string
   type: MaterialType
@@ -256,6 +262,9 @@ export default function WeChatMaterials() {
   const navigate = useNavigate()
   const materialFileInputRef = useRef<HTMLInputElement | null>(null)
   const contentFileInputRef = useRef<HTMLInputElement | null>(null)
+  const prefetchedPagesRef = useRef(new Map<string, MaterialPageResponse>())
+  const prefetchRequestsRef = useRef(new Map<string, Promise<MaterialPageResponse>>())
+  const prefetchAttemptsRef = useRef(new Set<string>())
 
   const [bound, setBound] = useState<boolean | null>(null)
   const [materialType, setMaterialType] = useState<MaterialType>('image')
@@ -304,18 +313,27 @@ export default function WeChatMaterials() {
     news: { label: '图文素材', icon: FileText, empty: '暂无图文素材' },
   }), [])
 
+  const fetchMaterialPage = useCallback((type: MaterialType, nextOffset: number) => (
+    fetchJson<MaterialPageResponse>(
+      `/api/wechat/materials?type=${type}&offset=${nextOffset}&count=${PAGE_SIZE}`,
+      { headers: getWxHeaders() },
+    )
+  ), [])
+
   const fetchMaterials = useCallback(async (nextOffset = 0, replace = false) => {
     setLoading(true)
     setError(null)
     try {
-      const data = await fetchJson<{
-        items?: WechatMaterialItem[]
-        total_count?: number
-        item_count?: number
-      }>(
-        `/api/wechat/materials?type=${materialType}&offset=${nextOffset}&count=${PAGE_SIZE}`,
-        { headers: getWxHeaders() },
-      )
+      if (replace) {
+        prefetchedPagesRef.current.clear()
+        prefetchRequestsRef.current.clear()
+        prefetchAttemptsRef.current.clear()
+      }
+      const pageKey = `${materialType}:${nextOffset}`
+      const prefetched = replace ? undefined : prefetchedPagesRef.current.get(pageKey)
+      const prefetchRequest = replace ? undefined : prefetchRequestsRef.current.get(pageKey)
+      const data = prefetched ?? await (prefetchRequest ?? fetchMaterialPage(materialType, nextOffset))
+      prefetchedPagesRef.current.delete(pageKey)
       setItems(prev => (replace || nextOffset === 0 ? (data.items ?? []) : [...prev, ...(data.items ?? [])]))
       setTotal(data.total_count ?? 0)
       setOffset(nextOffset + (data.item_count ?? 0))
@@ -324,7 +342,7 @@ export default function WeChatMaterials() {
     } finally {
       setLoading(false)
     }
-  }, [materialType])
+  }, [fetchMaterialPage, materialType])
 
   useEffect(() => {
     if (!bound) return
@@ -336,6 +354,43 @@ export default function WeChatMaterials() {
     revokeDetailFileUrl()
     fetchMaterials(0, true)
   }, [bound, materialType, fetchMaterials, revokeDetailFileUrl])
+
+  useEffect(() => {
+    if (!bound || loading || materialType !== 'image' || offset <= 0 || offset >= total) return
+
+    const pageKey = `${materialType}:${offset}`
+    if (prefetchAttemptsRef.current.has(pageKey)) return
+    prefetchAttemptsRef.current.add(pageKey)
+
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      const request = fetchMaterialPage(materialType, offset)
+      prefetchRequestsRef.current.set(pageKey, request)
+      request
+        .then(data => {
+          if (cancelled) return
+          prefetchedPagesRef.current.set(pageKey, data)
+          for (const item of (data.items ?? []).slice(0, PAGE_SIZE)) {
+            const src = wxImg(item.url)
+            if (!src) continue
+            const image = new Image()
+            image.decoding = 'async'
+            image.src = src
+          }
+        })
+        .catch(() => {
+          prefetchAttemptsRef.current.delete(pageKey)
+        })
+        .finally(() => {
+          prefetchRequestsRef.current.delete(pageKey)
+        })
+    }, 0)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [bound, fetchMaterialPage, loading, materialType, offset, total])
 
   const openDetail = useCallback(async (item: WechatMaterialItem) => {
     setDetailLoading(true)
