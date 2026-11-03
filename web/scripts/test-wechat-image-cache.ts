@@ -6,6 +6,7 @@ import test from 'node:test'
 import {
   createWechatImageCache,
   parseWechatImageUrl,
+  WechatImageResourceError,
   WechatImageUrlError,
 } from '../server/utils/wechatImageCache.ts'
 
@@ -140,6 +141,117 @@ test('微信图片磁盘缓存超限时优先淘汰最旧条目', async () => {
     })
     const newest = await restartedCache.load('https://mmbiz.qpic.cn/test/new.png')
     assert.equal(newest.cacheStatus, 'DISK')
+  } finally {
+    await rm(cacheDir, { recursive: true, force: true })
+  }
+})
+
+test('微信图片内存缓存按总字节数淘汰最旧条目', async () => {
+  const cacheDir = await mkdtemp(path.join(os.tmpdir(), 'autowriting-wechat-image-memory-capacity-'))
+  let fetchCount = 0
+
+  try {
+    const cache = createWechatImageCache({
+      cacheDir,
+      memoryLimit: 100,
+      maxMemoryBytes: 2_500,
+      cleanupMinIntervalMs: Number.POSITIVE_INFINITY,
+      fetcher: async url => {
+        fetchCount += 1
+        return {
+          data: Buffer.alloc(1_000, url.endsWith('old.png') ? 1 : 2),
+          contentType: 'image/png',
+        }
+      },
+    })
+
+    const oldUrl = 'https://mmbiz.qpic.cn/test/memory-old.png'
+    const middleUrl = 'https://mmbiz.qpic.cn/test/memory-middle.png'
+    const newUrl = 'https://mmbiz.qpic.cn/test/memory-new.png'
+    await cache.load(oldUrl)
+    await cache.load(middleUrl)
+    await cache.load(newUrl)
+
+    assert.equal((await cache.load(middleUrl)).cacheStatus, 'MEMORY')
+    assert.equal((await cache.load(newUrl)).cacheStatus, 'MEMORY')
+    assert.equal((await cache.load(oldUrl)).cacheStatus, 'DISK')
+    assert.equal(fetchCount, 3)
+  } finally {
+    await rm(cacheDir, { recursive: true, force: true })
+  }
+})
+
+test('微信图片代理限制不同图片的并发加载并保留同地址请求合并', async () => {
+  const cacheDir = await mkdtemp(path.join(os.tmpdir(), 'autowriting-wechat-image-concurrency-'))
+  let releaseFetch = () => undefined
+  const fetchStarted = new Promise<void>(resolve => {
+    releaseFetch = resolve
+  })
+
+  try {
+    const cache = createWechatImageCache({
+      cacheDir,
+      maxConcurrentLoads: 1,
+      maxRssBytes: 0,
+      cleanupMinIntervalMs: Number.POSITIVE_INFINITY,
+      fetcher: async () => {
+        await fetchStarted
+        return { data: Buffer.from('image'), contentType: 'image/png' }
+      },
+    })
+
+    const firstUrl = 'https://mmbiz.qpic.cn/test/concurrent-first.png'
+    const first = cache.load(firstUrl)
+    const duplicate = cache.load(firstUrl)
+    await assert.rejects(
+      cache.load('https://mmbiz.qpic.cn/test/concurrent-second.png'),
+      (error: unknown) => error instanceof WechatImageResourceError && error.reason === 'concurrency',
+    )
+    releaseFetch()
+    assert.deepEqual((await Promise.all([first, duplicate])).map(result => result.cacheStatus), ['MISS', 'MISS'])
+  } finally {
+    await rm(cacheDir, { recursive: true, force: true })
+  }
+})
+
+test('微信图片代理在内存压力下熔断并在冷却后恢复探测', async () => {
+  const cacheDir = await mkdtemp(path.join(os.tmpdir(), 'autowriting-wechat-image-breaker-'))
+  let currentTime = 30_000
+  let rssBytes = 500
+  let fetchCount = 0
+
+  try {
+    const cache = createWechatImageCache({
+      cacheDir,
+      maxRssBytes: 400,
+      breakerCooldownMs: 5_000,
+      now: () => currentTime,
+      getRssBytes: () => rssBytes,
+      cleanupMinIntervalMs: Number.POSITIVE_INFINITY,
+      fetcher: async () => {
+        fetchCount += 1
+        return { data: Buffer.from('image'), contentType: 'image/png' }
+      },
+    })
+    const url = 'https://mmbiz.qpic.cn/test/breaker.png'
+
+    await assert.rejects(
+      cache.load(url),
+      (error: unknown) => error instanceof WechatImageResourceError
+        && error.reason === 'memory'
+        && error.retryAfterSeconds === 5,
+    )
+    rssBytes = 100
+    currentTime += 2_000
+    await assert.rejects(
+      cache.load(url),
+      (error: unknown) => error instanceof WechatImageResourceError
+        && error.reason === 'memory'
+        && error.retryAfterSeconds === 3,
+    )
+    currentTime += 3_001
+    assert.equal((await cache.load(url)).cacheStatus, 'MISS')
+    assert.equal(fetchCount, 1)
   } finally {
     await rm(cacheDir, { recursive: true, force: true })
   }

@@ -29,10 +29,15 @@ import { parseWechatCookieJson } from '../utils/platformCookies.ts'
 import {
   createWechatImageCache,
   parseWechatImageUrl,
+  WechatImageResourceError,
   WechatImageUrlError,
 } from '../utils/wechatImageCache.ts'
 import {
+  WECHAT_IMAGE_PROXY_BREAKER_COOLDOWN_MS,
+  WECHAT_IMAGE_PROXY_MAX_CONCURRENT,
+  WECHAT_IMAGE_PROXY_MAX_RSS_BYTES,
   WECHAT_IMAGE_CACHE_DIR,
+  WECHAT_IMAGE_CACHE_MAX_MEMORY_BYTES,
   WECHAT_IMAGE_CACHE_MAX_BYTES,
 } from '../config.ts'
 
@@ -45,7 +50,11 @@ const activeDrafts = new Set<string>()
 const activeWechatPublishes = new Set<string>()
 const wechatImageCache = createWechatImageCache({
   cacheDir: WECHAT_IMAGE_CACHE_DIR,
+  maxMemoryBytes: WECHAT_IMAGE_CACHE_MAX_MEMORY_BYTES,
   maxDiskBytes: WECHAT_IMAGE_CACHE_MAX_BYTES,
+  maxConcurrentLoads: WECHAT_IMAGE_PROXY_MAX_CONCURRENT,
+  maxRssBytes: WECHAT_IMAGE_PROXY_MAX_RSS_BYTES,
+  breakerCooldownMs: WECHAT_IMAGE_PROXY_BREAKER_COOLDOWN_MS,
   onCacheError: (operation, error, cacheKey) => {
     const action = operation === 'read' ? '读取' : operation === 'write' ? '写入' : '清理'
     logger.warn(WECHAT, `${action}微信图片磁盘缓存失败`, {
@@ -78,6 +87,16 @@ router.get('/proxy-img', async (req, res) => {
     res.setHeader('X-Image-Cache', image.cacheStatus)
     return res.send(image.data)
   } catch (error) {
+    if (error instanceof WechatImageResourceError) {
+      logger.warn(WECHAT, '图片代理触发资源保护', {
+        hostname: parsed.hostname,
+        reason: error.reason,
+        retryAfterSeconds: error.retryAfterSeconds,
+      })
+      res.setHeader('Retry-After', String(error.retryAfterSeconds))
+      res.setHeader('Cache-Control', 'no-store')
+      return res.status(503).json({ error: '图片服务繁忙，请稍后重试' })
+    }
     const message = error instanceof Error ? error.message : 'unknown error'
     logger.error(WECHAT, '图片代理失败', { hostname: parsed.hostname, error: message })
     return res.status(502).json({ error: '图片代理失败' })

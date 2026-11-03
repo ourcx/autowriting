@@ -7,7 +7,11 @@ const ALLOWED_WECHAT_IMAGE_HOSTS = ['mmbiz.qpic.cn', 'mmbiz.qlogo.cn', 'wx.qlogo
 const DEFAULT_TTL_MS = 30 * 24 * 60 * 60 * 1000
 const DEFAULT_TTL_JITTER_RATIO = 0.2
 const DEFAULT_MEMORY_LIMIT = 100
+const DEFAULT_MAX_MEMORY_BYTES = 64 * 1024 * 1024
 const DEFAULT_MAX_DISK_BYTES = 1024 * 1024 * 1024
+const DEFAULT_MAX_CONCURRENT_LOADS = 4
+const DEFAULT_MAX_RSS_BYTES = 384 * 1024 * 1024
+const DEFAULT_BREAKER_COOLDOWN_MS = 30_000
 const DEFAULT_CLEANUP_MIN_INTERVAL_MS = 60 * 60 * 1000
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024
 const CACHE_KEY_PATTERN = /^[a-f0-9]{64}$/
@@ -42,10 +46,15 @@ interface CreateWechatImageCacheOptions {
   ttlMs?: number
   ttlJitterRatio?: number
   memoryLimit?: number
+  maxMemoryBytes?: number
   maxDiskBytes?: number
+  maxConcurrentLoads?: number
+  maxRssBytes?: number
+  breakerCooldownMs?: number
   cleanupMinIntervalMs?: number
   now?: () => number
   random?: () => number
+  getRssBytes?: () => number
   fetcher?: (_url: string) => Promise<FetchResult>
   onCacheError?: (_operation: 'read' | 'write' | 'cleanup', _error: unknown, _cacheKey: string) => void
 }
@@ -66,6 +75,18 @@ export class WechatImageUrlError extends Error {
     super(message)
     this.name = 'WechatImageUrlError'
     this.status = status
+  }
+}
+
+export class WechatImageResourceError extends Error {
+  readonly reason: 'concurrency' | 'memory'
+  readonly retryAfterSeconds: number
+
+  constructor(reason: 'concurrency' | 'memory', retryAfterSeconds: number) {
+    super(reason === 'memory' ? 'Image proxy memory circuit is open' : 'Image proxy concurrency limit reached')
+    this.name = 'WechatImageResourceError'
+    this.reason = reason
+    this.retryAfterSeconds = retryAfterSeconds
   }
 }
 
@@ -114,16 +135,30 @@ export function createWechatImageCache(options: CreateWechatImageCacheOptions) {
   const ttlMs = options.ttlMs ?? DEFAULT_TTL_MS
   const ttlJitterRatio = Math.min(0.9, Math.max(0, options.ttlJitterRatio ?? DEFAULT_TTL_JITTER_RATIO))
   const memoryLimit = options.memoryLimit ?? DEFAULT_MEMORY_LIMIT
+  const maxMemoryBytes = options.maxMemoryBytes ?? DEFAULT_MAX_MEMORY_BYTES
   const maxDiskBytes = options.maxDiskBytes ?? DEFAULT_MAX_DISK_BYTES
+  const maxConcurrentLoads = Math.max(1, options.maxConcurrentLoads ?? DEFAULT_MAX_CONCURRENT_LOADS)
+  const maxRssBytes = options.maxRssBytes ?? DEFAULT_MAX_RSS_BYTES
+  const breakerCooldownMs = Math.max(1_000, options.breakerCooldownMs ?? DEFAULT_BREAKER_COOLDOWN_MS)
   const cleanupMinIntervalMs = options.cleanupMinIntervalMs ?? DEFAULT_CLEANUP_MIN_INTERVAL_MS
   const now = options.now ?? Date.now
   const random = options.random ?? Math.random
+  const getRssBytes = options.getRssBytes ?? (() => process.memoryUsage().rss)
   const fetcher = options.fetcher ?? fetchWechatImage
   const onCacheError = options.onCacheError ?? (() => undefined)
   const memoryCache = new Map<string, MemoryEntry>()
   const inFlight = new Map<string, Promise<WechatImageResult>>()
+  let memoryBytes = 0
+  let breakerOpenUntil = 0
   let lastCleanupAt = Number.NEGATIVE_INFINITY
   let cleanupPromise: Promise<void> | null = null
+
+  const forget = (key: string) => {
+    const entry = memoryCache.get(key)
+    if (!entry) return
+    memoryBytes -= entry.data.byteLength
+    memoryCache.delete(key)
+  }
 
   const resolveExpiresAt = (metadata: CacheMetadata) => (
     typeof metadata.expiresAt === 'number' ? metadata.expiresAt : metadata.storedAt + ttlMs
@@ -148,7 +183,7 @@ export function createWechatImageCache(options: CreateWechatImageCacheOptions) {
         if (code !== 'ENOENT') onCacheError('cleanup', result.reason, entry.key)
       }
     }
-    memoryCache.delete(entry.key)
+    forget(entry.key)
   }
 
   const runCleanup = async () => {
@@ -248,12 +283,14 @@ export function createWechatImageCache(options: CreateWechatImageCacheOptions) {
   }
 
   const remember = (key: string, entry: MemoryEntry) => {
-    memoryCache.delete(key)
+    forget(key)
+    if (entry.data.byteLength > maxMemoryBytes) return
     memoryCache.set(key, entry)
-    while (memoryCache.size > memoryLimit) {
+    memoryBytes += entry.data.byteLength
+    while (memoryCache.size > memoryLimit || memoryBytes > maxMemoryBytes) {
       const oldestKey = memoryCache.keys().next().value
       if (typeof oldestKey !== 'string') break
-      memoryCache.delete(oldestKey)
+      forget(oldestKey)
     }
   }
 
@@ -322,10 +359,23 @@ export function createWechatImageCache(options: CreateWechatImageCacheOptions) {
         cacheStatus: 'MEMORY',
       }
     }
-    if (memoryEntry) memoryCache.delete(key)
+    if (memoryEntry) forget(key)
 
     const pending = inFlight.get(key)
     if (pending) return pending
+
+    const currentTime = now()
+    const retryAfterSeconds = Math.max(1, Math.ceil(breakerCooldownMs / 1_000))
+    if (currentTime < breakerOpenUntil) {
+      throw new WechatImageResourceError('memory', Math.max(1, Math.ceil((breakerOpenUntil - currentTime) / 1_000)))
+    }
+    if (maxRssBytes > 0 && getRssBytes() >= maxRssBytes) {
+      breakerOpenUntil = currentTime + breakerCooldownMs
+      throw new WechatImageResourceError('memory', retryAfterSeconds)
+    }
+    if (inFlight.size >= maxConcurrentLoads) {
+      throw new WechatImageResourceError('concurrency', 1)
+    }
 
     const request = (async () => {
       const diskResult = await readDisk(key)

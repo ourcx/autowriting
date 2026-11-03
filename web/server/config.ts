@@ -85,6 +85,22 @@ export const LOG_DIR = process.env.LOG_DIR || path.join(PROJECT_ROOT, 'logs')
 export const STATIC_DIR = process.env.STATIC_DIR || STATIC_DIR_DEFAULT
 export const CACHE_DIR = path.join(DATA_DIR, 'covers')
 export const WECHAT_IMAGE_CACHE_DIR = path.join(DATA_DIR, 'wechat-image-cache')
+export const WECHAT_IMAGE_CACHE_MAX_MEMORY_BYTES = Math.max(
+  0,
+  Number.parseInt(process.env.WECHAT_IMAGE_CACHE_MAX_MEMORY_BYTES || String(64 * 1024 * 1024), 10) || 0,
+)
+export const WECHAT_IMAGE_PROXY_MAX_CONCURRENT = Math.max(
+  1,
+  Number.parseInt(process.env.WECHAT_IMAGE_PROXY_MAX_CONCURRENT || '4', 10) || 1,
+)
+export const WECHAT_IMAGE_PROXY_MAX_RSS_BYTES = Math.max(
+  0,
+  Number.parseInt(process.env.WECHAT_IMAGE_PROXY_MAX_RSS_BYTES || String(384 * 1024 * 1024), 10) || 0,
+)
+export const WECHAT_IMAGE_PROXY_BREAKER_COOLDOWN_MS = Math.max(
+  1_000,
+  Number.parseInt(process.env.WECHAT_IMAGE_PROXY_BREAKER_COOLDOWN_MS || '30000', 10) || 1_000,
+)
 export const WECHAT_IMAGE_CACHE_MAX_BYTES = Math.max(
   0,
   Number.parseInt(process.env.WECHAT_IMAGE_CACHE_MAX_BYTES || String(1024 * 1024 * 1024), 10) || 0,

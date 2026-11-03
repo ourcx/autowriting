@@ -1,14 +1,15 @@
 module.exports = {
   apps: [{
     name: 'autowriting',
-    // 后端入口为 server.ts（TypeScript），通过 tsx interpreter 运行
+    // 让 PM2 直接托管真实 Node 进程，再通过 tsx 的 Node import hook 加载 TypeScript。
+    // 若把 tsx CLI 设为 interpreter，tsx 会再派生一个 Node 子进程，PM2 只能看到
+    // 包装进程的内存，max_memory_restart 无法保护真正承载请求的服务进程。
     // 注意：不要改为 server.js，项目不编译 TS 为 JS
     // 如果 PM2 报 ERR_MODULE_NOT_FOUND: server.js，说明缓存了旧进程配置
     // 解决：pm2 delete autowriting && pm2 start ecosystem.config.cjs
     script: './server.ts',
-
-    // 使用 tsx 运行 TypeScript（项目后端为 .ts，未编译为 .js）
-    interpreter: './node_modules/.bin/tsx',
+    interpreter: 'node',
+    node_args: ['--import', 'tsx'],
 
     // 多实例配置（根据 CPU 核心数）
     instances: 1,  // 单核服务器用 1，多核可用 'max' 或具体数字
@@ -18,7 +19,7 @@ module.exports = {
     autorestart: true,
     max_restarts: 10,  // 10 次重启后停止（防止无限重启）
     min_uptime: '10s',  // 至少运行 10 秒才算成功启动
-    max_memory_restart: '500M',  // 内存超过 500M 自动重启
+    max_memory_restart: '420M',  // 熔断阈值之上的最后一道进程级保护
     
     // 环境变量
     env: {

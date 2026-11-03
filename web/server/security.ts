@@ -3,6 +3,7 @@ import helmet from "helmet"
 import { ipKeyGenerator, rateLimit } from "express-rate-limit"
 import type { ErrorRequestHandler, Request, RequestHandler } from "express"
 import { logger } from "./logger.ts"
+import { shouldSkipApiRateLimit } from "./utils/rateLimit.ts"
 
 const DEFAULT_JSON_LIMIT = "1mb"
 const LARGE_JSON_LIMIT = "30mb"
@@ -101,7 +102,9 @@ export const apiRateLimiter = rateLimit({
   limit: parsePositiveInteger(process.env.API_RATE_LIMIT_MAX, API_RATE_LIMIT_MAX),
   standardHeaders: "draft-8",
   legacyHeaders: false,
-  skip: (req) => req.method === "OPTIONS",
+  // 图片由浏览器直接加载，一次素材页可能产生数百个请求。它们不应耗尽业务 API
+  // 配额；微信代理自身另有域名白名单、并发闸门与内存熔断保护。
+  skip: (req) => shouldSkipApiRateLimit(req.method, req.path),
   handler(_req, res) {
     res.status(429).json({ error: "请求过于频繁，请稍后再试" })
   },
