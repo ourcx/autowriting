@@ -238,13 +238,14 @@ jobs:
             echo "[deploy] dependencies installed at $(date -u +%FT%TZ)"
             test -f web/dist/index.html
 
-            echo "[deploy] restart PM2; Nginx keeps proxying port 3000"
+            echo "[deploy] recreate PM2 app from ecosystem config; Nginx keeps proxying port 3000"
             cd web
             if pm2 describe autowriting >/dev/null 2>&1; then
-              pm2 restart autowriting --update-env
-            else
-              pm2 start ecosystem.config.cjs --only autowriting
+              # PM2 restart preserves the original interpreter and memory limit.
+              # Recreate the app so ecosystem changes always reach the real process.
+              pm2 delete autowriting
             fi
+            pm2 start ecosystem.config.cjs --only autowriting
 
             echo "[deploy] health check"
             for attempt in 1 2 3 4 5; do
@@ -258,4 +259,5 @@ jobs:
               fi
               sleep 2
             done
+            pm2 save
             pm2 status autowriting
