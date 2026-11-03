@@ -44,3 +44,7 @@ export function resolveEmbeddingApiKey(config: AIConfig): string {
   }
   return resolveArticleApiKey(config) || clean(config.coverApiKey)
 }
+
+export function resolveOpenRouterApiKey(config: AIConfig, serverKey: string): string {
+  return clean(config.openrouterApiKey) || clean(serverKey)
+}

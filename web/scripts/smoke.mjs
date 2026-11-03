@@ -507,7 +507,7 @@ cases.push({
   },
 })
 cases.push({
-  name: 'OpenRouter 封面只接受服务端 Key，缺失时不发起生成',
+  name: 'OpenRouter 封面缺少浏览器与服务端 Key 时不发起生成',
   run: async () => {
     const r = await fetch(`${BASE}/api/generate-cover`, {
       method: 'POST',
@@ -515,14 +515,24 @@ cases.push({
       body: JSON.stringify({
         title: 'OpenRouter 封面冒烟测试',
         provider: 'openrouter',
-        aiConfig: { openrouterApiKey: 'client-supplied-key-must-be-ignored' },
+        aiConfig: { openrouterApiKey: '' },
       }),
     })
     if (r.status !== 400) throw new Error(`期望 400，实际 ${r.status}`)
     const body = await r.json()
-    if (!String(body.error || '').includes('OPENROUTER_API_KEY')) {
+    if (!String(body.error || '').includes('OpenRouter API Key 未配置')) {
       throw new Error(`错误信息不正确：${JSON.stringify(body)}`)
     }
+    const invalid = await fetch(`${BASE}/api/generate-cover`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: 'OpenRouter 封面冒烟测试',
+        provider: 'openrouter',
+        aiConfig: { openrouterApiKey: 'invalid\nheader' },
+      }),
+    })
+    if (invalid.status !== 400) throw new Error(`非法 Key 期望 400，实际 ${invalid.status}`)
   },
 })
 cases.push({

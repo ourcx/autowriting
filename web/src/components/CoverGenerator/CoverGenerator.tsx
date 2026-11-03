@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from '../Toast/Toast'
 import './CoverGenerator.css'
 import { loadAIConfig, type CoverProvider } from '../../utils/aiConfig'
-import { generateCoverImage, uploadBase64Image } from '../../utils/apiHelpers'
+import { generateCoverImage, getOpenRouterServerReady, uploadBase64Image } from '../../utils/apiHelpers'
 
 interface CoverGeneratorProps {
   title: string
@@ -30,7 +30,7 @@ interface ProviderOption {
   name: string
   desc: string
   /** 哪个 key 字段必须非空 */
-  requiresKey: 'siliconflowApiKey' | 'coverApiKey' | 'doubaoApiKey' | 'zhipuApiKey' | null
+  requiresKey: 'siliconflowApiKey' | 'coverApiKey' | 'doubaoApiKey' | 'zhipuApiKey' | 'openrouterApiKey' | null
   /** 配置页的描述 */
   keyLabel: string
 }
@@ -58,8 +58,8 @@ const PROVIDERS: ProviderOption[] = [
     id: 'openrouter',
     name: 'GPT Image 2',
     desc: 'OpenRouter，2.35:1 公众号封面',
-    requiresKey: null,
-    keyLabel: '',
+    requiresKey: 'openrouterApiKey',
+    keyLabel: 'OpenRouter API Key',
   },
   {
     id: 'zhipu',
@@ -130,6 +130,7 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
   onCoverGenerated,
 }) => {
   const navigate = useNavigate()
+  const [serverOpenrouterReady, setServerOpenrouterReady] = useState(false)
 
   const [selectedStyle,  setSelectedStyle]  = useState('modern')
   const [selectedColor,  setSelectedColor]  = useState('matcha')
@@ -156,6 +157,14 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
 
   // provider 切换时检查 key
   useEffect(() => {
+    let active = true
+    getOpenRouterServerReady()
+      .then(ready => { if (active) setServerOpenrouterReady(ready) })
+      .catch(() => {})
+    return () => { active = false }
+  }, [])
+
+  useEffect(() => {
     const cfg  = loadAIConfig()
     const prov = PROVIDERS.find(p => p.id === provider)
     if (!prov || !prov.requiresKey) {
@@ -166,8 +175,8 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
       ? cfg.zhipuImageApiKey || cfg.zhipuApiKey
       : (cfg[prov.requiresKey] as string | undefined) || ''
     const modelReady = provider !== 'doubao' || Boolean(cfg.doubaoModel.trim())
-    setMissingKey(keyVal.trim() && modelReady ? null : prov.keyLabel)
-  }, [provider])
+    setMissingKey((keyVal.trim() && modelReady) || (provider === 'openrouter' && serverOpenrouterReady) ? null : prov.keyLabel)
+  }, [provider, serverOpenrouterReady])
 
   const handleGenerate = async () => {
     if (!title.trim()) {
@@ -179,20 +188,6 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
 
     try {
       const aiConfig = loadAIConfig()
-
-      // ── 诊断日志（browser console）────────────────────────────────────────
-      console.group('[CoverGenerator] 发起生成请求')
-      console.log('provider         :', provider)
-      console.log('siliconflowApiKey:', aiConfig.siliconflowApiKey
-        ? `sk-...${aiConfig.siliconflowApiKey.slice(-6)} (len=${aiConfig.siliconflowApiKey.length})`
-        : '❌ 空')
-      console.log('siliconflowModel :', aiConfig.siliconflowModel)
-      console.log('coverApiKey      :', aiConfig.coverApiKey
-        ? `sk-...${aiConfig.coverApiKey.slice(-6)}`
-        : '❌ 空')
-      console.log('localStorage raw :', localStorage.getItem('wx-ai-config-v1')?.slice(0, 200))
-      console.groupEnd()
-      // ──────────────────────────────────────────────────────────────────────
 
       const body: Record<string, unknown> = {
         title,
@@ -208,6 +203,7 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
           doubaoBaseUrl:     aiConfig.doubaoBaseUrl,
           doubaoModel:       aiConfig.doubaoModel,
           coverApiKey:       aiConfig.coverApiKey,
+          openrouterApiKey:  provider === 'openrouter' ? aiConfig.openrouterApiKey : undefined,
           articleApiKey:     aiConfig.articleApiKey,
           zhipuApiKey:       aiConfig.zhipuApiKey,
           zhipuImageApiKey:  aiConfig.zhipuImageApiKey,
@@ -441,7 +437,7 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
 
         {provider === 'openrouter' && (
           <div className="cg-notice cg-notice--info">
-            固定提示词：生成一个公众号文章封面，2.35:1，需要简约，不需要实物，给我来点好看的，标题是：{title.trim() || '公众号文章标题'}。服务端需配置 OPENROUTER_API_KEY。
+            固定提示词：生成一个公众号文章封面，2.35:1，需要简约，不需要实物，给我来点好看的，标题是：{title.trim() || '公众号文章标题'}。OpenRouter Key 在「AI 配置 → 封面生成」中保存。
           </div>
         )}
         {/* 自定义 Prompt */}

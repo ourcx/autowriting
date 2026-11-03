@@ -3,6 +3,7 @@ import {
   hasArticleApiKey,
   resolveArticleApiKey,
   resolveEmbeddingApiKey,
+  resolveOpenRouterApiKey,
   resolveZhipuApiKey,
 } from "../server/utils/providerKeys.ts"
 import {
@@ -29,6 +30,9 @@ assert.equal(resolveEmbeddingApiKey({
   zhipuApiKey: shared,
 }), "")
 assert.equal(hasArticleApiKey({ articleProvider: "zhipu", zhipuApiKey: shared }), true)
+assert.equal(resolveOpenRouterApiKey({ openrouterApiKey: " browser-key " }, "server-key"), "browser-key")
+assert.equal(resolveOpenRouterApiKey({ openrouterApiKey: "" }, "server-key"), "server-key")
+assert.equal(resolveOpenRouterApiKey({ openrouterApiKey: 123 }, ""), "")
 assert.equal(hasZhipuKnowledge({
   zhipuApiKey: shared,
   zhipuKnowledgeMode: "hybrid",

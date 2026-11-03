@@ -22,7 +22,7 @@ import { mapWithConcurrency } from '../utils/concurrency.ts'
 import { authMiddleware } from '../authMiddleware.ts'
 import { logger } from '../logger.ts'
 import { generateWithDoubao } from '../utils/doubaoImage.ts'
-import { resolveZhipuApiKey } from '../utils/providerKeys.ts'
+import { resolveOpenRouterApiKey, resolveZhipuApiKey } from '../utils/providerKeys.ts'
 import { generateOpenRouterCoverPrompt } from '../utils/coverPrompt.ts'
 
 const router = Router()
@@ -61,6 +61,7 @@ router.post('/generate-cover', async (req, res) => {
     const doubaoModel = String(cfg.doubaoModel || '')
     const doubaoBaseUrl = String(cfg.doubaoBaseUrl || 'https://ark.cn-beijing.volces.com/api/v3')
     const coverApiKey = String(cfg.coverApiKey || cfg.stabilityApiKey || '')
+    const openrouterKey = resolveOpenRouterApiKey(cfg, SERVER_AI_CONFIG.openrouterApiKey)
     const zhipuKey = resolveZhipuApiKey(cfg, provider === 'zhipu' ? cfg.zhipuImageApiKey : '')
 
     logger.debug('COVERS', '准备生成封面', {
@@ -102,15 +103,15 @@ router.post('/generate-cover', async (req, res) => {
     if (provider === 'zhipu' && !zhipuKey) {
       return res.status(400).json({ error: '智谱公共 API Key 未配置。请前往「AI 配置 → 公共 Key」填写。' })
     }
-    if (provider === 'openrouter' && !SERVER_AI_CONFIG.openrouterApiKey) {
-      return res.status(400).json({ error: 'OpenRouter API Key 未配置，请在服务端设置 OPENROUTER_API_KEY。' })
+    if (provider === 'openrouter' && (!openrouterKey || openrouterKey.length > 512 || /[\r\n]/.test(openrouterKey))) {
+      return res.status(400).json({ error: 'OpenRouter API Key 未配置或格式无效，请在「AI 配置 → 封面生成」填写。' })
     }
 
     // ── 缓存检查（仅非自定义 prompt，provider 参与 key 避免跨 provider 污染） ──
     const providerCacheKey = provider === 'doubao' ? `${provider}:${doubaoModel}` : provider === 'openrouter' ? 'openrouter:gpt-image-2:v1' : provider
     // 固定提示词只由标题决定，风格与颜色不能改变请求或缓存结果。
     const cacheKey = provider === 'openrouter'
-      ? generateCacheKey(title.trim(), 'fixed', providerCacheKey)
+      ? generateCacheKey(title.trim(), 'fixed', `${providerCacheKey}|user:${req.user.id}`)
       : generateCacheKey(title, style, `${color}|${providerCacheKey}`)
     if (!customPrompt && provider !== 'qwen-edit') {
       const cached = getCachedImage(cacheKey)
@@ -135,7 +136,7 @@ router.post('/generate-cover', async (req, res) => {
         aspect_ratio: '21:9',
         n: 1,
       }, {
-        headers: { Authorization: `Bearer ${SERVER_AI_CONFIG.openrouterApiKey}`, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${openrouterKey}`, 'Content-Type': 'application/json' },
         timeout: 180000,
       })
       const encoded = response.data?.data?.[0]?.b64_json

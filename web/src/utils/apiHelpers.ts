@@ -113,7 +113,7 @@ export function isLocalApiKeyConfigured(cfg: AIConfig): boolean {
 // ── 判断本地封面 Key 是否已配置 ──
 export function isLocalCoverKeyConfigured(cfg: AIConfig): boolean {
   if (cfg.coverProvider === 'local') return true
-  if (cfg.coverProvider === 'openrouter') return false
+  if (cfg.coverProvider === 'openrouter') return Boolean(cfg.openrouterApiKey)
   if (cfg.coverProvider === 'doubao') return Boolean(cfg.doubaoApiKey && cfg.doubaoModel)
   if (cfg.coverProvider === 'zhipu') return Boolean(cfg.zhipuImageApiKey || cfg.zhipuApiKey)
   if (['siliconflow', 'z-image', 'qwen-edit'].includes(cfg.coverProvider)) return Boolean(cfg.siliconflowApiKey)
@@ -789,6 +789,11 @@ export async function generateCoverImage(input: Record<string, unknown>): Promis
   } catch (error) {
     throw normalizeApiError(error)
   }
+}
+
+export async function getOpenRouterServerReady(): Promise<boolean> {
+  const response = await axios.get<{ openrouterReady?: boolean }>("/api/config/status")
+  return Boolean(response.data.openrouterReady)
 }
 
 function normalizeRequestHeaders(headers?: HeadersInit): Record<string, string> | undefined {

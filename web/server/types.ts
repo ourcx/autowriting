@@ -46,6 +46,7 @@ export interface AIConfig {
   maasModel?: string
   coverProvider?: string
   coverApiKey?: string
+  openrouterApiKey?: string
   zhipuImageApiKey?: string
   stabilityApiKey?: string
   stabilityBaseUrl?: string

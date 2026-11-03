@@ -31,6 +31,7 @@ export interface AIConfig {
   // 封面生成
   coverProvider: CoverProvider
   coverApiKey: string
+  openrouterApiKey: string
   zhipuImageApiKey: string
 
   // SiliconFlow / Kolors
@@ -92,6 +93,7 @@ export const DEFAULT_CONFIG: AIConfig = {
 
   coverProvider: 'siliconflow',
   coverApiKey: '',
+  openrouterApiKey: '',
   zhipuImageApiKey: '',
 
   siliconflowApiKey: '',
@@ -205,7 +207,8 @@ export async function syncAIConfigFromServer(): Promise<AIConfig | null> {
       typeof data.value === 'string'
         ? (JSON.parse(data.value) as Partial<AIConfig>)
         : (data.value as Partial<AIConfig>)
-    const merged = { ...DEFAULT_CONFIG, ...serverConfig }
+    // OpenRouter Key 只属于当前浏览器，服务端配置同步不能覆盖它。
+    const merged = { ...DEFAULT_CONFIG, ...serverConfig, openrouterApiKey: loadAIConfig().openrouterApiKey }
     // 写回 localStorage 保证后续同步读取拿到最新值
     localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
     window.dispatchEvent(new CustomEvent('ai-config-updated'))
@@ -222,11 +225,12 @@ export function saveAIConfig(config: AIConfig): void {
     window.dispatchEvent(new CustomEvent('ai-config-updated'))
   } catch { /* ignore */ }
 
-  // 异步持久化到服务端 settings 表（setSetting 内部会做 JSON.stringify，直接传对象即可）
+  // 其他配置沿用服务端同步；OpenRouter Key 按用户要求只保存在当前浏览器。
+  const { openrouterApiKey: _browserOnlyKey, ...serverConfig } = config
   authFetch('/api/settings', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ 'ai-config': config }),
+    body:    JSON.stringify({ 'ai-config': serverConfig }),
   }).catch(() => { /* 网络失败静默，localStorage 已保存 */ })
 }
 
@@ -326,6 +330,6 @@ export const COVER_PROVIDER_PRESETS = [
   { id: 'z-image'     as CoverProvider, name: 'Z-Image 造相',  desc: 'SiliconFlow，支持复杂提示词' },
   { id: 'qwen-edit'   as CoverProvider, name: 'Qwen 图片编辑', desc: 'SiliconFlow，对已有封面精修' },
   { id: 'openai'      as CoverProvider, name: 'DALL-E 3',      desc: '需要 OpenAI API Key' },
-  { id: 'openrouter'  as CoverProvider, name: 'GPT Image 2',   desc: 'OpenRouter Key 配置在服务端' },
+  { id: 'openrouter'  as CoverProvider, name: 'GPT Image 2',   desc: 'OpenRouter Key 保存在当前浏览器' },
   { id: 'stability'   as CoverProvider, name: 'Stability AI',  desc: '需要 Stability API Key' },
 ]

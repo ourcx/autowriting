@@ -134,7 +134,7 @@ export default function AISettings() {
     },
     {
       label: 'OpenRouter GPT Image 2',
-      local: false,
+      local: !!config.openrouterApiKey,
       server: !!serverStatus?.openrouterReady,
       serverNote: '服务端',
       color: 'lavender',
@@ -211,7 +211,7 @@ export default function AISettings() {
       <div className="as-security-banner">
         <ShieldAlert size={14} className="as-security-banner-icon" />
         <span>
-          API Key 仅保存在<strong>当前浏览器</strong>。定时任务在服务端执行时，会将 Key 同步写入本机数据库供 Cron 使用，读取需要登录鉴权。请勿将 Key 分享给他人。
+          OpenRouter Key 仅保存在<strong>当前浏览器</strong>，生成封面时发送给服务端。其他服务商配置会同步到服务端数据库供定时任务使用，读取需要登录鉴权。请勿将 Key 分享给他人。
         </span>
       </div>
 
@@ -667,10 +667,30 @@ export default function AISettings() {
                 </div>
               </div>
 
+              <div className="as-card">
+                <div className="as-card-section-label">OpenRouter · GPT Image 2</div>
+                <div className="as-field">
+                  <label className="as-label">API Key</label>
+                  <div className="as-key-wrap">
+                    <input
+                      className="as-input as-input-mono"
+                      type={showKeys['openrouter'] ? 'text' : 'password'}
+                      value={config.openrouterApiKey}
+                      onChange={e => set({ openrouterApiKey: e.target.value })}
+                      placeholder="sk-or-..."
+                    />
+                    <button className="as-eye-btn" onClick={() => toggleKey('openrouter')}>
+                      {showKeys['openrouter'] ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                  <p className="as-hint">仅保存在当前浏览器，生成封面时发送给服务端调用 OpenRouter；不会写入服务端配置。</p>
+                </div>
+              </div>
+
               {/* 默认 provider */}
               <div className="as-card">
                 <div className="as-card-section-label">默认封面服务</div>
-                <p className="as-card-desc">封面生成器里可随时切换，这里设默认值。GPT Image 2 的 OpenRouter Key 请在服务端设置 OPENROUTER_API_KEY。</p>
+                <p className="as-card-desc">封面生成器里可随时切换，这里设默认值。GPT Image 2 的 Key 可在上方填写。</p>
                 <div className="as-provider-grid">
                   {COVER_PROVIDER_PRESETS.map(p => (
                     <>

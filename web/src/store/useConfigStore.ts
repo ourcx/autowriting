@@ -102,7 +102,7 @@ export function isArticleReady(s: ConfigState): boolean {
 export function isCoverReady(s: ConfigState): boolean {
   const { localConfig, serverStatus } = s
   if (localConfig.coverProvider === 'local') return true
-  if (localConfig.coverProvider === 'openrouter') return serverStatus?.openrouterReady ?? false
+  if (localConfig.coverProvider === 'openrouter') return Boolean(localConfig.openrouterApiKey || serverStatus?.openrouterReady)
   const localReady = localConfig.coverProvider === 'doubao'
     ? Boolean(localConfig.doubaoApiKey && localConfig.doubaoModel)
     : ['siliconflow', 'z-image', 'qwen-edit'].includes(localConfig.coverProvider)
