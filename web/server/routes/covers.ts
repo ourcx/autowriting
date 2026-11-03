@@ -9,6 +9,7 @@
  */
 import { Router } from 'express'
 import axios from 'axios'
+import sharp from 'sharp'
 import { SERVER_AI_CONFIG } from '../config.js'
 import {
   generateCacheKey, getCachedImage, cacheImage,
@@ -22,6 +23,7 @@ import { authMiddleware } from '../authMiddleware.ts'
 import { logger } from '../logger.ts'
 import { generateWithDoubao } from '../utils/doubaoImage.ts'
 import { resolveZhipuApiKey } from '../utils/providerKeys.ts'
+import { generateOpenRouterCoverPrompt } from '../utils/coverPrompt.ts'
 
 const router = Router()
 router.use([
@@ -100,10 +102,16 @@ router.post('/generate-cover', async (req, res) => {
     if (provider === 'zhipu' && !zhipuKey) {
       return res.status(400).json({ error: '智谱公共 API Key 未配置。请前往「AI 配置 → 公共 Key」填写。' })
     }
+    if (provider === 'openrouter' && !SERVER_AI_CONFIG.openrouterApiKey) {
+      return res.status(400).json({ error: 'OpenRouter API Key 未配置，请在服务端设置 OPENROUTER_API_KEY。' })
+    }
 
     // ── 缓存检查（仅非自定义 prompt，provider 参与 key 避免跨 provider 污染） ──
-    const providerCacheKey = provider === 'doubao' ? `${provider}:${doubaoModel}` : provider
-    const cacheKey = generateCacheKey(title, style, `${color}|${providerCacheKey}`)
+    const providerCacheKey = provider === 'doubao' ? `${provider}:${doubaoModel}` : provider === 'openrouter' ? 'openrouter:gpt-image-2:v1' : provider
+    // 固定提示词只由标题决定，风格与颜色不能改变请求或缓存结果。
+    const cacheKey = provider === 'openrouter'
+      ? generateCacheKey(title.trim(), 'fixed', providerCacheKey)
+      : generateCacheKey(title, style, `${color}|${providerCacheKey}`)
     if (!customPrompt && provider !== 'qwen-edit') {
       const cached = getCachedImage(cacheKey)
       if (cached) {
@@ -118,6 +126,30 @@ router.post('/generate-cover', async (req, res) => {
     }
 
     const finalPrompt = customPrompt || generatePrompt(title, content, style, color)
+
+    if (provider === 'openrouter') {
+      // GPT Image 2 不接受 2.35:1；先取最接近的 21:9，再裁成公众号封面比例。
+      const response = await axios.post('https://openrouter.ai/api/v1/images', {
+        model: 'openai/gpt-image-2',
+        prompt: generateOpenRouterCoverPrompt(title),
+        aspect_ratio: '21:9',
+        n: 1,
+      }, {
+        headers: { Authorization: `Bearer ${SERVER_AI_CONFIG.openrouterApiKey}`, 'Content-Type': 'application/json' },
+        timeout: 180000,
+      })
+      const encoded = response.data?.data?.[0]?.b64_json
+      if (typeof encoded !== 'string' || !encoded) throw new Error('OpenRouter 未返回图片')
+      const image = await sharp(Buffer.from(encoded, 'base64'))
+        .resize(1410, 600, { fit: 'cover', position: 'centre' })
+        .png()
+        .toBuffer()
+      const imageUrl = `data:image/png;base64,${image.toString('base64')}`
+      cacheImage(cacheKey, imageUrl, { title, style, color, provider: 'openrouter', model: 'openai/gpt-image-2' })
+      const historyItem = addToHistory(title, style, color, provider, imageUrl, cacheKey)
+      addImageToLibrary(imageUrl, title, 'cover', [style, color], 'openrouter')
+      return res.json({ imageUrl, historyId: historyItem.id })
+    }
 
     // ── Stability AI ─────────────────────────────────────────────────────────
     if (provider === 'stability') {

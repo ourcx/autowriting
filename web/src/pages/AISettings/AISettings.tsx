@@ -133,6 +133,14 @@ export default function AISettings() {
       section: 'cover' as Section,
     },
     {
+      label: 'OpenRouter GPT Image 2',
+      local: false,
+      server: !!serverStatus?.openrouterReady,
+      serverNote: '服务端',
+      color: 'lavender',
+      section: 'cover' as Section,
+    },
+    {
       label: 'SiliconFlow',
       local: localSiliconflow,
       server: !!serverStatus?.siliconflowReady,
@@ -662,7 +670,7 @@ export default function AISettings() {
               {/* 默认 provider */}
               <div className="as-card">
                 <div className="as-card-section-label">默认封面服务</div>
-                <p className="as-card-desc">封面生成器里可随时切换，这里设默认值</p>
+                <p className="as-card-desc">封面生成器里可随时切换，这里设默认值。GPT Image 2 的 OpenRouter Key 请在服务端设置 OPENROUTER_API_KEY。</p>
                 <div className="as-provider-grid">
                   {COVER_PROVIDER_PRESETS.map(p => (
                     <>

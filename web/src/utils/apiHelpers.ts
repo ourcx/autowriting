@@ -113,6 +113,7 @@ export function isLocalApiKeyConfigured(cfg: AIConfig): boolean {
 // ── 判断本地封面 Key 是否已配置 ──
 export function isLocalCoverKeyConfigured(cfg: AIConfig): boolean {
   if (cfg.coverProvider === 'local') return true
+  if (cfg.coverProvider === 'openrouter') return false
   if (cfg.coverProvider === 'doubao') return Boolean(cfg.doubaoApiKey && cfg.doubaoModel)
   if (cfg.coverProvider === 'zhipu') return Boolean(cfg.zhipuImageApiKey || cfg.zhipuApiKey)
   if (['siliconflow', 'z-image', 'qwen-edit'].includes(cfg.coverProvider)) return Boolean(cfg.siliconflowApiKey)
@@ -782,8 +783,12 @@ export async function generateCoverImage(input: Record<string, unknown>): Promis
   imageUrl: string
   warning?: string
 }> {
-  const response = await axios.post("/api/generate-cover", input)
-  return response.data as { imageUrl: string; warning?: string }
+  try {
+    const response = await axios.post("/api/generate-cover", input, { timeout: 190000 })
+    return response.data as { imageUrl: string; warning?: string }
+  } catch (error) {
+    throw normalizeApiError(error)
+  }
 }
 
 function normalizeRequestHeaders(headers?: HeadersInit): Record<string, string> | undefined {

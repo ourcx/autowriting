@@ -186,6 +186,7 @@ export const SERVER_AI_CONFIG = {
   // 封面
   coverProvider: process.env.COVER_PROVIDER || 'local',
   coverApiKey: process.env.COVER_API_KEY || process.env.OPENAI_API_KEY || '',
+  openrouterApiKey: process.env.OPENROUTER_API_KEY || '',
   zhipuImageApiKey: process.env.ZHIPU_IMAGE_API_KEY || '',
   // Stability（保留兼容）
   stabilityApiKey: process.env.STABILITY_API_KEY || '',

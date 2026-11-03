@@ -74,6 +74,7 @@ function startServer() {
       LOG_DIR: join(SMOKE_DATA_ROOT, 'logs'),
       STATIC_DIR: SMOKE_STATIC_ROOT,
       AGENT_API_KEY: SMOKE_AGENT_API_KEY,
+      OPENROUTER_API_KEY: '',
       AGENT_USERNAME: 'admin',
       CORS_ALLOWED_ORIGINS: SMOKE_ALLOWED_ORIGIN,
       EXPENSIVE_RATE_LIMIT_MAX: '60',
@@ -501,6 +502,25 @@ cases.push({
     if (r.status !== 400) throw new Error(`期望 400，实际 ${r.status}`)
     const body = await r.json()
     if (!String(body.error || '').includes('豆包方舟 API Key 或图片模型未配置')) {
+      throw new Error(`错误信息不正确：${JSON.stringify(body)}`)
+    }
+  },
+})
+cases.push({
+  name: 'OpenRouter 封面只接受服务端 Key，缺失时不发起生成',
+  run: async () => {
+    const r = await fetch(`${BASE}/api/generate-cover`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: 'OpenRouter 封面冒烟测试',
+        provider: 'openrouter',
+        aiConfig: { openrouterApiKey: 'client-supplied-key-must-be-ignored' },
+      }),
+    })
+    if (r.status !== 400) throw new Error(`期望 400，实际 ${r.status}`)
+    const body = await r.json()
+    if (!String(body.error || '').includes('OPENROUTER_API_KEY')) {
       throw new Error(`错误信息不正确：${JSON.stringify(body)}`)
     }
   },

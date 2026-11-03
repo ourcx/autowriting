@@ -1,6 +1,10 @@
 const DEFAULT_COVER_PROMPT_PREFIX =
   "生成一个公众号文章封面，2.35:1，需要简约，不需要实物，给我来点好看的，标题是："
 
+export function generateOpenRouterCoverPrompt(title: string): string {
+  return `${DEFAULT_COVER_PROMPT_PREFIX}${title.trim()}`
+}
+
 const STYLE_PROMPTS: Record<string, string> = {
   modern: "现代简约，使用清晰的几何关系、克制的层次和干净留白",
   minimalist: "极简风格，大面积留白、少量强调色和纤细线条",

@@ -166,7 +166,8 @@ app.get("/api/config/status", (_req, res) => {
     articleProvider: provider, articleReady: hasMaasKey || hasOpenaiKey || (provider === "zhipu" && hasZhipuKey),
     maasReady: hasMaasKey, maasEmail: hasMaasKey ? SERVER_AI_CONFIG.maasUserEmail : null,
     openaiReady: hasOpenaiKey, coverProvider: (SERVER_AI_CONFIG.coverProvider as string) || "local",
-    coverReady: !!(hasCoverKey || hasStabilityKey || hasSiliconflowKey || hasDoubaoKey || (SERVER_AI_CONFIG.coverProvider === "local")),
+    coverReady: !!(hasCoverKey || hasStabilityKey || hasSiliconflowKey || hasDoubaoKey || SERVER_AI_CONFIG.openrouterApiKey || (SERVER_AI_CONFIG.coverProvider === "local")),
+    openrouterReady: !!SERVER_AI_CONFIG.openrouterApiKey,
     dalleReady: hasCoverKey, stabilityReady: hasStabilityKey, siliconflowReady: hasSiliconflowKey,
     doubaoReady: hasDoubaoKey, zhipuReady: hasZhipuKey,
     wechatCollectorReady: {

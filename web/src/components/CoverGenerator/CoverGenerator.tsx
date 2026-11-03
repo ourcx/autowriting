@@ -55,6 +55,13 @@ const COVER_COLORS: ColorOption[] = [
 
 const PROVIDERS: ProviderOption[] = [
   {
+    id: 'openrouter',
+    name: 'GPT Image 2',
+    desc: 'OpenRouter，2.35:1 公众号封面',
+    requiresKey: null,
+    keyLabel: '',
+  },
+  {
     id: 'zhipu',
     name: '智谱 GLM-Image',
     desc: '中文文字与复杂版式',
@@ -193,7 +200,7 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
         style: selectedStyle,
         color: selectedColor,
         provider,
-        customPrompt: customPrompt.trim() || undefined,
+        customPrompt: provider === 'openrouter' ? undefined : customPrompt.trim() || undefined,
         aiConfig: {
           siliconflowApiKey: aiConfig.siliconflowApiKey,
           siliconflowModel:  aiConfig.siliconflowModel,
@@ -389,63 +396,74 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
           </div>
         )}
 
-        {/* 画面风格 */}
-        <div className="cg-field">
-          <span className="cg-label">画面风格</span>
-          <div className="cg-style-grid">
-            {COVER_STYLES.map(s => (
-              <button
-                key={s.id}
-                className={`cg-style-card ${selectedStyle === s.id ? 'active' : ''}`}
-                onClick={() => setSelectedStyle(s.id)}
-              >
-                <span className="cg-style-name">{s.name}</span>
-                <span className="cg-style-desc">{s.desc}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+        {provider !== 'openrouter' && (
+          <>
+            {/* 画面风格 */}
+            <div className="cg-field">
+              <span className="cg-label">画面风格</span>
+              <div className="cg-style-grid">
+                {COVER_STYLES.map(s => (
+                  <button
+                    key={s.id}
+                    className={`cg-style-card ${selectedStyle === s.id ? 'active' : ''}`}
+                    onClick={() => setSelectedStyle(s.id)}
+                  >
+                    <span className="cg-style-name">{s.name}</span>
+                    <span className="cg-style-desc">{s.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        {/* 主色调 */}
-        <div className="cg-field">
-          <span className="cg-label">主色调</span>
-          <div className="cg-color-row">
-            {COVER_COLORS.map(c => (
-              <button
-                key={c.id}
-                className={`cg-color-swatch ${selectedColor === c.id ? 'active' : ''}`}
-                style={{ backgroundColor: c.hex }}
-                onClick={() => setSelectedColor(c.id)}
-                title={c.name}
-              >
-                {selectedColor === c.id && (
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <path d="M2 7l4 4 6-7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
+            {/* 主色调 */}
+            <div className="cg-field">
+              <span className="cg-label">主色调</span>
+              <div className="cg-color-row">
+                {COVER_COLORS.map(c => (
+                  <button
+                    key={c.id}
+                    className={`cg-color-swatch ${selectedColor === c.id ? 'active' : ''}`}
+                    style={{ backgroundColor: c.hex }}
+                    onClick={() => setSelectedColor(c.id)}
+                    title={c.name}
+                  >
+                    {selectedColor === c.id && (
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M2 7l4 4 6-7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
 
+        {provider === 'openrouter' && (
+          <div className="cg-notice cg-notice--info">
+            固定提示词：生成一个公众号文章封面，2.35:1，需要简约，不需要实物，给我来点好看的，标题是：{title.trim() || '公众号文章标题'}。服务端需配置 OPENROUTER_API_KEY。
+          </div>
+        )}
         {/* 自定义 Prompt */}
-        <div className="cg-field">
-          <span className="cg-label">
-            自定义描述
-            <span className="cg-label-opt">可选</span>
-          </span>
-          <textarea
-            className="cg-prompt-input"
-            value={customPrompt}
-            onChange={e => setCustomPrompt(e.target.value)}
-            placeholder={
-              provider === 'qwen-edit'
-                ? '描述你想如何修改这张封面，例如：换成蓝色调，加入科技感元素'
-                : `生成一个公众号文章封面，2.35:1，需要简约，不需要实物，给我来点好看的，标题是：${title.trim() || 'xxxx'}。`
-            }
-            rows={3}
-          />
-        </div>
+        {provider !== 'openrouter' && (
+          <div className="cg-field">
+            <span className="cg-label">
+              自定义描述
+              <span className="cg-label-opt">可选</span>
+            </span>
+            <textarea
+              className="cg-prompt-input"
+              value={customPrompt}
+              onChange={e => setCustomPrompt(e.target.value)}
+              placeholder={
+                provider === 'qwen-edit'
+                  ? '描述你想如何修改这张封面，例如：换成蓝色调，加入科技感元素'
+                  : `生成一个公众号文章封面，2.35:1，需要简约，不需要实物，给我来点好看的，标题是：${title.trim() || 'xxxx'}。`
+              }
+              rows={3}
+            />
+          </div>
+        )}
 
         {/* 错误信息 */}
         {error && (

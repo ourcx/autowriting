@@ -16,7 +16,7 @@ function authFetch(url: string, init: RequestInit = {}): Promise<Response> {
 }
 
 export type ArticleProvider = 'maas' | 'openai' | 'openai-compat' | 'zhipu'
-export type CoverProvider = 'local' | 'openai' | 'stability' | 'siliconflow' | 'z-image' | 'qwen-edit' | 'doubao' | 'zhipu'
+export type CoverProvider = 'local' | 'openai' | 'openrouter' | 'stability' | 'siliconflow' | 'z-image' | 'qwen-edit' | 'doubao' | 'zhipu'
 
 export interface AIConfig {
   // 服务商公共 Key（工具自己的 Key 非空时仍优先使用工具 Key）
@@ -326,5 +326,6 @@ export const COVER_PROVIDER_PRESETS = [
   { id: 'z-image'     as CoverProvider, name: 'Z-Image 造相',  desc: 'SiliconFlow，支持复杂提示词' },
   { id: 'qwen-edit'   as CoverProvider, name: 'Qwen 图片编辑', desc: 'SiliconFlow，对已有封面精修' },
   { id: 'openai'      as CoverProvider, name: 'DALL-E 3',      desc: '需要 OpenAI API Key' },
+  { id: 'openrouter'  as CoverProvider, name: 'GPT Image 2',   desc: 'OpenRouter Key 配置在服务端' },
   { id: 'stability'   as CoverProvider, name: 'Stability AI',  desc: '需要 Stability API Key' },
 ]
