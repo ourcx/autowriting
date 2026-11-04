@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Calendar, FileText, Trash2, ArrowRight, RefreshCw, Zap, Server, HardDrive, AlertTriangle, Upload, Search, MessageCircle, Newspaper, BookOpen, X } from 'lucide-react'
+import { Plus, Calendar, FileText, Trash2, ArrowRight, RefreshCw, Zap, Server, HardDrive, AlertTriangle, Upload, Search, MessageCircle, Newspaper, BookOpen, X, LayoutList, Rows } from 'lucide-react'
 import { fetchArticleList, fetchArticleWorkflowMetrics, deleteArticle, type WorkflowMetrics } from '../../utils/apiHelpers'
 import { showConfirm, toast } from '../../components/Toast/Toast'
 import './Dashboard.css'
@@ -63,6 +63,10 @@ const STATUS_META: Record<string, { label: string; className: string }> = {
 
 // 存储位置类型
 type StorageMode = 'server' | 'local'
+type ArticleViewMode = 'status' | 'list'
+
+const ARTICLE_PAGE_SIZE = 20
+const STATUS_PREVIEW_SIZE = 4
 
 // 本地文章迁移到服务端
 async function migrateLocalToServer(articles: Article[]): Promise<{ ok: number; fail: number }> {
@@ -106,6 +110,8 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
   const [migrating, setMigrating] = useState(false)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<'all' | 'writing' | 'review' | 'ready' | 'done'>('all')
+  const [viewMode, setViewMode] = useState<ArticleViewMode>('status')
+  const [page, setPage] = useState(1)
   const [loadError, setLoadError] = useState(false)
   const [workflowMetrics, setWorkflowMetrics] = useState<WorkflowMetrics>({ sampleSize: 0, medianMinutes: null, medianActiveMinutes: null, activeSampleSize: 0, reworkCount: 0 })
   const titleRef = useRef<HTMLInputElement>(null)
@@ -129,6 +135,10 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
     loadArticles()
     setLocalArticles(loadLocalArticles())
   }, [])
+
+  useEffect(() => {
+    setPage(1)
+  }, [filter, query, viewMode])
 
   const handleMigrateLocal = async () => {
     if (localArticles.length === 0) return
@@ -223,6 +233,8 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
   const visibleArticles = allArticles.filter(article =>
     matchesFilter(article, filter) && `${article.title} ${article.date}`.toLowerCase().includes(query.trim().toLowerCase()),
   )
+  const pageCount = Math.max(1, Math.ceil(visibleArticles.length / ARTICLE_PAGE_SIZE))
+  const pagedArticles = visibleArticles.slice((page - 1) * ARTICLE_PAGE_SIZE, page * ARTICLE_PAGE_SIZE)
   const resumeArticle = allArticles.find(article => article.status === 'ready')
     || allArticles.find(article => ['review', 'generated'].includes(article.status))
     || allArticles.find(article => !['wechat_draft', 'published'].includes(article.status))
@@ -295,6 +307,39 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
           )
         })}
       </ul>
+    )
+  }
+
+  function showFilteredList(nextFilter: typeof filter) {
+    setFilter(nextFilter)
+    setViewMode('list')
+  }
+
+  function renderStatusView() {
+    return (
+      <div className="dash-status-grid">
+        {filters.slice(1).map(item => {
+          const group = allArticles.filter(article => matchesFilter(article, item.id))
+          return (
+            <section className="dash-status-section" key={item.id} aria-labelledby={`dash-status-${item.id}`}>
+              <header>
+                <div>
+                  <h4 id={`dash-status-${item.id}`}>{item.label}</h4>
+                  <span>{group.length} 篇</span>
+                </div>
+                {group.length > STATUS_PREVIEW_SIZE && (
+                  <button className="dash-text-btn" onClick={() => showFilteredList(item.id)}>
+                    查看全部<ArrowRight size={14} />
+                  </button>
+                )}
+              </header>
+              {group.length
+                ? renderArticleList(group.slice(0, STATUS_PREVIEW_SIZE), '')
+                : <p className="dash-status-empty">当前没有文章</p>}
+            </section>
+          )
+        })}
+      </div>
     )
   }
 
@@ -454,6 +499,14 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
 
         <div className="dash-list-header">
           <h3>文章列表</h3>
+          <div className="dash-view-switch" role="group" aria-label="文章列表视图">
+            <button aria-pressed={viewMode === 'status'} onClick={() => setViewMode('status')} title="按状态分类">
+              <Rows size={14} />按状态
+            </button>
+            <button aria-pressed={viewMode === 'list'} onClick={() => setViewMode('list')} title="全部文章列表">
+              <LayoutList size={14} />全部文章
+            </button>
+          </div>
           <label className="dash-search">
             <Search size={16} />
             <input aria-label="搜索文章" value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索标题或日期" />
@@ -468,11 +521,13 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
             <RefreshCw size={15} className={loading ? 'dash-spin' : ''} />
           </button>
         </div>
-        <div className="dash-filters" role="group" aria-label="文章进度筛选">
-          {filters.map(item => <button key={item.id} aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}>
-            {item.label}<span>{allArticles.filter(article => matchesFilter(article, item.id)).length}</span>
-          </button>)}
-        </div>
+        {(viewMode === 'list' || query) && (
+          <div className="dash-filters" role="group" aria-label="文章进度筛选">
+            {filters.map(item => <button key={item.id} aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}>
+              {item.label}<span>{allArticles.filter(article => matchesFilter(article, item.id)).length}</span>
+            </button>)}
+          </div>
+        )}
 
         {loadError ? (
           <div className="dash-empty" role="alert"><AlertTriangle size={24} /><p>文章列表加载失败</p><button className="dash-text-btn" onClick={() => void loadArticles()}>重新加载</button></div>
@@ -481,8 +536,17 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
             <RefreshCw size={20} className="dash-spin" />
             <span>加载中...</span>
           </div>
-        ) : (
-          renderArticleList(visibleArticles, allArticles.length ? '没有匹配的文章' : '还没有文章')
+        ) : viewMode === 'status' && !query ? renderStatusView() : (
+          <>
+            {renderArticleList(pagedArticles, allArticles.length ? '没有匹配的文章' : '还没有文章')}
+            {visibleArticles.length > ARTICLE_PAGE_SIZE && (
+              <nav className="dash-pagination" aria-label="文章列表分页">
+                <button disabled={page === 1} onClick={() => setPage(current => Math.max(1, current - 1))}>上一页</button>
+                <span>第 {page} / {pageCount} 页 · 共 {visibleArticles.length} 篇</span>
+                <button disabled={page === pageCount} onClick={() => setPage(current => Math.min(pageCount, current + 1))}>下一页</button>
+              </nav>
+            )}
+          </>
         )}
       </main>
     </div>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { ArrowRight, BarChart3, Bookmark, BookOpen, Clock3, ExternalLink, FileText, Info, RefreshCw, Search, Share2, Sparkles, Upload, Users } from "lucide-react"
+import { ArrowRight, BarChart3, Bookmark, BookOpen, ChevronDown, Clock3, ExternalLink, FileText, Info, Link2, RefreshCw, Search, Share2, Sparkles, Upload, Users, X } from "lucide-react"
 import {
   Bar,
   BarChart,
@@ -44,6 +44,9 @@ const CHART_COLORS = {
   sources: "#1a3a3a",
 }
 
+const ARTICLE_PAGE_SIZE = 10
+const DRAFT_SEARCH_LIMIT = 8
+
 function formatCompactNumber(value: number) {
   return new Intl.NumberFormat("zh-CN", { notation: "compact", maximumFractionDigits: 1 }).format(value)
 }
@@ -61,12 +64,26 @@ export default function TopicInsights() {
   const [error, setError] = useState("")
   const [busy, setBusy] = useState(false)
   const [drafts, setDrafts] = useState<Array<{ id: string; title: string }>>([])
+  const [articlePage, setArticlePage] = useState(1)
+  const [activeLinkArticleId, setActiveLinkArticleId] = useState<string | null>(null)
+  const [draftQuery, setDraftQuery] = useState("")
   const [config, setConfig] = useState<WechatAnalyticsRefreshConfig>({ enabled: false, intervalHours: 24 })
   const [state, setState] = useState<WechatAnalyticsState>({ status: "idle" })
   const [cookieBound, setCookieBound] = useState(false)
   const snapshot = snapshots[index]
   const analysis = useMemo(() => snapshot ? analyzeTopic(snapshot, keyword) : null, [snapshot, keyword])
   const ranked = useMemo(() => snapshot ? rankWechatArticles(snapshot) : [], [snapshot])
+  const articlePageCount = Math.max(1, Math.ceil((analysis?.articles.length ?? 0) / ARTICLE_PAGE_SIZE))
+  const pagedAnalysisArticles = useMemo(() => analysis?.articles.slice(
+    (articlePage - 1) * ARTICLE_PAGE_SIZE,
+    articlePage * ARTICLE_PAGE_SIZE,
+  ) ?? [], [analysis?.articles, articlePage])
+  const matchingDrafts = useMemo(() => {
+    const normalized = draftQuery.trim().toLowerCase()
+    return drafts
+      .filter(draft => !normalized || `${draft.title} ${draft.id}`.toLowerCase().includes(normalized))
+      .slice(0, DRAFT_SEARCH_LIMIT)
+  }, [draftQuery, drafts])
   const dailyMetrics = useMemo(() => snapshot?.dashboard.daily ?? [], [snapshot])
   const dailyChartData = useMemo(() => dailyMetrics.map(item => ({
     ...item,
@@ -96,6 +113,10 @@ export default function TopicInsights() {
     } catch { setError("数据未能加载，请刷新重试。") }
   }, [userId])
   useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    setArticlePage(1)
+    setActiveLinkArticleId(null)
+  }, [index, keyword])
 
   const collect = useCallback(async () => {
     const cookies = userId ? loadWechatAnalyticsCookies(userId) : ""
@@ -162,6 +183,11 @@ export default function TopicInsights() {
       setSnapshots(previous => previous.map((item, position) => position === index ? saved : item))
     } catch { toast.error("关联失败，请重试") }
     finally { setBusy(false) }
+  }
+  const chooseLinkedArticle = async (analyticsArticleId: string, localArticleId: string) => {
+    setActiveLinkArticleId(null)
+    setDraftQuery("")
+    await linkArticle(analyticsArticleId, localArticleId)
   }
   const createBrief = async () => {
     if (!snapshot || !question.trim() || busy) return
@@ -286,15 +312,71 @@ export default function TopicInsights() {
           <label className="topic-search"><Search size={18}/><input value={keyword} onChange={event => setKeyword(event.target.value)} placeholder="按主题筛选，例如：保研、校园跑" aria-label="主题关键词"/></label>
           <p className="topic-note">{analysis.articles.length} 篇匹配 · 期间阅读人数中位数 {analysis.medianReaders?.toLocaleString() ?? "—"} · {analysis.olderArticles} 篇在统计窗口前发布</p>
           <div className="topic-table-wrap"><table><thead><tr><th>文章 / 关联工作台稿件</th><th>相对位置</th><th>发布日期</th><th>期间阅读人数</th></tr></thead><tbody>
-            {analysis.articles.map(item => <tr key={item.id}><td><strong>{item.title}</strong>
-              <select disabled={busy} aria-label={`关联稿件：${item.title}`} value={item.localArticleId || ""} onChange={event => void linkArticle(item.id, event.target.value)}>
-                <option value="">关联候选稿、素材和写作取舍…</option>{drafts.map(draft => <option value={draft.id} key={draft.id}>{draft.title}</option>)}
-              </select>
+            {pagedAnalysisArticles.map(item => <tr key={item.id}><td><strong>{item.title}</strong>
+              <div
+                className="topic-article-linker"
+                onBlur={event => {
+                  if (!event.currentTarget.contains(event.relatedTarget)) {
+                    setActiveLinkArticleId(null)
+                    setDraftQuery("")
+                  }
+                }}
+              >
+                <button
+                  type="button"
+                  className="topic-article-link-trigger"
+                  disabled={busy}
+                  aria-haspopup="listbox"
+                  aria-expanded={activeLinkArticleId === item.id}
+                  onClick={() => {
+                    setActiveLinkArticleId(current => current === item.id ? null : item.id)
+                    setDraftQuery("")
+                  }}
+                >
+                  <Link2 size={13}/>
+                  <span>{item.localArticleId
+                    ? drafts.find(draft => draft.id === item.localArticleId)?.title || "已关联稿件"
+                    : "关联工作台稿件"}</span>
+                  <ChevronDown size={13}/>
+                </button>
+                {activeLinkArticleId === item.id && <div className="topic-article-link-popover">
+                  <label><Search size={14}/><input
+                    autoFocus
+                    value={draftQuery}
+                    onChange={event => setDraftQuery(event.target.value)}
+                    onKeyDown={event => {
+                      if (event.key === "Escape") {
+                        setActiveLinkArticleId(null)
+                        setDraftQuery("")
+                      }
+                    }}
+                    placeholder="搜索标题或文章编号"
+                    aria-label={`搜索要关联的稿件：${item.title}`}
+                  />{draftQuery && <button type="button" aria-label="清除稿件搜索" onClick={() => setDraftQuery("")}><X size={13}/></button>}</label>
+                  <div role="listbox" aria-label="可关联的工作台稿件">
+                    {item.localArticleId && <button type="button" role="option" aria-selected="false" onClick={() => void chooseLinkedArticle(item.id, "")}>取消关联</button>}
+                    {matchingDrafts.map(draft => <button
+                      type="button"
+                      role="option"
+                      aria-selected={draft.id === item.localArticleId}
+                      key={draft.id}
+                      onClick={() => void chooseLinkedArticle(item.id, draft.id)}
+                    ><span>{draft.title}</span><small>{draft.id}</small></button>)}
+                    {!matchingDrafts.length && <p>没有匹配的稿件</p>}
+                  </div>
+                  {drafts.length > DRAFT_SEARCH_LIMIT && !draftQuery && <small>输入标题可以继续查找其余 {drafts.length - DRAFT_SEARCH_LIMIT} 篇</small>}
+                </div>}
+              </div>
               {item.localArticleId && <a href={`${articleEditorUrl(item.localArticleId, {
                 title: drafts.find(draft => draft.id === item.localArticleId)?.title,
               })}?tab=analysis`}>查看写作取舍 ↗</a>}
             </td><td><span className={`topic-band topic-band--${item.band}`}>{item.band === "high" ? "高关注" : item.band === "low" ? "低关注" : "中段"}</span><small>第 {item.rank}/{snapshot.articles.length}</small></td><td>{item.publishedAt}</td><td>{item.reads.toLocaleString()}<small>后台占比 {item.shareOfReads}%</small></td></tr>)}
           </tbody></table></div>
+          {analysis.articles.length > ARTICLE_PAGE_SIZE && <nav className="topic-pagination" aria-label="历史文章分页">
+            <Button disabled={articlePage === 1} onClick={() => setArticlePage(current => Math.max(1, current - 1))}>上一页</Button>
+            <span>第 {articlePage} / {articlePageCount} 页 · 共 {analysis.articles.length} 篇</span>
+            <Button disabled={articlePage === articlePageCount} onClick={() => setArticlePage(current => Math.min(articlePageCount, current + 1))}>下一页</Button>
+          </nav>}
           {!analysis.articles.length && <p>没有匹配的标题，换一个关键词试试。</p>}
           <p className="topic-note">{analysis.observation} 下一次对比应固定发布后的观察时长，并记录账号体量和流量来源。</p>
         </div>
