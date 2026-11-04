@@ -2,8 +2,10 @@ import assert from "node:assert/strict"
 import {
   auditArticleSources,
   comparePlatformVersions,
+  formatCreatorPersonaForPrompt,
   formatCreatorProfileForPrompt,
   getCompletedWritingDnaLayers,
+  normalizeCreatorPersona,
   normalizeCreatorWritingProfile,
   stripEmoji,
 } from "../shared/contentProduction.ts"
@@ -14,6 +16,21 @@ import { parseWechatDailyMetrics } from "../server/utils/wechatAnalyticsParser.t
 import { normalizePlatformCookieInput } from "../src/utils/platformCookieInput.ts"
 
 const profile = normalizeCreatorWritingProfile({
+  persona: {
+    enabled: true,
+    accountName: "校园观察",
+    accountInfo: "长期记录校园技术与教学实践",
+    personalExperiences: "参与过校内数字化项目",
+    historicalArticles: "持续发布校园工具和教学案例",
+    speakingStyle: "像熟悉业务的同事，直接但不武断",
+    expertise: "校园信息化",
+    values: "区分事实与推测",
+    audienceRelationship: "一线实践者之间的经验分享",
+    otherNotes: "不使用导师口吻",
+    sourceArticleCount: 6,
+    sourceArticleTitles: ["一次校园系统改造"],
+    analyzedAt: "2026-11-04T00:00:00.000Z",
+  },
   audience: "大学生",
   stance: "区分事实和观点",
   tone: "直接",
@@ -28,10 +45,16 @@ const profile = normalizeCreatorWritingProfile({
 assert.deepEqual(profile.bannedPhrases, ["赋能", "闭眼冲"])
 assert.deepEqual(profile.defaultPlatforms, ["wechat", "toutiao"])
 assert.equal(getCompletedWritingDnaLayers(profile).length, 6)
+assert.equal(profile.persona.accountName, "校园观察")
 const profilePrompt = formatCreatorProfileForPrompt(profile)
 assert.match(profilePrompt, /L1 词句与节奏/)
 assert.match(profilePrompt, /L6 图文与视觉/)
 assert.match(profilePrompt, /不得代替作者编造/)
+const personaPrompt = formatCreatorPersonaForPrompt(profile.persona)
+assert.match(personaPrompt, /^# 已确认作者人设/)
+assert.match(personaPrompt, /参与过校内数字化项目/)
+assert.match(personaPrompt, /未确认、仅由历史文章推测出的经历不得写成第一人称事实/)
+assert.equal(formatCreatorPersonaForPrompt(normalizeCreatorPersona({ enabled: false, accountName: "不应注入" })), "")
 assert.equal(stripEmoji("# 标题 🎉\n\n保留数字 2026 和标点。✅"), "# 标题 \n\n保留数字 2026 和标点。")
 assert.equal(stripEmoji("开发者👨‍💻正在测试🇨🇳版本1️⃣"), "开发者正在测试版本")
 assert.equal(stripEmoji("分片残留🏻\u20E3也要清理"), "分片残留也要清理")

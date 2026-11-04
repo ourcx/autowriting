@@ -6,15 +6,17 @@ import {
 } from "lucide-react"
 import PageHeader from "../../components/PageHeader/PageHeader"
 import {
-  collectWechatAnalytics, extractErrorMessage, fetchCreatorWritingProfile, fetchGlobalMemory,
+  analyzeCreatorPersona, collectWechatAnalytics, extractErrorMessage, fetchCreatorWritingProfile, fetchGlobalMemory,
   fetchToutiaoAccount, fetchWechatAccount, fetchWritingAssetOverview, saveCreatorWritingProfile,
-  saveGlobalMemory, type ToutiaoAccount, type WechatAccount, type WritingAssetOverview,
+  fetchWechatPublishedForPersona, saveGlobalMemory, type PersonaPublishedArticle, type ToutiaoAccount, type WechatAccount, type WritingAssetOverview,
 } from "../../utils/apiHelpers"
+import { loadAIConfig } from "../../utils/aiConfig"
 import { toast } from "../../components/Toast/Toast"
 import {
   EMPTY_CREATOR_WRITING_PROFILE,
   WRITING_DNA_LAYER_LABELS,
   type CreatorFeedbackLayer,
+  type CreatorPersona,
   type CreatorWritingProfile,
   type PublishingPlatform,
 } from "../../../shared/contentProduction"
@@ -183,6 +185,8 @@ export default function AccountPage() {
   const [assetOverview, setAssetOverview] = useState<WritingAssetOverview | null>(null)
   const [profileLoading, setProfileLoading] = useState(true)
   const [profileSaving, setProfileSaving] = useState(false)
+  const [personaAnalyzing, setPersonaAnalyzing] = useState(false)
+  const [personaAnalysisSources, setPersonaAnalysisSources] = useState("")
 
   const refreshWechat = useCallback(async () => {
     if (!loadWechatCredentials()) return
@@ -242,6 +246,13 @@ export default function AccountPage() {
     setWritingProfile(previous => ({ ...previous, [field]: value }))
   }
 
+  function updatePersona<K extends keyof CreatorPersona>(field: K, value: CreatorPersona[K]) {
+    setWritingProfile(previous => ({
+      ...previous,
+      persona: { ...previous.persona, [field]: value },
+    }))
+  }
+
   function selectDefaultPlatform(platform: PublishingPlatform) {
     setWritingProfile(previous => ({ ...previous, defaultPlatforms: [platform] }))
   }
@@ -259,11 +270,43 @@ export default function AccountPage() {
       } catch {
         toast.warn("写作资产已保存，统计稍后刷新")
       }
-      toast.success("写作 DNA 与长期背景已保存")
+      toast.success("作者人设、写作 DNA 与长期背景已保存")
     } catch (error) {
       toast.error(extractErrorMessage(error, "写作资产保存失败"))
     } finally {
       setProfileSaving(false)
+    }
+  }
+
+  async function analyzePersona() {
+    setPersonaAnalyzing(true)
+    try {
+      let publishedArticles: PersonaPublishedArticle[] = []
+      if (wechatBound) {
+        try {
+          publishedArticles = await fetchWechatPublishedForPersona(getWechatHeaders())
+        } catch {
+          toast.warn("公众号已发布列表暂不可读取，将只分析工作台历史成稿")
+        }
+      }
+      const result = await analyzeCreatorPersona({
+        aiConfig: loadAIConfig(),
+        accountInfo: {
+          name: wechatAccount?.nickname || toutiaoAccount?.nickname || writingProfile.persona.accountName,
+          description: toutiaoAccount?.description || writingProfile.persona.accountInfo,
+          principal: wechatAccount?.principal || "",
+        },
+        publishedArticles,
+      })
+      setWritingProfile(previous => ({ ...previous, persona: result.persona }))
+      setPersonaAnalysisSources(
+        `本次分析使用 ${result.sources.publishedArticleCount} 篇公众号已发布记录和 ${result.sources.localArticleCount} 篇工作台历史成稿`,
+      )
+      toast.success("人设候选已生成，请检查并保存后启用")
+    } catch (error) {
+      toast.error(extractErrorMessage(error, "人设分析失败"))
+    } finally {
+      setPersonaAnalyzing(false)
     }
   }
 
@@ -620,6 +663,128 @@ export default function AccountPage() {
               <div><GitBranch size={17} /><strong>{assetOverview?.summary.completedCandidateCount ?? 0}/{assetOverview?.summary.candidateCount ?? 0}</strong><span>完成候选</span></div>
               <div><BarChart3 size={17} /><strong>{assetOverview?.summary.highPerformanceCount ?? 0}/{assetOverview?.summary.lowPerformanceCount ?? 0}</strong><span>高 / 低表现</span></div>
             </div>
+
+            <section className="ap-asset-section" aria-labelledby="ap-persona-title">
+              <div className="ap-asset-section-head ap-persona-head">
+                <div><span>作者身份</span><h3 id="ap-persona-title">账号人设</h3></div>
+                <button
+                  type="button"
+                  className="ap-btn ap-btn--dark"
+                  onClick={() => void analyzePersona()}
+                  disabled={profileLoading || personaAnalyzing}
+                >
+                  {personaAnalyzing ? <RefreshCw className="ap-spin" size={15} /> : <Brain size={15} />}
+                  {personaAnalyzing ? "分析中…" : "分析历史文章"}
+                </button>
+              </div>
+              <div className="ap-persona-status">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={writingProfile.persona.enabled}
+                    onChange={event => updatePersona("enabled", event.target.checked)}
+                  />
+                  <span>生成文章时自动使用这份人设</span>
+                </label>
+                <small>
+                  {personaAnalysisSources
+                    || (writingProfile.persona.analyzedAt
+                      ? `最近分析：${new Date(writingProfile.persona.analyzedAt).toLocaleString("zh-CN")}`
+                      : "尚未分析，可先手动填写")}
+                </small>
+              </div>
+              <div className="ap-persona-grid">
+                <label>
+                  <span>账号名称</span>
+                  <input
+                    value={writingProfile.persona.accountName}
+                    onChange={event => updatePersona("accountName", event.target.value)}
+                    placeholder="作者或账号对外使用的名称"
+                  />
+                </label>
+                <label>
+                  <span>账号信息与定位</span>
+                  <textarea
+                    value={writingProfile.persona.accountInfo}
+                    onChange={event => updatePersona("accountInfo", event.target.value)}
+                    rows={3}
+                    placeholder="账号介绍、长期方向、公开身份"
+                  />
+                </label>
+                <label>
+                  <span>人物经历</span>
+                  <textarea
+                    value={writingProfile.persona.personalExperiences}
+                    onChange={event => updatePersona("personalExperiences", event.target.value)}
+                    rows={4}
+                    placeholder="只写可以公开引用、已经确认的真实经历"
+                  />
+                </label>
+                <label>
+                  <span>历史发布文章</span>
+                  <textarea
+                    value={writingProfile.persona.historicalArticles}
+                    onChange={event => updatePersona("historicalArticles", event.target.value)}
+                    rows={4}
+                    placeholder="长期主题、常见内容类型和代表性文章"
+                  />
+                </label>
+                <label>
+                  <span>说话风格</span>
+                  <textarea
+                    value={writingProfile.persona.speakingStyle}
+                    onChange={event => updatePersona("speakingStyle", event.target.value)}
+                    rows={3}
+                    placeholder="作者平时如何表达、如何与读者交流"
+                  />
+                </label>
+                <label>
+                  <span>熟悉领域</span>
+                  <textarea
+                    value={writingProfile.persona.expertise}
+                    onChange={event => updatePersona("expertise", event.target.value)}
+                    rows={3}
+                    placeholder="专业领域、实践经验和能力边界"
+                  />
+                </label>
+                <label>
+                  <span>稳定观点与价值取向</span>
+                  <textarea
+                    value={writingProfile.persona.values}
+                    onChange={event => updatePersona("values", event.target.value)}
+                    rows={3}
+                    placeholder="长期坚持的判断原则，不写本篇临时观点"
+                  />
+                </label>
+                <label>
+                  <span>与读者的关系</span>
+                  <textarea
+                    value={writingProfile.persona.audienceRelationship}
+                    onChange={event => updatePersona("audienceRelationship", event.target.value)}
+                    rows={3}
+                    placeholder="例如同行、实践者、观察者或经验分享者"
+                  />
+                </label>
+                <label className="ap-persona-wide">
+                  <span>其他人设信息</span>
+                  <textarea
+                    value={writingProfile.persona.otherNotes}
+                    onChange={event => updatePersona("otherNotes", event.target.value)}
+                    rows={3}
+                    placeholder="称呼习惯、公开边界、需要长期保持一致的信息"
+                  />
+                </label>
+              </div>
+              {writingProfile.persona.sourceArticleTitles.length > 0 ? (
+                <details className="ap-persona-sources">
+                  <summary>查看本次分析参考的 {writingProfile.persona.sourceArticleCount} 篇文章<ChevronDown size={14} /></summary>
+                  <ul>
+                    {writingProfile.persona.sourceArticleTitles.map(title => <li key={title}>{title}</li>)}
+                  </ul>
+                </details>
+              ) : null}
+              <p className="ap-asset-note">人设说明“作者是谁”，六层 DNA 说明“文章怎么写”。AI 分析只生成候选，保存后才进入文章提示词。</p>
+            </section>
 
             <section className="ap-asset-section" aria-labelledby="ap-dna-title">
               <div className="ap-asset-section-head">

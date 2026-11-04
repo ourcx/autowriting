@@ -18,7 +18,9 @@ import type { WechatAnalyticsSnapshot } from '../../shared/wechatAnalytics'
 import type { WechatBrowserPublishOptions } from '../../shared/wechatPublish'
 import {
   normalizeCreatorWritingProfile,
+  normalizeCreatorPersona,
   type CreatorFeedbackLayer,
+  type CreatorPersona,
   type CreatorWritingProfile,
 } from '../../shared/contentProduction'
 
@@ -387,6 +389,55 @@ export async function collectWechatAnalytics(cookies: string): Promise<{ snapsho
 export async function fetchCreatorWritingProfile(): Promise<CreatorWritingProfile> {
   const response = await axios.get('/api/creator-profile')
   return normalizeCreatorWritingProfile(response.data)
+}
+
+export interface PersonaPublishedArticle {
+  title: string
+  digest: string
+  publishedAt?: string
+}
+
+export interface CreatorPersonaAnalysis {
+  persona: CreatorPersona
+  sources: {
+    localArticleCount: number
+    publishedArticleCount: number
+  }
+}
+
+export async function fetchWechatPublishedForPersona(
+  headers: Record<string, string>,
+): Promise<PersonaPublishedArticle[]> {
+  const response = await axios.get<{
+    items?: Array<{ title?: unknown; digest?: unknown; update_time?: unknown }>
+  }>('/api/wechat/published?offset=0&count=20', { headers })
+  return (response.data.items || []).flatMap(item => {
+    if (typeof item.title !== 'string' || !item.title.trim()) return []
+    const timestamp = typeof item.update_time === 'number' ? item.update_time : Number(item.update_time)
+    return [{
+      title: item.title.trim(),
+      digest: typeof item.digest === 'string' ? item.digest.trim() : '',
+      ...(Number.isFinite(timestamp) && timestamp > 0
+        ? { publishedAt: new Date(timestamp * 1000).toISOString() }
+        : {}),
+    }]
+  })
+}
+
+export async function analyzeCreatorPersona(input: {
+  aiConfig: AIConfig
+  accountInfo: {
+    name: string
+    description: string
+    principal: string
+  }
+  publishedArticles: PersonaPublishedArticle[]
+}): Promise<CreatorPersonaAnalysis> {
+  const response = await axios.post<CreatorPersonaAnalysis>('/api/creator-profile/persona/analyze', input)
+  return {
+    persona: normalizeCreatorPersona(response.data.persona),
+    sources: response.data.sources,
+  }
 }
 
 export interface WritingAssetOverview {

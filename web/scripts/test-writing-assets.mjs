@@ -57,6 +57,26 @@ try {
         }],
       } })
     }
+    if (url.pathname === "/api/creator-profile/persona/analyze") {
+      return route.fulfill({ json: {
+        persona: {
+          enabled: true,
+          accountName: "校园观察者",
+          accountInfo: "长期记录校园技术实践",
+          personalExperiences: "参与过校内数字化项目",
+          historicalArticles: "持续发布校园工具与教学案例",
+          speakingStyle: "直接、克制，先讲事实",
+          expertise: "校园信息化",
+          values: "区分事实、推测和观点",
+          audienceRelationship: "同行实践者",
+          otherNotes: "",
+          sourceArticleCount: 4,
+          sourceArticleTitles: ["校园系统改造复盘"],
+          analyzedAt: "2026-11-04T00:00:00.000Z",
+        },
+        sources: { localArticleCount: 4, publishedArticleCount: 0 },
+      } })
+    }
     if (url.pathname === "/api/creator-profile") {
       if (request.method() === "PUT") {
         savedProfile = request.postDataJSON()
@@ -91,13 +111,24 @@ try {
   await page.getByText("图文与视觉规则", { exact: true }).locator("..").locator("textarea").fill("图片只承担解释或证据作用")
   await page.getByRole("textbox", { name: "长期背景记忆", exact: true }).fill("长期关注校园内容")
   await page.getByRole("button", { name: "保存写作资产", exact: true }).click()
-  await page.getByText("写作 DNA 与长期背景已保存", { exact: true }).waitFor()
+  await page.getByText("作者人设、写作 DNA 与长期背景已保存", { exact: true }).waitFor()
 
   assert.equal(savedProfile.audience, "校园内容读者和年轻教师")
   assert.equal(savedProfile.languageStyle, "短句为主，不使用破折号")
   assert.equal(savedMemory, "长期关注校园内容")
   await page.locator(".toast-success .toast-close").click()
   await page.locator(".toast-success").waitFor({ state: "detached" })
+
+  await page.getByRole("button", { name: "分析历史文章", exact: true }).click()
+  await page.getByText("人设候选已生成，请检查并保存后启用", { exact: true }).waitFor()
+  assert.equal(await page.getByText("账号名称", { exact: true }).locator("..").locator("input").inputValue(), "校园观察者")
+  assert.equal(savedProfile.persona.accountName, "")
+  await page.locator(".toast-success .toast-close").click()
+  await page.getByRole("button", { name: "保存写作资产", exact: true }).click()
+  await page.getByText("作者人设、写作 DNA 与长期背景已保存", { exact: true }).waitFor()
+  assert.equal(savedProfile.persona.accountName, "校园观察者")
+  assert.equal(savedProfile.persona.enabled, true)
+
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
   await page.screenshot({ path: join(screenshots, "writing-assets-desktop.png"), fullPage: true })
 

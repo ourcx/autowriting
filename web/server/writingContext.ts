@@ -4,6 +4,7 @@ import { formatCreatorExperiences } from "./productionJournal.ts"
 import { formatExampleContext } from "./rag.ts"
 import {
   ARTICLE_WRITING_BASELINE,
+  formatCreatorPersonaForPrompt,
   formatCreatorProfileForPrompt,
   normalizeCreatorWritingProfile,
 } from "../shared/contentProduction.ts"
@@ -29,20 +30,22 @@ export async function buildWritingContext(
     referenceContext = "",
   }: WritingContextOptions = {},
 ): Promise<string> {
-  const profile = formatCreatorProfileForPrompt(normalizeCreatorWritingProfile(
-    getSetting(`creator_writing_profile:${userId}`),
-  ))
+  const writingProfile = normalizeCreatorWritingProfile(getSetting(`creator_writing_profile:${userId}`))
+  const persona = formatCreatorPersonaForPrompt(writingProfile.persona)
+  const profile = formatCreatorProfileForPrompt(writingProfile)
   const memory = boundedMemory(getSetting(`global_memory:${userId}`))
   const performance = includePerformanceEvidence ? await formatExampleContext(userId) : ""
   const writingGuide = includeWritingGuide ? getWritingGuideContent().trim() : ""
   const sections = [
+    persona,
     ARTICLE_WRITING_BASELINE,
     `# 上下文使用顺序
 1. 本篇任务与素材决定当前情境、事实边界和交付目标。
-2. 写作 DNA 与作者已确认取舍用于表达选择，不适用当前情境时不要生搬硬套。
-3. 长期背景只提供稳定事实，不能覆盖本篇素材。
-4. 历史表现只用于提出选题和内容假设，不能证明某种句式、篇幅或模板有效。
-5. 往期文章只参考展开方式，不复制旧事实。`,
+2. 已确认作者人设用于确定叙述身份，不能据此补写未确认的个人经历。
+3. 写作 DNA 与作者已确认取舍用于表达选择，不适用当前情境时不要生搬硬套。
+4. 长期背景只提供稳定事实，不能覆盖本篇素材。
+5. 历史表现只用于提出选题和内容假设，不能证明某种句式、篇幅或模板有效。
+6. 往期文章只参考展开方式，不复制旧事实。`,
     writingGuide ? `# 通用写作规范\n${writingGuide}` : "",
     profile,
     formatCreatorExperiences(userId),

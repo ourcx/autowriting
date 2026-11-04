@@ -12,6 +12,7 @@
 import { spawn } from 'node:child_process'
 import { smokeArticleStream } from './smoke-article-stream.mjs'
 import { smokeCandidates } from './smoke-candidates.mjs'
+import { smokePersonaAgent } from './smoke-persona-agent.mjs'
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve, dirname, join } from 'node:path'
@@ -582,6 +583,21 @@ cases.push({
   run: async () => {
     const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
     const profile = {
+      persona: {
+        enabled: true,
+        accountName: 'Smoke 作者',
+        accountInfo: '长期记录本地回归测试',
+        personalExperiences: '明确参与过 Smoke 测试',
+        historicalArticles: '持续发布工程回归记录',
+        speakingStyle: '直接说明证据和结果',
+        expertise: '自动化回归',
+        values: '不把目标写成结果',
+        audienceRelationship: '同行实践者',
+        otherNotes: '',
+        sourceArticleCount: 2,
+        sourceArticleTitles: ['回归测试文章'],
+        analyzedAt: '2026-11-04T00:00:00.000Z',
+      },
       audience: 'Smoke 读者',
       stance: '区分事实与观点',
       tone: '直接',
@@ -602,6 +618,7 @@ cases.push({
     const stored = await readResponse.json()
     if (
       stored.audience !== profile.audience
+      || stored.persona.accountName !== profile.persona.accountName
       || stored.languageStyle !== profile.languageStyle
       || stored.anglePreference !== profile.anglePreference
       || stored.materialPreference !== profile.materialPreference
@@ -1054,6 +1071,10 @@ cases.push({
 cases.push({
   name: '普通文章双平台生成在模型静默期间应持续保活并保存完整正文',
   run: () => smokeArticleStream(BASE, token),
+})
+cases.push({
+  name: '账号人设 Agent 应分析当前用户历史成稿和已发布摘要',
+  run: () => smokePersonaAgent(BASE, token),
 })
 cases.push({
   name: '候选稿并发上限、断点续写、原文保护与用户隔离',

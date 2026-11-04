@@ -40,7 +40,40 @@ export const ARTICLE_WRITING_BASELINE = `# 中文成文底线
 - 先写具体事实，再让读者自己看出结论。句子长短错开，长句留出停顿，但不要把严谨书面语硬改成口水话。
 - 输出前通读全文，核对事实、结构、套话和节奏。把可疑句子默读着翻回英文，几乎不用调整就能翻顺的，按中文习惯重写。只输出最终正文，不解释修改过程。`
 
+export interface CreatorPersona {
+  enabled: boolean
+  accountName: string
+  accountInfo: string
+  personalExperiences: string
+  historicalArticles: string
+  speakingStyle: string
+  expertise: string
+  values: string
+  audienceRelationship: string
+  otherNotes: string
+  sourceArticleCount: number
+  sourceArticleTitles: string[]
+  analyzedAt: string
+}
+
+export const EMPTY_CREATOR_PERSONA: CreatorPersona = {
+  enabled: false,
+  accountName: "",
+  accountInfo: "",
+  personalExperiences: "",
+  historicalArticles: "",
+  speakingStyle: "",
+  expertise: "",
+  values: "",
+  audienceRelationship: "",
+  otherNotes: "",
+  sourceArticleCount: 0,
+  sourceArticleTitles: [],
+  analyzedAt: "",
+}
+
 export interface CreatorWritingProfile {
+  persona: CreatorPersona
   audience: string
   stance: string
   tone: string
@@ -54,6 +87,7 @@ export interface CreatorWritingProfile {
 }
 
 export const EMPTY_CREATOR_WRITING_PROFILE: CreatorWritingProfile = {
+  persona: { ...EMPTY_CREATOR_PERSONA },
   audience: "",
   stance: "",
   tone: "",
@@ -72,6 +106,58 @@ function text(value: unknown, maxLength = 300): string {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : ""
 }
 
+export function normalizeCreatorPersona(value: unknown): CreatorPersona {
+  const source = value && typeof value === "object" ? value as Record<string, unknown> : {}
+  const sourceArticleCount = typeof source.sourceArticleCount === "number" && Number.isFinite(source.sourceArticleCount)
+    ? Math.max(0, Math.min(1000, Math.floor(source.sourceArticleCount)))
+    : 0
+  const sourceArticleTitles = Array.isArray(source.sourceArticleTitles)
+    ? source.sourceArticleTitles
+      .flatMap(item => {
+        const title = text(item, 120)
+        return title ? [title] : []
+      })
+      .slice(0, 20)
+    : []
+  return {
+    enabled: source.enabled === true,
+    accountName: text(source.accountName, 120),
+    accountInfo: text(source.accountInfo, 800),
+    personalExperiences: text(source.personalExperiences, 2000),
+    historicalArticles: text(source.historicalArticles, 2000),
+    speakingStyle: text(source.speakingStyle, 1200),
+    expertise: text(source.expertise, 1000),
+    values: text(source.values, 1000),
+    audienceRelationship: text(source.audienceRelationship, 800),
+    otherNotes: text(source.otherNotes, 1200),
+    sourceArticleCount,
+    sourceArticleTitles,
+    analyzedAt: text(source.analyzedAt, 40),
+  }
+}
+
+export function parseCreatorPersonaAnalysis(
+  content: string,
+  metadata: { accountName: string; sourceArticleCount: number; sourceArticleTitles: string[] },
+  analyzedAt = new Date().toISOString(),
+): CreatorPersona {
+  const unfenced = content.trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+  const start = unfenced.indexOf("{")
+  const end = unfenced.lastIndexOf("}")
+  if (start < 0 || end <= start) throw new Error("人设分析结果格式不正确")
+  const parsed = JSON.parse(unfenced.slice(start, end + 1)) as Record<string, unknown>
+  return normalizeCreatorPersona({
+    ...parsed,
+    enabled: true,
+    accountName: text(parsed.accountName, 120) || metadata.accountName,
+    sourceArticleCount: metadata.sourceArticleCount,
+    sourceArticleTitles: metadata.sourceArticleTitles,
+    analyzedAt,
+  })
+}
+
 export function normalizeCreatorWritingProfile(value: unknown): CreatorWritingProfile {
   const source = value && typeof value === "object" ? value as Record<string, unknown> : {}
   const bannedPhrases = Array.isArray(source.bannedPhrases)
@@ -86,6 +172,7 @@ export function normalizeCreatorWritingProfile(value: unknown): CreatorWritingPr
     ? [...new Set(source.defaultPlatforms.filter((item): item is PublishingPlatform => PLATFORM_SET.has(item as PublishingPlatform)))]
     : []
   return {
+    persona: normalizeCreatorPersona(source.persona),
     audience: text(source.audience),
     stance: text(source.stance),
     tone: text(source.tone),
@@ -97,6 +184,26 @@ export function normalizeCreatorWritingProfile(value: unknown): CreatorWritingPr
     defaultPlatforms: defaultPlatforms.length ? defaultPlatforms : ["wechat"],
     visualStyle: text(source.visualStyle),
   }
+}
+
+export function formatCreatorPersonaForPrompt(persona: CreatorPersona): string {
+  if (!persona.enabled) return ""
+  const rows = [
+    persona.accountName && `- 账号名称：${persona.accountName}`,
+    persona.accountInfo && `- 账号信息与定位：${persona.accountInfo}`,
+    persona.personalExperiences && `- 已确认的人物经历：${persona.personalExperiences}`,
+    persona.historicalArticles && `- 历史发布内容画像：${persona.historicalArticles}`,
+    persona.speakingStyle && `- 日常说话与表达风格：${persona.speakingStyle}`,
+    persona.expertise && `- 熟悉领域与能力边界：${persona.expertise}`,
+    persona.values && `- 稳定观点与价值取向：${persona.values}`,
+    persona.audienceRelationship && `- 与读者的关系：${persona.audienceRelationship}`,
+    persona.otherNotes && `- 其他人设信息：${persona.otherNotes}`,
+  ].filter(Boolean)
+  if (!rows.length) return ""
+  return `# 已确认作者人设
+${rows.join("\n")}
+
+写作时以这个身份选择叙述位置和措辞，但本篇任务与素材仍决定事实边界。人物经历只能使用上面明确写出的内容；未确认、仅由历史文章推测出的经历不得写成第一人称事实。`
 }
 
 export function getCompletedWritingDnaLayers(profile: CreatorWritingProfile): WritingDnaLayer[] {
