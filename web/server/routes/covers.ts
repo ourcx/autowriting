@@ -24,6 +24,8 @@ import { logger } from '../logger.ts'
 import { generateWithDoubao } from '../utils/doubaoImage.ts'
 import { resolveOpenRouterApiKey, resolveZhipuApiKey } from '../utils/providerKeys.ts'
 import { generateOpenRouterCoverPrompt } from '../utils/coverPrompt.ts'
+import { openRouterForbiddenMessage } from '../utils/openrouterError.ts'
+import type { AuthedRequest } from '../types.ts'
 
 const router = Router()
 router.use([
@@ -62,6 +64,7 @@ router.post('/generate-cover', async (req, res) => {
     const doubaoBaseUrl = String(cfg.doubaoBaseUrl || 'https://ark.cn-beijing.volces.com/api/v3')
     const coverApiKey = String(cfg.coverApiKey || cfg.stabilityApiKey || '')
     const openrouterKey = resolveOpenRouterApiKey(cfg, SERVER_AI_CONFIG.openrouterApiKey)
+    const coverUserId = (req as AuthedRequest).user?.id || ''
     const zhipuKey = resolveZhipuApiKey(cfg, provider === 'zhipu' ? cfg.zhipuImageApiKey : '')
 
     logger.debug('COVERS', '准备生成封面', {
@@ -106,12 +109,15 @@ router.post('/generate-cover', async (req, res) => {
     if (provider === 'openrouter' && (!openrouterKey || openrouterKey.length > 512 || /[\r\n]/.test(openrouterKey))) {
       return res.status(400).json({ error: 'OpenRouter API Key 未配置或格式无效，请在「AI 配置 → 封面生成」填写。' })
     }
+    if (provider === 'openrouter' && !coverUserId) {
+      return res.status(401).json({ error: '请登录后生成封面' })
+    }
 
     // ── 缓存检查（仅非自定义 prompt，provider 参与 key 避免跨 provider 污染） ──
     const providerCacheKey = provider === 'doubao' ? `${provider}:${doubaoModel}` : provider === 'openrouter' ? 'openrouter:gpt-image-2:v1' : provider
     // 固定提示词只由标题决定，风格与颜色不能改变请求或缓存结果。
     const cacheKey = provider === 'openrouter'
-      ? generateCacheKey(title.trim(), 'fixed', `${providerCacheKey}|user:${req.user.id}`)
+      ? generateCacheKey(title.trim(), 'fixed', `${providerCacheKey}|user:${coverUserId}`)
       : generateCacheKey(title, style, `${color}|${providerCacheKey}`)
     if (!customPrompt && provider !== 'qwen-edit') {
       const cached = getCachedImage(cacheKey)
@@ -130,15 +136,24 @@ router.post('/generate-cover', async (req, res) => {
 
     if (provider === 'openrouter') {
       // GPT Image 2 不接受 2.35:1；先取最接近的 21:9，再裁成公众号封面比例。
-      const response = await axios.post('https://openrouter.ai/api/v1/images', {
-        model: 'openai/gpt-image-2',
-        prompt: generateOpenRouterCoverPrompt(title),
-        aspect_ratio: '21:9',
-        n: 1,
-      }, {
-        headers: { Authorization: `Bearer ${openrouterKey}`, 'Content-Type': 'application/json' },
-        timeout: 180000,
-      })
+      let response
+      try {
+        response = await axios.post('https://openrouter.ai/api/v1/images', {
+          model: 'openai/gpt-image-2',
+          prompt: generateOpenRouterCoverPrompt(title),
+          aspect_ratio: '21:9',
+          n: 1,
+        }, {
+          headers: { Authorization: `Bearer ${openrouterKey}`, 'Content-Type': 'application/json' },
+          timeout: 180000,
+        })
+      } catch (error: unknown) {
+        if (axios.isAxiosError(error) && error.response?.status === 403) {
+          logger.warn('COVERS', 'OpenRouter 拒绝封面生成请求', { provider, status: 403 })
+          return res.status(403).json({ error: openRouterForbiddenMessage(error.response.data) })
+        }
+        throw error
+      }
       const encoded = response.data?.data?.[0]?.b64_json
       if (typeof encoded !== 'string' || !encoded) throw new Error('OpenRouter 未返回图片')
       const image = await sharp(Buffer.from(encoded, 'base64'))
