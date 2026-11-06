@@ -75,6 +75,7 @@
 .dash-local-tag { display: inline-flex; align-items: center; gap: 4px; }
 .dash-article-right, .dash-platform-actions { display: flex; align-items: center; gap: 4px; }
 .dash-refresh-btn, .dash-delete-btn, .dash-platform-actions button { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: var(--rounded-xs); background: transparent; color: var(--color-muted); cursor: pointer; flex-shrink: 0; }
+.dash-platform-actions .dash-wechat-publish { display: inline-flex; width: auto; padding: 0 8px; gap: 5px; font: inherit; font-size: 12px; }
 .dash-platform-actions button:hover, .dash-refresh-btn:hover { background: var(--color-surface-strong); color: var(--color-brand-teal); }
 .dash-platform-actions button:first-child { color: var(--color-brand-teal); }
 .dash-delete-btn { border-color: transparent; color: var(--color-muted); }
@@ -91,7 +92,7 @@
 .dash-status-section .dash-article-list { border-top: 1px solid var(--color-hairline-soft); }
 .dash-status-section .dash-article-item { padding: 10px 0; }
 .dash-status-section .dash-article-title { font-size: 13px; }
-.dash-status-section .dash-platform-actions { display: none; }
+.dash-status-section .dash-platform-actions button:not(.dash-wechat-publish) { display: none; }
 .dash-status-section .dash-delete-btn { width: 30px; height: 30px; }
 .dash-status-section .dash-text-btn { flex: 0 0 auto; border: 0; background: transparent; }
 .dash-status-empty { margin: 0; padding: 24px 0; border-top: 1px solid var(--color-hairline-soft); }

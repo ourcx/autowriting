@@ -1,4 +1,4 @@
-import { ClipboardEvent, FormEvent, useCallback, useEffect, useState } from "react"
+import { ClipboardEvent, FormEvent, useCallback, useEffect, useState, type ReactNode } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import {
   BarChart3, BookOpen, Brain, CheckCircle2, ChevronDown, ClipboardPaste, Database, Eye, EyeOff,
@@ -39,6 +39,7 @@ import {
 import "./AccountPage.css"
 
 type Platform = "wechat" | "toutiao" | "xiaohongshu"
+type WritingSection = "persona" | "dna" | "memory" | "sources" | "decisions"
 type WritingProfileTextField =
   | "preferredStructure"
   | "anglePreference"
@@ -180,6 +181,9 @@ export default function AccountPage() {
   const [wechatAnalyticsCookies, setWechatAnalyticsCookies] = useState("")
   const [wechatAnalyticsError, setWechatAnalyticsError] = useState("")
   const [bindingWechatAnalytics, setBindingWechatAnalytics] = useState(false)
+  const [expandedPlatform, setExpandedPlatform] = useState<Platform>("wechat")
+  const [showWechatAdvanced, setShowWechatAdvanced] = useState(false)
+  const [writingSection, setWritingSection] = useState<WritingSection>("persona")
   const [writingProfile, setWritingProfile] = useState<CreatorWritingProfile>(EMPTY_CREATOR_WRITING_PROFILE)
   const [globalMemory, setGlobalMemory] = useState("")
   const [assetOverview, setAssetOverview] = useState<WritingAssetOverview | null>(null)
@@ -445,7 +449,7 @@ export default function AccountPage() {
     <main className="ap-root">
       <PageHeader
         title="账号与资产"
-        subtitle="管理平台连接、发布能力和可复用写作资产"
+        subtitle="先连接常用发布平台，其他配置按需展开"
         backLabel={fromSetup ? "返回首次设置" : "返回工作台"}
         onBack={() => navigate(fromSetup ? "/setup" : "/")}
         actions={<div className="ap-header-note"><ShieldCheck size={14} /> 凭据仅保存在当前浏览器</div>}
@@ -456,7 +460,7 @@ export default function AccountPage() {
           <div>
             <h1>{activeTab === "connections" ? "平台连接" : "写作资产"}</h1>
             <p>{activeTab === "connections"
-              ? "按平台管理发布能力，需要哪项就连接哪项。"
+              ? "通常先连接微信公众号即可。头条和小红书可以在需要发布时再配置。"
               : "文风、背景、反馈与历史表现各司其职，生成时按固定顺序读取。"}</p>
           </div>
           {activeTab === "connections" && <div className="ap-summary"><strong>{connectedPlatformCount}/3</strong><span>平台已连接</span></div>}
@@ -474,22 +478,29 @@ export default function AccountPage() {
         {activeTab === "connections" ? (
           <div className="ap-platform-list">
             <article className="ap-platform-row ap-platform-row--wechat">
-              <header className="ap-platform-head">
+              <button
+                type="button"
+                className="ap-platform-head"
+                aria-expanded={expandedPlatform === "wechat"}
+                onClick={() => setExpandedPlatform("wechat")}
+              >
                 <span className="ap-platform-mark ap-platform-mark--wechat">微</span>
                 <div>
                   <h2>微信公众号</h2>
-                  <p>写入草稿使用 AppID，数据同步与后台发表使用 Cookie，可分别连接。</p>
+                  <p>先连接草稿写入即可发文，数据同步属于可选能力。</p>
                 </div>
                 <span className={`ap-status ${wechatBound || wechatAnalyticsBound ? "ap-status--ok" : ""}`}>
                   {Number(wechatBound) + Number(wechatAnalyticsBound)}/2 项可用
                 </span>
-              </header>
+                <ChevronDown size={17} className={`ap-platform-chevron${expandedPlatform === "wechat" ? " is-open" : ""}`} />
+              </button>
 
-              <div className="ap-capability-grid">
-                <section className="ap-capability">
+              {expandedPlatform === "wechat" && (
+              <div className="ap-capability-grid ap-capability-grid--focused">
+                <section className="ap-capability ap-capability--primary">
                   <div className="ap-capability-title">
                     <BookOpen size={17} />
-                    <div><h3>草稿写入</h3><p>需要 AppID 与 AppSecret</p></div>
+                    <div><h3>发到公众号草稿</h3><p>日常发文只需要 AppID 与 AppSecret</p></div>
                     <span className={wechatBound ? "ready" : ""}>{wechatBound ? "已连接" : "未连接"}</span>
                   </div>
                   {wechatBound ? (
@@ -521,12 +532,20 @@ export default function AccountPage() {
                   )}
                 </section>
 
-                <section className="ap-capability">
-                  <div className="ap-capability-title">
+                <section className={`ap-capability ap-capability--optional${showWechatAdvanced ? " is-open" : ""}`}>
+                  <button
+                    type="button"
+                    className="ap-capability-title ap-capability-toggle"
+                    aria-expanded={showWechatAdvanced}
+                    onClick={() => setShowWechatAdvanced(value => !value)}
+                  >
                     <BarChart3 size={17} />
-                    <div><h3>后台自动化</h3><p>数据看板与草稿发表共用同一登录信息</p></div>
+                    <div><h3>数据同步与后台自动化</h3><p>可选，需要看板或后台操作时再连接</p></div>
                     <span className={wechatAnalyticsBound ? "ready" : ""}>{wechatAnalyticsBound ? "已连接" : "未连接"}</span>
-                  </div>
+                    <ChevronDown size={15} className={showWechatAdvanced ? "is-open" : ""} />
+                  </button>
+                  {showWechatAdvanced && (
+                  <>
                   {wechatAnalyticsBound ? (
                     <>
                       <div className="ap-account-brief ap-account-brief--plain">
@@ -554,16 +573,26 @@ export default function AccountPage() {
                       </div>
                     </form>
                   )}
+                  </>
+                  )}
                 </section>
               </div>
+              )}
             </article>
 
             <article className="ap-platform-row">
-              <header className="ap-platform-head">
+              <button
+                type="button"
+                className="ap-platform-head"
+                aria-expanded={expandedPlatform === "toutiao"}
+                onClick={() => setExpandedPlatform("toutiao")}
+              >
                 <span className="ap-platform-mark ap-platform-mark--toutiao">头</span>
                 <div><h2>今日头条</h2><p>一份 Cookie 同时用于读取账号数据与发布文章。</p></div>
                 <span className={`ap-status ${toutiaoBound ? "ap-status--ok" : ""}`}>{toutiaoBound ? "已连接" : "未连接"}</span>
-              </header>
+                <ChevronDown size={17} className={`ap-platform-chevron${expandedPlatform === "toutiao" ? " is-open" : ""}`} />
+              </button>
+              {expandedPlatform === "toutiao" && (
               <section className="ap-capability ap-capability--single">
                 {toutiaoBound ? (
                   <>
@@ -601,14 +630,22 @@ export default function AccountPage() {
                   </form>
                 )}
               </section>
+              )}
             </article>
 
             <article className="ap-platform-row">
-              <header className="ap-platform-head">
+              <button
+                type="button"
+                className="ap-platform-head"
+                aria-expanded={expandedPlatform === "xiaohongshu"}
+                onClick={() => setExpandedPlatform("xiaohongshu")}
+              >
                 <span className="ap-platform-mark ap-platform-mark--xiaohongshu">红</span>
                 <div><h2>小红书</h2><p>连接创作服务平台，用于图文笔记发布。</p></div>
                 <span className={`ap-status ${xiaohongshuBound ? "ap-status--ok" : ""}`}>{xiaohongshuBound ? "已连接" : "未连接"}</span>
-              </header>
+                <ChevronDown size={17} className={`ap-platform-chevron${expandedPlatform === "xiaohongshu" ? " is-open" : ""}`} />
+              </button>
+              {expandedPlatform === "xiaohongshu" && (
               <section className="ap-capability ap-capability--single">
                 {xiaohongshuBound ? (
                   <>
@@ -640,30 +677,44 @@ export default function AccountPage() {
                   </form>
                 )}
               </section>
+              )}
             </article>
           </div>
         ) : (
           <section className="ap-writing-profile" aria-label="写作资产">
             <div className="ap-writing-profile-head">
               <div>
-                <h2>写作资产总览</h2>
-                <p>长期规则只保存你明确确认的内容，任务、素材和当次选择仍以单篇文章为准。</p>
+                <h2>先完成前三项</h2>
+                <p>账号定位、写作风格和长期背景需要你确认；资产来源与写作取舍由系统自动积累。</p>
               </div>
               <button className="ap-btn ap-btn--dark" onClick={() => void saveWritingAssets()} disabled={profileLoading || profileSaving}>
                 {profileSaving ? "保存中…" : "保存写作资产"}
               </button>
             </div>
 
-            <div className="ap-asset-metrics" aria-label="写作资产统计">
-              <div><Sparkles size={17} /><strong>{assetOverview?.summary.dnaLayersCompleted ?? 0}/6</strong><span>文风层级</span></div>
-              <div><FileText size={17} /><strong>{assetOverview?.summary.memoryCharacters ?? 0}</strong><span>背景记忆字数</span></div>
-              <div><CheckCircle2 size={17} /><strong>{assetOverview?.summary.confirmedChoiceCount ?? 0}</strong><span>确认取舍</span></div>
-              <div><Zap size={17} /><strong>{assetOverview?.summary.promptCount ?? 0}</strong><span>提示词</span></div>
-              <div><Database size={17} /><strong>{assetOverview?.summary.materialArticleCount ?? 0}</strong><span>素材文章</span></div>
-              <div><GitBranch size={17} /><strong>{assetOverview?.summary.completedCandidateCount ?? 0}/{assetOverview?.summary.candidateCount ?? 0}</strong><span>完成候选</span></div>
-              <div><BarChart3 size={17} /><strong>{assetOverview?.summary.highPerformanceCount ?? 0}/{assetOverview?.summary.lowPerformanceCount ?? 0}</strong><span>高 / 低表现</span></div>
+            <div className="ap-writing-nav" role="tablist" aria-label="写作资产配置">
+              {([
+                ["persona", "1", "账号定位", "告诉 AI 你是谁", <Brain size={17} />],
+                ["dna", "2", "写作风格", "告诉 AI 文章怎么写", <Sparkles size={17} />],
+                ["memory", "3", "长期背景", "保存稳定事实", <FileText size={17} />],
+                ["sources", "自动", "资产来源", "提示词、素材与候选", <Database size={17} />],
+                ["decisions", "自动", "确认取舍", "沉淀人工修改", <CheckCircle2 size={17} />],
+              ] as Array<[WritingSection, string, string, string, ReactNode]>).map(([id, step, label, description, icon]) => (
+                <button
+                  type="button"
+                  role="tab"
+                  key={id}
+                  aria-selected={writingSection === id}
+                  onClick={() => setWritingSection(id)}
+                >
+                  <span className="ap-writing-nav-icon">{icon}</span>
+                  <span><b>{label}</b><small>{description}</small></span>
+                  <em>{step}</em>
+                </button>
+              ))}
             </div>
 
+            {writingSection === "persona" && (
             <section className="ap-asset-section" aria-labelledby="ap-persona-title">
               <div className="ap-asset-section-head ap-persona-head">
                 <div><span>作者身份</span><h3 id="ap-persona-title">账号人设</h3></div>
@@ -711,6 +762,9 @@ export default function AccountPage() {
                     placeholder="账号介绍、长期方向、公开身份"
                   />
                 </label>
+                <details className="ap-persona-advanced">
+                  <summary>更多人设信息（可选）<ChevronDown size={14} /></summary>
+                  <div className="ap-persona-grid ap-persona-grid--nested">
                 <label>
                   <span>人物经历</span>
                   <textarea
@@ -774,6 +828,8 @@ export default function AccountPage() {
                     placeholder="称呼习惯、公开边界、需要长期保持一致的信息"
                   />
                 </label>
+                  </div>
+                </details>
               </div>
               {writingProfile.persona.sourceArticleTitles.length > 0 ? (
                 <details className="ap-persona-sources">
@@ -785,7 +841,9 @@ export default function AccountPage() {
               ) : null}
               <p className="ap-asset-note">人设说明“作者是谁”，六层 DNA 说明“文章怎么写”。AI 分析只生成候选，保存后才进入文章提示词。</p>
             </section>
+            )}
 
+            {writingSection === "dna" && (
             <section className="ap-asset-section" aria-labelledby="ap-dna-title">
               <div className="ap-asset-section-head">
                 <div><span>长期表达规则</span><h3 id="ap-dna-title">六层写作 DNA</h3></div>
@@ -825,7 +883,9 @@ export default function AccountPage() {
                 ))}
               </div>
             </section>
+            )}
 
+            {writingSection === "memory" && (
             <section className="ap-asset-section" aria-labelledby="ap-memory-title">
               <div className="ap-asset-section-head">
                 <div><span>稳定事实</span><h3 id="ap-memory-title">长期背景记忆</h3></div>
@@ -842,11 +902,19 @@ export default function AccountPage() {
               />
               <p className="ap-asset-note">这里只保存身份、领域和稳定事实。文风规则放在六层 DNA，本篇资料放在文章素材。</p>
             </section>
+            )}
 
+            {writingSection === "sources" && (
             <section className="ap-asset-section" aria-labelledby="ap-sources-title">
               <div className="ap-asset-section-head">
                 <div><span>生产资料</span><h3 id="ap-sources-title">素材、候选与表现证据</h3></div>
                 <p>历史表现用于提出假设，不直接改写文风规则。</p>
+              </div>
+              <div className="ap-asset-metrics ap-asset-metrics--compact" aria-label="写作资产统计">
+                <div><Zap size={17} /><strong>{assetOverview?.summary.promptCount ?? 0}</strong><span>提示词</span></div>
+                <div><Database size={17} /><strong>{assetOverview?.summary.materialArticleCount ?? 0}</strong><span>素材文章</span></div>
+                <div><GitBranch size={17} /><strong>{assetOverview?.summary.completedCandidateCount ?? 0}/{assetOverview?.summary.candidateCount ?? 0}</strong><span>完成候选</span></div>
+                <div><BarChart3 size={17} /><strong>{assetOverview?.summary.highPerformanceCount ?? 0}/{assetOverview?.summary.lowPerformanceCount ?? 0}</strong><span>高 / 低表现</span></div>
               </div>
               <div className="ap-asset-links">
                 <button onClick={() => navigate("/prompts")}><Zap size={18} /><span><strong>提示词</strong><small>{assetOverview?.summary.promptCount ?? 0} 条，管理生成与审核指令</small></span><ExternalLink size={14} /></button>
@@ -855,7 +923,9 @@ export default function AccountPage() {
                 <button onClick={() => navigate("/insights")}><BarChart3 size={18} /><span><strong>高低表现文章</strong><small>{assetOverview?.summary.highPerformanceCount ?? 0} 篇高表现，{assetOverview?.summary.lowPerformanceCount ?? 0} 篇低表现</small></span><ExternalLink size={14} /></button>
               </div>
             </section>
+            )}
 
+            {writingSection === "decisions" && (
             <section className="ap-asset-section" aria-labelledby="ap-decisions-title">
               <div className="ap-asset-section-head">
                 <div><span>人工确认</span><h3 id="ap-decisions-title">作者已确认的取舍</h3></div>
@@ -871,6 +941,7 @@ export default function AccountPage() {
                 )) : <div className="ap-decision-empty">还没有确认过写作取舍。文章手改后，可在审核页记录可复用选择。</div>}
               </div>
             </section>
+            )}
           </section>
         )}
       </section>

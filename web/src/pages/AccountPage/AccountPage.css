@@ -92,15 +92,36 @@
 }
 
 .ap-platform-row {
-  padding: 28px 0;
+  padding: 0;
   border-bottom: 1px solid var(--color-surface-strong);
 }
 
 .ap-platform-head {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) auto;
+  grid-template-columns: 38px minmax(0, 1fr) auto 18px;
   align-items: center;
   gap: 14px;
+  width: 100%;
+  padding: 20px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ap-platform-head:hover h2 {
+  color: var(--color-brand-teal);
+}
+
+.ap-platform-chevron {
+  color: var(--color-muted);
+  transition: transform .16s ease;
+}
+
+.ap-platform-chevron.is-open {
+  transform: rotate(180deg);
 }
 
 .ap-platform-mark {
@@ -143,11 +164,15 @@
 .ap-capability-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin: 22px 0 0 52px;
+  margin: 0 0 20px 52px;
   border: 1px solid var(--color-surface-strong);
   border-radius: var(--rounded-sm);
   background: var(--color-surface-soft);
   overflow: hidden;
+}
+
+.ap-capability-grid--focused {
+  grid-template-columns: minmax(0, 1.2fr) minmax(300px, .8fr);
 }
 
 .ap-capability {
@@ -158,13 +183,48 @@
   padding: 20px;
 }
 
+.ap-capability--primary {
+  background: var(--color-canvas);
+}
+
+.ap-capability--optional {
+  min-height: 0;
+  background: var(--color-surface-soft);
+}
+
+.ap-capability-toggle {
+  grid-template-columns: 22px minmax(0, 1fr) auto 16px;
+  width: 100%;
+  margin-bottom: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ap-capability--optional.is-open .ap-capability-toggle {
+  margin-bottom: 18px;
+}
+
+.ap-capability-toggle > svg:last-child {
+  color: var(--color-muted);
+  transition: transform .16s ease;
+}
+
+.ap-capability-toggle > svg:last-child.is-open {
+  transform: rotate(180deg);
+}
+
 .ap-capability + .ap-capability {
   border-left: 1px solid var(--color-surface-strong);
 }
 
 .ap-capability--single {
   min-height: 0;
-  margin: 18px 0 0 52px;
+  margin: 0 0 20px 52px;
   padding: 20px;
   border: 1px solid var(--color-surface-strong);
   border-radius: var(--rounded-sm);
@@ -564,6 +624,92 @@
   font-size: 13px;
 }
 
+.ap-writing-nav {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 20px 0 8px;
+  border: 1px solid var(--color-surface-strong);
+  border-radius: var(--rounded-sm);
+  overflow: hidden;
+}
+
+.ap-writing-nav button {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  min-height: 76px;
+  padding: 12px;
+  border: 0;
+  border-right: 1px solid var(--color-surface-strong);
+  background: var(--color-canvas);
+  color: var(--color-body);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ap-writing-nav button:last-child {
+  border-right: 0;
+}
+
+.ap-writing-nav button:hover {
+  background: var(--color-surface-soft);
+}
+
+.ap-writing-nav button[aria-selected="true"] {
+  background: var(--color-brand-teal);
+  color: var(--color-on-primary);
+}
+
+.ap-writing-nav-icon {
+  display: grid;
+  place-items: center;
+  color: var(--color-brand-teal);
+}
+
+.ap-writing-nav button[aria-selected="true"] .ap-writing-nav-icon {
+  color: var(--color-brand-ochre);
+}
+
+.ap-writing-nav button > span:nth-child(2) {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ap-writing-nav b {
+  font-size: 13px;
+}
+
+.ap-writing-nav small {
+  overflow: hidden;
+  color: var(--color-muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ap-writing-nav button[aria-selected="true"] small {
+  color: var(--color-on-dark-soft);
+}
+
+.ap-writing-nav em {
+  position: absolute;
+  top: 6px;
+  right: 7px;
+  color: var(--color-muted-soft);
+  font-size: 9px;
+  font-style: normal;
+}
+
+.ap-writing-nav button[aria-selected="true"] em {
+  color: var(--color-brand-mint);
+}
+
 .ap-asset-metrics {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -601,8 +747,23 @@
   font-size: 11px;
 }
 
+.ap-asset-metrics--compact {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0 0 20px;
+}
+
+.ap-asset-metrics--compact > div {
+  min-height: 82px;
+  padding: 12px;
+}
+
+.ap-asset-metrics--compact strong {
+  margin-top: 7px;
+  font-size: 17px;
+}
+
 .ap-asset-section {
-  padding: 34px 0 42px;
+  padding: 24px 0 32px;
   border-top: 1px solid var(--color-surface-strong);
 }
 
@@ -856,6 +1017,40 @@
 
 .ap-persona-wide {
   grid-column: 1 / -1;
+}
+
+.ap-persona-advanced {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-surface-strong);
+}
+
+.ap-persona-advanced summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-brand-teal);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.ap-persona-advanced summary::-webkit-details-marker {
+  display: none;
+}
+
+.ap-persona-advanced summary svg {
+  transition: transform .16s ease;
+}
+
+.ap-persona-advanced[open] summary svg {
+  transform: rotate(180deg);
+}
+
+.ap-persona-grid--nested {
+  margin-top: 14px;
 }
 
 .ap-persona-sources {
@@ -1117,6 +1312,23 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .ap-writing-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ap-writing-nav button {
+    border-bottom: 1px solid var(--color-surface-strong);
+  }
+
+  .ap-writing-nav button:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .ap-writing-nav button:last-child {
+    grid-column: 1 / -1;
+    border-bottom: 0;
+  }
+
   .ap-asset-metrics > div {
     border-bottom: 1px solid var(--color-surface-strong);
   }
@@ -1127,6 +1339,10 @@
 
   .ap-asset-metrics > div:last-child {
     grid-column: 1 / -1;
+  }
+
+  .ap-asset-metrics--compact > div:last-child {
+    grid-column: auto;
   }
 
   .ap-asset-section-head {
@@ -1203,10 +1419,16 @@
   }
 
   .ap-platform-head {
-    grid-template-columns: 38px minmax(0, 1fr);
+    grid-template-columns: 38px minmax(0, 1fr) 18px;
   }
 
   .ap-platform-head > .ap-status {
     grid-column: 2;
+    grid-row: 2;
+  }
+
+  .ap-platform-head > .ap-platform-chevron {
+    grid-column: 3;
+    grid-row: 1 / span 2;
   }
 }

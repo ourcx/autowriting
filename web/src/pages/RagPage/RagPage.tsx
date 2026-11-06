@@ -264,6 +264,7 @@ export default function RagPage() {
       />
 
       <div className="rp-body">
+        <div className="rp-main-column">
 
         {/* ══ Embedding 配置 ══ */}
         <section className="rp-section">
@@ -609,6 +610,9 @@ export default function RagPage() {
             </div>
           </div>
         </section>
+        </div>
+
+        <aside className="rp-side-column">
 
         {/* ══ 索引状态 ══ */}
         <section className="rp-section">
@@ -747,9 +751,10 @@ export default function RagPage() {
             </div>
           )}
         </section>
+        </aside>
 
         {/* ══ 使用说明 ══ */}
-        <section className="rp-section">
+        <section className="rp-section rp-guide-section">
           <div className="rp-section-label">使用说明</div>
           <div className="rp-guide-grid">
             <div className="rp-guide-card rp-guide-card--teal">

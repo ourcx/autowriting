@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Save, Check, Eye, EyeOff, AlertCircle, CheckCircle2,
   Zap, Image, Search, ChevronRight, ShieldAlert,
-  ExternalLink, Layers,
+  ExternalLink, Layers, Sparkles, ArrowRight,
 } from 'lucide-react'
 import {
   AIConfig,
@@ -18,9 +18,10 @@ import { useConfigStore, setLocalConfig, fetchServerStatus } from '../../store/u
 import { testAIConnection } from '../../utils/apiHelpers'
 import './AISettings.css'
 
-type Section = 'providers' | 'article' | 'cover' | 'search' | 'advanced' | 'cdn'
+type Section = 'quickstart' | 'providers' | 'article' | 'cover' | 'search' | 'advanced' | 'cdn'
 
 const NAV_ITEMS: { id: Section; icon: React.ReactNode; label: string; sub: string }[] = [
+  { id: 'quickstart', icon: <Sparkles size={16} />, label: '快速开始', sub: '一个 Key 先跑起来' },
   { id: 'providers', icon: <ShieldAlert size={16} />, label: '公共 Key', sub: '按服务商统一复用' },
   { id: 'article', icon: <Zap size={16} />, label: '文章生成', sub: '大语言模型 API' },
   { id: 'cover', icon: <Image size={16} />, label: '封面生成', sub: '图片生成 API' },
@@ -39,7 +40,7 @@ export default function AISettings() {
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({})
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
-  const [activeSection, setActiveSection] = useState<Section>('providers')
+  const [activeSection, setActiveSection] = useState<Section>('quickstart')
 
   useEffect(() => {
     setConfig(loadAIConfig())
@@ -85,102 +86,71 @@ export default function AISettings() {
     }
   }
 
+  const applyRecommendedSetup = () => {
+    set({
+      articleProvider: 'zhipu',
+      articleBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+      articleModel: 'glm-5.3-flash',
+      articleApiKey: '',
+      coverProvider: 'zhipu',
+      zhipuImageApiKey: '',
+      searchProvider: 'zhipu',
+      searchApiKey: '',
+      glmApiKey: '',
+    })
+  }
+
+  const handleSaveAndStart = () => {
+    setLocalConfig(config)
+    navigate('/')
+  }
+
   const selectedArticlePreset = PROVIDER_PRESETS.find(p => p.id === config.articleProvider)
 
   // ── 配置状态（每个 key 的状态） ──────────────────────────────────────────
-  const localMaas = config.articleProvider === 'maas' && !!config.maasApiKey
-  const localOpenai = config.articleProvider !== 'maas' && config.articleProvider !== 'zhipu' && !!config.articleApiKey
-  const localZhipu = !!config.zhipuApiKey
-  const localSiliconflow = !!config.siliconflowApiKey
-  const localDoubao = !!config.doubaoApiKey && !!config.doubaoModel
-  const localCoverKey = !!config.coverApiKey
+  const localArticleReady = config.articleProvider === 'maas'
+    ? Boolean(config.maasApiKey)
+    : config.articleProvider === 'zhipu'
+      ? Boolean(config.articleApiKey || config.zhipuApiKey)
+      : Boolean(config.articleApiKey)
+  const localCoverReady = config.coverProvider === 'local'
+    || (config.coverProvider === 'openrouter' && Boolean(config.openrouterApiKey))
+    || (config.coverProvider === 'zhipu' && Boolean(config.zhipuImageApiKey || config.zhipuApiKey))
+    || (config.coverProvider === 'doubao' && Boolean(config.doubaoApiKey && config.doubaoModel))
+    || (['siliconflow', 'z-image', 'qwen-edit'].includes(config.coverProvider) && Boolean(config.siliconflowApiKey))
+    || (['openai', 'stability'].includes(config.coverProvider) && Boolean(config.coverApiKey))
   const localSearchKey = config.searchProvider === 'searxng'
     || (config.searchProvider === 'zhipu' ? !!(config.searchApiKey || config.zhipuApiKey || config.glmApiKey || config.articleApiKey) : !!config.searchApiKey)
   const localCdn = (config.cdnProvider === 'imgur' && !!config.imgurClientId)
     || (config.cdnProvider === 'github' && !!config.githubToken && !!config.githubRepo)
+  const recommendedApplied = config.articleProvider === 'zhipu'
+    && config.coverProvider === 'zhipu'
+    && config.searchProvider === 'zhipu'
+  const recommendedReady = recommendedApplied && Boolean(config.zhipuApiKey || serverStatus?.zhipuReady)
 
   const STATUS_CARDS = [
     {
-      label: '智谱公共 Key',
-      local: localZhipu,
-      server: !!serverStatus?.zhipuReady,
+      label: '文章生成',
+      local: localArticleReady,
+      server: !!serverStatus?.articleReady,
       serverNote: '服务端',
-      color: 'teal',
-      section: 'providers' as Section,
-    },
-    {
-      label: 'MaaS',
-      local: localMaas,
-      server: !!serverStatus?.maasReady,
-      serverNote: serverStatus?.maasEmail || '服务端',
       color: 'teal',
       section: 'article' as Section,
     },
     {
-      label: 'OpenAI',
-      local: localOpenai,
-      server: !!serverStatus?.openaiReady,
-      serverNote: '服务端',
-      color: 'lavender',
-      section: 'article' as Section,
-    },
-    {
-      label: '豆包图片',
-      local: localDoubao,
-      server: !!serverStatus?.doubaoReady,
-      serverNote: '服务端',
-      color: 'mint',
-      section: 'cover' as Section,
-    },
-    {
-      label: 'OpenRouter GPT Image 2',
-      local: !!config.openrouterApiKey,
-      server: !!serverStatus?.openrouterReady,
+      label: '封面生成',
+      local: localCoverReady,
+      server: config.coverProvider === 'openrouter' ? false : !!serverStatus?.coverReady,
       serverNote: '服务端',
       color: 'lavender',
       section: 'cover' as Section,
     },
     {
-      label: 'SiliconFlow',
-      local: localSiliconflow,
-      server: !!serverStatus?.siliconflowReady,
-      serverNote: '服务端',
-      color: 'peach',
-      section: 'cover' as Section,
-    },
-    {
-      label: 'DALL-E',
-      local: config.coverProvider === 'openai' && localCoverKey,
-      server: !!serverStatus?.dalleReady,
-      serverNote: '服务端',
-      color: 'ochre',
-      section: 'cover' as Section,
-    },
-    {
-      label: 'Stability',
-      local: config.coverProvider === 'stability' && localCoverKey,
-      server: !!serverStatus?.stabilityReady,
-      serverNote: '服务端',
-      color: 'pink',
-      section: 'cover' as Section,
-    },
-    {
-      label: '搜索引擎',
+      label: '素材搜索',
       local: localSearchKey,
       server: false,
       serverNote: '',
       color: 'mint',
-      section: 'search' as Section,
-    },
-    {
-      label: '公众号采集',
-      local: false,
-      server: Boolean(
-        serverStatus?.wechatCollectorReady?.tikhub
-        || serverStatus?.wechatCollectorReady?.dajiala
-      ),
-      serverNote: '服务端',
-      color: 'teal',
       section: 'search' as Section,
     },
     {
@@ -196,8 +166,8 @@ export default function AISettings() {
   return (
     <div className="as-root">
       <PageHeader
-        title="API 配置"
-        subtitle="管理文章生成、封面、搜索与图床服务"
+        title="AI 配置"
+        subtitle="先用推荐方案开始，需要时再调整"
         onBack={() => navigate(-1)}
         actions={(
           <button className={`as-save-btn${saved ? ' as-save-btn--ok' : ''}`} onClick={handleSave}>
@@ -211,7 +181,7 @@ export default function AISettings() {
       <div className="as-security-banner">
         <ShieldAlert size={14} className="as-security-banner-icon" />
         <span>
-          OpenRouter Key 仅保存在<strong>当前浏览器</strong>，生成封面时发送给服务端。其他服务商配置会同步到服务端数据库供定时任务使用，读取需要登录鉴权。请勿将 Key 分享给他人。
+          OpenRouter Key 仅保存在<strong>当前浏览器</strong>，GPT Image 2 由浏览器直接请求 OpenRouter。其他服务商配置会同步到服务端供定时任务使用。
         </span>
       </div>
 
@@ -288,6 +258,99 @@ export default function AISettings() {
 
         {/* ── 右侧内容 ── */}
         <main className="as-content">
+
+          {/* ════ 快速开始 ════ */}
+          {activeSection === 'quickstart' && (
+            <div className="as-panel">
+              <div className="as-panel-header">
+                <h2 className="as-panel-title">先配置一套能用的</h2>
+                <p className="as-panel-desc">不需要把所有服务都配完。推荐方案只填一个 Key，就能写文章、生成封面和搜索素材。</p>
+              </div>
+
+              <div className="as-card as-quick-card">
+                <div className="as-quick-heading">
+                  <div>
+                    <span className="as-card-tag as-card-tag--teal">推荐 · 最少配置</span>
+                    <h3>智谱一站式方案</h3>
+                    <p>文章用 GLM，封面用 GLM-Image，素材搜索也复用同一个 Key。</p>
+                  </div>
+                  <button
+                    className={`as-quick-apply${recommendedApplied ? ' as-quick-apply--active' : ''}`}
+                    onClick={applyRecommendedSetup}
+                  >
+                    {recommendedApplied ? <Check size={15} /> : <Sparkles size={15} />}
+                    {recommendedApplied ? '已选用' : '一键使用'}
+                  </button>
+                </div>
+
+                <div className="as-quick-capabilities" aria-label="推荐方案能力">
+                  {[
+                    ['文章生成', 'GLM-5.3 Flash'],
+                    ['封面生成', 'GLM-Image'],
+                    ['素材搜索', '智谱 Web Search'],
+                  ].map(([label, detail]) => (
+                    <div className="as-quick-capability" key={label}>
+                      {recommendedReady
+                        ? <CheckCircle2 size={17} />
+                        : <span className="as-quick-step-dot" />}
+                      <span><strong>{label}</strong><small>{detail}</small></span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="as-card-divider" />
+
+                <div className="as-field">
+                  <label className="as-label">智谱 API Key</label>
+                  <div className="as-key-wrap">
+                    <input
+                      className="as-input as-input-mono"
+                      type={showKeys['quick-zhipu'] ? 'text' : 'password'}
+                      value={config.zhipuApiKey}
+                      onChange={e => set({ zhipuApiKey: e.target.value })}
+                      placeholder={serverStatus?.zhipuReady ? '服务端已配置，可直接开始' : '填一次即可，不用再配置三个服务'}
+                    />
+                    <button className="as-eye-btn" onClick={() => toggleKey('quick-zhipu')} aria-label="显示或隐藏 API Key">
+                      {showKeys['quick-zhipu'] ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                  <p className="as-hint">
+                    没有 Key？前往 <a href="https://bigmodel.cn/usercenter/proj-mgmt/apikeys" target="_blank" rel="noreferrer">智谱开放平台</a> 获取。
+                    {serverStatus?.zhipuReady ? ' 当前服务端已有可用配置。' : ''}
+                  </p>
+                </div>
+
+                <div className="as-quick-actions">
+                  <button
+                    className="as-btn-test"
+                    onClick={handleTest}
+                    disabled={testing || !config.zhipuApiKey || !recommendedApplied}
+                  >
+                    {testing ? '测试中...' : '测试连接'}
+                  </button>
+                  <button
+                    className="as-quick-start"
+                    onClick={handleSaveAndStart}
+                    disabled={!recommendedReady}
+                  >
+                    保存并开始写作
+                    <ArrowRight size={15} />
+                  </button>
+                </div>
+                {testResult && (
+                  <span className={`as-test-msg${testResult.ok ? ' as-test-msg--ok' : ' as-test-msg--err'}`}>
+                    {testResult.ok ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
+                    {testResult.msg}
+                  </span>
+                )}
+              </div>
+
+              <button className="as-detail-link" onClick={() => setActiveSection('article')}>
+                我想分别选择文章、封面和搜索服务
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
 
           {/* ════ 服务商公共 Key ════ */}
           {activeSection === 'providers' && (
@@ -390,7 +453,7 @@ export default function AISettings() {
               {/* 快速预设方案 */}
               <div className="as-card">
                 <div className="as-card-section-label">快速预设方案</div>
-                <p className="as-card-desc">一键应用推荐配置，无需逐个填写 API Key</p>
+                <p className="as-card-desc">一键选择服务与模型，应用后只需填写该方案对应的 Key</p>
                 <div className="as-provider-grid">
                   {CONFIG_PRESETS.map(preset => (
                     <button
@@ -529,9 +592,36 @@ export default function AISettings() {
             <div className="as-panel">
               <div className="as-panel-header">
                 <h2 className="as-panel-title">封面生成</h2>
-                <p className="as-panel-desc">封面生成器支持多种图片服务，Key 填了才能用对应服务</p>
+                <p className="as-panel-desc">先选一个默认服务，下面只填写这个服务需要的配置</p>
               </div>
 
+              <div className="as-card">
+                <div className="as-card-section-label">默认封面服务</div>
+                <div className="as-provider-grid">
+                  {COVER_PROVIDER_PRESETS.map(p => (
+                    <button
+                      key={p.id}
+                      className={`as-provider-tile${config.coverProvider === p.id ? ' as-provider-tile--active' : ''}`}
+                      onClick={() => set({ coverProvider: p.id })}
+                    >
+                      <span className="as-pt-name">{p.name}</span>
+                      <span className="as-pt-desc">{p.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {config.coverProvider === 'local' && (
+                <div className="as-card as-card--hint">
+                  <div className="as-card-label-row">
+                    <span className="as-card-section-label">SVG 占位封面</span>
+                    <span className="as-card-tag as-card-tag--teal">无需配置</span>
+                  </div>
+                  <p className="as-card-desc">可以直接开始写作，需要正式图片时再切换其他服务。</p>
+                </div>
+              )}
+
+              {config.coverProvider === 'zhipu' && (
               <div className="as-card">
                 <div className="as-card-label-row">
                   <span className="as-card-section-label">智谱 GLM-Image</span>
@@ -554,7 +644,9 @@ export default function AISettings() {
                   </div>
                 </div>
               </div>
+              )}
 
+              {config.coverProvider === 'doubao' && (
               <div className="as-card">
                 <div className="as-card-label-row">
                   <span className="as-card-section-label">火山方舟</span>
@@ -600,8 +692,10 @@ export default function AISettings() {
                   </p>
                 </div>
               </div>
+              )}
 
               {/* SiliconFlow — Kolors / Z-Image / Qwen 图编 */}
+              {['siliconflow', 'z-image', 'qwen-edit'].includes(config.coverProvider) && (
               <div className="as-card">
                 <div className="as-card-label-row">
                   <span className="as-card-section-label">SiliconFlow</span>
@@ -642,15 +736,17 @@ export default function AISettings() {
                   </datalist>
                 </div>
               </div>
+              )}
 
               {/* DALL-E / Stability */}
+              {['openai', 'stability'].includes(config.coverProvider) && (
               <div className="as-card">
                 <div className="as-card-label-row">
-                  <span className="as-card-section-label">OpenAI / Stability</span>
-                  <span className="as-card-tag as-card-tag--ochre">DALL-E 3 · Stability AI</span>
+                  <span className="as-card-section-label">{config.coverProvider === 'openai' ? 'OpenAI' : 'Stability AI'}</span>
+                  <span className="as-card-tag as-card-tag--ochre">{config.coverProvider === 'openai' ? 'DALL-E 3' : 'Stable Diffusion'}</span>
                 </div>
                 <div className="as-field">
-                  <label className="as-label">API Key</label>
+                  <label className="as-label">{config.coverProvider === 'openai' ? 'OpenAI API Key' : 'Stability API Key'}</label>
                   <div className="as-key-wrap">
                     <input
                       className="as-input as-input-mono"
@@ -663,12 +759,19 @@ export default function AISettings() {
                       {showKeys['cover'] ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
                   </div>
-                  <p className="as-hint">DALL-E 3 填 OpenAI Key；Stability AI 填 Stability Key。文章 Key 与封面 Key 相同时复制即可。</p>
+                  <p className="as-hint">
+                    {config.coverProvider === 'openai' ? '文章也使用 OpenAI 时，可以填写同一个 Key。' : '填写 Stability AI 控制台生成的 Key。'}
+                  </p>
                 </div>
               </div>
+              )}
 
+              {config.coverProvider === 'openrouter' && (
               <div className="as-card">
-                <div className="as-card-section-label">OpenRouter · GPT Image 2</div>
+                <div className="as-card-label-row">
+                  <span className="as-card-section-label">OpenRouter · GPT Image 2</span>
+                  <span className="as-card-tag as-card-tag--lavender">浏览器直连</span>
+                </div>
                 <div className="as-field">
                   <label className="as-label">API Key</label>
                   <div className="as-key-wrap">
@@ -683,29 +786,10 @@ export default function AISettings() {
                       {showKeys['openrouter'] ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
                   </div>
-                  <p className="as-hint">仅保存在当前浏览器，生成封面时发送给服务端调用 OpenRouter；不会写入服务端配置。</p>
+                  <p className="as-hint">仅保存在当前浏览器，生成封面时由浏览器直接请求 OpenRouter，不经过部署服务器。</p>
                 </div>
               </div>
-
-              {/* 默认 provider */}
-              <div className="as-card">
-                <div className="as-card-section-label">默认封面服务</div>
-                <p className="as-card-desc">封面生成器里可随时切换，这里设默认值。GPT Image 2 的 Key 可在上方填写。</p>
-                <div className="as-provider-grid">
-                  {COVER_PROVIDER_PRESETS.map(p => (
-                    <>
-                      <button
-                        key={p.id}
-                        className={`as-provider-tile${config.coverProvider === p.id ? ' as-provider-tile--active' : ''}`}
-                        onClick={() => set({ coverProvider: p.id })}
-                      >
-                        <span className="as-pt-name">{p.name}</span>
-                        <span className="as-pt-desc">{p.desc}</span>
-                      </button>
-                    </>
-                  ))}
-                </div>
-              </div>
+              )}
             </div>
           )}
 

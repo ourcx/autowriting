@@ -289,7 +289,10 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
               <div className="dash-article-right">
                 {['review', 'ready', 'wechat_draft', 'generated', 'published'].includes(article.status) && (
                   <div className="dash-platform-actions">
-                    <button title="公众号预览与推送" aria-label={`公众号：${article.title}`} onClick={() => onPublishArticle(article.id, article.title, 'wechat')}><MessageCircle size={16} /></button>
+                    <button className="dash-wechat-publish" title="公众号预览与推送" aria-label={`公众号：${article.title}`} onClick={() => onPublishArticle(article.id, article.title, 'wechat')}>
+                      <MessageCircle size={16} />
+                      <span>推微信</span>
+                    </button>
                     <button title="今日头条预览与发布" aria-label={`今日头条：${article.title}`} onClick={() => onPublishArticle(article.id, article.title, 'toutiao')}><Newspaper size={16} /></button>
                     <button title="小红书预览与发布" aria-label={`小红书：${article.title}`} onClick={() => onPublishArticle(article.id, article.title, 'xiaohongshu')}><BookOpen size={16} /></button>
                   </div>
@@ -476,7 +479,13 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
         {!loading && !loadError && resumeArticle && (
           <section className="dash-resume" aria-label="继续创作">
             <div><span>{STATUS_META[resumeArticle.status]?.label || '继续创作'}</span><h2>{resumeArticle.title || '未命名文章'}</h2></div>
-            <button onClick={() => onEditArticle?.(resumeArticle.id, resumeArticle.title)}>继续处理<ArrowRight size={16} /></button>
+            <button onClick={() => resumeArticle.status === 'ready'
+              ? onPublishArticle(resumeArticle.id, resumeArticle.title, 'wechat')
+              : onEditArticle?.(resumeArticle.id, resumeArticle.title)}
+            >
+              {resumeArticle.status === 'ready' ? '发布到微信' : '继续处理'}
+              <ArrowRight size={16} />
+            </button>
           </section>
         )}
         {/* 本地存储警告横幅 */}

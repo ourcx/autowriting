@@ -4,25 +4,13 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from '../Toast/Toast'
 import './CoverGenerator.css'
 import { loadAIConfig, type CoverProvider } from '../../utils/aiConfig'
-import { generateCoverImage, getOpenRouterServerReady, uploadBase64Image } from '../../utils/apiHelpers'
+import { generateCoverImage, generateOpenRouterCoverInBrowser, uploadBase64Image } from '../../utils/apiHelpers'
 
 interface CoverGeneratorProps {
   title: string
   content: string
   articleId?: string
   onCoverGenerated?: (imageUrl: string) => void
-}
-
-interface StyleOption {
-  id: string
-  name: string
-  desc: string
-}
-
-interface ColorOption {
-  id: string
-  name: string
-  hex: string
 }
 
 interface ProviderOption {
@@ -35,29 +23,11 @@ interface ProviderOption {
   keyLabel: string
 }
 
-const COVER_STYLES: StyleOption[] = [
-  { id: 'modern',       name: '现代',   desc: '扁平几何，强版面' },
-  { id: 'minimalist',   name: '极简',   desc: '留白为主，单色调' },
-  { id: 'gradient',     name: '渐变',   desc: '双色渐变，当代感' },
-  { id: 'illustration', name: '插画',   desc: '扁平插图，编辑风' },
-  { id: 'photography',  name: '摄影',   desc: '电影感，杂志封面' },
-  { id: 'abstract',     name: '抽象',   desc: '几何形体，动感构成' },
-]
-
-const COVER_COLORS: ColorOption[] = [
-  { id: 'matcha',      name: '抹茶绿', hex: '#078a52' },
-  { id: 'slushie',     name: '冰沙蓝', hex: '#3bd3fd' },
-  { id: 'lemon',       name: '柠檬黄', hex: '#fbbd41' },
-  { id: 'ube',         name: '紫薯紫', hex: '#43089f' },
-  { id: 'pomegranate', name: '石榴红', hex: '#fc7981' },
-  { id: 'blueberry',   name: '蓝莓蓝', hex: '#01418d' },
-]
-
 const PROVIDERS: ProviderOption[] = [
   {
     id: 'openrouter',
     name: 'GPT Image 2',
-    desc: 'OpenRouter，2.35:1 公众号封面',
+    desc: 'OpenRouter，浏览器直连',
     requiresKey: 'openrouterApiKey',
     keyLabel: 'OpenRouter API Key',
   },
@@ -123,6 +93,10 @@ const PROVIDERS: ProviderOption[] = [
 const coverStorageKey = (id?: string) =>
   id ? `cover_image_${id}` : null
 
+function defaultCoverPrompt(title: string): string {
+  return `生成一个微信公众号文章封面，画幅 2.35:1，简约、有设计感，不使用写实物体，不添加 Logo 或水印。文章标题是：${title.trim() || '公众号文章标题'}。`
+}
+
 export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
   title,
   content,
@@ -130,12 +104,9 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
   onCoverGenerated,
 }) => {
   const navigate = useNavigate()
-  const [serverOpenrouterReady, setServerOpenrouterReady] = useState(false)
 
-  const [selectedStyle,  setSelectedStyle]  = useState('modern')
-  const [selectedColor,  setSelectedColor]  = useState('matcha')
   const [provider,       setProvider]       = useState<CoverProvider>(() => loadAIConfig().coverProvider)
-  const [customPrompt,   setCustomPrompt]   = useState('')
+  const [customPrompt,   setCustomPrompt]   = useState(() => defaultCoverPrompt(title))
   const [isGenerating,   setIsGenerating]   = useState(false)
   const [generatedImage, setGeneratedImage] = useState<string | null>(null)
   const [error,          setError]          = useState<string | null>(null)
@@ -143,6 +114,13 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
   const [isSavingToLibrary, setIsSavingToLibrary] = useState(false)
   const [isDragOver,        setIsDragOver]        = useState(false)
   const pasteZoneRef = useRef<HTMLDivElement>(null)
+  const previousDefaultPromptRef = useRef(defaultCoverPrompt(title))
+
+  useEffect(() => {
+    const nextDefaultPrompt = defaultCoverPrompt(title)
+    setCustomPrompt(current => current === previousDefaultPromptRef.current ? nextDefaultPrompt : current)
+    previousDefaultPromptRef.current = nextDefaultPrompt
+  }, [title])
 
   // 挂载时从 localStorage 恢复封面（刷新后保持）
   useEffect(() => {
@@ -155,15 +133,6 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
     }
   }, [articleId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // provider 切换时检查 key
-  useEffect(() => {
-    let active = true
-    getOpenRouterServerReady()
-      .then(ready => { if (active) setServerOpenrouterReady(ready) })
-      .catch(() => {})
-    return () => { active = false }
-  }, [])
-
   useEffect(() => {
     const cfg  = loadAIConfig()
     const prov = PROVIDERS.find(p => p.id === provider)
@@ -175,8 +144,8 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
       ? cfg.zhipuImageApiKey || cfg.zhipuApiKey
       : (cfg[prov.requiresKey] as string | undefined) || ''
     const modelReady = provider !== 'doubao' || Boolean(cfg.doubaoModel.trim())
-    setMissingKey((keyVal.trim() && modelReady) || (provider === 'openrouter' && serverOpenrouterReady) ? null : prov.keyLabel)
-  }, [provider, serverOpenrouterReady])
+    setMissingKey(keyVal.trim() && modelReady ? null : prov.keyLabel)
+  }, [provider])
 
   const handleGenerate = async () => {
     if (!title.trim()) {
@@ -192,10 +161,10 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
       const body: Record<string, unknown> = {
         title,
         content: content.substring(0, 500),
-        style: selectedStyle,
-        color: selectedColor,
+        style: 'prompt',
+        color: 'auto',
         provider,
-        customPrompt: provider === 'openrouter' ? undefined : customPrompt.trim() || undefined,
+        customPrompt: customPrompt.trim(),
         aiConfig: {
           siliconflowApiKey: aiConfig.siliconflowApiKey,
           siliconflowModel:  aiConfig.siliconflowModel,
@@ -203,7 +172,6 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
           doubaoBaseUrl:     aiConfig.doubaoBaseUrl,
           doubaoModel:       aiConfig.doubaoModel,
           coverApiKey:       aiConfig.coverApiKey,
-          openrouterApiKey:  provider === 'openrouter' ? aiConfig.openrouterApiKey : undefined,
           articleApiKey:     aiConfig.articleApiKey,
           zhipuApiKey:       aiConfig.zhipuApiKey,
           zhipuImageApiKey:  aiConfig.zhipuImageApiKey,
@@ -215,7 +183,27 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
         body.baseImageUrl = generatedImage
       }
 
-      const data = await generateCoverImage(body)
+      let data = provider === 'openrouter'
+        ? await generateOpenRouterCoverInBrowser(customPrompt, aiConfig.openrouterApiKey)
+        : await generateCoverImage(body)
+
+      if (provider === 'openrouter') {
+        try {
+          const uploaded = await uploadBase64Image({
+            data: data.imageUrl,
+            mimeType: 'image/png',
+            originalName: `cover-${title}-${Date.now()}.png`,
+            articleId,
+          })
+          data = {
+            imageUrl: uploaded.url.startsWith('http')
+              ? uploaded.url
+              : `${window.location.origin}${uploaded.url}`,
+          }
+        } catch {
+          toast.warn('封面已生成，但保存到图片库失败，请先下载备份')
+        }
+      }
 
       // ── 响应诊断日志 ──────────────────────────────────────────────────────
       console.group('[CoverGenerator] 服务端响应')
@@ -392,74 +380,23 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
           </div>
         )}
 
-        {provider !== 'openrouter' && (
-          <>
-            {/* 画面风格 */}
-            <div className="cg-field">
-              <span className="cg-label">画面风格</span>
-              <div className="cg-style-grid">
-                {COVER_STYLES.map(s => (
-                  <button
-                    key={s.id}
-                    className={`cg-style-card ${selectedStyle === s.id ? 'active' : ''}`}
-                    onClick={() => setSelectedStyle(s.id)}
-                  >
-                    <span className="cg-style-name">{s.name}</span>
-                    <span className="cg-style-desc">{s.desc}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 主色调 */}
-            <div className="cg-field">
-              <span className="cg-label">主色调</span>
-              <div className="cg-color-row">
-                {COVER_COLORS.map(c => (
-                  <button
-                    key={c.id}
-                    className={`cg-color-swatch ${selectedColor === c.id ? 'active' : ''}`}
-                    style={{ backgroundColor: c.hex }}
-                    onClick={() => setSelectedColor(c.id)}
-                    title={c.name}
-                  >
-                    {selectedColor === c.id && (
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                        <path d="M2 7l4 4 6-7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
-
         {provider === 'openrouter' && (
           <div className="cg-notice cg-notice--info">
-            固定提示词：生成一个公众号文章封面，2.35:1，需要简约，不需要实物，给我来点好看的，标题是：{title.trim() || '公众号文章标题'}。OpenRouter Key 在「AI 配置 → 封面生成」中保存。
+            GPT Image 2 会从当前浏览器直接请求 OpenRouter。Key 在「AI 配置 → 封面生成」中保存，不经过部署服务器。
           </div>
         )}
-        {/* 自定义 Prompt */}
-        {provider !== 'openrouter' && (
-          <div className="cg-field">
-            <span className="cg-label">
-              自定义描述
-              <span className="cg-label-opt">可选</span>
-            </span>
-            <textarea
-              className="cg-prompt-input"
-              value={customPrompt}
-              onChange={e => setCustomPrompt(e.target.value)}
-              placeholder={
-                provider === 'qwen-edit'
-                  ? '描述你想如何修改这张封面，例如：换成蓝色调，加入科技感元素'
-                  : `生成一个公众号文章封面，2.35:1，需要简约，不需要实物，给我来点好看的，标题是：${title.trim() || 'xxxx'}。`
-              }
-              rows={3}
-            />
-          </div>
-        )}
+
+        {/* 图像提示词 */}
+        <div className="cg-field">
+          <span className="cg-label">图像提示词</span>
+          <textarea
+            className="cg-prompt-input"
+            value={customPrompt}
+            onChange={e => setCustomPrompt(e.target.value)}
+            placeholder="描述需要生成的画面"
+            rows={5}
+          />
+        </div>
 
         {/* 错误信息 */}
         {error && (
@@ -472,7 +409,7 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
         <button
           className="cg-generate-btn"
           onClick={handleGenerate}
-          disabled={isGenerating || !title.trim() || !!missingKey}
+          disabled={isGenerating || !title.trim() || !customPrompt.trim() || !!missingKey}
         >
           {isGenerating
             ? <><span className="cg-spinner" /> 生成中…</>

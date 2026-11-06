@@ -842,6 +842,43 @@ export async function generateCoverImage(input: Record<string, unknown>): Promis
   }
 }
 
+export async function generateOpenRouterCoverInBrowser(prompt: string, apiKey: string): Promise<{
+  imageUrl: string
+}> {
+  if (!apiKey.trim()) {
+    throw new Error('请先在 AI 配置中填写 OpenRouter API Key')
+  }
+
+  const response = await fetch('https://openrouter.ai/api/v1/images', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey.trim()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'openai/gpt-image-2',
+      prompt: prompt.trim(),
+      aspect_ratio: '21:9',
+      n: 1,
+    }),
+  })
+
+  const data = await response.json().catch(() => ({})) as {
+    data?: Array<{ b64_json?: string }>
+    error?: { message?: string }
+  }
+  if (!response.ok) {
+    if (response.status === 403 && /violation of provider terms of service/i.test(data.error?.message || '')) {
+      throw new Error('OpenRouter 的服务商条款拒绝了 GPT Image 2 请求（403），请检查模型访问资格')
+    }
+    throw new Error(data.error?.message || `OpenRouter 图片生成失败（${response.status}）`)
+  }
+
+  const encoded = data.data?.[0]?.b64_json
+  if (!encoded) throw new Error('OpenRouter 未返回图片')
+  return { imageUrl: `data:image/png;base64,${encoded}` }
+}
+
 export async function getOpenRouterServerReady(): Promise<boolean> {
   const response = await axios.get<{ openrouterReady?: boolean }>("/api/config/status")
   return Boolean(response.data.openrouterReady)
