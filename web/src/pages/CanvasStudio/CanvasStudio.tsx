@@ -736,7 +736,7 @@ export default function CanvasStudio() {
       {mode === "xiumi" ? (
         articleLoading || (articleId && loadedArticleId !== articleId) ? <div className="cs-empty">正在加载文章…</div>
           : !articleId ? <div className="cs-empty"><FileText size={32} /><p>选择一篇文章，开始秀米排版。</p></div>
-          : <XiumiEditor key={articleId} articleId={articleId} article={articleData.article} pushing={pushing}
+          : <XiumiEditor key={articleId} articleId={articleId} article={articleData.article} title={articleData.title} pushing={pushing}
             onPush={async html => {
               setPushing(true)
               try {

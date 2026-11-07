@@ -15,6 +15,7 @@ import {
   CSS_RECEIPT_NOTE,
   CSS_SUNSET_FILM,
   DEFAULT_WECHAT_TEMPLATE_ID,
+  DECORATIVE_STYLE_TEMPLATES,
 } from "../../shared/defaultStyleTemplates"
 
 export interface TemplateItem {
@@ -906,6 +907,7 @@ export const CSS_AURORA = `/* ====== 极光紫 ====== */
 // ── 内置模板列表（前端本地副本，用于离线 fallback） ──────────────────────────
 
 export const BUILTIN_TEMPLATES: TemplateItem[] = [
+  ...DECORATIVE_STYLE_TEMPLATES,
   { id: "seasalt", name: "海盐日记", desc: "清透蓝绿与开阔留白，适合海边旅行和生活记录", accentColor: "#176b78", css: CSS_SEASALT, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: "wisteria", name: "紫藤诗页", desc: "淡紫折角引文与宋体刊头，适合散文和阅读随笔", accentColor: "#685084", css: CSS_WISTERIA, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: "vermilion", name: "朱砂文录", desc: "朱红双线与暖白纸面，适合文化、历史和节日专题", accentColor: "#a0322b", css: CSS_VERMILION, isBuiltin: true, createdAt: 0, updatedAt: 0 },

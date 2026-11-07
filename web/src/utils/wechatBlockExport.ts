@@ -8,6 +8,8 @@ const WECHAT_INLINE_PROPERTIES = [
   "background-size", "background-repeat",
   "font-family", "font-size", "font-weight", "font-style",
   "line-height", "letter-spacing", "text-align", "text-decoration",
+  "text-decoration-line", "text-decoration-color", "text-decoration-style",
+  "list-style-type",
   "text-transform", "text-indent",
   "margin-top", "margin-right", "margin-bottom", "margin-left",
   "padding-top", "padding-right", "padding-bottom", "padding-left",
@@ -57,6 +59,35 @@ function inlineComputedWechatStyles(source: HTMLElement, clone: HTMLElement): vo
       cloneElement.style.setProperty(property, value)
     })
   })
+}
+
+// 默认模板进入秀米前复用样式内联器，不执行旧画布的布局重写。
+export function buildWechatStyledHtml(html: string, css: string): string {
+  const id = `wechat-template-${crypto.randomUUID()}`
+  const container = document.createElement("div")
+  container.style.cssText = "position:fixed;left:-10000px;top:0;width:677px;pointer-events:none;"
+  const style = document.createElement("style")
+  style.textContent = css.replace(/#wemd\b/g, `#${id}`)
+  const source = document.createElement("section")
+  source.id = id
+  source.innerHTML = html
+  container.append(style, source)
+  document.body.appendChild(container)
+  try {
+    const clone = source.cloneNode(true) as HTMLElement
+    inlineComputedWechatStyles(source, clone)
+    clone.removeAttribute("id")
+    const images = source.querySelectorAll("img")
+    clone.querySelectorAll("img").forEach((image, index) => {
+      // 平台内的相对地址转绝对地址，粘到秀米后仍能识别正文配图。
+      image.src = images[index].src
+      image.style.maxWidth = "100%"
+      image.style.height = "auto"
+    })
+    return clone.outerHTML
+  } finally {
+    container.remove()
+  }
 }
 
 function stripEditorAttributes(root: HTMLElement): void {

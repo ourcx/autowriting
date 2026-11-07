@@ -57,7 +57,7 @@ const INLINE_PROPS = [
   'border-right-width', 'border-right-style', 'border-right-color',
   'border-bottom-width', 'border-bottom-style', 'border-bottom-color',
   'border-left-width', 'border-left-style', 'border-left-color',
-  'border-radius', 'box-shadow',
+  'border-radius', 'box-shadow', 'box-sizing',
   'display', 'vertical-align', 'list-style-type',
   'white-space', 'word-break', 'overflow-wrap',
   'overflow-x', 'overflow-y', 'break-inside', 'filter',
@@ -174,11 +174,10 @@ function copyHtmlViaExecCommand(
     // 1. 把所有计算后样式内联到每个元素 style 属性（等价于 juice）
     inlineComputedStyles(section)
 
-    // 2. section 根元素：白底 + 清掉左右 padding
+    // 2. 保留模板纸色，清掉左右 padding。
     //    模板 CSS 的 padding（如 24px）已被 getComputedStyle 内联进来，
     //    但我们用子元素 margin 来实现左右缩进，所以 section 本身不需要左右 padding，
     //    否则 padding + 子 margin 叠加会让缩进翻倍。
-    section.style.setProperty('background-color', '#ffffff')
     section.style.setProperty('padding-left', '0px')
     section.style.setProperty('padding-right', '0px')
 

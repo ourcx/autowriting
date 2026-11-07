@@ -1279,3 +1279,152 @@ export const CSS_FIELD_NOTES = `${editionStyle("#1f513f", "#fffdf5", "#292b29")}
 #wemd table tr:nth-child(even) td { background: #f8f3dc; }
 #wemd hr { margin: 42px 0; border-top: 2px dashed #1f513f; }
 `
+
+// 彩色刊物共用正文适配，每款单独设计刊头、章节签、引文与照片边框。
+// 装饰使用真实元素的内联兼容属性，复制到秀米和微信时不依赖伪元素。
+function decorativeTemplate(
+  id: string, name: string, desc: string,
+  primary: string, paper: string, tint: string, accent: string, details: string,
+) {
+  return {
+    id, name, desc, accentColor: primary, isBuiltin: true, createdAt: 0, updatedAt: 0,
+    css: `${editionStyle(primary, paper, "#343633")}
+#wemd { padding: 24px 20px 36px; }
+#wemd h1 { margin: 12px 0 36px; padding: 24px 18px; font-size: 30px; line-height: 1.45; font-weight: 800; background: ${tint}; }
+#wemd h2 { padding: 12px 16px; font-size: 20px; background: ${tint}; }
+#wemd h3 { padding-bottom: 8px; border-bottom: 2px dotted ${accent}; }
+#wemd blockquote, #wemd .multiquote-1, #wemd .callout { padding: 20px 18px; border: 1px solid ${accent}; background: ${tint}; }
+#wemd blockquote p, #wemd .callout p { line-height: 1.9; }
+#wemd strong, #wemd mark { padding: 1px 3px; color: ${primary}; background: ${tint}; }
+#wemd h1 strong, #wemd h2 strong, #wemd h3 strong { color: inherit; background: transparent; padding: 0; }
+#wemd a { border-color: ${accent}; }
+#wemd figure { margin: 28px 0; }
+#wemd img { padding: 6px; border: 1px solid ${accent}; background: #ffffff; }
+#wemd figcaption { padding: 8px 12px; font-size: 12px; line-height: 1.7; }
+#wemd table tr:nth-child(even) td { background: ${tint}; }
+#wemd hr { margin: 36px 0; border-top: 3px dashed ${accent}; }
+${details}`,
+  }
+}
+
+export const DECORATIVE_STYLE_TEMPLATES = [
+  decorativeTemplate("lime-gazette", "青柠小报", "荧光青柠刊头、硬边投影和小报章节签", "#354d20", "#fffff5", "#e5f5a5", "#9fb94e", `
+#wemd h1 { border: 2px solid #354d20; border-radius: 0 32px 0 0; box-shadow: 5px 5px 0 #c8dc7d; letter-spacing: 1px; }
+#wemd h2 { background: transparent; padding: 10px 0; border-top: 2px solid #354d20; border-bottom: 6px solid #c8dc7d; }
+#wemd h2 .content { background: #e5f5a5; padding: 2px 6px; }
+#wemd blockquote, #wemd .multiquote-1 { border: 1px dashed #9fb94e; border-radius: 0 18px 18px 18px; }
+#wemd img { border: 2px solid #354d20; box-shadow: 4px 4px 0 #e5f5a5; }
+#wemd hr { border-top: 5px double #9fb94e; }
+`),
+  decorativeTemplate("orange-soda", "橘子汽水", "橘黄撞海蓝、圆拱刊头和气泡引文", "#96421b", "#fffaf2", "#ffe5bd", "#de935a", `
+#wemd h1 { text-align: center; padding-top: 34px; border-radius: 60px 60px 12px 12px; border-bottom: 7px solid #31808c; }
+#wemd h2 { color: #286a76; background: #e4f4f5; border-radius: 24px 4px 24px 4px; border-left: 5px solid #efb069; }
+#wemd blockquote, #wemd .multiquote-1 { border: 2px dotted #de935a; border-radius: 22px; background: #fff3d9; }
+#wemd img { border-radius: 26px 26px 4px 4px; }
+#wemd figcaption { color: #286a76; }
+`),
+  decorativeTemplate("strawberry-milk", "草莓牛乳", "草莓粉标签、奶油留白和圆角相册", "#9a3f5c", "#fffaf9", "#fbe0e7", "#d99bad", `
+#wemd h1 { text-align: center; border-radius: 28px; border: 3px double #d99bad; font-family: "Songti SC", SimSun, serif; }
+#wemd h2 { border-radius: 6px 24px 24px 6px; border-left: 6px solid #9a3f5c; }
+#wemd blockquote, #wemd .multiquote-1 { background: #fff1dc; border-color: #d6b486; border-radius: 18px 0 18px 0; }
+#wemd img { padding: 10px 10px 24px; border-radius: 8px; box-shadow: 0 4px 0 #fbe0e7; }
+#wemd hr { border-top: 4px dotted #d99bad; }
+`),
+  decorativeTemplate("mint-checker", "薄荷方格", "薄荷方格刊头、笔记侧栏和细格章节", "#276458", "#f8fcf8", "#def2e9", "#9bc7b7", `
+#wemd h1 { border: 1px solid #9bc7b7; background-image: linear-gradient(#c8e4d8 1px, transparent 1px), linear-gradient(90deg, #c8e4d8 1px, transparent 1px); background-size: 18px 18px; }
+#wemd h1 .content { background: #f8fcf8; padding: 2px 6px; }
+#wemd h2 { background: transparent; border-left: 7px solid #78aa98; border-bottom: 1px solid #9bc7b7; }
+#wemd blockquote, #wemd .multiquote-1 { border-left: 5px solid #9bc7b7; border-radius: 0 16px 16px 0; }
+#wemd img { padding: 8px; border: 1px dashed #78aa98; }
+#wemd figcaption { background: #def2e9; }
+`),
+  decorativeTemplate("butter-toast", "黄油吐司", "烘焙色拱门、奶黄便签和菜单分隔", "#73532c", "#fffaf0", "#ffedb2", "#c8a46a", `
+#wemd h1 { text-align: center; border-radius: 90px 90px 8px 8px; border: 2px solid #c8a46a; padding: 38px 18px 24px; font-family: Georgia, "Songti SC", serif; }
+#wemd h2 { border-top: 3px double #c8a46a; border-bottom: 3px double #c8a46a; text-align: center; background: transparent; }
+#wemd blockquote, #wemd .multiquote-1 { border: 0; border-bottom: 5px solid #e7c57a; border-radius: 4px 4px 20px 4px; }
+#wemd img { padding: 10px; border-radius: 20px 20px 2px 2px; }
+#wemd hr { border-top: 2px dotted #c8a46a; }
+`),
+  decorativeTemplate("blue-airmail", "蓝色航空信", "蓝红邮边、信封刊头和邮票式照片", "#315a80", "#fafcff", "#e5effa", "#9ab4cc", `
+#wemd { border-top: 7px solid #315a80; border-bottom: 7px solid #b85a51; }
+#wemd h1 { background: transparent; padding: 24px 0; border-bottom: 3px double #9ab4cc; letter-spacing: 2px; font-family: "Songti SC", serif; }
+#wemd h2 { border-left: 4px solid #b85a51; border-radius: 0 16px 0 0; }
+#wemd blockquote, #wemd .multiquote-1 { border: 1px dashed #9ab4cc; background: #fff9ee; }
+#wemd img { padding: 10px; border: 3px dotted #9ab4cc; }
+#wemd hr { border-top: 3px dashed #b85a51; }
+`),
+  decorativeTemplate("lavender-ticket", "薰衣草票根", "紫色票券、虚线裁口和圆角票根", "#664779", "#fcfaff", "#eee2f5", "#b49bc8", `
+#wemd h1 { border: 2px dashed #b49bc8; border-radius: 20px; text-align: center; }
+#wemd h2 { padding: 12px 18px; border-radius: 24px 0 24px 0; border-bottom: 3px solid #b49bc8; }
+#wemd blockquote, #wemd .multiquote-1 { border-left: 6px double #b49bc8; border-right: 6px double #b49bc8; border-top: 0; border-bottom: 0; background: #fff7dd; }
+#wemd img { border-radius: 18px; border-style: dashed; }
+#wemd figcaption { color: #664779; border-bottom: 1px dashed #b49bc8; }
+`),
+  decorativeTemplate("peach-scrapbook", "蜜桃拼贴", "桃粉拼色、便签投影和拍立得照片", "#935348", "#fff9f3", "#f9dfcd", "#d2a18b", `
+#wemd h1 { border-left: 12px solid #82a18b; border-bottom: 6px solid #d2a18b; border-radius: 0 26px 0 0; }
+#wemd h2 { background: #e6eee2; color: #45694c; border-radius: 0 18px 0 18px; }
+#wemd blockquote, #wemd .multiquote-1 { background: #fff0d3; border: 0; box-shadow: 4px 4px 0 #efd8c4; }
+#wemd img { padding: 9px 9px 28px; box-shadow: 4px 4px 0 #efd8c4; border-radius: 0; }
+#wemd hr { border-color: #82a18b; }
+`),
+  decorativeTemplate("cobalt-zine", "钴蓝独立刊", "钴蓝大字、酸黄重点和硬边画册", "#214baa", "#fffef8", "#e8edff", "#8da6df", `
+#wemd h1 { color: #ffffff; background: #214baa; border-bottom: 9px solid #dbed77; font-size: 34px; font-weight: 900; border-radius: 0; }
+#wemd h2 { background: #dbed77; border: 2px solid #214baa; box-shadow: 4px 4px 0 #214baa; }
+#wemd h3 { border-bottom: 2px solid #214baa; }
+#wemd blockquote, #wemd .multiquote-1 { border: 2px solid #214baa; background: #ffffff; }
+#wemd img { padding: 0; border: 3px solid #214baa; border-radius: 0; }
+#wemd hr { border-top: 6px solid #dbed77; }
+`),
+  decorativeTemplate("retro-poster", "复古海报", "砖红奶黄撞色、双线报头和粗体章节", "#963d31", "#fff7e6", "#f5dfad", "#c19268", `
+#wemd { font-family: Georgia, "Songti SC", SimSun, serif; border: 1px solid #c19268; }
+#wemd h1 { background: transparent; text-align: center; border-top: 6px double #963d31; border-bottom: 6px double #963d31; font-size: 32px; }
+#wemd h2 { color: #fff7e6; background: #963d31; text-align: center; letter-spacing: 2px; }
+#wemd blockquote, #wemd .multiquote-1 { border: 1px solid #c19268; box-shadow: 4px 4px 0 #ead0a0; }
+#wemd img { padding: 6px; border: 3px double #963d31; border-radius: 0; }
+#wemd hr { border-top: 4px double #963d31; }
+`),
+  decorativeTemplate("sakura-letter", "樱花笺", "淡樱粉与豆绿、花瓣圆角和诗笺留白", "#875365", "#fffafb", "#f7e4eb", "#d3b0bd", `
+#wemd { font-family: "Songti SC", SimSun, serif; }
+#wemd h1 { text-align: center; border-radius: 50px 0 50px 0; border-bottom: 3px solid #aec4aa; font-weight: 700; letter-spacing: 2px; }
+#wemd h2 { text-align: center; background: transparent; padding: 16px 0; border-top: 1px solid #d3b0bd; border-bottom: 1px solid #d3b0bd; }
+#wemd h3 { color: #4f7355; }
+#wemd blockquote, #wemd .multiquote-1 { background: #eef3e9; border: 0; border-radius: 26px 0 26px 0; }
+#wemd img { border-radius: 30px 0 30px 0; padding: 6px; }
+`),
+  decorativeTemplate("matcha-menu", "抹茶菜单", "抹茶绿菜单栏、奶油卡纸和票据边框", "#456338", "#fbf9ee", "#e6ecd0", "#a4b27d", `
+#wemd h1 { text-align: center; border: 5px double #456338; background: #f6f0dc; letter-spacing: 3px; }
+#wemd h2 { color: #fbf9ee; background: #456338; border-radius: 4px; font-size: 19px; }
+#wemd h3 { border-bottom: 1px dashed #a4b27d; }
+#wemd blockquote, #wemd .multiquote-1 { background: #fffdf4; border: 2px dashed #a4b27d; }
+#wemd ol > li { padding-bottom: 8px; border-bottom: 1px dotted #a4b27d; }
+#wemd img { border: 4px double #a4b27d; border-radius: 6px; }
+`),
+  decorativeTemplate("ocean-postcard", "海岛明信片", "海水蓝与珊瑚红、横纹信笺和圆拱相片", "#246b7a", "#f6fcfc", "#dff0f1", "#95bdc3", `
+#wemd h1 { text-align: center; border-top: 5px solid #dc8c75; border-bottom: 5px solid #246b7a; background-image: repeating-linear-gradient(0deg, transparent 0, transparent 25px, #c8e3e5 25px, #c8e3e5 26px); }
+#wemd h2 { background: transparent; color: #9c523e; border-bottom: 4px solid #f2c1a8; padding-left: 0; }
+#wemd blockquote, #wemd .multiquote-1 { border-radius: 24px 24px 0 24px; border: 0; background: #e0f2ee; }
+#wemd img { padding: 0; border-radius: 44px 44px 4px 4px; border: 2px solid #95bdc3; }
+#wemd hr { border-top: 4px dotted #dc8c75; }
+`),
+  decorativeTemplate("grape-party", "葡萄派对", "葡萄紫与柠檬黄、圆点舞台和粗边标签", "#65408d", "#fcf9ff", "#eadff6", "#b69bcc", `
+#wemd h1 { text-align: center; border-radius: 28px 4px 28px 4px; border: 2px solid #65408d; background-image: radial-gradient(#d0b9e5 1px, transparent 1px); background-size: 12px 12px; box-shadow: 5px 5px 0 #e8ec9c; }
+#wemd h2 { background: #f0f0b9; border-radius: 30px; text-align: center; border: 1px solid #b9bd6b; }
+#wemd blockquote, #wemd .multiquote-1 { border: 2px dashed #b69bcc; border-radius: 0 20px 20px 20px; }
+#wemd img { border-radius: 20px 4px 20px 4px; }
+#wemd hr { border-top: 5px dotted #b69bcc; }
+`),
+  decorativeTemplate("sunflower-club", "向日葵俱乐部", "明黄活动刊头、墨绿标签和粗虚线分隔", "#526028", "#fffdf1", "#f9edb0", "#c5ad56", `
+#wemd h1 { border-radius: 0 50px 0 50px; border: 2px solid #526028; background: #f8df78; text-align: center; }
+#wemd h2 { background: #e6edcf; border-left: 8px solid #526028; border-radius: 0 20px 20px 0; }
+#wemd blockquote, #wemd .multiquote-1 { border: 0; border-top: 4px dotted #c5ad56; border-bottom: 4px dotted #c5ad56; }
+#wemd img { border: 5px solid #f8df78; padding: 5px; border-radius: 14px; }
+#wemd figcaption { color: #526028; }
+`),
+  decorativeTemplate("candy-bulletin", "糖果公告栏", "粉蓝黄拼色、便签章节和双层照片框", "#85465b", "#fffbf5", "#fae1e9", "#cca4b1", `
+#wemd h1 { background: #fae1e9; border-top: 10px solid #a9cddc; border-bottom: 6px solid #f2d78a; border-radius: 12px 12px 0 0; }
+#wemd h2 { background: #e4f1f7; color: #38697e; border: 1px solid #a9cddc; box-shadow: 4px 4px 0 #f6e3aa; border-radius: 4px; }
+#wemd blockquote, #wemd .multiquote-1 { background: #fff2cc; border: 1px dashed #c6a756; border-radius: 0 20px 0 20px; }
+#wemd img { padding: 8px; border: 2px solid #a9cddc; box-shadow: 4px 4px 0 #fae1e9; }
+#wemd hr { border-top: 4px dashed #a9cddc; }
+`),
+]

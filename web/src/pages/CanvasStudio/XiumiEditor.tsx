@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import type { ClipboardEvent } from "react"
-import { Copy, ExternalLink, Eye, Send } from "lucide-react"
+import { Copy, ExternalLink, Eye, LayoutTemplate, Send } from "lucide-react"
 import Button from "../../components/Button/Button"
 import { toast } from "../../components/Toast/Toast"
 import { renderWechatMarkdown } from "../../utils/wechatMarkdown"
-import { copyWechatHtml } from "../../utils/wechatBlockExport"
+import { buildWechatStyledHtml, copyWechatHtml } from "../../utils/wechatBlockExport"
+import { BUILTIN_TEMPLATES } from "../../utils/templateStore"
 import { sanitizeHtml } from "../../utils/sanitizeHtml"
 import { localizeXiumiHtml } from "../../utils/xiumiHtml"
 
@@ -14,18 +15,20 @@ const XIUMI_EDITOR_URL = `${XIUMI_ORIGIN}/studio/v5#/paper`
 interface XiumiEditorProps {
   articleId: string
   article: string
+  title: string
   pushing: boolean
   onPush: (html: string) => Promise<void>
 }
 
-export default function XiumiEditor({ articleId, article, pushing, onPush }: XiumiEditorProps) {
+export default function XiumiEditor({ articleId, article, title, pushing, onPush }: XiumiEditorProps) {
   // 官方插件没有正文写入或回读接口：秀米负责编辑，本机只保存回传的排版。
   const storageKey = `xiumi-article-html-v1:${articleId}`
   const [html, setHtml] = useState(() => {
     try { return sanitizeHtml(localStorage.getItem(storageKey) || "") }
     catch { return "" }
   })
-  const [editing, setEditing] = useState(!html)
+  const [view, setView] = useState<"editor" | "saved" | "template">(html ? "saved" : "editor")
+  const [templateId, setTemplateId] = useState("lime-gazette")
   const [pendingHtml, setPendingHtml] = useState("")
   const [importing, setImporting] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
@@ -33,6 +36,13 @@ export default function XiumiEditor({ articleId, article, pushing, onPush }: Xiu
   const mountedRef = useRef(true)
   const imageCache = useRef(new Map<string, string>())
   const receiverRef = useRef<(content: string) => void>(() => {})
+  const template = BUILTIN_TEMPLATES.find(item => item.id === templateId)
+  const sourceHtml = useMemo(() => {
+    const rendered = renderWechatMarkdown(article)
+    return !title || /^<h1[\s>]/i.test(rendered.trim())
+      ? rendered : `${renderWechatMarkdown(`# ${title}`)}${rendered}`
+  }, [article, title])
+  const buildTemplateHtml = () => buildWechatStyledHtml(sourceHtml, template?.css || "")
 
   const receiveHtml = async (content: string) => {
     if (importRef.current || pushing) return
@@ -52,7 +62,7 @@ export default function XiumiEditor({ articleId, article, pushing, onPush }: Xiu
       localStorage.setItem(storageKey, localized)
       setHtml(localized)
       setPendingHtml("")
-      setEditing(false)
+      setView("saved")
       toast.success("秀米排版已保存到本机")
     } catch {
       if (mountedRef.current) toast.error("图片转存或本机保存失败，请重试；上一次排版已保留")
@@ -98,19 +108,42 @@ export default function XiumiEditor({ articleId, article, pushing, onPush }: Xiu
 
   return (
     <section className="cs-xiumi">
+      <div className="cs-xiumi-templates">
+        <label>
+          <LayoutTemplate size={15} />
+          <span>默认模板</span>
+          <select aria-label="选择秀米画布默认模板" value={templateId}
+            disabled={importing || pushing} onChange={event => {
+              setTemplateId(event.target.value)
+              setView("template")
+            }}>
+            <option value="">不套模板</option>
+            {BUILTIN_TEMPLATES.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </label>
+        <Button variant="secondary" disabled={!article || importing || pushing} onClick={() => setView("template")}>
+          <Eye size={14} />预览模板
+        </Button>
+        <Button variant="secondary" disabled={!article || importing || pushing}
+          onClick={() => void receiveHtml(buildTemplateHtml())}>
+          <LayoutTemplate size={14} />用正文生成排版
+        </Button>
+        <span>{template?.desc || "保留正文结构，不添加模板装饰"}</span>
+      </div>
       <div className="cs-edit-bar">
         <div className="cs-edit-actions">
           <Button variant="secondary" disabled={!article || importing || pushing}
-            onClick={() => void copyContent(renderWechatMarkdown(article))}>
-            <Copy size={14} />复制正文到秀米
+            onClick={() => void copyContent(buildTemplateHtml())}>
+            <Copy size={14} />复制模板正文到秀米
           </Button>
           <a className="cs-xiumi-link" href={XIUMI_EDITOR_URL} target="_blank" rel="noopener noreferrer">
             <ExternalLink size={14} />新窗口打开秀米
           </a>
         </div>
         <div className="cs-edit-actions">
-          {html && <Button variant="secondary" disabled={importing || pushing} onClick={() => setEditing(!editing)}>
-            <Eye size={14} />{editing ? "查看已保存排版" : "返回秀米编辑"}
+          {(html || view === "template") && <Button variant="secondary" disabled={importing || pushing}
+            onClick={() => setView(view === "editor" && html ? "saved" : "editor")}>
+            <Eye size={14} />{view === "editor" ? "查看已保存排版" : "返回秀米编辑"}
           </Button>}
           <Button variant="secondary" disabled={!html || importing || pushing || !!pendingHtml} onClick={() => void copyContent(html)}>
             <Copy size={14} />复制已保存排版
@@ -121,7 +154,7 @@ export default function XiumiEditor({ articleId, article, pushing, onPush }: Xiu
         </div>
       </div>
       <div className="cs-xiumi-help">
-        <p>复制正文 → 在秀米中粘贴、排版 → 点击顶部对勾传回。继续编辑请在秀米「我的图文」中打开原稿。</p>
+        <p>选择模板后，可用当前正文生成排版并保存，也可复制到秀米继续编辑。秀米编辑完成后，点击顶部对勾传回。</p>
         <details>
           <summary>登录或回传遇到问题？新窗口排版后粘贴到这里</summary>
           <p>请通过 HTTPS 访问平台，并允许秀米登录所需的第三方 Cookie。新窗口排版完成后，点击秀米对勾复制，再粘贴到下方。</p>
@@ -134,10 +167,14 @@ export default function XiumiEditor({ articleId, article, pushing, onPush }: Xiu
           ) : html ? "已保存到本机；推送使用最近一次传回的排版。" : "排版完成后传回，即可保存并推送微信草稿。"}
         </div>
       </div>
-      <iframe ref={iframeRef} className="cs-xiumi-frame" title="秀米图文编辑器" hidden={!editing}
+      <iframe ref={iframeRef} className="cs-xiumi-frame" title="秀米图文编辑器" hidden={view !== "editor"}
           src={XIUMI_EDITOR_URL} allow="clipboard-read; clipboard-write"
           onLoad={() => iframeRef.current?.contentWindow?.postMessage("XIUMI:3rdEditor:Connect", XIUMI_ORIGIN)} />
-      {!editing && (
+      {view === "template" && (
+        <iframe className="cs-xiumi-frame cs-xiumi-preview" title="默认模板预览" sandbox=""
+          srcDoc={`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{max-width:677px;margin:0 auto;background:#fff}img{max-width:100%}${template?.css || ""}</style></head><body><section id="wemd">${sourceHtml}</section></body></html>`} />
+      )}
+      {view === "saved" && (
         <iframe className="cs-xiumi-frame cs-xiumi-preview" title="已保存的秀米排版" sandbox=""
           srcDoc={`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{max-width:677px;margin:24px auto;padding:0 16px;overflow-wrap:break-word}img{max-width:100%}</style></head><body>${html}</body></html>`} />
       )}

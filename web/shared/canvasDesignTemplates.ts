@@ -1,6 +1,18 @@
 import type { CanvasMaterialId } from "./canvasMaterialLibrary.ts"
 
 export type CanvasDesignTemplateId =
+  | "lime-bulletin"
+  | "orange-weekend"
+  | "berry-album"
+  | "mint-notebook"
+  | "butter-bakery"
+  | "airmail-travel"
+  | "lavender-fair"
+  | "peach-collage"
+  | "cobalt-editorial"
+  | "retro-screening"
+  | "sakura-poetry"
+  | "summer-club"
   | "nature-journal"
   | "festival-invite"
   | "photo-album"
@@ -272,7 +284,50 @@ function themedTemplate(
   }
 }
 
+// 复用现有布局、纸张和素材，不增加新的画布结构或外部素材依赖。
+function decoratedCanvasTemplate(
+  id: CanvasDesignTemplateId, name: string, description: string,
+  colors: { primary: string; canvas: string; surfaceAlt: string },
+  font: CanvasDesignFont, pattern: CanvasDesignSurfaceKind,
+  layouts: CanvasDesignSectionLayout[],
+  materials: NonNullable<CanvasTemplateDesignSystem["materials"]>,
+  frame?: CanvasDesignSectionRecipe["frame"],
+): CanvasDesignTemplate {
+  const template = themedTemplate(id, name, description, colors, font, layouts, materials)
+  const system = template.designSystem
+  return {
+    ...template,
+    designSystem: {
+      ...system,
+      theme: {
+        ...system.theme,
+        displaySize: 34, displayWeight: 800, headingSize: 22, sectionGap: 34, radius: 18,
+        canvasStyle: { ...system.theme.canvasStyle, kind: pattern, patternColor: colors.primary, size: 24, opacity: 0.06 },
+      },
+      intro: { ...system.intro, surface: "surfaceAlt", surfaceKind: "solid", accentStyle: "top", shadow: "soft" },
+      bodyCycle: system.bodyCycle.map(recipe => ({
+        ...recipe, frame, surface: frame ? "none" : "surfaceAlt",
+        surfaceKind: frame ? "none" : "solid",
+        shadow: frame ? "none" : "soft",
+      })),
+      media: { ...system.media, frame: "photo" },
+    },
+  }
+}
+
 export const CANVAS_DESIGN_TEMPLATES: CanvasDesignTemplate[] = [
+  decoratedCanvasTemplate("lime-bulletin", "青柠小报", "青柠纸色 · 方格底纹 · 信纸章节与彩色胶带", { primary: "#49652b", canvas: "#fcfdeb", surfaceAlt: "#e7f2b9" }, "rounded", "grid", ["stack", "editorial"], { opening: "washi-tape", section: "pencil-note", ending: "svg-plane" }, "letter"),
+  decoratedCanvasTemplate("orange-weekend", "橘子周末", "橘色重点 · 圆点纸底 · 周末活动票券", { primary: "#a54d25", canvas: "#fff9ee", surfaceAlt: "#ffe7c1" }, "rounded", "dots", ["feature", "steps"], { opening: "ribbon-banner", section: "gift-box", ending: "heart-ending" }, "ticket"),
+  decoratedCanvasTemplate("berry-album", "莓果相册", "莓粉章节 · 拍立得相框 · 心形夹板", { primary: "#a14866", canvas: "#fff7f9", surfaceAlt: "#f8dfe8" }, "friendly", "solid", ["media-text", "stack"], { opening: "little-camera", section: "watercolor-clip", ending: "petal-ending" }, "photo"),
+  decoratedCanvasTemplate("mint-notebook", "薄荷笔记本", "薄荷方格 · 蓝绿章节签 · 铅笔与书页", { primary: "#35766a", canvas: "#f5fcf8", surfaceAlt: "#dcf0e6" }, "friendly", "grid", ["stack", "steps"], { opening: "open-book", section: "pencil-note", ending: "olive-divider" }, "letter"),
+  decoratedCanvasTemplate("butter-bakery", "黄油烘焙社", "奶黄纸张 · 咖啡插画 · 烘焙菜单票根", { primary: "#846032", canvas: "#fff9e9", surfaceAlt: "#f9e8b7" }, "serif", "dots", ["stack", "feature"], { opening: "coffee-break", section: "birthday-cake", ending: "heart-ending" }, "ticket"),
+  decoratedCanvasTemplate("airmail-travel", "航空旅行信", "邮蓝横线纸 · 飞机分隔 · 行李箱和旅途照片", { primary: "#3f6892", canvas: "#f7faff", surfaceAlt: "#e3edf9" }, "editorial", "ruled-paper", ["timeline", "media-text"], { opening: "svg-plane", section: "travel-suitcase", ending: "little-camera" }, "letter"),
+  decoratedCanvasTemplate("lavender-fair", "紫藤游园会", "淡紫条纹 · 节日彩旗 · 游园票券", { primary: "#76518c", canvas: "#fcf8ff", surfaceAlt: "#eee1f6" }, "rounded", "stripes", ["feature", "steps"], { opening: "svg-bunting", section: "gift-box", ending: "star-divider" }, "ticket"),
+  decoratedCanvasTemplate("peach-collage", "蜜桃拼贴簿", "桃色纸面 · 水彩彩旗 · 胶带和相片拼贴", { primary: "#a66851", canvas: "#fff8ef", surfaceAlt: "#f8dfce" }, "friendly", "solid", ["media-text", "editorial"], { opening: "watercolor-bunting", section: "washi-tape", ending: "envelope-heart" }, "photo"),
+  decoratedCanvasTemplate("cobalt-editorial", "钴蓝独立刊", "大字报头 · 钴蓝分区 · 杂志式重点和引语", { primary: "#2852a0", canvas: "#fffef7", surfaceAlt: "#e3ebff" }, "editorial", "solid", ["editorial", "feature", "stack"], { opening: "bookmark-ribbon", section: "star-divider", ending: "ink-quill" }),
+  decoratedCanvasTemplate("retro-screening", "复古放映厅", "砖红奶油配色 · 电影票章节 · 胶片故事", { primary: "#9b4a38", canvas: "#fff5e4", surfaceAlt: "#f0deba" }, "serif", "ruled-paper", ["editorial", "timeline"], { opening: "little-camera", section: "ribbon-banner", ending: "star-divider" }, "ticket"),
+  decoratedCanvasTemplate("sakura-poetry", "樱花诗笺", "樱粉信纸 · 郁金香页眉 · 花瓣分隔和留白", { primary: "#956079", canvas: "#fffafb", surfaceAlt: "#f5e4ed" }, "serif", "dots", ["stack", "editorial"], { opening: "tulip-garden", section: "daisy-divider", ending: "petal-ending" }, "letter"),
+  decoratedCanvasTemplate("summer-club", "夏日俱乐部", "明黄草绿 · 方格纸底 · 活动路线和庆祝彩旗", { primary: "#637633", canvas: "#fffdeb", surfaceAlt: "#eff0b7" }, "rounded", "grid", ["steps", "feature"], { opening: "svg-bunting", section: "mountain-sun", ending: "ribbon-banner" }),
   publicationTemplate("nature-journal", "自然手记", "草木绿 · 信纸章节与舒展留白", "#48735b", "serif", "letter", { opening: "tulip-garden", section: "olive-divider", ending: "petal-ending" }),
   publicationTemplate("festival-invite", "节庆邀请", "朱红色 · 票券章节与居中标题", "#b4483e", "rounded", "ticket", { opening: "ribbon-banner", section: "star-divider", ending: "heart-ending" }),
   publicationTemplate("photo-album", "影像画册", "石墨灰 · 相框章节与照片叙事", "#4b545b", "editorial", "photo", { opening: "little-camera", section: "washi-tape", ending: "star-divider" }),

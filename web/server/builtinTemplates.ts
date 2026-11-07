@@ -16,6 +16,7 @@ import {
   CSS_RECEIPT_NOTE,
   CSS_SUNSET_FILM,
   DEFAULT_WECHAT_TEMPLATE_ID,
+  DECORATIVE_STYLE_TEMPLATES,
 } from "../shared/defaultStyleTemplates.ts"
 
 const CSS_DEFAULT = `/* ====== 经典蓝 ====== */
@@ -149,6 +150,7 @@ const CSS_AURORA = `/* ====== 极光紫 ====== */
 #wemd tr:nth-child(even) td { background: #f8f5ff; }`
 
 export const BUILTIN_TEMPLATES_DATA: StyleTemplate[] = [
+  ...DECORATIVE_STYLE_TEMPLATES,
   { id: DEFAULT_WECHAT_TEMPLATE_ID, name: "默认样式", desc: "公众号最佳实践，正文、列表、代码与表格完整适配", accentColor: "#1e6bb8", css: CSS_BEST_PRACTICE, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: "eastern-letter", name: "东方笺谱", desc: "现代人文长文，宋体留白与朱砂点睛", accentColor: "#a33a2b", css: CSS_EASTERN_LETTER, isBuiltin: true, createdAt: 0, updatedAt: 0 },
   { id: "receipt-note", name: "黑白小票", desc: "清单感与打印纸质感，适合教程和复盘", accentColor: "#171717", css: CSS_RECEIPT_NOTE, isBuiltin: true, createdAt: 0, updatedAt: 0 },

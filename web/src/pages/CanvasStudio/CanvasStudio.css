@@ -162,6 +162,40 @@
   background: #fff;
 }
 
+.cs-xiumi-templates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-hairline);
+  background: var(--color-surface-soft);
+}
+
+.cs-xiumi-templates label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.cs-xiumi-templates select {
+  min-height: 34px;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-md);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font: inherit;
+}
+
+.cs-xiumi-templates > span {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
 .cs-xiumi-help {
   padding: 10px 16px;
   border-bottom: 1px solid var(--color-hairline);
