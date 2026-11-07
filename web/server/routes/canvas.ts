@@ -29,12 +29,32 @@ import {
 } from "../../shared/canvasDesignSystem.ts"
 
 import { readXiumiReference, validateXiumiUrl } from "../utils/xiumiReference.ts"
+import { parseXiumiImageUrl, readXiumiImage } from "../utils/xiumiImage.ts"
 import { hasArticleApiKey } from "../utils/providerKeys.ts"
 
 const router = Router()
 router.use(authMiddleware)
 
 const activeXiumiReaders = new Set<string>()
+router.post("/xiumi-image", async (req, res) => {
+  let url: URL
+  try { url = parseXiumiImageUrl(req.body?.url) }
+  catch { res.status(400).json({ error: "请输入有效的 HTTPS 秀米图片地址" }); return }
+  const userId = String((req as AuthedRequest).user?.id)
+  if (activeXiumiReaders.has(userId) || activeXiumiReaders.size >= 4) {
+    res.status(429).json({ error: "正在转存秀米图片，请稍后重试" }); return
+  }
+  activeXiumiReaders.add(userId)
+  try {
+    const image = await readXiumiImage(url)
+    res.setHeader("Cache-Control", "no-store")
+    res.type(image.contentType).send(image.data)
+  } catch {
+    logger.warn("CANVAS", "秀米图片下载失败")
+    res.status(422).json({ error: "秀米图片转存失败，请稍后重试" })
+  } finally { activeXiumiReaders.delete(userId) }
+})
+
 router.post("/xiumi-reference", async (req, res) => {
   try { validateXiumiUrl(req.body?.url) }
   catch { res.status(400).json({ error: "请输入 HTTPS 秀米公开分享链接（board/v5）" }); return }

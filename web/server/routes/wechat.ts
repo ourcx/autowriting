@@ -373,6 +373,8 @@ async function rewriteWechatContentImages(req, token, html) {
   const uniqueUrls = [...new Set([
     ...matches.map(match => match[1]),
     ...generatedBackgroundMatches,
+    // 秀米的背景图、SVG 图片也已转存到本地，推送时一并上传至微信。
+    ...(html.match(/(?:https?:\/\/[^/"'<>\s]+)?\/api\/images\/uploads\/[\w.-]+/gi) || []),
   ].filter(Boolean))]
   if (uniqueUrls.length === 0) return { html, rewritten: 0, failed: [] }
 

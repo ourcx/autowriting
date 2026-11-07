@@ -287,7 +287,7 @@ function copyViaSelection(html: string): boolean {
     const content = container.firstElementChild
     if (!selection || !content) return false
     const range = document.createRange()
-    range.selectNode(content)
+    range.selectNodeContents(container)
     selection.removeAllRanges()
     selection.addRange(range)
     const copied = document.execCommand("copy")
@@ -318,7 +318,11 @@ async function rasterizeExportVectors(html: string): Promise<string> {
 
 export async function copyWechatBlockHtml(source: HTMLElement): Promise<void> {
   const html = await rasterizeExportVectors(buildWechatBlockHtml(source))
-  const plainText = source.innerText
+  await copyWechatHtml(html, source.innerText)
+}
+
+// 秀米已提供内联排版，直接复制原 HTML，避免块编辑器重新计算样式。
+export async function copyWechatHtml(html: string, plainText: string): Promise<void> {
   if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
     try {
       await navigator.clipboard.write([

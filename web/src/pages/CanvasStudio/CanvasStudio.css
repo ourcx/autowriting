@@ -53,8 +53,8 @@
 
 .cs-mode-switch {
   display: grid;
-  flex: 0 0 224px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  flex: 0 0 330px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 3px;
   padding: 3px;
   border: 1px solid var(--color-hairline);
@@ -144,6 +144,56 @@
 .cs-root .ui-button:disabled {
   opacity: 0.55;
   cursor: wait;
+}
+
+.cs-xiumi {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+}
+
+.cs-xiumi-frame {
+  flex: 1;
+  width: 100%;
+  min-height: 440px;
+  border: 0;
+  background: #fff;
+}
+
+.cs-xiumi-help {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--color-hairline);
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.cs-xiumi-help p {
+  margin: 0 0 6px;
+}
+
+.cs-xiumi-help summary {
+  cursor: pointer;
+}
+
+.cs-xiumi-help textarea {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 8px 0;
+  padding: 10px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-md);
+  font: inherit;
+}
+
+.cs-xiumi-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-brand-teal);
+  font-size: 12px;
 }
 
 .cs-workspace {

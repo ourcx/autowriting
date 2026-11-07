@@ -1,6 +1,7 @@
 import Button from "../../components/Button/Button"
 import CanvasMaterialShelf from "./CanvasMaterialShelf"
 import CanvasSectionPresetShelf from "./CanvasSectionPresetShelf"
+import XiumiEditor from "./XiumiEditor"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import {
@@ -82,7 +83,7 @@ const STORAGE_KEY = "visual-article-canvas-v2"
 const BLOCK_STORAGE_KEY = "visual-article-blocks-v1"
 
 type InspectorTab = "properties" | "dsl"
-type StudioMode = "blocks" | "svg"
+type StudioMode = "xiumi" | "blocks" | "svg"
 
 function cloneDefaultDocument(): CanvasDocument {
   return JSON.parse(JSON.stringify(DEFAULT_CANVAS_DOCUMENT)) as CanvasDocument
@@ -171,7 +172,8 @@ export default function CanvasStudio() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const articleId = searchParams.get("articleId") || ""
-  const mode: StudioMode = searchParams.get("mode") === "svg" ? "svg" : "blocks"
+  const requestedMode = searchParams.get("mode")
+  const mode: StudioMode = requestedMode === "svg" || requestedMode === "blocks" ? requestedMode : "xiumi"
   const svgRef = useRef<SVGSVGElement>(null)
   const blockContentRef = useRef<HTMLElement>(null)
   const [document, setDocument] = useState<CanvasDocument>(cloneDefaultDocument)
@@ -592,8 +594,8 @@ export default function CanvasStudio() {
   const setMode = (nextMode: StudioMode) => {
     setSearchParams(current => {
       const next = new URLSearchParams(current)
-      if (nextMode === "svg") next.set("mode", "svg")
-      else next.delete("mode")
+      if (nextMode === "xiumi") next.delete("mode")
+      else next.set("mode", nextMode)
       return next
     }, { replace: true })
   }
@@ -602,10 +604,10 @@ export default function CanvasStudio() {
     <div className="cs-root">
       <PageHeader
         title="公众号编辑器"
-        icon={mode === "blocks" ? <PanelLeft size={16} /> : <Shapes size={16} />}
+        icon={mode === "svg" ? <Shapes size={16} /> : <PanelLeft size={16} />}
         subtitle={articleId
           ? `${articleData.title || "当前文章"} · ${sources.filter(source => source.kind !== "image").length} 个内容块 · ${sources.filter(source => source.kind === "image").length} 张图片`
-          : "选择文章，应用默认模板后继续编辑"}
+          : "选择文章，使用秀米排版"}
         onBack={() => navigate("/")}
         actions={(
           <>
@@ -628,7 +630,7 @@ export default function CanvasStudio() {
                   {pushing ? "推送中..." : "推送公众号"}
                 </Button>
               </>
-            ) : (
+            ) : mode === "svg" ? (
               <>
                 <Button variant="secondary" onClick={copyDsl}>
                   <Copy size={14} />
@@ -651,16 +653,20 @@ export default function CanvasStudio() {
                   {pushing ? "推送中..." : "推送公众号"}
                 </Button>
               </>
-            )}
+            ) : null}
           </>
         )}
       />
 
       <div className="cs-toolbar">
         <div className="cs-mode-switch" role="group" aria-label="排版模式">
+          <button className={mode === "xiumi" ? "active" : ""} onClick={() => setMode("xiumi")}>
+            <LayoutTemplate size={15} />
+            秀米排版
+          </button>
           <button className={mode === "blocks" ? "active" : ""} onClick={() => setMode("blocks")}>
             <PanelLeft size={15} />
-            文章排版
+            旧版排版
           </button>
           <button className={mode === "svg" ? "active" : ""} onClick={() => setMode("svg")}>
             <Shapes size={15} />
@@ -695,7 +701,7 @@ export default function CanvasStudio() {
         </label>
       </div>
 
-      <div className="cs-tools">
+      {mode === "blocks" && <div className="cs-tools">
       {mode === "blocks" && <details className="cs-tools-menu"><summary>主题与模板</summary><div className="cs-tools-popover">
         <CanvasTemplateShelf selected={designTemplateId} onSelect={id => {
           setDesignTemplateId(id)
@@ -725,9 +731,25 @@ export default function CanvasStudio() {
           }} /> : null}
       </div></details> : null}
       {mode === "blocks" ? <span className="cs-theme-status"><i style={{ background: blockDocument.theme.primary }} />当前主色 · {blockDocument.theme.primary} · 待用主题：{getCanvasDesignTemplate(designTemplateId).name}</span> : null}
-      </div>
+      </div>}
 
-      {mode === "blocks" ? (
+      {mode === "xiumi" ? (
+        articleLoading || (articleId && loadedArticleId !== articleId) ? <div className="cs-empty">正在加载文章…</div>
+          : !articleId ? <div className="cs-empty"><FileText size={32} /><p>选择一篇文章，开始秀米排版。</p></div>
+          : <XiumiEditor key={articleId} articleId={articleId} article={articleData.article} pushing={pushing}
+            onPush={async html => {
+              setPushing(true)
+              try {
+                const coverUrl = localStorage.getItem(`cover_image_${articleId}`)
+                  || sources.find(item => item.kind === "image")?.src || ""
+                await submitWechatHtml(html, coverUrl, "秀米排版已推送到微信公众号草稿箱")
+              } catch (error: unknown) {
+                toast.error(error instanceof Error ? error.message : "公众号草稿推送失败，请先核对草稿箱")
+              } finally {
+                setPushing(false)
+              }
+            }} />
+      ) : mode === "blocks" ? (
         <>
           <div className="cs-edit-bar">
             <div className="cs-edit-actions">

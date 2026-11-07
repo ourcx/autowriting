@@ -820,6 +820,18 @@ export async function uploadLocalImage(file: File): Promise<{
   return response.data as { id: string; url: string; originalName: string }
 }
 
+export async function importXiumiImage(url: string): Promise<string> {
+  const response = await axios.post<Blob>("/api/canvas/xiumi-image", { url }, {
+    responseType: "blob",
+    timeout: 30000,
+  })
+  const image = response.data
+  const uploaded = await uploadLocalImage(new File(
+    [image], `xiumi.${image.type.split("/")[1] || "png"}`, { type: image.type },
+  ))
+  return new URL(uploaded.url, window.location.origin).href
+}
+
 export async function uploadBase64Image(input: {
   data: string
   mimeType: string
