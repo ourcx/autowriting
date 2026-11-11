@@ -320,6 +320,19 @@ server {
     client_max_body_size 50M;
 
     # API 代理
+    # 头条发布会等待外部编辑器与回执。现有站点若仍使用默认的 60 秒，
+    # 在 HTTPS server 中复制下面的 /api/ 代理配置作为这个精确匹配，保留转发头。
+    location = /api/toutiao/publish {
+        proxy_pass http://autowriting_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 240s;
+        proxy_next_upstream off;
+    }
+
     location /api/ {
         proxy_pass http://autowriting_backend;
         proxy_http_version 1.1;
