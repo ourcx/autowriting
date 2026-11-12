@@ -251,6 +251,13 @@ export default function ArticleEditor() {
     }
   }, [articleId, isLocalArticle, recoveryKey])
 
+  function handleMaterialsSaved(content: string) {
+    // 素材已追加到服务端，只同步右侧编辑区，保留未保存的编辑和未勾选的素材。
+    const append = (existing: string) => existing.trimEnd() ? `${existing.trimEnd()}\n\n---\n\n${content}` : content
+    savedData.current = { ...savedData.current, materials: append(savedData.current.materials) }
+    setData(prev => ({ ...prev, materials: append(prev.materials) }))
+  }
+
   const handleSave = useCallback(async (): Promise<boolean> => {
     if (savingRef.current || loading || loadError) return false
     try {
@@ -804,7 +811,7 @@ export default function ArticleEditor() {
               <div className="materials-collector-pane">
                 <div className="panel-header materials-panel-header">
                   <h3>素材采集</h3>
-                  <p>搜索 / 解析 URL / 粘贴，采集后自动写入右侧素材库</p>
+                  <p>搜索、解析链接或粘贴内容，勾选后写入右侧素材库</p>
                 </div>
                 <MaterialsCollector
                   articleId={articleId}
@@ -815,7 +822,7 @@ export default function ArticleEditor() {
                   glmApiKey={aiConfig.zhipuApiKey || aiConfig.glmApiKey || aiConfig.articleApiKey || ''}
                   jinaApiKey={aiConfig.jinaApiKey || ''}
                   wechatCollectorReady={serverStatus?.wechatCollectorReady}
-                  onSaved={fetchArticleData}
+                  onSaved={handleMaterialsSaved}
                 />
               </div>
 
