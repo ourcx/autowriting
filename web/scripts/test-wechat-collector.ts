@@ -77,6 +77,24 @@ assert.deepEqual(yuanbao.articles.map(item => [item.url, item.title]), [
 assert.throws(() => parseYuanbaoStream(stream([citations, answerPart])), /未返回完整回答/)
 assert.throws(() => parseYuanbaoStream(stream([{ data_type: "anti_crawl", data: { status: "reject" } }])), /未接受/)
 
+const now = Date.parse("2026-11-12T12:00:00+08:00")
+const ranked = parseYuanbaoStream(stream([{
+  search_info: { search_results: [
+    { url: "https://mp.weixin.qq.com/s/unknown", time: "2026-02-30" },
+    ...Array.from({ length: 10 }, (_, index) => ({ url: `https://mp.weixin.qq.com/s/older-${index}`, time: "2026-09-01" })),
+    { url: "https://mp.weixin.qq.com/s/month", time: "2026-11-05" },
+    { url: "https://mp.weixin.qq.com/s/week-first", publish_time_ts: Date.parse("2026-11-10T09:00:00+08:00") },
+    { url: "https://mp.weixin.qq.com/s/week-second", publish_time_ts: Date.parse("2026-11-11T16:30:00Z") / 1000 },
+  ] },
+}, answerPart, finished]), now)
+assert.equal(ranked.articles.length, 10)
+assert.deepEqual(ranked.articles.slice(0, 4).map(item => [new URL(item.url).pathname, item.publishedOn]), [
+  ["/s/week-first", "2026-11-10"],
+  ["/s/week-second", "2026-11-12"],
+  ["/s/month", "2026-11-05"],
+  ["/s/older-0", "2026-09-01"],
+])
+
 // Chromium 读取没有 charset 的元宝 SSE 时，回答和引用必须保留原始中文。
 const browser = await chromium.launch({ headless: true })
 try {

@@ -315,7 +315,7 @@ export default function MaterialsCollector({
         fullFetched: !!article.content,
         selected: false,
         expanded: false,
-        dateTag: defaultDateTag,
+        dateTag: defaultDateTag || article.publishedOn || '',
       }))
       const articlesByUrl = new Map(articles.map(article => [article.url, article]))
       setItems(prev => {

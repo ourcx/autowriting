@@ -13,6 +13,10 @@ const PAGE_ORIGINS = new Set([
 const MAX_STREAM_BYTES = 1024 * 1024
 const MAX_ARTICLES = 10
 const ARTICLE_CONCURRENCY = 3
+const DAY_MS = 86_400_000
+const beijingDate = new Intl.DateTimeFormat('zh-CN', {
+  timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+})
 let searching = false
 
 export class YuanbaoSearchError extends Error {
@@ -26,6 +30,8 @@ const citation = z.object({
   title: z.string().nullish(),
   site_name: z.string().nullish(),
   abstract: z.string().nullish(),
+  publish_time_ts: z.unknown().optional(),
+  time: z.unknown().optional(),
 })
 
 const streamFrame = z.object({
@@ -53,9 +59,33 @@ function normalizeArticleUrl(value: string): string | null {
   return url.href
 }
 
-export function parseYuanbaoStream(stream: string): YuanbaoSearchResult {
+function formatPublishedOn(timestamp: number): string {
+  return beijingDate.format(timestamp).replaceAll('/', '-')
+}
+
+function resolvePublishedOn(timestamp: unknown, date: unknown, now: number, today: string): string | undefined {
+  const numeric = typeof timestamp === 'number' ? timestamp
+    : typeof timestamp === 'string' && /^\d{10}(?:\d{3})?$/.test(timestamp) ? Number(timestamp) : NaN
+  const ms = numeric < 1e12 ? numeric * 1000 : numeric
+  if (Number.isFinite(ms) && ms > 0 && ms <= now) return formatPublishedOn(ms)
+
+  if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date) || date > today) return undefined
+  const day = Date.parse(`${date}T00:00:00+08:00`)
+  return Number.isFinite(day) && formatPublishedOn(day) === date ? date : undefined
+}
+
+function recencyGroup(publishedOn: string | undefined, today: number): number {
+  if (!publishedOn) return 3
+  const age = (today - Date.parse(`${publishedOn}T00:00:00+08:00`)) / DAY_MS
+  if (age < 7) return 0
+  if (age < 30) return 1
+  return 2
+}
+
+export function parseYuanbaoStream(stream: string, now = Date.now()): YuanbaoSearchResult {
   const articles = new Map<string, YuanbaoArticle>()
   const answer: string[] = []
+  const today = formatPublishedOn(now)
   let finished = false
 
   for (const line of stream.split(/\r?\n/)) {
@@ -81,24 +111,30 @@ export function parseYuanbaoStream(stream: string): YuanbaoSearchResult {
     if (choice?.finish_reason === 'stop') finished = true
 
     for (const candidate of frame.data.search_info?.search_results ?? []) {
-      if (articles.size >= MAX_ARTICLES) break
       const result = citation.safeParse(candidate)
       if (!result.success) continue
       const url = normalizeArticleUrl(result.data.url)
       if (!url || articles.has(url)) continue
+      const publishedOn = resolvePublishedOn(result.data.publish_time_ts, result.data.time, now, today)
       articles.set(url, {
         url,
         title: result.data.title?.trim().slice(0, 160) || '公众号文章',
         source: result.data.site_name?.trim().slice(0, 80) || '微信公众号',
         snippet: result.data.abstract?.trim().slice(0, 1000) || '',
         content: '',
+        ...(publishedOn ? { publishedOn } : {}),
       })
     }
   }
 
   const text = answer.join('').trim()
   if (!finished || !text) throw new YuanbaoSearchError('元宝未返回完整回答，请重试')
-  return { answer: text, articles: [...articles.values()] }
+  const dayStart = Date.parse(`${today}T00:00:00+08:00`)
+  // 元宝未提供阅读量等互动数据，同一时段保留它给出的排序。
+  const ranked = [...articles.values()]
+    .sort((a, b) => recencyGroup(a.publishedOn, dayStart) - recencyGroup(b.publishedOn, dayStart))
+    .slice(0, MAX_ARTICLES)
+  return { answer: text, articles: ranked }
 }
 
 type StreamCapture = { text: string } | { error: 'too-large' | 'invalid-stream' }
@@ -221,7 +257,11 @@ async function readSearchPage(query: string, signal: AbortSignal): Promise<Yuanb
 
     const page = await context.newPage()
     const url = new URL(PAGE_URL)
-    url.searchParams.set('query', `查找与「${query}」相关的微信公众号文章。请优先检索公众号，只引用 mp.weixin.qq.com 的原文，列出文章标题、公众号和原文链接。`)
+    url.searchParams.set('query', [
+      `查找与「${query}」相关的微信公众号文章。`,
+      '优先选择近 30 天发布、近期讨论较多的相关报道和实用解析。符合条件的原文较少时，补充近 90 天的相关内容。',
+      '只引用 mp.weixin.qq.com 的原文，列出文章标题、公众号和原文链接。不要猜测阅读量或点赞量。',
+    ].join(''))
 
     // 匿名页面自行发出搜索请求，由站点完成会话初始化和请求校验。
     return await readYuanbaoStream(page, url.href, signal)

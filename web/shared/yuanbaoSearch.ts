@@ -4,6 +4,7 @@ export interface YuanbaoArticle {
   source: string
   snippet: string
   content: string
+  publishedOn?: string
 }
 
 export interface YuanbaoSearchResult {
