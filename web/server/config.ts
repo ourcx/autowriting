@@ -128,6 +128,7 @@ export const PUBLISH_DIR = path.join(DATA_DIR, 'publish')
 export const PUBLISH_HISTORY_FILE = path.join(DATA_DIR, 'publish_history.json')
 
 export const PORT = process.env.PORT || 3000
+export const YUANBAO_SEARCH_ENABLED = process.env.YUANBAO_SEARCH_ENABLED === 'true'
 export const HOST = process.env.HOST || '0.0.0.0'
 export const AGENT_API_KEY = process.env.AGENT_API_KEY || ''
 export const AGENT_USERNAME = process.env.AGENT_USERNAME || 'admin'

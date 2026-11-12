@@ -63,15 +63,18 @@ export async function assertPublicHttpUrl(value: string): Promise<URL> {
   return url
 }
 
-export async function fetchPublicUrl(value: string, init: RequestInit = {}): Promise<Response> {
+export async function fetchPublicUrl(value: string, init: RequestInit = {}, sameOrigin = false): Promise<Response> {
   let current = await assertPublicHttpUrl(value)
+  const origin = current.origin
   for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect++) {
     const response = await fetch(current, { ...init, redirect: "manual" })
     if (![301, 302, 303, 307, 308].includes(response.status)) return response
     const location = response.headers.get("location")
     if (!location) throw new Error("重定向响应缺少 Location")
     if (redirect === MAX_REDIRECTS) throw new Error("重定向次数过多")
-    current = await assertPublicHttpUrl(new URL(location, current).toString())
+    const next = new URL(location, current)
+    if (sameOrigin && next.origin !== origin) throw new Error("不允许跨站重定向")
+    current = await assertPublicHttpUrl(next.toString())
   }
   throw new Error("重定向次数过多")
 }

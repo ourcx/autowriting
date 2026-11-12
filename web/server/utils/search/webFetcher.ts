@@ -245,6 +245,8 @@ function stripInlineTags(text: string): string {
 export interface FetchOptions {
   /** 最大字符数（默认 8000） */
   maxChars?: number
+  signal?: AbortSignal
+  sameOrigin?: boolean
 }
 
 /**
@@ -280,14 +282,16 @@ export async function webFetch(url: string, options: FetchOptions = {}): Promise
 
   // 3. HTTP 请求
   try {
+    const deadline = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+    const signal = options.signal ? AbortSignal.any([deadline, options.signal]) : deadline
     const resp = await fetchPublicUrl(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (compatible; autowriting-web-fetch/1.0)",
         "Accept": "text/html,application/xhtml+xml,*/*",
         "Accept-Language": "zh-CN,zh;q=0.9",
       },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    })
+      signal,
+    }, options.sameOrigin)
 
     if (!resp.ok) {
       throw new Error(`HTTP ${resp.status}`)

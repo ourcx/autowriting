@@ -5,6 +5,7 @@
  * POST /api/materials/fetch-url-batch  - 批量 Jina Reader 读取全文（并发上限 3）
  * POST /api/materials/search           - Serper/Bing/SearXNG 搜索，返回标题+摘要+URL 列表
  * POST /api/materials/wechat-search    - 通过付费服务搜索公众号文章
+ * POST /api/materials/yuanbao-search   - 搜索元宝 AI 回答并解析公众号原文
  * POST /api/materials/wechat-article   - 通过付费服务读取公众号正文
  * POST /api/materials/:articleId/save  - 追加素材片段到 materials.md
  * GET  /api/materials/:articleId       - 读取当前 materials.md 内容
@@ -15,12 +16,13 @@ import FormData from 'form-data'
 import fs from 'fs'
 import multer from 'multer'
 import path from 'path'
-import { DRAFTS_DIR, SERVER_AI_CONFIG } from '../config.js'
+import { DRAFTS_DIR, SERVER_AI_CONFIG, YUANBAO_SEARCH_ENABLED } from '../config.js'
 import { logger } from '../logger.js'
 import { resolveZhipuApiKey } from '../utils/providerKeys.ts'
 import { authMiddleware } from '../authMiddleware.js'
 import { webFetch } from '../utils/search/webFetcher.js'
 import { assertPublicHttpUrl } from '../utils/networkPolicy.ts'
+import { searchYuanbao, YuanbaoSearchError } from '../utils/yuanbaoSearch.ts'
 import {
   fetchWechatArticle,
   searchWechatArticles,
@@ -224,6 +226,28 @@ router.post('/fetch-url-batch', async (req, res) => {
   }
 
   res.json({ results })
+})
+
+router.post('/yuanbao-search', async (req, res) => {
+  const query = typeof req.body?.query === 'string' ? req.body.query.trim() : ''
+  if (!query || query.length > 100) return res.status(400).json({ error: '请输入 1 至 100 个字符的搜索关键词' })
+  if (!YUANBAO_SEARCH_ENABLED) return res.status(503).json({ error: '当前服务器未启用元宝 AI 搜索' })
+
+  const controller = new AbortController()
+  const abort = () => controller.abort()
+  res.once('close', abort)
+  try {
+    const result = await searchYuanbao(query, controller.signal)
+    if (!controller.signal.aborted) res.json(result)
+  } catch (error) {
+    if (controller.signal.aborted) return
+    if (error instanceof YuanbaoSearchError) return res.status(error.status).json({ error: error.message })
+    // 浏览器异常可能附带含搜索词的请求 URL。
+    logger.warn('MATERIALS', '元宝搜索请求失败', { errorType: error instanceof Error ? error.name : 'UnknownError' })
+    res.status(502).json({ error: '暂时无法连接元宝 AI 搜索，请稍后再试' })
+  } finally {
+    res.off('close', abort)
+  }
 })
 
 // ── POST /api/materials/wechat-search ────────────────────────────────────────

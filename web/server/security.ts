@@ -116,7 +116,7 @@ const EXPENSIVE_OPERATION_PATHS = [
   /^\/(?:generate-cover|generate-covers-batch)/,
   /^\/rag\/(?:index|search|candidates)/,
   /^\/creator-profile\/persona\/analyze$/,
-  /^\/materials\/parse-file$/,
+  /^\/materials\/(?:parse-file|yuanbao-search)$/,
   /^\/wechat\/draft\/[^/]+\/publish$/,
   /^\/(?:publish|toutiao|xiaohongshu)\//,
 ]

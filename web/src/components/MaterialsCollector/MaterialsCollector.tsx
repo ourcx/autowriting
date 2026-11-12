@@ -3,7 +3,7 @@
  * 四种模式：网页搜索 / 公众号采集 / URL 解析 / 手动粘贴
  * 搜索结果支持「读取全文」（单条 & 批量），采集后一键追加到 materials.md
  */
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Link, Search, ClipboardPaste, Plus, Check,
   Loader2, ExternalLink, ChevronDown, ChevronUp, AlertCircle,
@@ -20,6 +20,7 @@ import {
   parseMaterialFile,
   searchMaterials,
   searchWechatArticles,
+  searchYuanbaoMaterials,
   type MaterialSearchResult,
   type WechatCollectorProvider,
   type WechatCollectorSort,
@@ -62,31 +63,9 @@ function nextId() { return String(++_idCounter) }
 
 type WechatSearchSource = WechatCollectorProvider | 'yuanbao'
 
-// 元宝只提供链接，先读到原文再允许勾选；付费搜索仍可保存已有摘要。
+// 元宝文章解析失败时暂留链接和摘要，等读到正文后再允许勾选。
 function needsWechatArticleText(item: CollectedItem): boolean {
   return item.type === 'wechat' && !item.provider && !item.fullFetched
-}
-
-function extractWechatArticleLinks(text: string): string[] {
-  const links = text.match(/https?:\/\/[^\s<>"'`()[\]{}，。；！？、]+/gi) ?? []
-  const urls = new Set<string>()
-  for (const link of links) {
-    try {
-      const url = new URL(link.replace(/&amp;/gi, '&').replace(/[.,;]+$/, ''))
-      if (url.hostname !== 'mp.weixin.qq.com' || url.username || url.password || url.port) continue
-      // 元宝引用可能是短链、带文章 ID 的长链，或带签名的链接。
-      const isArticle = /^\/s\/[\w-]+$/.test(url.pathname) || (url.pathname === '/s' && (
-        (url.searchParams.get('__biz') && url.searchParams.get('mid')) || url.searchParams.get('signature')
-      ))
-      if (!isArticle) continue
-      url.protocol = 'https:'
-      url.hash = ''
-      urls.add(url.href)
-    } catch {
-      // 回答里可能有残缺的链接，跳过后继续读其余文章。
-    }
-  }
-  return [...urls]
 }
 
 /** 格式化日期显示 */
@@ -116,7 +95,7 @@ export default function MaterialsCollector({
   const [searchQuery, setSearchQuery] = useState('')
   const [wechatQuery, setWechatQuery] = useState('')
   const [wechatProvider, setWechatProvider] = useState<WechatSearchSource>('yuanbao')
-  const [yuanbaoAnswer, setYuanbaoAnswer] = useState('')
+  const yuanbaoRequest = useRef<AbortController | null>(null)
   const [wechatSort, setWechatSort] = useState<WechatCollectorSort>('default')
   const [wechatPublishTime, setWechatPublishTime] = useState<WechatCollectorTimeRange>('all')
   const [pasteText, setPasteText]     = useState('')
@@ -135,6 +114,8 @@ export default function MaterialsCollector({
     || (searchProvider === 'zhipu' ? !!(glmApiKey || searchApiKey) : !!searchApiKey)
   const usingYuanbao = wechatProvider === 'yuanbao'
   const canSearchWechat = usingYuanbao || wechatCollectorReady[wechatProvider]
+
+  useEffect(() => () => yuanbaoRequest.current?.abort(), [articleId])
 
   async function handleParseFile(file: File | null) {
     if (!file) return
@@ -268,16 +249,9 @@ export default function MaterialsCollector({
   // ── 公众号文章搜索 ────────────────────────────────────────────────────────
   async function handleWechatSearch() {
     const query = wechatQuery.trim()
-    if (!query) return
+    if (!query || loading || !canSearchWechat) return
     if (wechatProvider === 'yuanbao') {
-      const url = new URL('https://so.qq.com/iaimode/search')
-      url.searchParams.set('query', `查找与「${query}」相关的微信公众号文章。只引用 mp.weixin.qq.com 的公众号原文，列出文章标题、公众号和可直接复制的原文链接。忽略其他网站，不要编造链接。`)
-      window.open(url.href, '_blank', 'noopener,noreferrer')
-      return
-    }
-    if (!canSearchWechat) {
-      const envName = wechatProvider === 'tikhub' ? 'TIKHUB_API_KEY' : 'DAJIALA_API_KEY'
-      toast.error(`服务端未配置 ${envName}`)
+      await handleYuanbaoSearch(query)
       return
     }
 
@@ -319,51 +293,56 @@ export default function MaterialsCollector({
     }
   }
 
-  function handleExtractYuanbaoLinks() {
-    const links = extractWechatArticleLinks(yuanbaoAnswer)
-    if (!links.length) {
-      toast.warn('没找到公众号原文链接，请从元宝回答里复制文章链接')
-      return
-    }
-    const existingUrls = new Set(items.map(item => item.url))
-    const urls = links.filter(url => !existingUrls.has(url))
-    if (!urls.length) {
-      toast.warn('这些文章已在当前列表中')
-      return
-    }
-    const articles = urls.map((url, index): CollectedItem => ({
-      id: nextId(),
-      type: 'wechat',
-      title: `公众号文章 ${index + 1}`,
-      content: '',
-      url,
-      source: '微信公众号',
-      selected: false,
-      expanded: false,
-      dateTag: defaultDateTag,
-    }))
-    setItems(prev => [...articles, ...prev])
-    toast.success(`找到 ${articles.length} 篇公众号文章，可按需解析原文`)
-  }
+  async function handleYuanbaoSearch(query: string) {
+    if (yuanbaoRequest.current) return
+    const controller = new AbortController()
+    yuanbaoRequest.current = controller
+    setLoading(true)
+    try {
+      const { answer, articles } = await searchYuanbaoMaterials(query, controller.signal)
+      if (controller.signal.aborted) return
+      const answerItem: CollectedItem = {
+        id: nextId(), type: 'paste', title: '元宝 AI 回答', source: '元宝',
+        content: answer, selected: false, expanded: false, dateTag: defaultDateTag,
+      }
+      const articleItems = articles.map((article): CollectedItem => ({
+        id: nextId(),
+        type: 'wechat',
+        title: article.title,
+        source: article.source,
+        url: article.url,
+        content: article.content || article.snippet,
+        fullFetched: !!article.content,
+        selected: false,
+        expanded: false,
+        dateTag: defaultDateTag,
+      }))
+      const articlesByUrl = new Map(articles.map(article => [article.url, article]))
+      setItems(prev => {
+        const existingUrls = new Set(prev.map(item => item.url))
+        const refreshed = prev.map(item => {
+          if (!item.url || !needsWechatArticleText(item)) return item
+          const content = articlesByUrl.get(item.url)?.content
+          return content ? { ...item, content, fullFetched: true } : item
+        })
+        const answerExists = prev.some(item => item.source === '元宝' && item.content === answer)
+        return [
+          ...(answerExists ? [] : [answerItem]),
+          ...articleItems.filter(item => !existingUrls.has(item.url)),
+          ...refreshed,
+        ]
+      })
 
-  function handleAddYuanbaoAnswer() {
-    const content = yuanbaoAnswer.trim()
-    if (!content) return
-    if (items.some(item => item.source === '元宝' && item.content === content)) {
-      toast.warn('这段回答已在当前列表中')
-      return
+      const parsedCount = articles.filter(article => article.content).length
+      if (!articles.length) toast.warn('已取得元宝回答，未找到公众号原文')
+      else if (parsedCount < articles.length) toast.warn(`找到 ${articles.length} 篇公众号文章，已解析 ${parsedCount} 篇正文`)
+      else toast.success(`已解析 ${parsedCount} 篇公众号文章`)
+    } catch (error: unknown) {
+      if (!controller.signal.aborted) toast.error(extractErrorMessage(error, '元宝搜索失败，请稍后再试'))
+    } finally {
+      yuanbaoRequest.current = null
+      setLoading(false)
     }
-    setItems(prev => [{
-      id: nextId(),
-      type: 'paste',
-      title: '元宝 AI 回答',
-      source: '元宝',
-      content,
-      selected: false,
-      expanded: false,
-      dateTag: defaultDateTag,
-    }, ...prev])
-    toast.success('回答已加入待选素材')
   }
 
   // ── 单条读取全文 ─────────────────────────────────────────────────────────
@@ -383,12 +362,8 @@ export default function MaterialsCollector({
         articleData = await fetchWechatArticle({ provider: target.provider, url })
       } else {
         const data = await fetchMaterialUrl(url, jinaApiKey || '')
-        // 公众号页面可能在文章标题前带有导航或空的 Markdown 标记。
-        const articleTitle = isYuanbaoArticle
-          ? data.content.match(/^[ \t]*(?:[-*][ \t]+)?#[ \t]+(.+)$/m)?.[1] || data.content.match(/^Title:[ \t]*(.+)$/mi)?.[1]
-          : undefined
         articleData = {
-          title: articleTitle?.trim() || target?.title || '',
+          title: target?.title || '',
           content: data.content,
           source: target?.source || '',
           publishedAt: '',
@@ -675,7 +650,7 @@ export default function MaterialsCollector({
           <div className="mc-wechat-search">
             <div className="mc-provider-toggle mc-provider-toggle--wechat" aria-label="公众号采集来源">
               {([
-                ['yuanbao', '元宝 AI 搜索', '打开网页版'],
+                ['yuanbao', '元宝 AI 搜索', '自动解析原文'],
                 ['tikhub', 'TikHub', wechatCollectorReady.tikhub ? '$0.01 / 次' : '未配置'],
                 ['dajiala', '极致了数据', wechatCollectorReady.dajiala ? '约 ¥0.5 / 次' : '未配置'],
               ] as Array<[WechatSearchSource, string, string]>).map(([provider, label, detail]) => (
@@ -736,45 +711,16 @@ export default function MaterialsCollector({
                 onClick={() => void handleWechatSearch()}
                 disabled={loading || !wechatQuery.trim() || !canSearchWechat}
               >
-                {usingYuanbao ? <ExternalLink size={14} /> : loading ? <Loader2 size={14} className="mc-spin" /> : <Search size={14} />}
-                {usingYuanbao ? '去元宝 AI 搜索' : loading ? '搜索中...' : '搜索公众号'}
+                {loading ? <Loader2 size={14} className="mc-spin" /> : <Search size={14} />}
+                {loading ? (usingYuanbao ? '搜索并解析中…' : '搜索中…') : '搜索公众号'}
               </button>
             </div>
 
             {usingYuanbao ? (
-              <>
-                <div className="mc-search-tip mc-search-tip--hint">
-                  <BookOpen size={12} />
-                  粘贴元宝回答后，可以提取公众号链接并逐篇解析，也可以单独添加回答。
-                </div>
-                <textarea
-                  className="mc-textarea"
-                  aria-label="元宝回答或公众号原文链接"
-                  placeholder="粘贴元宝回答或公众号原文链接"
-                  value={yuanbaoAnswer}
-                  onChange={event => setYuanbaoAnswer(event.target.value)}
-                  disabled={loading}
-                  rows={2}
-                />
-                <div className="mc-yuanbao-actions">
-                  <button
-                    type="button"
-                    className="mc-btn mc-btn--primary"
-                    onClick={handleExtractYuanbaoLinks}
-                    disabled={!yuanbaoAnswer.trim()}
-                  >
-                    <Link size={14} />提取公众号链接
-                  </button>
-                  <button
-                    type="button"
-                    className="mc-btn mc-btn--fetch"
-                    onClick={handleAddYuanbaoAnswer}
-                    disabled={!yuanbaoAnswer.trim()}
-                  >
-                    <Plus size={14} />添加元宝回答
-                  </button>
-                </div>
-              </>
+              <div className="mc-search-tip mc-search-tip--hint">
+                <BookOpen size={12} />
+                搜索词会发送给元宝。回答和解析后的公众号正文可分别勾选。
+              </div>
             ) : (
               <div className={`mc-search-tip${canSearchWechat ? ' mc-search-tip--paid' : ' mc-search-tip--warn'}`}>
                 {canSearchWechat ? <BookOpen size={12} /> : <AlertCircle size={12} />}
@@ -982,7 +928,7 @@ export default function MaterialsCollector({
                           ? <Loader2 size={12} className="mc-spin" />
                           : <BookOpen size={12} />
                         }
-                        {item.fetching ? '读取中' : needsWechatArticleText(item) ? '解析原文' : item.type === 'wechat' ? '读取正文' : '读全文'}
+                        {item.fetching ? '读取中' : needsWechatArticleText(item) ? '重试解析' : item.type === 'wechat' ? '读取正文' : '读全文'}
                       </button>
                     )}
 
@@ -1050,7 +996,7 @@ export default function MaterialsCollector({
           {mode === 'wechat' && (
             <div className="mc-empty-inner">
               <MessageCircle size={28} className="mc-empty-icon" />
-              <p>{usingYuanbao ? '提取链接后，可逐篇解析原文，再勾选要用的素材' : '搜索公开公众号文章，确认摘要后再按需读取正文'}</p>
+              <p>{usingYuanbao ? '输入关键词，查找相关的公众号文章' : '搜索公开公众号文章，确认摘要后再按需读取正文'}</p>
               {!usingYuanbao && canSearchWechat && (
                 <span className="mc-empty-badge">
                   {wechatProvider === 'tikhub' ? 'TikHub 已启用' : '极致了数据已启用'}

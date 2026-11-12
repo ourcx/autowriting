@@ -76,6 +76,7 @@ function startServer() {
       STATIC_DIR: SMOKE_STATIC_ROOT,
       AGENT_API_KEY: SMOKE_AGENT_API_KEY,
       OPENROUTER_API_KEY: '',
+      YUANBAO_SEARCH_ENABLED: 'false',
       AGENT_USERNAME: 'admin',
       CORS_ALLOWED_ORIGINS: SMOKE_ALLOWED_ORIGIN,
       EXPENSIVE_RATE_LIMIT_MAX: '60',
@@ -256,12 +257,14 @@ cases.push({
 cases.push({
   name: '未登录不得调用公众号采集',
   run: async () => {
-    const r = await fetch(`${BASE}/api/materials/wechat-search`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: 'tikhub', query: '测试' }),
-    })
-    if (![401, 403].includes(r.status)) throw new Error(`status=${r.status}`)
+    for (const path of ['wechat-search', 'yuanbao-search']) {
+      const r = await fetch(`${BASE}/api/materials/${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: 'tikhub', query: '测试' }),
+      })
+      if (![401, 403].includes(r.status)) throw new Error(`${path}: status=${r.status}`)
+    }
   },
 })
 cases.push({
@@ -563,6 +566,19 @@ cases.push({
       body: JSON.stringify({ provider: 'unknown', query: '测试' }),
     })
     if (r.status !== 400) throw new Error(`期望 400，实际 ${r.status}`)
+  },
+})
+cases.push({
+  name: '元宝搜索校验关键词且默认关闭',
+  run: async () => {
+    for (const [query, expected] of [[' '.repeat(10), 400], ['字'.repeat(101), 400], ['测试', 503]]) {
+      const r = await fetch(`${BASE}/api/materials/yuanbao-search`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query }),
+      })
+      if (r.status !== expected) throw new Error(`期望 ${expected}，实际 ${r.status}`)
+    }
   },
 })
 cases.push({

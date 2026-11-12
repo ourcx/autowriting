@@ -16,6 +16,7 @@ import type { ArticleWorkflow, ArticleWorkflowEvent, ArticleWorkflowStage } from
 import type { CandidateInput, CandidateEvent, GenerationCandidate } from '../../shared/generationCandidate'
 import type { WechatAnalyticsSnapshot } from '../../shared/wechatAnalytics'
 import type { WechatBrowserPublishOptions } from '../../shared/wechatPublish'
+import type { YuanbaoSearchResult } from '../../shared/yuanbaoSearch'
 import {
   normalizeCreatorWritingProfile,
   normalizeCreatorPersona,
@@ -186,6 +187,11 @@ export async function searchWechatArticles(input: {
   page?: number
 }): Promise<WechatCollectorSearchResponse> {
   const response = await axios.post<WechatCollectorSearchResponse>('/api/materials/wechat-search', input)
+  return response.data
+}
+
+export async function searchYuanbaoMaterials(query: string, signal: AbortSignal): Promise<YuanbaoSearchResult> {
+  const response = await axios.post<YuanbaoSearchResult>('/api/materials/yuanbao-search', { query }, { signal })
   return response.data
 }
 
