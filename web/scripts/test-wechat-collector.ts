@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
+import { chromium } from "playwright"
 import { wechatCollectorTestUtils } from "../server/utils/wechatCollector.ts"
-import { parseYuanbaoStream } from "../server/utils/yuanbaoSearch.ts"
+import { parseYuanbaoStream, readYuanbaoStream } from "../server/utils/yuanbaoSearch.ts"
 
 const tikhubItems = wechatCollectorTestUtils.collectArticleItems({
   items: [{
@@ -75,6 +76,28 @@ assert.deepEqual(yuanbao.articles.map(item => [item.url, item.title]), [
 ])
 assert.throws(() => parseYuanbaoStream(stream([citations, answerPart])), /未返回完整回答/)
 assert.throws(() => parseYuanbaoStream(stream([{ data_type: "anti_crawl", data: { status: "reject" } }])), /未接受/)
+
+// Chromium 读取没有 charset 的元宝 SSE 时，回答和引用必须保留原始中文。
+const browser = await chromium.launch({ headless: true })
+try {
+  const page = await browser.newPage()
+  const pageUrl = "https://so.qq.com/iaimode/search"
+  const searchUrl = "https://lizhiassistant.search.qq.com/browser_aimode/aimode/query_get"
+  await page.route(pageUrl, route => route.fulfill({
+    contentType: "text/html",
+    body: `<script>fetch(${JSON.stringify(searchUrl)}, { method: 'POST' }).then(response => response.text())</script>`,
+  }))
+  await page.route(searchUrl, route => route.fulfill({
+    headers: { "content-type": "text/event-stream", "access-control-allow-origin": "https://so.qq.com" },
+    body: Buffer.from(stream([citations, answerPart, finished]), "utf8"),
+  }))
+
+  const result = await readYuanbaoStream(page, pageUrl, AbortSignal.timeout(10000))
+  assert.equal(result.answer, yuanbao.answer)
+  assert.deepEqual(result.articles, yuanbao.articles)
+} finally {
+  await browser.close()
+}
 
 console.log("wechat collector parser tests passed")
 process.exit(0)

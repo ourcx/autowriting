@@ -1,4 +1,4 @@
-import { chromium } from 'playwright'
+import { chromium, type Page } from 'playwright'
 import { z } from 'zod'
 import type { YuanbaoArticle, YuanbaoSearchResult } from '../../shared/yuanbaoSearch.ts'
 import { webFetch } from './search/webFetcher.ts'
@@ -101,6 +101,109 @@ export function parseYuanbaoStream(stream: string): YuanbaoSearchResult {
   return { answer: text, articles: [...articles.values()] }
 }
 
+type StreamCapture = { text: string } | { error: 'too-large' | 'invalid-stream' }
+
+export async function readYuanbaoStream(page: Page, url: string, signal: AbortSignal): Promise<YuanbaoSearchResult> {
+  const bindingName = '__dashyCaptureYuanbaoStream'
+  let receive: (result: StreamCapture) => void = () => {}
+  await page.exposeBinding(bindingName, ({ frame }, result: StreamCapture) => {
+    if (frame === page.mainFrame()) receive(result)
+  })
+
+  // 元宝的 SSE 响应没有 charset，Playwright 获取响应体时会拿到 Chromium 已经误解码的文本。
+  // 在页面里复制这一个响应的字节流，按 SSE 规定的 UTF-8 解码，原响应仍交给元宝页面处理。
+  await page.addInitScript({ content: `
+    (() => {
+      const { bindingName, searchUrl, maxBytes } = ${JSON.stringify({ bindingName, searchUrl: SEARCH_URL, maxBytes: MAX_STREAM_BYTES })}
+      const nativeFetch = globalThis.fetch
+      function capture(result) {
+        return globalThis[bindingName](result)
+      }
+
+      async function readBody(response) {
+        const reader = response.clone().body?.getReader()
+        if (!reader) {
+          await capture({ error: 'invalid-stream' })
+          return
+        }
+
+        const decoder = new TextDecoder('utf-8', { fatal: true })
+        const chunks = []
+        let size = 0
+        try {
+          for (;;) {
+            const { done, value } = await reader.read()
+            if (done) break
+            size += value.byteLength
+            if (size > maxBytes) {
+              void reader.cancel().catch(() => undefined)
+              await capture({ error: 'too-large' })
+              return
+            }
+            chunks.push(decoder.decode(value, { stream: true }))
+          }
+          chunks.push(decoder.decode())
+          await capture({ text: chunks.join('') })
+        } catch {
+          void reader.cancel().catch(() => undefined)
+          await capture({ error: 'invalid-stream' })
+        } finally {
+          reader.releaseLock()
+        }
+      }
+
+      globalThis.fetch = async (input, init) => {
+        const response = await nativeFetch(input, init)
+        const method = init?.method ?? (input instanceof Request ? input.method : 'GET')
+        if (response.url === searchUrl && method.toUpperCase() === 'POST' && response.ok) {
+          void readBody(response).catch(() => undefined)
+        }
+        return response
+      }
+    })()
+  ` })
+
+  let cleanup = () => {}
+  const body = new Promise<string>((resolve, reject) => {
+    const abort = () => reject(signal.reason)
+    cleanup = () => signal.removeEventListener('abort', abort)
+    if (signal.aborted) {
+      abort()
+      return
+    }
+    signal.addEventListener('abort', abort, { once: true })
+    receive = result => {
+      if (!result || typeof result !== 'object') return
+      if ('text' in result && typeof result.text === 'string' && Buffer.byteLength(result.text, 'utf8') <= MAX_STREAM_BYTES) {
+        resolve(result.text)
+      } else if ('error' in result && result.error === 'too-large') {
+        reject(new YuanbaoSearchError('元宝返回的搜索结果过大'))
+      } else {
+        reject(new YuanbaoSearchError('元宝返回的搜索结果无法解码，请重试'))
+      }
+    }
+  })
+
+  try {
+    const response = page.waitForResponse(
+      response => response.url() === SEARCH_URL && response.request().method() === 'POST',
+      { timeout: 20000 },
+    ).then(response => {
+      if (!response.ok() || !response.headers()['content-type']?.includes('text/event-stream')) {
+        throw new YuanbaoSearchError('元宝暂时无法提供搜索结果，请稍后再试')
+      }
+    })
+    const [stream] = await Promise.all([
+      body,
+      response,
+      page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 }),
+    ])
+    return parseYuanbaoStream(stream)
+  } finally {
+    cleanup()
+  }
+}
+
 async function readSearchPage(query: string, signal: AbortSignal): Promise<YuanbaoSearchResult> {
   const browser = await chromium.launch({ headless: true, chromiumSandbox: true, timeout: 10000 })
   const closeBrowser = () => { void browser.close().catch(() => undefined) }
@@ -121,17 +224,7 @@ async function readSearchPage(query: string, signal: AbortSignal): Promise<Yuanb
     url.searchParams.set('query', `查找与「${query}」相关的微信公众号文章。请优先检索公众号，只引用 mp.weixin.qq.com 的原文，列出文章标题、公众号和原文链接。`)
 
     // 匿名页面自行发出搜索请求，由站点完成会话初始化和请求校验。
-    const [response] = await Promise.all([
-      page.waitForResponse(response => response.url() === SEARCH_URL && response.request().method() === 'POST', { timeout: 20000 }),
-      page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: 15000 }),
-    ])
-    if (!response.ok() || !response.headers()['content-type']?.includes('text/event-stream')) {
-      throw new YuanbaoSearchError('元宝暂时无法提供搜索结果，请稍后再试')
-    }
-
-    const stream = await response.body()
-    if (stream.byteLength > MAX_STREAM_BYTES) throw new YuanbaoSearchError('元宝返回的搜索结果过大')
-    return parseYuanbaoStream(stream.toString('utf8'))
+    return await readYuanbaoStream(page, url.href, signal)
   } finally {
     signal.removeEventListener('abort', closeBrowser)
     await browser.close().catch(() => undefined)
