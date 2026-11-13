@@ -52,6 +52,21 @@ jobs:
           test -f "$backup_dir/data.tar.gz"
           test -f "$backup_dir/drafts.tar.gz"
           test -f "$backup_dir/SHA256SUMS"
+          test -f "$backup_dir/logs.tar.gz"
+          test -f "$backup_dir/manifest.txt"
+          (cd "$backup_dir" && sha256sum -c SHA256SUMS)
+          tar -tzf "$backup_dir/data.tar.gz" > "$RUNNER_TEMP/data-backup-contents.txt"
+          grep -Eq '^\./app\.db$' "$RUNNER_TEMP/data-backup-contents.txt"
+          tar -tzf "$backup_dir/drafts.tar.gz" > /dev/null
+          tar -tzf "$backup_dir/logs.tar.gz" > /dev/null
+          # Backup pauses the service; also verify it was restarted successfully.
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3000/health > /dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          curl --fail --silent http://127.0.0.1:3000/health > /dev/null
 
       - name: Print diagnostics
         if: always()

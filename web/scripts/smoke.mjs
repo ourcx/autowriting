@@ -228,6 +228,15 @@ cases.push({
       throw new Error('旧编辑路由缺少 X-Robots-Tag')
     }
 
+    const legacyArticle = await fetch(`${BASE}/articles/docker-smoke?tab=analysis`, { redirect: 'manual' })
+    if (legacyArticle.status !== 301 || legacyArticle.headers.get('location') !== '/articles/docker-smoke/docker-smoke?tab=analysis') {
+      throw new Error('Docker smoke 旧文章 URL 必须 301 到规范 URL 并保留查询参数')
+    }
+    const canonicalArticle = await fetch(`${BASE}${legacyArticle.headers.get('location')}`, { redirect: 'manual' })
+    if (canonicalArticle.status !== 200 || !(await canonicalArticle.text()).includes(SMOKE_INDEX_MARKER)) {
+      throw new Error('Docker smoke 规范文章 URL 必须返回 React 页面而不是再次重定向')
+    }
+
     const preview = await fetch(`${BASE}/preview/20260929-%E4%B8%AD%E6%96%87%E6%A0%87%E9%A2%98?platform=wechat`, { redirect: 'manual' })
     if (preview.status !== 301) throw new Error(`预览路由期望 301，实际 ${preview.status}`)
     if (preview.headers.get('location') !== '/previews/20260929-%E4%B8%AD%E6%96%87%E6%A0%87%E9%A2%98/%E4%B8%AD%E6%96%87%E6%A0%87%E9%A2%98?platform=wechat') {

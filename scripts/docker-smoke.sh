@@ -30,7 +30,22 @@ assert_status() {
 
 assert_status 200 "$base_url/health"
 assert_status 200 "$base_url/"
-assert_status 200 "$base_url/articles/docker-smoke"
+# Legacy article IDs deliberately redirect to canonical /articles/:id/:slug URLs.
+legacy_url="$base_url/articles/docker-smoke?tab=analysis"
+canonical_url="$base_url/articles/docker-smoke/docker-smoke?tab=analysis"
+assert_status 301 "$legacy_url"
+redirect_url="$(curl --silent --show-error --output /dev/null --write-out '%{redirect_url}' "$legacy_url")"
+if [[ "$redirect_url" != "$canonical_url" ]]; then
+  echo "旧文章地址重定向错误: expected=$canonical_url actual=$redirect_url" >&2
+  exit 1
+fi
+assert_status 200 "$canonical_url"
+assert_status 200 "$base_url/deepseek"
+article_body="$(curl --fail --silent --show-error "$canonical_url")"
+if [[ "$article_body" != *"<div id=\"root\""* ]]; then
+  echo "规范文章地址未返回 React 页面。" >&2
+  exit 1
+fi
 assert_status 404 "$base_url/api/docker-smoke-not-found"
 
 index_body="$(curl --fail --silent --show-error "$base_url/")"
@@ -88,4 +103,4 @@ compose exec -T autowriting sh -lc '
   rm -f "$marker"
 '
 
-echo "Docker smoke 通过：健康、首页、SPA、API 404、卷、SQLite、草稿写入、Playwright。"
+echo "Docker smoke 通过：健康、首页、旧文章301、规范SPA、DeepSeek页面、API 404、卷、SQLite、草稿写入、Playwright。"
