@@ -77,6 +77,8 @@ function startServer() {
       AGENT_API_KEY: SMOKE_AGENT_API_KEY,
       OPENROUTER_API_KEY: '',
       YUANBAO_SEARCH_ENABLED: 'false',
+      DEEPSEEK_APP_ENABLED: 'false',
+      DEEPSEEK_API_KEY: '',
       AGENT_USERNAME: 'admin',
       CORS_ALLOWED_ORIGINS: SMOKE_ALLOWED_ORIGIN,
       EXPENSIVE_RATE_LIMIT_MAX: '60',
@@ -103,6 +105,24 @@ process.on('SIGTERM', stopServer)
 process.on('exit', stopServer)
 
 const cases = []
+
+cases.push({
+  name: 'DeepSeek 默认关闭且所有入口需要登录',
+  run: async () => {
+    for (const operation of ['status', 'chat', 'search', 'fetch', 'ocr', 'asr', 'tts']) {
+      const response = await fetch(`${BASE}/api/deepseek/${operation}`, { method: operation === 'status' ? 'GET' : 'POST' })
+      if (response.status !== 401) throw new Error(`${operation}: expected 401, got ${response.status}`)
+    }
+    const login = await fetch(`${BASE}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'admin', password: 'admin123' }) })
+    const { token: localToken } = await login.json()
+    const headers = { Authorization: `Bearer ${localToken}`, 'Content-Type': 'application/json' }
+    const status = await fetch(`${BASE}/api/deepseek/status`, { headers })
+    const data = await status.json()
+    if (data.enabled || data.configured) throw new Error('DeepSeek must stay disabled in smoke')
+    const response = await fetch(`${BASE}/api/deepseek/search`, { method: 'POST', headers, body: JSON.stringify({ query: 'smoke', confirmedCost: true }) })
+    if (response.status !== 503) throw new Error(`Disabled expected 503, got ${response.status}`)
+  },
+})
 
 cases.push({
   name: 'GET /health 应返回 200',

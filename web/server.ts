@@ -14,6 +14,7 @@ import styleRouter from "./server/routes/style.ts"
 import ragRouter from "./server/routes/rag.ts"
 import templatesRouter from "./server/routes/templates.ts"
 import settingsRouter from "./server/routes/settings.ts"
+import deepseekRouter from "./server/routes/deepseek.ts"
 import materialsRouter from "./server/routes/materials.ts"
 import wechatRouter from "./server/routes/wechat.ts"
 import authRouter from "./server/routes/auth.ts"
@@ -138,6 +139,7 @@ app.use("/api/rag", ragRouter)
 app.use("/api/templates", templatesRouter)
 app.use("/api/settings", settingsRouter)
 app.use("/api/materials", materialsRouter)
+app.use("/api/deepseek", deepseekRouter)
 app.use("/api/wechat", wechatRouter)
 app.use("/api/monitoring", monitoringRouter)
 app.use("/api/prompts", promptsRouter)

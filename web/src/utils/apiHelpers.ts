@@ -1040,3 +1040,20 @@ export async function writeStyleTemplate(payload: { id: string; name: string; de
 export async function removeStyleTemplate(id: string): Promise<void> {
   await axios.delete(`/api/templates/${encodeURIComponent(id)}`)
 }
+
+export type DeepSeekOperation = "chat" | "search" | "fetch" | "ocr" | "asr" | "tts"
+export async function deepSeekRequest(operation: DeepSeekOperation | "status", body?: Record<string, unknown> | FormData, signal?: AbortSignal): Promise<Record<string, unknown> | Blob> {
+  const token = localStorage.getItem("auth_token")
+  const multipart = body instanceof FormData
+  const response = await fetch(`/api/deepseek/${operation}`, {
+    method: operation === "status" ? "GET" : "POST",
+    headers: { Authorization: `Bearer ${token || ""}`, ...(multipart || !body ? {} : { "Content-Type": "application/json" }) },
+    body: body ? multipart ? body : JSON.stringify(body) : undefined,
+    signal,
+  })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({})) as { error?: string }
+    throw new Error(error.error || `请求失败 (${response.status})`)
+  }
+  return operation === "tts" ? response.blob() : response.json()
+}

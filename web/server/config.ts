@@ -238,3 +238,9 @@ export const SERVER_AI_CONFIG = {
   tikhubApiKey: process.env.TIKHUB_API_KEY || '',
   dajialaApiKey: process.env.DAJIALA_API_KEY || '',
 }
+
+// DeepSeek 应用能力：默认关闭，密钥仅留在服务端，不复用浏览器提供的 URL/Key。
+export const DEEPSEEK_APP_CONFIG = {
+  enabled: process.env.DEEPSEEK_APP_ENABLED === 'true',
+  apiKey: process.env.DEEPSEEK_API_KEY || '',
+}

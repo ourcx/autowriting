@@ -177,6 +177,7 @@ export default function AISettings() {
         )}
       />
 
+      <button className="as-save-btn" onClick={() => navigate("/deepseek")}>DeepSeek 工作台：搜索、文件与语音</button>
       {/* ── 安全提示 Banner ── */}
       <div className="as-security-banner">
         <ShieldAlert size={14} className="as-security-banner-icon" />
