@@ -53,7 +53,7 @@ app.disable("x-powered-by")
 app.set("trust proxy", "loopback")
 
 const PRIVATE_SPA_ROUTE_PATTERNS = [
-  /^\/(?:login|register|setup|drafts|styles|settings|rag|token-usage|prompts|cron|scores|insights|account|canvas|admin|monitoring)\/?$/,
+  /^\/(?:login|register|setup|drafts|styles|settings|deepseek|rag|token-usage|prompts|cron|scores|insights|account|canvas|admin|monitoring)\/?$/,
   /^\/(?:articles|previews)\/[^/]+\/[^/]+\/?$/,
   /^\/(?:editor|preview)\/[^/]+\/?$/,
   /^\/wechat\/materials\/?$/,

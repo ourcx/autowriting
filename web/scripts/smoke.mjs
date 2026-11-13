@@ -239,7 +239,7 @@ cases.push({
 cases.push({
   name: '生产模式私有前端路由应回退到 index.html 并禁止索引',
   run: async () => {
-    for (const path of ['/settings', '/articles/20260929-writing/writing-better-urls']) {
+    for (const path of ['/settings', '/deepseek', '/articles/20260929-writing/writing-better-urls']) {
       const r = await fetch(`${BASE}${path}`)
       if (!r.ok) throw new Error(`${path} status=${r.status}`)
       if (r.headers.get('x-robots-tag') !== 'noindex, nofollow, noarchive') {
