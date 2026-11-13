@@ -14,8 +14,7 @@ import {
   submitXiaohongshuOnce,
 } from "../utils/xiaohongshuBrowser.ts"
 import {
-  buildLLMRequest,
-  callLLMWithRetry,
+  createArticleModel,
   createXiaohongshuPublishLock,
   removeXiaohongshuPublishLock,
   saveXiaohongshuDebugArtifacts,
@@ -421,9 +420,8 @@ router.post("/article-metadata", async (req, res) => {
   }
 
   try {
-    const { url, model, headers } = buildLLMRequest(aiConfig)
-    const response = await callLLMWithRetry(url, {
-      model,
+    const { complete } = createArticleModel(aiConfig)
+    const response = await complete({
       messages: [
         {
           role: "system",
@@ -437,7 +435,7 @@ router.post("/article-metadata", async (req, res) => {
       temperature: 0.5,
       max_tokens: 500,
       stream: false,
-    }, headers)
+    })
     const output = response.data.choices[0]?.message?.content ?? ""
     const metadata = parseXiaohongshuMetadata(output)
     if (!metadata.title) metadata.title = title

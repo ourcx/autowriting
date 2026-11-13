@@ -92,6 +92,7 @@ export interface MaterialSearchResult {
   url: string
   source: string
   engine?: string
+  datePublished?: string
 }
 
 // ── 从 axios/fetch 错误中提取可读的错误信息 ──
@@ -108,6 +109,7 @@ export function extractErrorMessage(err: unknown, fallback = '请求失败，请
 
 // ── 判断用户本地配置是否已填写 API Key ──
 export function isLocalApiKeyConfigured(cfg: AIConfig): boolean {
+  if (cfg.articleProvider === 'deepseek') return false
   if (cfg.articleProvider === 'maas') return !!cfg.maasApiKey
   if (cfg.articleProvider === 'zhipu') return Boolean(cfg.articleApiKey || cfg.zhipuApiKey)
   return !!cfg.articleApiKey
@@ -951,6 +953,14 @@ export async function fetchBlob(url: string, init: RequestInit = {}): Promise<Bl
 
 // ── 连通性测试（发 max_tokens=1 的最小请求） ──
 export async function testAIConnection(cfg: AIConfig): Promise<{ ok: boolean; msg: string }> {
+  if (cfg.articleProvider === "deepseek") {
+    try {
+      await deepSeekRequest("chat", { confirmedCost: true, prompt: "请只回复「连接正常」。" })
+      return { ok: true, msg: "DeepSeek 连接正常" }
+    } catch (error) {
+      return { ok: false, msg: extractErrorMessage(error, "DeepSeek 连接失败") }
+    }
+  }
   const isMaas = cfg.articleProvider === 'maas'
   const baseUrl = isMaas ? cfg.maasBaseUrl : cfg.articleBaseUrl
   const apiKey  = isMaas
@@ -1015,7 +1025,7 @@ export async function fetchXiumiReference(url: string): Promise<{title: string; 
 /** 样式管理统一复用登录请求；未填写本地密钥时保留服务端配置。 */
 export async function generateArticleStyle(prompt: string, baseCSS: string, aiConfig: AIConfig): Promise<string> {
   const { data } = await axios.post<{ css: string }>("/api/generate-style", {
-    prompt, baseCSS, ...(isLocalApiKeyConfigured(aiConfig) ? { aiConfig } : {}),
+    prompt, baseCSS, ...(aiConfig.articleProvider === "deepseek" || isLocalApiKeyConfigured(aiConfig) ? { aiConfig } : {}),
   }, { timeout: 300000 })
   const rawCss = typeof data.css === "string" ? data.css.trim() : ""
   const fencedCss = rawCss.match(/```(?:css)?\s*([\s\S]*?)```/i)?.[1]
@@ -1042,6 +1052,49 @@ export async function removeStyleTemplate(id: string): Promise<void> {
 }
 
 export type DeepSeekOperation = "chat" | "search" | "fetch" | "ocr" | "asr" | "tts"
+interface DeepSeekSearchResponse {
+  results: Array<{ title: string; url: string; snippet: string; summary: string; siteName?: string; datePublished?: string }>
+}
+export interface DeepSeekChatResponse {
+  content: string
+  annotations: Array<{ url_citation: { url: string; title: string } }>
+}
+
+export function formatDeepSeekResearch(content: string, annotations: DeepSeekChatResponse["annotations"]): string {
+  const sources = new Map(annotations.map(({ url_citation }) => [url_citation.url, url_citation.title]))
+  const links = [...sources].map(([url, title]) => `- ${title ? `${title} · ` : ""}${url}`)
+  return links.length ? `${content}\n\n#### 引用来源\n${links.join("\n")}` : content
+}
+
+export function transcribeDeepSeekMaterial(file: File): Promise<{ text: string }> {
+  const form = new FormData()
+  form.append("file", file)
+  form.append("confirmedCost", "true")
+  return deepSeekRequest("asr", form)
+}
+
+export async function searchDeepSeekMaterials(query: string): Promise<MaterialSearchResult[]> {
+  const { results } = await deepSeekRequest<DeepSeekSearchResponse>("search", { query, confirmedCost: true })
+  return results.map(row => ({
+    title: row.title || row.url, url: row.url, snippet: row.snippet || row.summary,
+    source: row.siteName || new URL(row.url).hostname, datePublished: row.datePublished,
+  }))
+}
+
+export async function fetchDeepSeekMaterial(url: string): Promise<{ title: string; content: string }> {
+  return deepSeekRequest("fetch", { url, confirmedCost: true })
+}
+
+export async function parseDeepSeekMaterial(file: File, purpose: "text_recognition" | "rich_layout_recognition"): Promise<{ content: string }> {
+  const form = new FormData()
+  form.append("file", file)
+  form.append("purpose", purpose)
+  form.append("confirmedCost", "true")
+  return deepSeekRequest("ocr", form)
+}
+
+export function deepSeekRequest(operation: "tts", body: Record<string, unknown>, signal?: AbortSignal): Promise<Blob>
+export function deepSeekRequest<T extends object = Record<string, unknown>>(operation: DeepSeekOperation | "status", body?: Record<string, unknown> | FormData, signal?: AbortSignal): Promise<T>
 export async function deepSeekRequest(operation: DeepSeekOperation | "status", body?: Record<string, unknown> | FormData, signal?: AbortSignal): Promise<Record<string, unknown> | Blob> {
   const token = localStorage.getItem("auth_token")
   const multipart = body instanceof FormData

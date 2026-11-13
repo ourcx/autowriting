@@ -6,6 +6,7 @@ import { useAIReadiness, fetchServerStatus } from '../../store/useConfigStore'
 import { useAuth } from '../../store/useAuth'
 import { useEditingActivity } from './useEditingActivity'
 import {
+  appendArticleMaterials,
   fetchArticle,
   fetchCreatorWritingProfile,
   generateArticleOutline,
@@ -26,6 +27,7 @@ import MarkdownEditor from '../../components/MarkdownEditor/MarkdownEditor'
 import ContentStats from '../../components/ContentStats/ContentStats'
 import WeChatRenderer from '../../components/WeChatRenderer/WeChatRenderer'
 import GenerateModal from '../../components/GenerateModal/GenerateModal'
+import DeepSeekReadAloud from "./DeepSeekReadAloud"
 import MaterialsCollector from '../../components/MaterialsCollector/MaterialsCollector'
 import TaskTemplateModal from '../../components/TaskTemplateModal/TaskTemplateModal'
 import PageHeader from '../../components/PageHeader/PageHeader'
@@ -251,11 +253,22 @@ export default function ArticleEditor() {
     }
   }, [articleId, isLocalArticle, recoveryKey])
 
-  function handleMaterialsSaved(content: string) {
-    // 素材已追加到服务端，只同步右侧编辑区，保留未保存的编辑和未勾选的素材。
+  async function handleMaterialsSaved(content: string) {
+    if (savingRef.current) throw new Error('正在保存文章，请稍后再试')
     const append = (existing: string) => existing.trimEnd() ? `${existing.trimEnd()}\n\n---\n\n${content}` : content
-    savedData.current = { ...savedData.current, materials: append(savedData.current.materials) }
-    setData(prev => ({ ...prev, materials: append(prev.materials) }))
+    savingRef.current = true
+    try {
+      if (isLocalArticle) {
+        saveLocalData({ ...savedData.current, materials: append(savedData.current.materials) })
+      } else {
+        await appendArticleMaterials(articleId, content)
+      }
+      // 追加只更新素材字段，保留编辑器里的未保存内容。
+      savedData.current = { ...savedData.current, materials: append(savedData.current.materials) }
+      setData(prev => ({ ...prev, materials: append(prev.materials) }))
+    } finally {
+      savingRef.current = false
+    }
   }
 
   const handleSave = useCallback(async (): Promise<boolean> => {
@@ -814,15 +827,17 @@ export default function ArticleEditor() {
                   <p>搜索、解析链接或粘贴内容，勾选后写入右侧素材库</p>
                 </div>
                 <MaterialsCollector
+                  key={articleId}
                   articleId={articleId}
                   searchApiKey={aiConfig.searchApiKey || ''}
                   searchProvider={aiConfig.searchProvider || 'serper'}
                   searchEngine={aiConfig.searchEngine || 'google'}
                   searxngUrl={aiConfig.searxngUrl || ''}
-                  glmApiKey={aiConfig.zhipuApiKey || aiConfig.glmApiKey || aiConfig.articleApiKey || ''}
+                  glmApiKey={aiConfig.zhipuApiKey || aiConfig.glmApiKey || (aiConfig.articleProvider === 'deepseek' ? '' : aiConfig.articleApiKey) || ''}
                   jinaApiKey={aiConfig.jinaApiKey || ''}
                   wechatCollectorReady={serverStatus?.wechatCollectorReady}
-                  onSaved={handleMaterialsSaved}
+                  deepseekReady={serverStatus?.deepseekReady}
+                  onSave={handleMaterialsSaved}
                 />
               </div>
 
@@ -947,6 +962,9 @@ export default function ArticleEditor() {
 
           {activeTab === 'analysis' && (
             <div className="editor-panel">
+              {serverStatus?.deepseekReady && data.article.trim() && (
+                <DeepSeekReadAloud key={articleId} content={data.article} />
+              )}
               <ProductionGuidance article={data.article} materials={data.materials} articleToutiao={data.articleToutiao} workflow={workflow}
                 articleId={isLocalArticle ? undefined : articleId} onBeforeFeedback={handleSave} onWorkflow={setWorkflow} />
               <ContentStats

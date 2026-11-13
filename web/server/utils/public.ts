@@ -6,8 +6,10 @@ import fs from "fs"
 import path from "path"
 import crypto from "crypto"
 import axios from "axios"
+import { Readable } from "node:stream"
 import {
   SERVER_AI_CONFIG,
+  DEEPSEEK_APP_CONFIG,
   XIAOHONGSHU_DEBUG_DIR,
   XIAOHONGSHU_DEBUG_MAX_BYTES,
   XIAOHONGSHU_DEBUG_RETENTION_DAYS,
@@ -24,6 +26,7 @@ import {
 import type { AIConfig } from "../types.ts"
 import { logger } from "../logger.ts"
 import { resolveArticleApiKey } from "./providerKeys.ts"
+import { createDeepSeekClient, DEEPSEEK_MODEL, DEEPSEEK_ORIGIN } from "./deepseek.ts"
 
 // ── LLM 请求构建（统一入口）────────────────────────────────────────────────────
 
@@ -35,12 +38,16 @@ interface LLMRequest {
 
 /**
  * 根据 cfg 构造 LLM 请求所需的 url、model、headers
- * 支持 maas / openai / openai-compat / zhipu provider
+ * 支持 maas / openai / openai-compat / zhipu / deepseek provider
  */
 export function buildLLMRequest(cfg: AIConfig): LLMRequest {
   const headers: Record<string, string> = { "Content-Type": "application/json" }
   let url: string
   let model: string
+
+  if (cfg.articleProvider === "deepseek") {
+    return { url: `${DEEPSEEK_ORIGIN}/chat/completions`, model: DEEPSEEK_MODEL, headers }
+  }
 
   if (cfg.articleProvider === "maas") {
     url = `${cfg.maasBaseUrl}/chat/completions`
@@ -57,6 +64,37 @@ export function buildLLMRequest(cfg: AIConfig): LLMRequest {
   return { url, model, headers }
 }
 
+interface ArticleCompletion {
+  choices: Array<{ message: { content: string }; finish_reason?: string }>
+  usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
+}
+
+const deepSeekArticleClient = createDeepSeekClient(DEEPSEEK_APP_CONFIG)
+
+export function createArticleModel(config: AIConfig, deepseek = deepSeekArticleClient) {
+  const { url, model, headers } = buildLLMRequest(config)
+  const isDeepSeek = config.articleProvider === "deepseek"
+  async function complete(body: Record<string, unknown>, maxRetries = 3, timeoutMs = 90000, signal?: AbortSignal): Promise<{ data: ArticleCompletion }> {
+    if (!isDeepSeek) return callLLMWithRetry(url, { ...body, model }, headers, maxRetries, timeoutMs)
+    const { content, usage } = await deepseek.complete(body, signal, timeoutMs)
+    return { data: { choices: [{ message: { content }, finish_reason: "stop" }], usage } }
+  }
+
+  async function stream(body: Record<string, unknown>, options: { timeout?: number; signal?: AbortSignal } = {}): Promise<{ data: Readable }> {
+    if (!isDeepSeek) return axios.post(url, { ...body, model, stream: true }, { ...options, headers, responseType: "stream" })
+    const { data } = await complete(body, 1, options.timeout ?? 120000, options.signal)
+    options.signal?.throwIfAborted()
+    const chunks = [
+      { choices: [{ delta: { content: data.choices[0].message.content }, finish_reason: "stop" }] },
+      { choices: [], usage: data.usage },
+    ]
+    // 沿用工作流的 SSE 事件，审核通过后才发送正文，拒答不会写入候选稿。
+    return { data: Readable.from([...chunks.map(chunk => `data: ${JSON.stringify(chunk)}\n\n`), "data: [DONE]\n\n"]) }
+  }
+
+  return { model, complete, stream, isDeepSeek }
+}
+
 /**
  * 带指数退避重试的 LLM 调用（非流式）
  * 只重试网络错误和 5xx，4xx 直接抛出
@@ -67,7 +105,7 @@ export async function callLLMWithRetry(
   headers: Record<string, string>,
   maxRetries = 3,
   timeoutMs = 90000,
-): Promise<{ data: { choices: Array<{ message: { content: string } }> } }> {
+): Promise<{ data: ArticleCompletion }> {
   let lastErr: unknown
   for (let i = 0; i < maxRetries; i++) {
     try {

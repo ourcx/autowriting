@@ -108,11 +108,13 @@ export default function AISettings() {
   const selectedArticlePreset = PROVIDER_PRESETS.find(p => p.id === config.articleProvider)
 
   // ── 配置状态（每个 key 的状态） ──────────────────────────────────────────
-  const localArticleReady = config.articleProvider === 'maas'
+  const deepseekSelected = config.articleProvider === 'deepseek'
+  const deepseekReady = Boolean(serverStatus?.deepseekReady)
+  const localArticleReady = !deepseekSelected && (config.articleProvider === 'maas'
     ? Boolean(config.maasApiKey)
     : config.articleProvider === 'zhipu'
       ? Boolean(config.articleApiKey || config.zhipuApiKey)
-      : Boolean(config.articleApiKey)
+      : Boolean(config.articleApiKey))
   const localCoverReady = config.coverProvider === 'local'
     || (config.coverProvider === 'openrouter' && Boolean(config.openrouterApiKey))
     || (config.coverProvider === 'zhipu' && Boolean(config.zhipuImageApiKey || config.zhipuApiKey))
@@ -120,7 +122,7 @@ export default function AISettings() {
     || (['siliconflow', 'z-image', 'qwen-edit'].includes(config.coverProvider) && Boolean(config.siliconflowApiKey))
     || (['openai', 'stability'].includes(config.coverProvider) && Boolean(config.coverApiKey))
   const localSearchKey = config.searchProvider === 'searxng'
-    || (config.searchProvider === 'zhipu' ? !!(config.searchApiKey || config.zhipuApiKey || config.glmApiKey || config.articleApiKey) : !!config.searchApiKey)
+    || (config.searchProvider === 'zhipu' ? !!(config.searchApiKey || config.zhipuApiKey || config.glmApiKey || config.articleApiKey) : config.searchProvider !== 'deepseek' && !!config.searchApiKey)
   const localCdn = (config.cdnProvider === 'imgur' && !!config.imgurClientId)
     || (config.cdnProvider === 'github' && !!config.githubToken && !!config.githubRepo)
   const recommendedApplied = config.articleProvider === 'zhipu'
@@ -132,7 +134,7 @@ export default function AISettings() {
     {
       label: '文章生成',
       local: localArticleReady,
-      server: !!serverStatus?.articleReady,
+      server: deepseekSelected ? deepseekReady : !!serverStatus?.articleReady,
       serverNote: '服务端',
       color: 'teal',
       section: 'article' as Section,
@@ -148,8 +150,8 @@ export default function AISettings() {
     {
       label: '素材搜索',
       local: localSearchKey,
-      server: false,
-      serverNote: '',
+      server: config.searchProvider === 'deepseek' && deepseekReady,
+      serverNote: '服务端',
       color: 'mint',
       section: 'search' as Section,
     },
@@ -177,7 +179,7 @@ export default function AISettings() {
         )}
       />
 
-      <button className="as-save-btn" onClick={() => navigate("/deepseek")}>DeepSeek 工作台：搜索、文件与语音</button>
+      <button className="as-save-btn" onClick={() => navigate("/deepseek")}>DeepSeek 工具工作台</button>
       {/* ── 安全提示 Banner ── */}
       <div className="as-security-banner">
         <ShieldAlert size={14} className="as-security-banner-icon" />
@@ -346,6 +348,31 @@ export default function AISettings() {
                 )}
               </div>
 
+              <div className="as-card as-quick-card">
+                <div className="as-quick-heading">
+                  <div>
+                    <h3>DeepSeek 写作与素材</h3>
+                    <p>文章用 deepseek-flash，素材搜索、链接读取、文件解析和语音复用服务端配置。</p>
+                    {!deepseekReady && <p>请管理员先在服务端启用 DeepSeek 并配置 API Key。</p>}
+                  </div>
+                  <button
+                    className="as-quick-apply"
+                    disabled={!deepseekReady}
+                    onClick={() => {
+                      const preset = PROVIDER_PRESETS.find(provider => provider.id === 'deepseek')
+                      if (!preset) return
+                      setLocalConfig({
+                        ...config, articleProvider: 'deepseek', articleBaseUrl: preset.defaultBaseUrl,
+                        articleModel: preset.models[0], searchProvider: 'deepseek',
+                      })
+                      navigate('/')
+                    }}
+                  >
+                    <Sparkles size={15} />保存并使用 DeepSeek
+                  </button>
+                </div>
+              </div>
+
               <button className="as-detail-link" onClick={() => setActiveSection('article')}>
                 我想分别选择文章、封面和搜索服务
                 <ChevronRight size={14} />
@@ -489,7 +516,9 @@ export default function AISettings() {
 
                 <div className="as-card-divider" />
 
-                {config.articleProvider === 'maas' ? (
+                {deepseekSelected ? (
+                  <p className="as-hint">deepseek-flash · {deepseekReady ? '服务端已启用。使用模型或测试连接会产生 Token 费用。' : '请管理员在服务端启用 DeepSeek 并配置 API Key。'}</p>
+                ) : config.articleProvider === 'maas' ? (
                   <>
                     <div className="as-row-2">
                       <div className="as-field">
@@ -574,7 +603,7 @@ export default function AISettings() {
                 )}
 
                 <div className="as-test-row">
-                  <button className="as-btn-test" onClick={handleTest} disabled={testing}>
+                  <button className="as-btn-test" onClick={handleTest} disabled={testing || (deepseekSelected && !deepseekReady)}>
                     {testing ? '测试中...' : '测试连接'}
                   </button>
                   {testResult && (
@@ -807,6 +836,7 @@ export default function AISettings() {
                 <p className="as-card-desc">智谱搜索适合中文素材，可复用文章模型的智谱 Key；SearXNG 无需 API Key；Serper / Bing 需单独注册</p>
                 <div className="as-provider-grid">
                   {[
+                    { id: 'deepseek', name: 'DeepSeek 搜索', desc: '搜索网页、读取原文', url: 'https://api-docs.deepseek.com/zh-cn/guides/search/', tip: '使用服务端 Key' },
                     { id: 'zhipu', name: '智谱搜索（推荐）', desc: '中文检索，支持摘要、来源和发布日期', url: 'https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys', tip: '可复用智谱文章模型 Key' },
                     { id: 'searxng', name: 'SearXNG', desc: '开源聚合，231 个搜索引擎，无需 Key', url: 'https://docs.searxng.org/admin/installation-docker.html', tip: 'Docker 一键部署，零成本' },
                     { id: 'serper', name: 'Serper.dev', desc: '支持 Google / 百度，2500 次/月免费', url: 'https://serper.dev', tip: '免费注册，2500 次/月' },
@@ -821,7 +851,7 @@ export default function AISettings() {
                         <span className="as-pt-desc">{p.desc}</span>
                       </button>
                       <p className="as-hint as-provider-hint">
-                        <a href={p.url} target="_blank" rel="noreferrer">获取 Key ↗</a> {p.tip}
+                        <a href={p.url} target="_blank" rel="noreferrer">{p.id === 'deepseek' ? '官方文档 ↗' : '获取 Key ↗'}</a> {p.tip}
                       </p>
                     </div>
                   ))}
@@ -878,8 +908,11 @@ export default function AISettings() {
                   </>
                 )}
 
+                {config.searchProvider === 'deepseek' && (
+                  <p className="as-hint">{deepseekReady ? '服务端已启用。搜索和读取网页按调用计费。' : '请管理员在服务端启用 DeepSeek 并配置 API Key。'}</p>
+                )}
                 {/* 智谱 / Serper / Bing API Key */}
-                {config.searchProvider !== 'searxng' && (
+                {config.searchProvider !== 'searxng' && config.searchProvider !== 'deepseek' && (
                   <>
                     <div className="as-card-divider" />
                     <div className="as-field">

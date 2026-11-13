@@ -116,11 +116,17 @@ cases.push({
     const login = await fetch(`${BASE}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'admin', password: 'admin123' }) })
     const { token: localToken } = await login.json()
     const headers = { Authorization: `Bearer ${localToken}`, 'Content-Type': 'application/json' }
+    const appStatus = await (await fetch(`${BASE}/api/config/status`)).json()
+    if (appStatus.deepseekReady !== false) throw new Error('AI config must report DeepSeek as disabled')
     const status = await fetch(`${BASE}/api/deepseek/status`, { headers })
     const data = await status.json()
     if (data.enabled || data.configured) throw new Error('DeepSeek must stay disabled in smoke')
     const response = await fetch(`${BASE}/api/deepseek/search`, { method: 'POST', headers, body: JSON.stringify({ query: 'smoke', confirmedCost: true }) })
     if (response.status !== 503) throw new Error(`Disabled expected 503, got ${response.status}`)
+    const escape = await fetch(`${BASE}/api/materials/${encodeURIComponent('../elsewhere')}/save`, {
+      method: 'POST', headers, body: JSON.stringify({ content: 'test' }),
+    })
+    if (escape.status !== 400) throw new Error(`Invalid article ID expected 400, got ${escape.status}`)
   },
 })
 

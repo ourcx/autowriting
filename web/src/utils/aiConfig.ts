@@ -15,7 +15,7 @@ function authFetch(url: string, init: RequestInit = {}): Promise<Response> {
   return fetch(url, { ...init, headers })
 }
 
-export type ArticleProvider = 'maas' | 'openai' | 'openai-compat' | 'zhipu'
+export type ArticleProvider = 'maas' | 'openai' | 'openai-compat' | 'zhipu' | 'deepseek'
 export type CoverProvider = 'local' | 'openai' | 'openrouter' | 'stability' | 'siliconflow' | 'z-image' | 'qwen-edit' | 'doubao' | 'zhipu'
 
 export interface AIConfig {
@@ -66,7 +66,7 @@ export interface AIConfig {
   zhipuKnowledgeRerank: boolean
 
   // 素材搜索
-  searchProvider: 'serper' | 'bing' | 'searxng' | 'zhipu'  // 搜索引擎服务商（zhipu 可复用 GLM_API_KEY）
+  searchProvider: 'serper' | 'bing' | 'searxng' | 'zhipu' | 'deepseek'  // 搜索引擎服务商（zhipu 可复用 GLM_API_KEY）
   searchApiKey:   string                          // 搜索 API Key（serper 需要单独的 Key；zhipu 复用 articleApiKey 时可不填）
   searchEngine:   string                          // serper engine：google / baidu / bing
   searxngUrl:     string                          // SearXNG 实例地址（可选，默认公共实例）
@@ -236,6 +236,8 @@ export function saveAIConfig(config: AIConfig): void {
 
 export function getEffectiveArticleConfig(config: AIConfig) {
   switch (config.articleProvider) {
+    case 'deepseek':
+      return { baseUrl: 'https://api.deepseek.com', apiKey: '', model: 'deepseek-flash', headers: {} }
     case 'maas':
       return {
         baseUrl: config.maasBaseUrl,
@@ -284,6 +286,15 @@ export const PROVIDER_PRESETS: Array<{
   tip: string
   url: string
 }> = [
+  {
+    id: 'deepseek',
+    name: 'DeepSeek 官方',
+    desc: 'V4.1 Flash，用于大纲、素材整理和文章生成',
+    defaultBaseUrl: 'https://api.deepseek.com',
+    models: ['deepseek-flash'],
+    tip: '使用服务端统一配置的 Key',
+    url: 'https://platform.deepseek.com/'
+  },
   {
     id: 'zhipu',
     name: '智谱 GLM',

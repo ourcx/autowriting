@@ -8,7 +8,7 @@ import { loadAIConfig, saveAIConfig, AIConfig } from '../utils/aiConfig'
 
 // ── 服务端配置状态（从 /api/config/status 拉取）──
 export interface ServerConfigStatus {
-  articleProvider: 'maas' | 'openai' | 'openai-compat' | 'zhipu' | null
+  articleProvider: AIConfig['articleProvider'] | null
   articleReady: boolean
   maasReady: boolean
   maasEmail: string | null
@@ -21,6 +21,7 @@ export interface ServerConfigStatus {
   doubaoReady: boolean
   openrouterReady: boolean
   zhipuReady: boolean
+  deepseekReady: boolean
   wechatCollectorReady: {
     tikhub: boolean
     dajiala: boolean
@@ -88,6 +89,7 @@ export async function fetchServerStatus() {
 // ── 计算「是否可用」——本地配置 OR 服务端已配置任意一种 ──
 export function isArticleReady(s: ConfigState): boolean {
   const { localConfig, serverStatus } = s
+  if (localConfig.articleProvider === "deepseek") return Boolean(serverStatus?.deepseekReady)
   // 本地有 Key
   const localReady = localConfig.articleProvider === 'maas'
     ? !!localConfig.maasApiKey

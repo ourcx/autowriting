@@ -4,7 +4,7 @@
  */
 import { Router } from 'express'
 import { SERVER_AI_CONFIG } from '../config.js'
-import { buildLLMRequest, callLLMWithRetry } from '../utils'
+import { createArticleModel } from '../utils'
 import { recordTokenUsage, getEffectivePrompt } from '../db.js'
 import { authMiddleware } from '../authMiddleware.ts'
 import { hasArticleApiKey } from '../utils/providerKeys.ts'
@@ -84,7 +84,7 @@ router.post('/generate-style', async (req, res) => {
       return res.status(400).json({ error: '未配置 MaaS API Key' })
     }
 
-    const { url, model, headers } = buildLLMRequest(aiConfig)
+    const { model, complete } = createArticleModel(aiConfig)
 
     // 从数据库读取样式生成提示词（支持用户自定义覆盖）
     const stylePromptData = getEffectivePrompt('prompt-style-generate')
@@ -109,15 +109,14 @@ ${baseCSS.slice(0, 2000)}
 7. 表格用斑马纹，th 有背景色
 8. 只输出 CSS 代码，从 \`#wemd {\` 开始`
 
-    const response = await callLLMWithRetry(url, {
-      model,
+    const response = await complete({
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user',   content: userPrompt },
       ],
       temperature: 0.8,
       max_tokens: 3000,
-    }, headers)
+    })
 
     const usage = response.data.usage
     if (usage) {

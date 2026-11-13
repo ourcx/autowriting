@@ -593,6 +593,7 @@ export default function CronPage() {
                   {[
                     { v: 'maas', label: 'MaaS（内网）' },
                     { v: 'openai', label: 'OpenAI' },
+                    { v: 'deepseek', label: 'DeepSeek 官方' },
                     { v: 'openai-compat', label: '兼容接口' },
                   ].map(p => (
                     <button
@@ -604,7 +605,9 @@ export default function CronPage() {
                 </div>
               </div>
 
-              {(form.aiConfig?.articleProvider || 'openai') === 'maas' ? (
+              {form.aiConfig?.articleProvider === 'deepseek' ? (
+                <p className="cp-hint">使用服务端 deepseek-flash。任务运行会产生模型调用费用。</p>
+              ) : (form.aiConfig?.articleProvider || 'openai') === 'maas' ? (
                 <>
                   <div className="cp-field">
                     <label className="cp-label">MaaS API Key <span className="cp-req">*</span></label>
@@ -663,7 +666,7 @@ export default function CronPage() {
                   )}
                 </>
               )}
-              <p className="cp-hint">AI Key 仅存储在此任务配置中，与「AI 配置」页面独立。</p>
+              {form.aiConfig?.articleProvider !== 'deepseek' && <p className="cp-hint">AI Key 仅存储在此任务配置中，与「AI 配置」页面独立。</p>}
 
               <div className="cp-sep"><span>微信公众号</span></div>
 

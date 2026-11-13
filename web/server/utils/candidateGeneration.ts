@@ -4,7 +4,7 @@ import { SERVER_AI_CONFIG } from "../config.ts"
 import { getEffectivePrompt, recordTokenUsage } from "../db.ts"
 import { stripEmoji } from "../../shared/contentProduction.ts"
 import { acquireCandidate, CandidateError, publicCandidate, readCandidate, saveCandidate } from "../generationCandidates.ts"
-import { buildLLMRequest } from "./public.ts"
+import { createArticleModel } from "./public.ts"
 import { consumeOpenAiContentStream } from "./openAiStream.ts"
 import { startSseHeartbeat } from "../sseHeartbeat.ts"
 import { logger } from "../logger.ts"
@@ -77,7 +77,7 @@ ${input.platform === "toutiao"
       ? "按今日头条阅读节奏改写母稿，不改变事实。"
       : "直接根据任务和素材生成今日头条版本，保持事实准确，不等待或依赖公众号候选稿。"
     : ""}`
-    const { url, model, headers } = buildLLMRequest(config)
+    const { model, stream, isDeepSeek } = createArticleModel(config)
     candidate.model = model
     const messages = [
       { role: "system", content: instruction + "\n本次任务优先：不要 emoji 或表情包。" },
@@ -87,8 +87,8 @@ ${input.platform === "toutiao"
         { role: "user", content: "上次输出中断。只从最后一个字符之后续写剩余正文，不重复已有内容，不重写标题，不加续写说明，完成结尾。" },
       ] : []),
     ]
-    const upstream = await axios.post(url, { model, messages, temperature: 0.85, max_tokens: 8192, stream: true }, {
-      headers, responseType: "stream", timeout: 120000, signal: controller.signal,
+    const upstream = await stream({ messages, temperature: 0.85, max_tokens: 8192 }, {
+      timeout: isDeepSeek ? 300000 : 120000, signal: controller.signal,
     })
     await consumeOpenAiContentStream(upstream.data, text => {
       const cleanText = stripEmoji(text)

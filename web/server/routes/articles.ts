@@ -12,7 +12,6 @@ import { Router } from 'express'
 import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
-import axios from 'axios'
 import { DRAFTS_DIR, SERVER_AI_CONFIG, getWritingGuideContent } from '../config.js'
 import {
   ArticleContentConflictError,
@@ -25,7 +24,7 @@ import {
 import { listCreatorExperiences, recordCreatorFeedback, recordEditingActivity, selectCandidate } from '../productionJournal.ts'
 import { getWechatAnalyticsSnapshots } from '../wechatAnalyticsStore.ts'
 import { rankWechatArticles } from '../../shared/wechatAnalytics.ts'
-import { ensureDir, buildLLMRequest, callLLMWithRetry } from '../utils'
+import { ensureDir, createArticleModel } from '../utils'
 import { retrieveRelevant, formatRetrievedContext, extractSearchQuery } from '../rag.js'
 import { saveAnalysis, getLatestAnalysis, listAnalyses, recordTokenUsage, getEffectivePrompt, listArticleScores } from '../db.js'
 import { ARTICLE_WRITING_BASELINE, stripEmoji } from '../../shared/contentProduction.ts'
@@ -516,10 +515,9 @@ ${materials}
 
 现在请直接输出完整的文章内容。使用纯 Markdown，只保留 1 个 H1，全文不得使用 emoji、表情包或装饰性表情符号：`
 
-    const { url, model, headers } = buildLLMRequest(cfg)
+    const { model, complete } = createArticleModel(cfg)
 
-    const response = await callLLMWithRetry(url, {
-      model,
+    const response = await complete({
       messages: [
         { role: 'system', content: generateSystemInstruction },
         { role: 'user',   content: userPrompt },
@@ -527,7 +525,7 @@ ${materials}
       temperature: 0.9,
       max_tokens: 4096,
       stream: false,
-    }, headers)
+    })
 
     const article = stripEmoji(response.data.choices[0].message.content)
     const articlePath = getArticlePath(articleId, 'article', req.user.id)
@@ -718,7 +716,7 @@ ${materials}
 请把母稿改写成完整的今日头条版本。可以调整标题、开头、段落节奏和表达，但不得新增母稿与素材之外的数字、人物、时间或判断。输出纯 Markdown，只有 1 个 H1，不使用 emoji 或表情包：`
 
     // ── 3. 构造请求参数（统一函数）──────────────────────────────────────────
-    const { url, model, headers } = buildLLMRequest(cfg)
+    const { model, stream } = createArticleModel(cfg)
 
     // ── 4. 按需生成各平台文章 ─────────────────────────────────────────────────
 
@@ -726,19 +724,16 @@ ${materials}
     async function streamPlatform(prompt, systemMsg, platformKey, isLast) {
       send('status', { step: 'generate', message: `AI 正在生成${platformKey === 'wechat' ? '公众号' : '今日头条'}文章...`, platform: platformKey })
 
-      const res2 = await axios.post(
-        url,
+      const res2 = await stream(
         {
-          model,
           messages: [
             { role: 'system', content: systemMsg },
             { role: 'user',   content: prompt },
           ],
           temperature: 0.9,
           max_tokens: 8192,
-          stream: true,
         },
-        { headers, responseType: 'stream', timeout: 120000, signal: generationController.signal }
+        { timeout: 120000, signal: generationController.signal }
       )
 
       const fullContent = await consumeOpenAiContentStream(res2.data, content => {
@@ -934,19 +929,17 @@ uiBlocks 字段说明（必须根据实际问题选择，不要强行凑数）�
 注意：上面是完整格式示例，实际返回时 uiBlocks 只包含真正适用的块（1-5个），scores 和 issues 等字段填入真实分析值。`
 
     // ── 3. 调用 LLM（流式）──────────────────────────────────────────────────
-    const { url, model, headers } = buildLLMRequest(cfg)
+    const { model, stream } = createArticleModel(cfg)
     send('progress', { step: 'llm', message: 'AI 正在深度分析...' })
 
-    const upstreamRes = await axios.post(url, {
-      model,
+    const upstreamRes = await stream({
       messages: [
         { role: 'system', content: analyzeInstruction + '\n\n只输出合法 JSON，不加任何解释或 Markdown 代码块。' },
         { role: 'user',   content: prompt },
       ],
       temperature: 0.3,
       max_tokens: 2000,
-      stream: true,
-    }, { headers, responseType: 'stream', timeout: 120000 })
+    }, { timeout: 120000 })
 
     // ── 4. 逐 chunk 转发 + 增量解析 partial-result ───────────────────────────
     let fullText = ''
@@ -1076,7 +1069,7 @@ router.post('/:articleId/inline-edit', async (req, res) => {
     }
 
     const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
-    const { url, model, headers } = buildLLMRequest(cfg)
+    const { model, complete } = createArticleModel(cfg)
 
     // 全文上下文块（截断到 3000 字，避免超 token）
     const articleCtx = fullArticle
@@ -1130,8 +1123,7 @@ router.post('/:articleId/inline-edit', async (req, res) => {
     const prompt = ACTION_PROMPTS[action]
     if (!prompt) return res.status(400).json({ error: '不支持的操作类型' })
 
-    const llmRes = await callLLMWithRetry(url, {
-      model,
+    const llmRes = await complete({
       messages: [
         {
           role: 'system',
@@ -1141,7 +1133,7 @@ router.post('/:articleId/inline-edit', async (req, res) => {
       ],
       temperature: 0.65,
       max_tokens: 1200,
-    }, headers)
+    })
 
     const usage = llmRes.data.usage
     if (usage) {
@@ -1172,7 +1164,7 @@ router.post('/:articleId/outline', async (req, res) => {
     }
 
     const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
-    const { url, model, headers } = buildLLMRequest(cfg)
+    const { model, complete } = createArticleModel(cfg)
 
     // 写作规范：可选注入，没配置就跳过
     const writingGuide = getWritingGuideContent()
@@ -1195,15 +1187,14 @@ ${task}
 4. 不要写"大纲如下"等废话，直接输出大纲内容
 5. 不使用 emoji、表情包或装饰性表情符号`
 
-    const llmRes = await callLLMWithRetry(url, {
-      model,
+    const llmRes = await complete({
       messages: [
         { role: 'system', content: outlineInstruction + '\n\n只输出大纲内容，Markdown 格式。' },
         { role: 'user',   content: prompt },
       ],
       temperature: 0.8,
       max_tokens: 1024,
-    }, headers)
+    })
 
     const usage = llmRes.data.usage
     if (usage) {
@@ -1234,7 +1225,7 @@ router.post('/:articleId/refine-materials', async (req, res) => {
     }
 
     const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
-    const { url, model, headers } = buildLLMRequest(cfg)
+    const { model, complete } = createArticleModel(cfg)
 
     // 从数据库读取素材整理提示词（支持用户自定义覆盖）
     const refinePromptData = getEffectivePrompt('prompt-materials-organize')
@@ -1272,15 +1263,14 @@ ${materials}
 ## 写作角度建议
 （根据素材，建议 2-3 个差异化的写作切入角度，避免大而全）`
 
-    const llmRes = await callLLMWithRetry(url, {
-      model,
+    const llmRes = await complete({
       messages: [
         { role: 'system', content: '你是专业的素材整理助手，只输出整理后的 Markdown 内容，不加任何解释。' },
         { role: 'user',   content: prompt },
       ],
       temperature: 0.5,
       max_tokens: 2048,
-    }, headers)
+    })
 
     const usage = llmRes.data.usage
     if (usage) {
@@ -1347,24 +1337,18 @@ router.post('/:articleId/deai/stream', async (req, res) => {
 
 ${article}`
 
-    const { url, model, headers } = buildLLMRequest(cfg)
+    const { model, stream } = createArticleModel(cfg)
 
     send('status', { step: 'deai', message: 'AI 正在去除 AI 腔调...' })
 
-    const upstreamRes = await axios.post(
-      url,
-      {
-        model,
-        messages: [
-          { role: 'system', content: `你是专业的文字编辑，只输出修改后的完整文章（Markdown 格式），不加任何解释或对比说明。\n\n${ARTICLE_WRITING_BASELINE}` },
-          { role: 'user',   content: userPrompt },
-        ],
-        temperature: 0.6,
-        max_tokens: 4096,
-        stream: true,
-      },
-      { headers, responseType: 'stream' }
-    )
+    const upstreamRes = await stream({
+      messages: [
+        { role: 'system', content: `你是专业的文字编辑，只输出修改后的完整文章（Markdown 格式），不加任何解释或对比说明。\n\n${ARTICLE_WRITING_BASELINE}` },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.6,
+      max_tokens: 4096,
+    })
 
     let buffer = ''
 

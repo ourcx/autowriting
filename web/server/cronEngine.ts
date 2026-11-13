@@ -18,8 +18,7 @@ import {
 } from './db.ts'
 import { SERVER_AI_CONFIG, DRAFTS_DIR } from './config.ts'
 import { 
-  buildLLMRequest, 
-  callLLMWithRetry,
+  createArticleModel,
   ensureDir,
   collectMaterials,
   formatMaterialsAsMarkdown,
@@ -105,17 +104,16 @@ async function fetchTrending(job, aiConfig) {
   const isMaas = aiConfig.articleProvider === 'maas'
   if (isMaas) {
     if (!aiConfig.maasApiKey) throw new Error('AI 未配置：请编辑此任务，在「AI 接口」区块填写 MaaS API Key')
-  } else {
+  } else if (aiConfig.articleProvider !== 'deepseek') {
     if (!aiConfig.articleApiKey) throw new Error('AI 未配置：请编辑此任务，在「AI 接口」区块填写 API Key')
   }
 
-  const { url, model, headers } = buildLLMRequest(aiConfig)
+  const { complete } = createArticleModel(aiConfig)
   const today = nowDay()
 
   let resp
   try {
-    resp = await callLLMWithRetry(url, {
-      model,
+    resp = await complete({
       messages: [
         {
           role: 'system',
@@ -134,7 +132,7 @@ async function fetchTrending(job, aiConfig) {
       ],
       temperature: 0.9,
       max_tokens: 300,
-    }, headers)
+    })
   } catch (err) {
     const status = err.response?.status
     if (status === 401) throw new Error('AI API Key 无效或已过期（401），请前往「AI 配置」页面重新填写')
@@ -158,11 +156,10 @@ async function generateArticle(userId: string, topic: string, aiConfig: AIConfig
     materialsSection = `# 参考素材（从网络搜索和爬取获得）\n\n${materialsMarkdown}\n\n**重要提示**：\n- 以上素材仅供参考，请提取关键信息和数据\n- 必须用自己的语言重新组织，不要直接复制粘贴\n- 引用数据时要标注来源（如"根据某网站报道"）\n- 保持客观和真实，不要编造不存在的信息\n\n`
   }
   
-  const { url, model, headers } = buildLLMRequest(aiConfig)
+  const { complete } = createArticleModel(aiConfig)
   const today = nowDay()
 
-  const resp = await callLLMWithRetry(url, {
-    model,
+  const resp = await complete({
     messages: [
       {
         role: 'system',
@@ -188,7 +185,7 @@ ${materialsDataset ? '- 充分利用上面提供的参考素材，但要用自�
     ],
     temperature: 0.85,
     max_tokens: 4096,
-  }, headers)
+  })
 
   return stripEmoji(resp.data.choices[0].message.content.trim())
 }
@@ -220,15 +217,14 @@ async function generateStyle(stylePrompt, aiConfig) {
 #wemd tr:nth-child(even) td { background: #f5f8ff; }`
   }
 
-  const { url, model, headers } = buildLLMRequest(aiConfig)
+  const { complete } = createArticleModel(aiConfig)
 
   const STYLE_SYSTEM = `你是一名专业的微信公众号 CSS 设计师。
 
 约束：不能用 CSS 变量、外部字体、rgba()、linear-gradient()、CSS Grid。
 选择器必须以 #wemd 开头。只输出纯 CSS 代码，以 #wemd { 开头，不要任何解释。`
 
-  const resp = await callLLMWithRetry(url, {
-    model,
+  const resp = await complete({
     messages: [
       { role: 'system', content: STYLE_SYSTEM },
       {
@@ -248,7 +244,7 @@ async function generateStyle(stylePrompt, aiConfig) {
     ],
     temperature: 0.7,
     max_tokens: 2500,
-  }, headers)
+  })
 
   const css = resp.data.choices[0].message.content.trim()
   return css.replace(/^```css\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```\s*$/i, '').trim()

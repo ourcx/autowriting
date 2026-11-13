@@ -120,6 +120,7 @@ export default function FirstSetupPage() {
 
   const selectedPreset = PROVIDER_PRESETS.find(item => item.id === config.articleProvider)
   const isMaas = config.articleProvider === "maas"
+  const isDeepSeek = config.articleProvider === "deepseek"
 
   return (
     <main className="fsp-root">
@@ -176,7 +177,9 @@ export default function FirstSetupPage() {
                 ))}
               </div>
 
-              <div className="fsp-form-grid">
+              {isDeepSeek ? (
+                <p>使用服务端配置的 deepseek-flash。验证连接会调用一次模型并产生 Token 费用。</p>
+              ) : <div className="fsp-form-grid">
                 <label>
                   <span>API 地址</span>
                   <input
@@ -226,7 +229,7 @@ export default function FirstSetupPage() {
                     </button>
                   </div>
                 </label>
-              </div>
+              </div>}
 
               {testResult && (
                 <div className={`fsp-result ${testResult.ok ? "fsp-result--ok" : "fsp-result--error"}`} role="status">

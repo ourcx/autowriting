@@ -4,7 +4,7 @@ import { SERVER_AI_CONFIG } from "../config.ts"
 import { recordTokenUsage } from "../db.ts"
 import { logger } from "../logger.ts"
 import type { AIConfig, AuthedRequest } from "../types.ts"
-import { buildLLMRequest, callLLMWithRetry } from "../utils/index.ts"
+import { createArticleModel } from "../utils/index.ts"
 import { parseCanvasDocument } from "../../shared/canvasDsl.ts"
 import type { CanvasDocument } from "../../shared/canvasDsl.ts"
 import {
@@ -574,24 +574,25 @@ function completionShape(data: CanvasCompletionData) {
 }
 
 async function callStructuredCanvas(
-  url: string,
+  articleModel: ReturnType<typeof createArticleModel>,
   body: Record<string, unknown>,
-  headers: Record<string, string>,
   maxRetries = 3,
 ): Promise<CanvasCompletionData> {
+  if (articleModel.isDeepSeek) {
+    const response = await articleModel.complete(body, 1, CANVAS_LLM_TIMEOUT_MS)
+    return response.data
+  }
   try {
-    const response = await callLLMWithRetry(url, {
+    const response = await articleModel.complete({
       ...body,
       response_format: { type: "json_object" },
-    }, headers, maxRetries, CANVAS_LLM_TIMEOUT_MS)
+    }, maxRetries, CANVAS_LLM_TIMEOUT_MS)
     return response.data as CanvasCompletionData
   } catch (error: unknown) {
     const status = (error as { response?: { status?: number } }).response?.status
     if (status !== 400 && status !== 422) throw error
-    const response = await callLLMWithRetry(
-      url,
+    const response = await articleModel.complete(
       body,
-      headers,
       maxRetries,
       CANVAS_LLM_TIMEOUT_MS,
     )
@@ -600,16 +601,13 @@ async function callStructuredCanvas(
 }
 
 async function analyzeDesignBrief(input: {
-  url: string
-  model: string
-  headers: Record<string, string>
+  articleModel: ReturnType<typeof createArticleModel>
   prompt: string
   enabled: boolean
 }): Promise<{ plan: string; completion: CanvasCompletionData | null }> {
   if (!input.enabled) return { plan: "", completion: null }
   try {
-    const completion = await callStructuredCanvas(input.url, {
-      model: input.model,
+    const completion = await callStructuredCanvas(input.articleModel, {
       messages: [
         { role: "system", content: DESIGN_PLAN_SYSTEM_PROMPT },
         { role: "user", content: input.prompt },
@@ -617,7 +615,7 @@ async function analyzeDesignBrief(input: {
       temperature: 0.1,
       max_tokens: 3500,
       stream: false,
-    }, input.headers, 2)
+    }, 2)
     for (const candidate of completionCandidates(completion)) {
       const plan = balancedJsonObjects(candidate)[0]
       if (plan) return {
@@ -748,9 +746,7 @@ function mergeBlockDocuments(
 }
 
 async function generateBlockChunks(input: {
-  url: string
-  model: string
-  headers: Record<string, string>
+  articleModel: ReturnType<typeof createArticleModel>
   prompt: string
   analysisPlan: string
   articleTitle: string
@@ -817,13 +813,12 @@ ${manifest}
 ${minimumExample}`,
       },
     ]
-    const first = await callStructuredCanvas(input.url, {
-      model: input.model,
+    const first = await callStructuredCanvas(input.articleModel, {
       messages,
       temperature: 0.1,
       max_tokens: BLOCK_CHUNK_MAX_TOKENS,
       stream: false,
-    }, input.headers, 2)
+    }, 2)
     attempts.push(first)
 
     try {
@@ -841,8 +836,7 @@ ${minimumExample}`,
       const malformed = firstWasTruncated
         ? ""
         : completionCandidates(first).join("\n")
-      const repair = await callStructuredCanvas(input.url, {
-        model: input.model,
+      const repair = await callStructuredCanvas(input.articleModel, {
         messages: [
           {
             role: "system",
@@ -871,7 +865,7 @@ ${malformed ? `待修复输出：${malformed}` : "上一轮被截断，请从头
         temperature: 0,
         max_tokens: BLOCK_CHUNK_MAX_TOKENS,
         stream: false,
-      }, input.headers, 2)
+      }, 2)
       attempts.push(repair)
       try {
         const document = normalizeCanvasPrimaryColor(parseBlockFromCompletion(repair))
@@ -911,9 +905,7 @@ ${malformed ? `待修复输出：${malformed}` : "上一轮被截断，请从头
 }
 
 async function generateCanvasWithRepair(input: {
-  url: string
-  model: string
-  headers: Record<string, string>
+  articleModel: ReturnType<typeof createArticleModel>
   prompt: string
   articleTitle: string
   sources: CanvasSource[]
@@ -929,9 +921,7 @@ async function generateCanvasWithRepair(input: {
 }> {
   input.onPlan?.()
   const analysis = await analyzeDesignBrief({
-    url: input.url,
-    model: input.model,
-    headers: input.headers,
+    articleModel: input.articleModel,
     prompt: input.prompt,
     enabled: input.hasDesignReference,
   })
@@ -948,13 +938,12 @@ async function generateCanvasWithRepair(input: {
       content: `原始设计输入：${input.prompt}\n\n设计分析结果：${analysis.plan || "无，直接阅读原始设计输入"}\n\n必须完整排版以下内容源，节点只能引用这些 sourceId：\n${sourceManifest}`,
     },
   ]
-  const first = await callStructuredCanvas(input.url, {
-    model: input.model,
+  const first = await callStructuredCanvas(input.articleModel, {
     messages,
     temperature: 0.2,
     max_tokens: 8000,
     stream: false,
-  }, input.headers)
+  })
   input.onAttempt?.(first, 1)
 
   try {
@@ -972,8 +961,7 @@ async function generateCanvasWithRepair(input: {
   } catch {
     input.onRepair?.()
     const malformed = completionCandidates(first).join("\n")
-    const repair = await callStructuredCanvas(input.url, {
-      model: input.model,
+    const repair = await callStructuredCanvas(input.articleModel, {
       messages: [
         {
           role: "system",
@@ -989,7 +977,7 @@ async function generateCanvasWithRepair(input: {
       temperature: 0,
       max_tokens: 8000,
       stream: false,
-    }, input.headers, 2)
+    }, 2)
     input.onAttempt?.(repair, 2)
     return {
       document: hydrateCanvasDocument(
@@ -1006,9 +994,7 @@ async function generateCanvasWithRepair(input: {
 }
 
 async function generateBlockWithRepair(input: {
-  url: string
-  model: string
-  headers: Record<string, string>
+  articleModel: ReturnType<typeof createArticleModel>
   prompt: string
   articleTitle: string
   sources: CanvasSource[]
@@ -1023,9 +1009,7 @@ async function generateBlockWithRepair(input: {
 }> {
   input.onPlan?.()
   const analysis = await analyzeDesignBrief({
-    url: input.url,
-    model: input.model,
-    headers: input.headers,
+    articleModel: input.articleModel,
     prompt: input.prompt,
     enabled: input.hasDesignReference,
   })
@@ -1037,9 +1021,7 @@ async function generateBlockWithRepair(input: {
     attempts: CanvasCompletionData[]
   }> => {
     const chunked = await generateBlockChunks({
-      url: input.url,
-      model: input.model,
-      headers: input.headers,
+      articleModel: input.articleModel,
       prompt: input.prompt,
       analysisPlan: analysis.plan,
       articleTitle: input.articleTitle,
@@ -1069,13 +1051,12 @@ async function generateBlockWithRepair(input: {
       content: `原始设计输入：${input.prompt}\n\n设计分析结果：${analysis.plan || "无，直接阅读原始设计输入"}\n\n必须完整排版以下内容源，content 或 section 只能引用这些 sourceId：\n${sourceManifest}`,
     },
   ]
-  const first = await callStructuredCanvas(input.url, {
-    model: input.model,
+  const first = await callStructuredCanvas(input.articleModel, {
     messages,
     temperature: 0.2,
     max_tokens: BLOCK_MAX_TOKENS,
     stream: false,
-  }, input.headers)
+  })
 
   try {
     const parsed = parseBlockFromCompletion(first)
@@ -1095,8 +1076,7 @@ async function generateBlockWithRepair(input: {
       return generateChunkedDocument([first])
     }
     const malformed = completionCandidates(first).join("\n")
-    const repair = await callStructuredCanvas(input.url, {
-      model: input.model,
+    const repair = await callStructuredCanvas(input.articleModel, {
       messages: [
         {
           role: "system",
@@ -1128,7 +1108,7 @@ ${sourceManifest}`,
       temperature: 0,
       max_tokens: BLOCK_MAX_TOKENS,
       stream: false,
-    }, input.headers, 2)
+    }, 2)
     try {
       const repairedDocument = parseBlockFromCompletion(repair)
       return {
@@ -1190,14 +1170,13 @@ router.post("/generate", async (req: AuthedRequest, res) => {
   const articleTitle = sources.find(source => source.kind === "title")?.text || "公众号长图"
 
   try {
-    const { url, model, headers } = buildLLMRequest(aiConfig)
+    const articleModel = createArticleModel(aiConfig)
+    const { model } = articleModel
     // #region debug-point BCD:before-upstream
     if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "pre-fix", hypothesisId: "B,C,D", traceId: debugTraceId, location: "server/routes/canvas.ts:before-upstream", msg: "[DEBUG] Canvas upstream request starting", data: { elapsedMs: Date.now() - debugStartedAt, provider: aiConfig.articleProvider, model, sourceCount: sources.length, maxTokens: 8000 }, ts: Date.now() }) }).catch(() => {})
     // #endregion
     const generated = await generateCanvasWithRepair({
-      url,
-      model,
-      headers,
+      articleModel,
       prompt,
       articleTitle,
       sources,
@@ -1277,11 +1256,10 @@ router.post("/generate/stream", async (req: AuthedRequest, res) => {
   // #endregion
 
   try {
-    const { url, model, headers } = buildLLMRequest(aiConfig)
+    const articleModel = createArticleModel(aiConfig)
+    const { model } = articleModel
     const generated = await generateCanvasWithRepair({
-      url,
-      model,
-      headers,
+      articleModel,
       prompt,
       articleTitle,
       sources,
@@ -1366,11 +1344,10 @@ router.post("/generate-block/stream", async (req: AuthedRequest, res) => {
   const heartbeat = setInterval(() => send("heartbeat", { elapsedMs: Date.now() - startedAt }), 15000)
 
   try {
-    const { url, model, headers } = buildLLMRequest(aiConfig)
+    const articleModel = createArticleModel(aiConfig)
+    const { model } = articleModel
     const generated = await generateBlockWithRepair({
-      url,
-      model,
-      headers,
+      articleModel,
       prompt,
       articleTitle,
       sources,

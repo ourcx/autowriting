@@ -16,10 +16,12 @@ import FormData from 'form-data'
 import fs from 'fs'
 import multer from 'multer'
 import path from 'path'
-import { DRAFTS_DIR, SERVER_AI_CONFIG, YUANBAO_SEARCH_ENABLED } from '../config.js'
+import { SERVER_AI_CONFIG, YUANBAO_SEARCH_ENABLED } from '../config.js'
 import { logger } from '../logger.js'
 import { resolveZhipuApiKey } from '../utils/providerKeys.ts'
 import { authMiddleware } from '../authMiddleware.js'
+import { validateArticleId } from '../articleIdMiddleware.ts'
+import { ArticleContentConflictError, resolveArticleFiles } from '../articleStorage.ts'
 import { webFetch } from '../utils/search/webFetcher.js'
 import { assertPublicHttpUrl } from '../utils/networkPolicy.ts'
 import { searchYuanbao, YuanbaoSearchError } from '../utils/yuanbaoSearch.ts'
@@ -106,38 +108,16 @@ router.post('/parse-file', parseUpload.single('file'), async (req, res) => {
   }
 })
 
-// ── 工具函数（路径规则与 articles.js 的 getArticlePath 保持同步）───────────
-
-function getUserDraftsDir(userId) {
-  return path.join(DRAFTS_DIR, userId)
-}
-
-/**
- * 解析 materials.md 路径，支持多用户隔离。
- * 逻辑与 articles.js getArticlePath(id, 'materials', uid) 完全一致：
- *   1. 优先在 DRAFTS_DIR/{uid}/{articleId}/ 直接查找
- *   2. 其次按 YYYYMMDD-suffix 格式解析
- */
-function getMaterialsPath(articleId, userId) {
-  const baseDir = userId ? getUserDraftsDir(userId) : DRAFTS_DIR
-  const directPath = path.join(baseDir, articleId)
-  if (fs.existsSync(directPath)) {
-    return path.join(directPath, 'prompt', 'materials.md')
-  }
-  const parts = articleId.split('-')
-  const dateDir = parts[0]
-  const suffix = parts.length > 1 ? `-${parts.slice(1).join('-')}` : ''
-  return path.join(baseDir, dateDir, 'prompt', `materials${suffix}.md`)
-}
+router.param('articleId', (req, res, next) => validateArticleId(req, res, next))
 
 // ── GET /api/materials/:articleId ─────────────────────────────────────────────
 router.get('/:articleId', (req, res) => {
   try {
-    const p = getMaterialsPath(req.params.articleId, req.user?.id)
+    const p = resolveArticleFiles(req.user.id, req.params.articleId).materials
     const content = fs.existsSync(p) ? fs.readFileSync(p, 'utf-8') : ''
     res.json({ content })
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    res.status(e instanceof ArticleContentConflictError ? 400 : 500).json({ error: e.message })
   }
 })
 
@@ -469,9 +449,9 @@ router.post('/search', async (req, res) => {
 router.post('/:articleId/save', (req, res) => {
   try {
     const { content, mode = 'append' } = req.body
-    if (!content) return res.status(400).json({ error: '缺少 content 参数' })
+    if (typeof content !== 'string' || !content.trim()) return res.status(400).json({ error: '缺少 content 参数' })
 
-    const p      = getMaterialsPath(req.params.articleId, req.user?.id)
+    const p      = resolveArticleFiles(req.user.id, req.params.articleId).materials
     const dir    = path.dirname(p)
     fs.mkdirSync(dir, { recursive: true })
 
@@ -486,7 +466,7 @@ router.post('/:articleId/save', (req, res) => {
 
     res.json({ ok: true })
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    res.status(e instanceof ArticleContentConflictError ? 400 : 500).json({ error: e.message })
   }
 })
 

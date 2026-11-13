@@ -2,7 +2,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { DRAFTS_DIR, SERVER_AI_CONFIG } from "./config.ts"
 import { readArticleContent, readArticleWorkflow } from "./articleStorage.ts"
-import { buildLLMRequest, callLLMWithRetry } from "./utils/public.ts"
+import { createArticleModel } from "./utils/public.ts"
 import { hasArticleApiKey } from "./utils/providerKeys.ts"
 import {
   parseCreatorPersonaAnalysis,
@@ -195,9 +195,8 @@ ${formatLocalArticles(localArticles) || "没有本地成稿"}
 6. 返回一个 JSON 对象，不要 Markdown，不要解释。必须包含这些字符串字段：
 accountName、accountInfo、personalExperiences、historicalArticles、speakingStyle、expertise、values、audienceRelationship、otherNotes。`
 
-  const { url, model, headers } = buildLLMRequest(config)
-  const response = await callLLMWithRetry(url, {
-    model,
+  const { complete } = createArticleModel(config)
+  const response = await complete({
     messages: [
       {
         role: "system",
@@ -208,7 +207,7 @@ accountName、accountInfo、personalExperiences、historicalArticles、speakingS
     temperature: 0.2,
     max_tokens: 2500,
     stream: false,
-  }, headers)
+  })
   const content = response.data.choices[0]?.message?.content
   if (!content) throw new Error("人设分析没有返回内容")
   return {

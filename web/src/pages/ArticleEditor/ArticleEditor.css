@@ -758,6 +758,18 @@
   gap: 8px;
 }
 
+.deepseek-read-aloud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.deepseek-read-aloud p {
+  flex-basis: 100%;
+}
+
 .materials-refine-btn {
   display: inline-flex;
   align-items: center;

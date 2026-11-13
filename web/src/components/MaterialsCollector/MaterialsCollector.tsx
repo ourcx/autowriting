@@ -1,6 +1,6 @@
 /**
  * MaterialsCollector — 素材采集面板
- * 四种模式：网页搜索 / 公众号采集 / URL 解析 / 手动粘贴
+ * 网页搜索、公众号采集、链接、文件、调研、语音和手动粘贴
  * 搜索结果支持「读取全文」（单条 & 批量），采集后一键追加到 materials.md
  */
 import { useEffect, useRef, useState } from 'react'
@@ -8,11 +8,17 @@ import {
   Link, Search, ClipboardPaste, Plus, Check,
   Loader2, ExternalLink, ChevronDown, ChevronUp, AlertCircle,
   Calendar, X, BookOpen, Globe, MessageCircle,
-  Upload,
+  Upload, Sparkles, Mic,
 } from 'lucide-react'
 import { toast } from '../Toast/Toast'
 import {
-  appendArticleMaterials,
+  deepSeekRequest,
+  fetchDeepSeekMaterial,
+  formatDeepSeekResearch,
+  parseDeepSeekMaterial,
+  searchDeepSeekMaterials,
+  transcribeDeepSeekMaterial,
+  type DeepSeekChatResponse,
   extractErrorMessage,
   fetchMaterialUrl,
   fetchMaterialUrls,
@@ -36,6 +42,7 @@ interface CollectedItem {
   url?:         string
   source?:      string
   provider?:    WechatCollectorProvider
+  useDeepSeekFetch?: boolean
   selected:     boolean
   expanded:     boolean
   dateTag:      string    // 可选时间标签，格式 YYYY-MM-DD 或空字符串
@@ -46,7 +53,7 @@ interface CollectedItem {
 interface Props {
   articleId:      string
   searchApiKey:   string
-  searchProvider: 'serper' | 'bing' | 'searxng' | 'zhipu'
+  searchProvider: 'serper' | 'bing' | 'searxng' | 'zhipu' | 'deepseek'
   searchEngine:   string
   searxngUrl?:    string
   glmApiKey?:     string
@@ -55,11 +62,14 @@ interface Props {
     tikhub: boolean
     dajiala: boolean
   }
-  onSaved?:       (appendedContent: string) => void
+  deepseekReady?: boolean
+  onSave: (appendedContent: string) => Promise<void>
 }
 
 let _idCounter = 0
 function nextId() { return String(++_idCounter) }
+
+const DEEPSEEK_DOCUMENT_EXTENSIONS = '.pdf,.doc,.docx,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.gif,.bmp,.tif,.tiff'
 
 type WechatSearchSource = WechatCollectorProvider | 'yuanbao'
 
@@ -88,9 +98,10 @@ export default function MaterialsCollector({
   glmApiKey,
   jinaApiKey,
   wechatCollectorReady = { tikhub: false, dajiala: false },
-  onSaved,
+  deepseekReady = false,
+  onSave,
 }: Props) {
-  const [mode, setMode]               = useState<'url' | 'search' | 'wechat' | 'paste' | 'file'>('search')
+  const [mode, setMode]               = useState<'url' | 'search' | 'wechat' | 'paste' | 'file' | 'research' | 'audio'>('search')
   const [urlInput, setUrlInput]       = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [wechatQuery, setWechatQuery] = useState('')
@@ -105,39 +116,101 @@ export default function MaterialsCollector({
   const [batchFetching, setBatchFetching] = useState(false)
   const [items, setItems]             = useState<CollectedItem[]>([])
   const [parseMode, setParseMode]     = useState<'document' | 'handwriting'>('document')
+  const [deepseekConsent, setDeepseekConsent] = useState(false)
+  const [urlProvider, setUrlProvider] = useState<string>()
+  const [fileProvider, setFileProvider] = useState<string>()
+  const [ocrPurpose, setOcrPurpose] = useState<'text_recognition' | 'rich_layout_recognition'>('text_recognition')
+  const [researchPrompt, setResearchPrompt] = useState('')
+  const [researchFile, setResearchFile] = useState<File>()
+  const [researchPurpose, setResearchPurpose] = useState('text_recognition')
+  const [researchThinking, setResearchThinking] = useState(true)
+  const [researchSearch, setResearchSearch] = useState(true)
+  const [researchReadUrl, setResearchReadUrl] = useState(true)
+  const canUseDeepSeek = deepseekReady && deepseekConsent
+  const deepSeekSearch = searchProvider === 'deepseek'
+  const deepSeekFile = deepseekReady && (fileProvider ? fileProvider === 'deepseek' : deepSeekSearch)
+  const deepSeekUrl = deepseekReady && (urlProvider ? urlProvider === 'deepseek' : deepSeekSearch)
 
   // 新增素材时的默认时间（可以不填）
   const [defaultDateTag, setDefaultDateTag] = useState('')
 
   // 是否可以使用搜索（SearXNG 不需要 key）
-  const canSearch = searchProvider === 'searxng'
+  const canSearch = deepSeekSearch ? canUseDeepSeek : searchProvider === 'searxng'
     || (searchProvider === 'zhipu' ? !!(glmApiKey || searchApiKey) : !!searchApiKey)
   const usingYuanbao = wechatProvider === 'yuanbao'
   const canSearchWechat = usingYuanbao || wechatCollectorReady[wechatProvider]
 
   useEffect(() => () => yuanbaoRequest.current?.abort(), [articleId])
 
-  async function handleParseFile(file: File | null) {
-    if (!file) return
-    if (!glmApiKey) {
-      toast.error('未配置智谱公共 API Key，请先到「AI 配置」填写')
-      return
-    }
+  function addDeepSeekItem(title: string, content: string, source: string) {
+    if (!content.trim()) throw new Error('DeepSeek 未返回可用文本')
+    setItems(prev => [{
+      id: nextId(), type: 'file', title, content, source, selected: true, expanded: false,
+      dateTag: defaultDateTag, fullFetched: true,
+    }, ...prev])
+  }
+
+  async function handleTranscribe(file?: File) {
+    if (!file || loading || !canUseDeepSeek) return
     setLoading(true)
     try {
-      const data = await parseMaterialFile(file, parseMode, glmApiKey)
-      setItems(prev => [{
-        id: nextId(),
-        type: 'file',
-        title: data.title,
-        content: data.content,
-        source: parseMode === 'handwriting' ? '智谱手写 OCR' : '智谱文件解析',
-        selected: true,
-        expanded: false,
-        dateTag: defaultDateTag,
-        fullFetched: true,
-      }, ...prev])
-      toast.success(`已解析 ${data.title}`)
+      const { text } = await transcribeDeepSeekMaterial(file)
+      addDeepSeekItem(file.name, text, 'DeepSeek 语音转文字')
+    } catch (error) {
+      toast.error(extractErrorMessage(error, '语音转文字失败'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleResearch() {
+    const prompt = researchPrompt.trim()
+    if (!prompt || loading || !canUseDeepSeek) return
+    setLoading(true)
+    try {
+      const fields = {
+        prompt, confirmedCost: true, thinking: researchThinking, webSearch: researchSearch,
+        readUrl: researchReadUrl, purpose: researchPurpose,
+      }
+      let body: typeof fields | FormData = fields
+      if (researchFile) {
+        if (!researchFile.size || researchFile.size > 32 * 1024 * 1024) throw new Error('附件须为 1 字节至 32 MiB')
+        const form = new FormData()
+        for (const [key, value] of Object.entries(fields)) form.append(key, String(value))
+        form.append('file', researchFile)
+        body = form
+      }
+      const { content, annotations } = await deepSeekRequest<DeepSeekChatResponse>('chat', body)
+      addDeepSeekItem(prompt.replace(/\s+/g, ' ').slice(0, 80), formatDeepSeekResearch(content, annotations), 'DeepSeek 调研')
+    } catch (error) {
+      toast.error(extractErrorMessage(error, 'DeepSeek 调研失败'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleParseFile(file: File | null) {
+    if (!file || loading || (deepSeekFile ? !canUseDeepSeek : !glmApiKey)) return
+    setLoading(true)
+    try {
+      if (deepSeekFile) {
+        const { content } = await parseDeepSeekMaterial(file, ocrPurpose)
+        addDeepSeekItem(file.name, content, 'DeepSeek OCR')
+      } else {
+        const data = await parseMaterialFile(file, parseMode, glmApiKey || '')
+        setItems(prev => [{
+          id: nextId(),
+          type: 'file',
+          title: data.title,
+          content: data.content,
+          source: parseMode === 'handwriting' ? '智谱手写 OCR' : '智谱文件解析',
+          selected: true,
+          expanded: false,
+          dateTag: defaultDateTag,
+          fullFetched: true,
+        }, ...prev])
+        toast.success(`已解析 ${data.title}`)
+      }
     } catch (error: unknown) {
       toast.error(extractErrorMessage(error, '文件解析失败'))
     } finally {
@@ -148,18 +221,18 @@ export default function MaterialsCollector({
   // ── URL 解析 ──────────────────────────────────────────────────────────────
   async function handleFetchUrl() {
     const url = urlInput.trim()
-    if (!url) return
+    if (!url || loading || (deepSeekUrl && !canUseDeepSeek)) return
     if (!/^https?:\/\//i.test(url)) {
       toast.error('请输入完整的 URL（以 http:// 或 https:// 开头）')
       return
     }
     setLoading(true)
     try {
-      const data = await fetchMaterialUrl(url, jinaApiKey || '')
+      const data = deepSeekUrl ? await fetchDeepSeekMaterial(url) : await fetchMaterialUrl(url, jinaApiKey || '')
 
       const hostname = new URL(url).hostname
       const firstLine = data.content.split('\n').find((l: string) => l.trim()) || hostname
-      const title = firstLine.replace(/^#+\s*/, '').slice(0, 80)
+      const title = (('title' in data && data.title) || firstLine.replace(/^#+\s*/, '')).slice(0, 80)
 
       setItems(prev => [{
         id:          nextId(),
@@ -185,41 +258,22 @@ export default function MaterialsCollector({
   // ── 搜索 ──────────────────────────────────────────────────────────────────
   async function handleSearch() {
     const query = searchQuery.trim()
-    if (!query) return
+    if (!query || loading) return
     if (!canSearch) {
-      toast.error(searchProvider === 'zhipu'
+      toast.error(deepSeekSearch ? '请确认 DeepSeek 使用说明后再搜索' : searchProvider === 'zhipu'
         ? '未配置智谱 API Key，请先在「AI 配置」页面填写'
         : '未配置搜索 API Key，请先在「AI 配置」页面填写，或切换到 SearXNG（免费）')
       return
     }
     setLoading(true)
     try {
-      const body: Record<string, unknown> = {
-        query,
-        provider:   searchProvider,
-        engine:     searchEngine,
-        num:        10,
-      }
-      if (searchProvider === 'searxng') {
-        body.searxngUrl = searxngUrl || ''
-      } else if (searchProvider === 'zhipu') {
-        body.apiKey = searchApiKey
-        body.glmApiKey = glmApiKey || searchApiKey
-      } else {
-        body.apiKey = searchApiKey
-      }
-
-      const data = await searchMaterials(body as {
-        query: string
-        provider: Props['searchProvider']
-        engine: string
-        num: number
-        searxngUrl?: string
-        apiKey?: string
-        glmApiKey?: string
-      })
-
-      const results: MaterialSearchResult[] = data.results || []
+      const results: MaterialSearchResult[] = deepSeekSearch
+        ? await searchDeepSeekMaterials(query)
+        : (await searchMaterials({
+          query, provider: searchProvider, engine: searchEngine, num: 10,
+          ...(searchProvider === 'searxng' ? { searxngUrl: searxngUrl || '' } : { apiKey: searchApiKey }),
+          ...(searchProvider === 'zhipu' ? { glmApiKey: glmApiKey || searchApiKey } : {}),
+        })).results || []
       if (results.length === 0) {
         toast.warn('没有搜索到相关结果')
         return
@@ -234,8 +288,9 @@ export default function MaterialsCollector({
         source:      r.source,
         selected:    false,
         expanded:    false,
-        dateTag:     defaultDateTag,
+        dateTag:     r.datePublished?.slice(0, 10) || defaultDateTag,
         fullFetched: false,
+        useDeepSeekFetch: deepSeekSearch,
       }))
       setItems(prev => [...newItems, ...prev])
       toast.success(`找到 ${results.length} 条结果，点击「读全文」可获取完整内容`)
@@ -347,25 +402,29 @@ export default function MaterialsCollector({
 
   // ── 单条读取全文 ─────────────────────────────────────────────────────────
   async function handleFetchFullText(id: string, url: string) {
+    const target = items.find(item => item.id === id)
+    if (!target || target.fetching || (target.useDeepSeekFetch && !canUseDeepSeek)) return
     // 标记 fetching
     setItems(prev => prev.map(it => it.id === id ? { ...it, fetching: true } : it))
     try {
-      const target = items.find(item => item.id === id)
-      const isYuanbaoArticle = !!target && needsWechatArticleText(target)
+      const isYuanbaoArticle = needsWechatArticleText(target)
       let articleData: {
         title: string
         content: string
         source: string
         publishedAt: string
       }
-      if (target?.type === 'wechat' && target.provider) {
+      if (target.type === 'wechat' && target.provider) {
         articleData = await fetchWechatArticle({ provider: target.provider, url })
+      } else if (target.useDeepSeekFetch) {
+        const data = await fetchDeepSeekMaterial(url)
+        articleData = { ...data, source: target.source || '', publishedAt: '' }
       } else {
         const data = await fetchMaterialUrl(url, jinaApiKey || '')
         articleData = {
-          title: target?.title || '',
+          title: target.title,
           content: data.content,
-          source: target?.source || '',
+          source: target.source || '',
           publishedAt: '',
         }
       }
@@ -399,7 +458,7 @@ export default function MaterialsCollector({
 
   // ── 批量读取全文（已选中且未读全文的 search 条目）────────────────────────
   async function handleBatchFetchFullText() {
-    const targets = items.filter(it => it.selected && it.type === 'search' && !it.fullFetched && it.url)
+    const targets = items.filter(it => it.selected && it.type === 'search' && !it.fullFetched && !it.fetching && !it.useDeepSeekFetch && it.url)
     if (targets.length === 0) {
       toast.warn('没有可以读取全文的搜索结果（请先勾选搜索结果条目）')
       return
@@ -483,7 +542,7 @@ export default function MaterialsCollector({
 
   // ── 统计 ─────────────────────────────────────────────────────────────────
   const selectedCount   = items.filter(it => it.selected).length
-  const canBatchFetch   = items.some(it => it.selected && it.type === 'search' && !it.fullFetched && it.url)
+  const canBatchFetch   = items.some(it => it.selected && it.type === 'search' && !it.fullFetched && !it.fetching && !it.useDeepSeekFetch && it.url)
 
   // ── 入库 ────────────────────────────────────────────────────────────────
   async function handleSave() {
@@ -517,7 +576,7 @@ export default function MaterialsCollector({
         for (const it of groupItems) {
           const header = it.url
             ? `### ${it.title}\n> 来源：${it.source || it.url}  \n> URL：${it.url}`
-            : `### ${it.title}`
+            : `### ${it.title}${it.source ? `\n> 来源：${it.source}` : ''}`
           parts.push(`${header}\n\n${it.content}`)
         }
       }
@@ -528,20 +587,19 @@ export default function MaterialsCollector({
         for (const it of noDateItems) {
           const header = it.url
             ? `### ${it.title}\n> 来源：${it.source || it.url}  \n> URL：${it.url}`
-            : `### ${it.title}`
+            : `### ${it.title}${it.source ? `\n> 来源：${it.source}` : ''}`
           parts.push(`${header}\n\n${it.content}`)
         }
       }
 
       const content = parts.join('\n\n')
 
-      await appendArticleMaterials(articleId, content)
+      await onSave(content)
 
       // 移除已保存的条目
       const savedIds = new Set(selected.map(item => item.id))
       setItems(prev => prev.filter(it => !savedIds.has(it.id)))
       toast.success(`${selected.length} 条素材已写入 materials.md`)
-      onSaved?.(content)
     } catch (e: unknown) {
       toast.error('保存失败：' + (e as Error).message)
     } finally {
@@ -584,12 +642,16 @@ export default function MaterialsCollector({
           ['wechat', <MessageCircle size={13} />,  '公众号采集'],
           ['url',    <Link size={13} />,            'URL 解析'],
           ['file',   <Upload size={13} />,          '文件 / OCR'],
+          ...(deepseekReady ? [
+            ['research', <Sparkles size={13} />, 'DeepSeek 调研'],
+            ['audio', <Mic size={13} />, '语音转文字'],
+          ] : []),
           ['paste',  <ClipboardPaste size={13} />,  '手动粘贴'],
         ] as [typeof mode, React.ReactNode, string][]).map(([id, icon, label]) => (
           <button
             key={id}
             className={`mc-mode-tab${mode === id ? ' mc-mode-tab--active' : ''}`}
-            onClick={() => setMode(id)}
+            onClick={() => { setMode(id); if (id !== 'research') setResearchFile(undefined) }}
           >
             {icon}
             {label}
@@ -599,6 +661,13 @@ export default function MaterialsCollector({
 
       {/* ── 输入区 ── */}
       <div className="mc-input-area">
+        {deepseekReady && ((mode === 'search' && deepSeekSearch) || (mode === 'url' && deepSeekUrl)
+          || (mode === 'file' && deepSeekFile) || mode === 'research' || mode === 'audio') && (
+          <label className="mc-search-tip mc-search-tip--hint">
+            <input type="checkbox" checked={deepseekConsent} disabled={loading} onChange={event => setDeepseekConsent(event.target.checked)} />
+            同意将当前文章中主动提交的搜索词、链接、文本或文件发给 DeepSeek，并按调用计费
+          </label>
+        )}
 
         {mode === 'search' && (
           <div className="mc-search-wrap">
@@ -608,10 +677,12 @@ export default function MaterialsCollector({
                 placeholder={
                   searchProvider === 'searxng'
                     ? '输入关键词，SearXNG 聚合搜索（免费）'
+                    : deepSeekSearch ? '输入 DeepSeek 搜索词（最多 128 字符）'
                     : canSearch
                     ? '输入关键词，如：AI 效率工具 2025'
                     : '请先在「AI 配置」页面填写搜索 API Key'
                 }
+                aria-label="搜索关键词"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && !loading) handleSearch() }}
@@ -632,7 +703,11 @@ export default function MaterialsCollector({
                 <Globe size={12} />
                 SearXNG 聚合搜索，无需 API Key — 搜索后点击「读全文」获取完整内容
               </div>
-            ) : !searchApiKey ? (
+            ) : deepSeekSearch ? (
+              <div className="mc-search-tip mc-search-tip--hint">
+                {deepseekReady ? 'DeepSeek 搜索 · 点击单条结果的「读全文」可读取原文' : 'DeepSeek 尚未在服务端启用'}
+              </div>
+            ) : !canSearch ? (
               <div className="mc-search-tip mc-search-tip--warn">
                 <AlertCircle size={12} />
                 未配置搜索 Key —— 可在「AI 配置」切换到 SearXNG（免费）方案
@@ -733,9 +808,18 @@ export default function MaterialsCollector({
         )}
 
         {mode === 'url' && (
-          <div className="mc-url-row">
+          <div className="mc-search-wrap">
+            {deepseekReady && <label className="mc-search-tip">
+              链接读取服务
+              <select value={deepSeekUrl ? 'deepseek' : 'jina'} disabled={loading} onChange={event => setUrlProvider(event.target.value)}>
+                <option value="jina">Jina Reader</option>
+                <option value="deepseek">DeepSeek Fetch</option>
+              </select>
+            </label>}
+            <div className="mc-url-row">
             <input
               className="mc-input mc-input--mono"
+              aria-label="网页 URL"
               placeholder="粘贴网页 URL，如 https://mp.weixin.qq.com/..."
               value={urlInput}
               onChange={e => setUrlInput(e.target.value)}
@@ -745,17 +829,31 @@ export default function MaterialsCollector({
             <button
               className="mc-btn mc-btn--primary"
               onClick={handleFetchUrl}
-              disabled={loading || !urlInput.trim()}
+              disabled={loading || !urlInput.trim() || (deepSeekUrl && !canUseDeepSeek)}
             >
               {loading ? <Loader2 size={14} className="mc-spin" /> : <Link size={14} />}
               {loading ? '解析中...' : '解析'}
             </button>
+            </div>
           </div>
         )}
 
         {mode === 'file' && (
           <div className="mc-paste-area">
-            <div className="mc-provider-toggle" aria-label="智谱文件解析类型">
+            {deepseekReady && <label className="mc-search-tip">
+              文件解析服务
+              <select value={deepSeekFile ? 'deepseek' : 'zhipu'} disabled={loading} onChange={event => setFileProvider(event.target.value)}>
+                <option value="zhipu">智谱</option>
+                <option value="deepseek">DeepSeek OCR</option>
+              </select>
+            </label>}
+            {deepSeekFile ? <label className="mc-search-tip">
+              OCR 解析方式
+              <select value={ocrPurpose} disabled={loading} onChange={event => setOcrPurpose(event.target.value === 'rich_layout_recognition' ? 'rich_layout_recognition' : 'text_recognition')}>
+                <option value="text_recognition">提取文本</option>
+                <option value="rich_layout_recognition">图文混排</option>
+              </select>
+            </label> : <div className="mc-provider-toggle" aria-label="智谱文件解析类型">
               <button
                 type="button"
                 className={`mc-provider-option${parseMode === 'document' ? ' mc-provider-option--active' : ''}`}
@@ -772,15 +870,15 @@ export default function MaterialsCollector({
                 <span>手写 OCR</span>
                 <small>PNG / JPG / JPEG</small>
               </button>
-            </div>
+            </div>}
             <label className={`mc-btn mc-btn--primary${loading ? ' mc-btn--loading' : ''}`}>
               {loading ? <Loader2 size={14} className="mc-spin" /> : <Upload size={14} />}
               {loading ? '解析中...' : '选择文件并解析'}
               <input
                 type="file"
                 hidden
-                disabled={loading || !glmApiKey}
-                accept={parseMode === 'handwriting'
+                disabled={loading || (deepSeekFile ? !canUseDeepSeek : !glmApiKey)}
+                accept={deepSeekFile ? DEEPSEEK_DOCUMENT_EXTENSIONS : parseMode === 'handwriting'
                   ? '.png,.jpg,.jpeg,image/png,image/jpeg'
                   : '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.md,.html,.png,.jpg,.jpeg,.webp,.tiff'}
                 onChange={event => {
@@ -790,12 +888,55 @@ export default function MaterialsCollector({
                 }}
               />
             </label>
-            <div className={`mc-search-tip${glmApiKey ? ' mc-search-tip--hint' : ' mc-search-tip--warn'}`}>
+            {deepSeekFile ? <div className="mc-search-tip mc-search-tip--hint">支持 PDF、Word、PPT 和图片，单个文件最大 32 MiB</div> : <div className={`mc-search-tip${glmApiKey ? ' mc-search-tip--hint' : ' mc-search-tip--warn'}`}>
               {glmApiKey ? <BookOpen size={12} /> : <AlertCircle size={12} />}
               {glmApiKey
                 ? '文件会发送到智谱解析，返回文本后再由你确认是否写入素材库'
                 : '请先在「AI 配置 → 公共 Key」配置智谱 API Key'}
+            </div>}
+          </div>
+        )}
+
+        {mode === 'research' && (
+          <div className="mc-paste-area">
+            <textarea className="mc-textarea" rows={4} maxLength={32000} aria-label="调研问题" placeholder="输入调研问题，也可附上链接或文件" value={researchPrompt} disabled={loading} onChange={event => setResearchPrompt(event.target.value)} />
+            <div className="mc-search-tip">
+              <label><input type="checkbox" checked={researchThinking} disabled={loading} onChange={event => setResearchThinking(event.target.checked)} />深度思考</label>
+              <label><input type="checkbox" checked={researchSearch} disabled={loading} onChange={event => setResearchSearch(event.target.checked)} />联网搜索</label>
+              <label><input type="checkbox" checked={researchReadUrl} disabled={loading} onChange={event => setResearchReadUrl(event.target.checked)} />阅读链接</label>
             </div>
+            <label className="mc-search-tip">
+              文件解析方式
+              <select value={researchPurpose} disabled={loading} onChange={event => { setResearchPurpose(event.target.value); setResearchFile(undefined) }}>
+                <option value="text_recognition">提取文本</option>
+                <option value="rich_layout_recognition">图文混排</option>
+                <option value="user_data">纯文本 / 表格</option>
+              </select>
+            </label>
+            <label className="mc-search-tip">
+              附件（可选）
+              <input key={researchPurpose} type="file" disabled={loading}
+                accept={researchPurpose === 'user_data' ? '.txt,.md,.csv,.json,.html,.xml,.xls,.xlsx' : DEEPSEEK_DOCUMENT_EXTENSIONS}
+                onChange={event => setResearchFile(event.target.files?.[0])} />
+            </label>
+            <button className="mc-btn mc-btn--primary" disabled={loading || !canUseDeepSeek || !researchPrompt.trim()} onClick={() => void handleResearch()}>
+              {loading ? '调研中…' : '开始调研'}
+            </button>
+          </div>
+        )}
+
+        {mode === 'audio' && (
+          <div className="mc-paste-area">
+            <label className="mc-btn mc-btn--primary">
+              <Mic size={14} />
+              {loading ? '转写中…' : '选择音频并转写'}
+              <input type="file" hidden accept=".wav,.ogg" disabled={loading || !canUseDeepSeek} onChange={event => {
+                const file = event.target.files?.[0]
+                event.target.value = ''
+                void handleTranscribe(file)
+              }} />
+            </label>
+            <p className="mc-search-tip">支持 16-bit PCM WAV 或 Ogg Opus，最长 120 秒，最大 8 MiB</p>
           </div>
         )}
 
@@ -921,7 +1062,7 @@ export default function MaterialsCollector({
                       <button
                         className="mc-fetch-btn"
                         onClick={() => item.url && handleFetchFullText(item.id, item.url)}
-                        disabled={item.fetching}
+                        disabled={item.fetching || (item.useDeepSeekFetch && (!canUseDeepSeek || loading || items.some(result => result.useDeepSeekFetch && result.fetching)))}
                         title={item.provider ? '通过付费服务读取正文' : '用网页解析器读取正文'}
                       >
                         {item.fetching
@@ -1007,7 +1148,7 @@ export default function MaterialsCollector({
           {mode === 'url' && (
             <div className="mc-empty-inner">
               <Link size={28} className="mc-empty-icon" />
-              <p>输入网页链接，Jina AI 会自动提取正文</p>
+              <p>输入网页链接，{deepSeekUrl ? 'DeepSeek Fetch' : 'Jina Reader'} 会提取正文</p>
             </div>
           )}
           {mode === 'paste' && (

@@ -1,4 +1,6 @@
 import type { AIConfig } from "../types.ts"
+import { DEEPSEEK_APP_CONFIG } from "../config.ts"
+import { isDeepSeekReady } from "./deepseek.ts"
 
 function clean(value: unknown): string {
   return typeof value === "string" ? value.trim() : ""
@@ -22,6 +24,7 @@ export function resolveZhipuApiKey(config: AIConfig, toolKey?: unknown): string 
 }
 
 export function resolveArticleApiKey(config: AIConfig): string {
+  if (config.articleProvider === "deepseek") return ""
   const explicit = clean(config.articleApiKey)
   if (explicit) return explicit
   if (config.articleProvider === "zhipu" || isZhipuEndpoint(config.articleBaseUrl)) {
@@ -31,6 +34,7 @@ export function resolveArticleApiKey(config: AIConfig): string {
 }
 
 export function hasArticleApiKey(config: AIConfig): boolean {
+  if (config.articleProvider === "deepseek") return isDeepSeekReady(DEEPSEEK_APP_CONFIG)
   return config.articleProvider === "maas"
     ? Boolean(clean(config.maasApiKey))
     : Boolean(resolveArticleApiKey(config))

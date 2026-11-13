@@ -43,7 +43,12 @@ export class DeepSeekError extends Error {
   }
 }
 
-const ORIGIN = 'https://api.deepseek.com'
+export const DEEPSEEK_ORIGIN = 'https://api.deepseek.com'
+export const DEEPSEEK_MODEL = 'deepseek-flash'
+
+export function isDeepSeekReady(config: DeepSeekConfig): boolean {
+  return config.enabled && Boolean(config.apiKey.trim())
+}
 const MiB = 1024 * 1024
 function object(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
@@ -78,16 +83,16 @@ export function createDeepSeekClient(config: DeepSeekConfig, transport: typeof f
     if (!config.enabled) throw new DeepSeekError('DeepSeek 应用能力尚未启用', 503)
     if (!config.apiKey.trim()) throw new DeepSeekError('服务端未配置 DEEPSEEK_API_KEY', 503)
   }
-  async function request(endpoint: string, body: Record<string, unknown> | FormData): Promise<Response> {
+  async function request(endpoint: string, body: Record<string, unknown> | FormData, signal?: AbortSignal, timeoutMs = 120_000): Promise<Response> {
     enabled()
     const multipart = body instanceof FormData
     let response: Response
     try {
-      response = await transport(`${ORIGIN}${endpoint}`, {
+      response = await transport(`${DEEPSEEK_ORIGIN}${endpoint}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${config.apiKey}`, ...(multipart ? {} : { 'Content-Type': 'application/json' }) },
         body: multipart ? body : JSON.stringify(body),
-        signal: AbortSignal.timeout(120_000),
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs),
         redirect: 'error',
       })
     } catch {
@@ -100,14 +105,35 @@ export function createDeepSeekClient(config: DeepSeekConfig, transport: typeof f
     }
     return response
   }
-  async function json(endpoint: string, body: Record<string, unknown> | FormData): Promise<Record<string, unknown>> {
-    const response = await request(endpoint, body)
+  async function json(endpoint: string, body: Record<string, unknown> | FormData, signal?: AbortSignal, timeoutMs?: number): Promise<Record<string, unknown>> {
+    const response = await request(endpoint, body, signal, timeoutMs)
     let data: Record<string, unknown>
     try { data = object(await response.json()) } catch { throw new DeepSeekError('DeepSeek 返回了无效 JSON') }
     if (data.error) throw new DeepSeekError('DeepSeek 未能完成请求；未自动重试，以避免重复计费')
     return data
   }
+  async function complete(body: Record<string, unknown>, signal?: AbortSignal, timeoutMs?: number) {
+    // 审核在模型生成结束后才完成，调用方只接收审核通过的完整正文。
+    const data = await json('/chat/completions', {
+      messages: body.messages,
+      max_tokens: body.max_tokens,
+      temperature: body.temperature,
+      ...(Array.isArray(body.tools) && body.tools.length ? { tools: body.tools } : {}),
+      model: DEEPSEEK_MODEL,
+      thinking: { type: body.thinking === true ? 'enabled' : 'disabled' },
+      safety_check: { level: 'high' },
+      stream: false,
+    }, signal, timeoutMs)
+    const choice = object(Array.isArray(data.choices) ? data.choices[0] : undefined)
+    if (choice.finish_reason === 'content_filter') throw new DeepSeekError('内容未通过 DeepSeek 安全检查', 422)
+    if (choice.finish_reason !== 'stop') throw new DeepSeekError('DeepSeek 未完整生成回答，请减少输入或调整输出上限')
+    const message = object(choice.message)
+    if (typeof message.content !== 'string' || !message.content.trim()) throw new DeepSeekError('DeepSeek 未返回文本回答')
+    return { message, content: message.content, usage: object(data.usage) }
+  }
+
   return {
+    complete,
     async chat(options: DeepSeekChatOptions): Promise<DeepSeekChatResult> {
       if (!options.messages.length || options.messages.length > 100) throw new DeepSeekError('消息数量必须为 1–100', 400)
       let fileCount = 0
@@ -130,17 +156,9 @@ export function createDeepSeekClient(config: DeepSeekConfig, transport: typeof f
         ...(options.webSearch ? [{ type: 'deepseek_web_search' }] : []),
         ...(options.readUrl ? [{ type: 'deepseek_read_url' }] : []),
       ]
-      const data = await json('/chat/completions', {
-        model: 'deepseek-flash', messages: options.messages,
-        thinking: { type: options.thinking ? 'enabled' : 'disabled' },
-        safety_check: { level: 'high' }, max_tokens: maxTokens, stream: false,
-        ...(tools.length ? { tools } : {}),
+      const { message, content, usage } = await complete({
+        messages: options.messages, thinking: options.thinking, max_tokens: maxTokens, tools,
       })
-      const choice = object(Array.isArray(data.choices) ? data.choices[0] : undefined)
-      if (choice.finish_reason === 'content_filter') throw new DeepSeekError('内容未通过 DeepSeek 安全检查', 422)
-      if (choice.finish_reason !== 'stop') throw new DeepSeekError('DeepSeek 未完整生成回答，请减少输入或调整输出上限')
-      const message = object(choice.message)
-      if (typeof message.content !== 'string') throw new DeepSeekError('DeepSeek 未返回文本回答')
       const annotations: DeepSeekCitation[] = []
       for (const raw of Array.isArray(message.annotations) ? message.annotations : []) {
         const annotation = object(raw)
@@ -153,9 +171,9 @@ export function createDeepSeekClient(config: DeepSeekConfig, transport: typeof f
         } })
       }
       return {
-        content: message.content, reasoningContent: string(message.reasoning_content), annotations,
+        content, reasoningContent: string(message.reasoning_content), annotations,
         serverToolCalls: Array.isArray(message.server_tool_calls) ? message.server_tool_calls : [],
-        usage: object(data.usage),
+        usage,
       }
     },
     async search(query: string, count = 10) {
@@ -165,7 +183,7 @@ export function createDeepSeekClient(config: DeepSeekConfig, transport: typeof f
       if (!Array.isArray(data.results)) throw new DeepSeekError('DeepSeek 未返回搜索结果')
       return data.results.map((raw: unknown) => {
         const row = object(raw)
-        return { title: string(row.title), url: string(row.url), snippet: string(row.snippet), summary: string(row.summary), content: string(row.content) }
+        return { title: string(row.title), url: string(row.url), snippet: string(row.snippet), summary: string(row.summary), content: string(row.content), siteName: string(row.site_name), datePublished: string(row.date) }
       }).filter(row => /^https?:\/\//i.test(row.url))
     },
     async fetchUrl(url: string) {
@@ -173,7 +191,7 @@ export function createDeepSeekClient(config: DeepSeekConfig, transport: typeof f
       requireText(url, 8192, 'URL')
       await assertPublicHttpUrl(url)
       const data = await json('/v1/tools/fetch', { url })
-      if (typeof data.content !== 'string') throw new DeepSeekError('DeepSeek 未返回网页正文')
+      if (typeof data.content !== 'string' || !data.content.trim()) throw new DeepSeekError('DeepSeek 未返回网页正文')
       return { title: string(data.title), content: data.content }
     },
     async uploadFile(file: DeepSeekFile, purpose: DeepSeekFilePurpose = 'text_recognition') {

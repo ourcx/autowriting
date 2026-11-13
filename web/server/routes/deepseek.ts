@@ -5,7 +5,7 @@ import { z } from 'zod'
 import type { AuthedRequest } from '../types.ts'
 import { authMiddleware } from '../authMiddleware.ts'
 import { DEEPSEEK_APP_CONFIG } from '../config.ts'
-import { createDeepSeekClient, DeepSeekError, type DeepSeekConfig, type DeepSeekFile } from '../utils/deepseek.ts'
+import { createDeepSeekClient, isDeepSeekReady, DeepSeekError, type DeepSeekConfig, type DeepSeekFile } from '../utils/deepseek.ts'
 
 const confirmation = z.union([z.literal(true), z.literal('true')])
 const toggle = z.union([z.boolean(), z.enum(['true', 'false'])]).optional().transform(value => value === true || value === 'true')
@@ -45,9 +45,9 @@ export function createDeepSeekRouter(config: DeepSeekConfig = DEEPSEEK_APP_CONFI
   const router = Router()
   router.use(authMiddleware)
   router.use((_req, res, next) => { res.setHeader('Cache-Control', 'private, no-store'); next() })
-  router.get('/status', (_req, res) => res.json({ enabled: config.enabled, configured: Boolean(config.apiKey) }))
+  router.get('/status', (_req, res) => res.json({ enabled: config.enabled, configured: Boolean(config.apiKey.trim()) }))
   router.use((req, res, next) => {
-    if (!config.enabled || !config.apiKey) { res.status(503).json({ error: 'DeepSeek 尚未启用或未配置服务端密钥' }); return }
+    if (!isDeepSeekReady(config)) { res.status(503).json({ error: 'DeepSeek 尚未启用或未配置服务端密钥' }); return }
     if (req.method !== 'POST') { res.status(405).json({ error: '不支持该方法' }); return }
     next()
   })

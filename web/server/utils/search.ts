@@ -20,17 +20,34 @@
  *   └── Jina Reader — 第三方 Reader API（可选，有 Key 时优先）
  */
 
-import { buildLLMRequest, callLLMWithRetry } from "./public.ts"
+import { createArticleModel } from "./public.ts"
 import { nowDay } from "./date.ts"
 import { logger } from "../logger.ts"
-import { SERVER_AI_CONFIG } from "../config.ts"
+import { DEEPSEEK_APP_CONFIG, SERVER_AI_CONFIG } from "../config.ts"
 import { createSearchProvider } from "./search/providers/index.ts"
+import { createDeepSeekClient, isDeepSeekReady } from "./deepseek.ts"
 import { webFetch } from "./search/webFetcher.ts"
 import type { AIConfig, SearchPlan, SearchItem, CrawlResult, MaterialsDataset } from "../types.ts"
 import type { SearchProvider } from "./search/providers/types.ts"
 import type { SearchResult as ProviderSearchResult } from "./search/types.ts"
 
 // ── 搜索 Provider 懒加载 ────────────────────────────────────────────────────────
+
+const deepseek = createDeepSeekClient(DEEPSEEK_APP_CONFIG)
+const deepSeekSearchProvider: SearchProvider = {
+  name: () => "deepseek",
+  isReady: () => isDeepSeekReady(DEEPSEEK_APP_CONFIG),
+  unavailableHint: () => "DeepSeek 尚未在服务端启用",
+  async search(query, topK = 10) {
+    return (await deepseek.search([...query].slice(0, 128).join(""), Math.min(topK, 50))).map(row => ({
+      title: row.title || row.url,
+      snippet: row.snippet || row.summary,
+      url: row.url,
+      source: row.siteName || extractDomain(row.url),
+      datePublished: row.datePublished || null,
+    }))
+  },
+}
 
 let _searchProvider: SearchProvider | null | undefined = undefined
 
@@ -74,7 +91,7 @@ export function resetSearchProvider(): void {
  * 使用 LLM 生成智能搜索计划
  */
 export async function generateSearchPlan(topic: string, aiConfig: AIConfig): Promise<SearchPlan> {
-  const { url, model, headers } = buildLLMRequest(aiConfig)
+  const { complete } = createArticleModel(aiConfig)
   const today = nowDay()
 
   const systemPrompt = `你是一个专业的信息检索专家，擅长设计高效的搜索策略。
@@ -123,15 +140,14 @@ export async function generateSearchPlan(topic: string, aiConfig: AIConfig): Pro
 只输出 JSON，不要任何其他文字。`
 
   try {
-    const resp = await callLLMWithRetry(url, {
-      model,
+    const resp = await complete({
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
       temperature: 0.7,
       max_tokens: 1000,
-    }, headers)
+    })
 
     const content = resp.data.choices[0].message.content.trim()
 
@@ -311,7 +327,8 @@ export async function crawlUrl(url: string, jinaApiKey = ""): Promise<string> {
  */
 export async function crawlUrlsBatch(
   targets: Array<{ url: string; reason: string; extract_hint: string }>,
-  jinaApiKey = ""
+  jinaApiKey = "",
+  readContent = crawlUrl,
 ): Promise<CrawlResult[]> {
   const CONCURRENCY = 3
   const results: CrawlResult[] = []
@@ -320,7 +337,7 @@ export async function crawlUrlsBatch(
     const batch = targets.slice(i, i + CONCURRENCY)
     const batchResults = await Promise.allSettled(
       batch.map(async (target) => {
-        const content = await crawlUrl(target.url, jinaApiKey)
+        const content = await readContent(target.url, jinaApiKey)
         return {
           url: target.url,
           reason: target.reason,
@@ -425,6 +442,8 @@ export async function collectMaterials(
   aiConfig: AIConfig,
 ): Promise<MaterialsDataset> {
   try {
+    const usesDeepSeekSearch = (aiConfig.searchProvider ?? SERVER_AI_CONFIG.searchProvider) === "deepseek"
+    if (usesDeepSeekSearch && !deepSeekSearchProvider.isReady()) throw new Error(deepSeekSearchProvider.unavailableHint())
     // Step 1: LLM 生成搜索计划
     logger.info("SEARCH", "开始生成搜索计划", { topic })
     const plan = await generateSearchPlan(topic, aiConfig)
@@ -434,7 +453,7 @@ export async function collectMaterials(
 
     const searchResults = await executeSearchBatch(
       plan.search_queries,
-      undefined, // 自动检测 Provider
+      usesDeepSeekSearch ? deepSeekSearchProvider : undefined,
       plan.max_results
     )
 
@@ -442,14 +461,16 @@ export async function collectMaterials(
     let crawledContents: CrawlResult[] = []
     if (plan.crawl_targets.length > 0) {
       logger.info("SEARCH", "开始爬取指定 URL", { targets: plan.crawl_targets.length })
-      crawledContents = await crawlUrlsBatch(plan.crawl_targets)
+      crawledContents = usesDeepSeekSearch
+        ? await crawlUrlsBatch(plan.crawl_targets, "", async url => (await deepseek.fetchUrl(url)).content)
+        : await crawlUrlsBatch(plan.crawl_targets)
     }
 
     // Step 4: 清洗数据
     logger.info("SEARCH", "开始清洗数据", { scripts: plan.clean_scripts })
     const allRawData: SearchItem[] = [
       ...searchResults,
-      ...crawledContents.map((c) => ({
+      ...crawledContents.filter(c => c.ok).map((c) => ({
         title: `[爬取] ${c.reason}`,
         url: c.url,
         content: c.content,

@@ -2,7 +2,9 @@
 
 ## 当前范围
 
-`server/utils/deepseek.ts` 提供服务端客户端，`server/routes/deepseek.ts` 挂载登录保护 API。登录后从「AI 配置 → DeepSeek 工作台」进入 `/deepseek`，可进行单轮文件问答、联网搜索、链接阅读、OCR、语音转文字和文字朗读。结果可手动复制到已有写作流程，不会自动保存、替换文章或发布。现有供应商与文章工作流保持兼容，没有数据库迁移。
+在「AI 配置 → 快速开始」可一次选择 DeepSeek 文章模型和素材搜索，也可分别设置。文章模型使用 `deepseek-flash`，供大纲、素材整理、候选稿、段落编辑和审核使用。DeepSeek 审核完完整正文后，服务端才把结果交给原有编辑流程。
+
+在文章「素材」页，可直接搜索网页、读取原文、OCR 解析、转写语音，或发起带联网、读链接和附件的调研。调研引用和搜索来源会随选中的素材一起保存。「审核」页可朗读当前公众号正文。独立的 `/deepseek` 入口支持把搜索和文本结果追加到已有文章。
 
 配置位于 `server/config.ts`，默认关闭：
 
@@ -31,7 +33,7 @@ const deepseek = createDeepSeekClient(DEEPSEEK_APP_CONFIG)
 - `POST /asr`：multipart `file`、`confirmedCost=true`。
 - `POST /tts`：JSON `{text, voice?, confirmedCost:true}`，返回 audio/wav。
 
-默认关闭时 POST 返回 503，未登录返回 401，缺少费用确认/非法参数返回 400。接口严格拒绝额外字段。工作台要求用户同意当前页面会话的费用和向 DeepSeek 传输输入后才能操作，不会自动重试。
+默认关闭时 POST 返回 503，未登录返回 401，缺少费用确认/非法参数返回 400。接口严格拒绝额外字段。工作台和素材采集在调用前确认数据发送与费用。写作使用选定的文章服务，审核页朗读在提交正文前确认。DeepSeek 调用不自动重试。
 
 上传内容会传给 DeepSeek；`/files` 文件保留遵循上游政策，本应用不提供上传后立即删除保证。不要上传未经授权的隐私资料。当前语音是上传 WAV/Ogg 和下载/播放 WAV，不请求麦克风权限、不隐式录音。
 
@@ -62,7 +64,7 @@ pnpm --dir web verify
 
 `test:deepseek` 使用临时数据库验证登录、默认关闭、费用确认、额外字段/跨用户文件 ID 拒绝、文件校验、限流和拒答；同时覆盖请求路径和参数、multipart 字段顺序、安全拒答、不完整回答、HTTP 200 内嵌错误、不重试、输入长度、内网 URL、音频响应类型和签名上下文保留。不需要 Key。`pnpm --dir web smoke` 另覆盖真实服务中的 DeepSeek 鉴权与默认关闭状态。
 
-关闭 `DEEPSEEK_APP_ENABLED` 可阻止客户端调用；回滚本次功能提交可移除工作台，不会更改用户数据。
+关闭 `DEEPSEEK_APP_ENABLED` 会停用 DeepSeek 模型和工具。可在 AI 配置切换文章模型和搜索服务，已入库素材继续可用。
 
 ## 官方来源（2026-11-13 核实）
 
