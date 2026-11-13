@@ -254,7 +254,7 @@ cases.push({
 cases.push({
   name: '生产模式私有前端路由应回退到 index.html 并禁止索引',
   run: async () => {
-    for (const path of ['/settings', '/deepseek', '/articles/20260929-writing/writing-better-urls']) {
+    for (const path of ['/settings', '/articles/20260929-writing/writing-better-urls']) {
       const r = await fetch(`${BASE}${path}`)
       if (!r.ok) throw new Error(`${path} status=${r.status}`)
       if (r.headers.get('x-robots-tag') !== 'noindex, nofollow, noarchive') {
@@ -263,6 +263,21 @@ cases.push({
       if (r.headers.get('cache-control') !== 'no-store') throw new Error(`${path} 缺少 no-store`)
       const body = await r.text()
       if (!body.includes(SMOKE_INDEX_MARKER)) throw new Error(`${path} 未回退到 index.html`)
+    }
+  },
+})
+
+cases.push({
+  name: '旧 DeepSeek 页面应跳转到 AI 配置',
+  run: async () => {
+    for (const path of ['/deepseek', '/deepseek/']) {
+      const response = await fetch(`${BASE}${path}`, { redirect: 'manual' })
+      if (response.status !== 302 || response.headers.get('location') !== '/settings') {
+        throw new Error(`${path} 应返回 302 并跳转到 /settings`)
+      }
+      if (response.headers.get('cache-control') !== 'no-store' || !response.headers.get('x-robots-tag')?.includes('noindex')) {
+        throw new Error(`${path} 跳转响应应禁止缓存和索引`)
+      }
     }
   },
 })

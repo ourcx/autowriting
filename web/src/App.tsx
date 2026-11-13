@@ -17,7 +17,6 @@ const WeChatPreview = lazy(() => import('./pages/WeChatPreview/WeChatPreview'))
 const WeChatDrafts = lazy(() => import('./pages/WeChatDrafts/WeChatDrafts'))
 const WeChatMaterials = lazy(() => import('./pages/WeChatMaterials/WeChatMaterials'))
 const StyleEditor = lazy(() => import('./pages/StyleEditor/StyleEditor'))
-const DeepSeekPage = lazy(() => import("./pages/DeepSeekPage/DeepSeekPage"))
 const AISettings = lazy(() => import('./pages/AISettings/AISettings'))
 const RagPage = lazy(() => import('./pages/RagPage/RagPage'))
 const TokenUsagePage = lazy(() => import('./pages/TokenUsagePage/TokenUsagePage'))
@@ -76,7 +75,7 @@ export default function App() {
         <Route path="/drafts" element={<PrivateRoute><WeChatDrafts /></PrivateRoute>} />
         <Route path="/wechat/materials" element={<PrivateRoute><WeChatMaterials /></PrivateRoute>} />
         <Route path="/styles" element={<PrivateRoute><StyleEditor /></PrivateRoute>} />
-        <Route path="/deepseek" element={<PrivateRoute><DeepSeekPage /></PrivateRoute>} />
+        <Route path="/deepseek" element={<Navigate to="/settings" replace />} />
         <Route path="/settings" element={<PrivateRoute><AISettings /></PrivateRoute>} />
         <Route path="/rag" element={<PrivateRoute><RagPage /></PrivateRoute>} />
         <Route path="/token-usage" element={<PrivateRoute><TokenUsagePage /></PrivateRoute>} />

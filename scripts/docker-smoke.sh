@@ -40,7 +40,13 @@ if [[ "$redirect_url" != "$canonical_url" ]]; then
   exit 1
 fi
 assert_status 200 "$canonical_url"
-assert_status 200 "$base_url/deepseek"
+assert_status 302 "$base_url/deepseek"
+deepseek_redirect="$(curl --silent --show-error --output /dev/null --write-out '%{redirect_url}' "$base_url/deepseek")"
+if [[ "$deepseek_redirect" != "$base_url/settings" ]]; then
+  echo "旧 DeepSeek 页面应重定向到 AI 配置。" >&2
+  exit 1
+fi
+assert_status 200 "$base_url/settings"
 article_body="$(curl --fail --silent --show-error "$canonical_url")"
 if [[ "$article_body" != *"<div id=\"root\""* ]]; then
   echo "规范文章地址未返回 React 页面。" >&2

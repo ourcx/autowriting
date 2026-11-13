@@ -54,7 +54,7 @@ app.disable("x-powered-by")
 app.set("trust proxy", "loopback")
 
 const PRIVATE_SPA_ROUTE_PATTERNS = [
-  /^\/(?:login|register|setup|drafts|styles|settings|deepseek|rag|token-usage|prompts|cron|scores|insights|account|canvas|admin|monitoring)\/?$/,
+  /^\/(?:login|register|setup|drafts|styles|settings|rag|token-usage|prompts|cron|scores|insights|account|canvas|admin|monitoring)\/?$/,
   /^\/(?:articles|previews)\/[^/]+\/[^/]+\/?$/,
   /^\/(?:editor|preview)\/[^/]+\/?$/,
   /^\/wechat\/materials\/?$/,
@@ -184,6 +184,11 @@ app.get("/api/config/status", (_req, res) => {
 })
 
 if (process.env.NODE_ENV === "production") {
+  app.get("/deepseek", (_req, res) => {
+    res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive")
+    res.setHeader("Cache-Control", "no-store")
+    res.redirect(302, "/settings")
+  })
   app.get("/editor/:articleId", redirectLegacyArticleRoute("editor"))
   app.get("/preview/:articleId", redirectLegacyArticleRoute("preview"))
   app.get("/articles/:articleId", redirectLegacyArticleRoute("editor"))

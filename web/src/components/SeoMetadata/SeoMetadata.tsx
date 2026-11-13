@@ -27,7 +27,6 @@ const PRIVATE_ROUTE_TITLES: Array<[RegExp, string]> = [
   [/^\/wechat\/materials\/?$/, '素材库'],
   [/^\/styles\/?$/, '样式管理'],
   [/^\/settings\/?$/, 'AI 配置'],
-  [/^\/deepseek\/?$/, 'DeepSeek 工作台'],
   [/^\/rag\/?$/, '知识库'],
   [/^\/token-usage\/?$/, '用量统计'],
   [/^\/prompts\/?$/, '提示词'],
