@@ -39,6 +39,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Test backup script contracts
+        run: bash scripts/test-docker-backup.sh
+
       - name: Start container
         run: ./scripts/docker-start.sh
 

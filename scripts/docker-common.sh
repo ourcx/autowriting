@@ -47,11 +47,19 @@ archive_volume() {
     echo "跳过不存在的卷: $volume"
     return
   fi
-  docker run --rm \
+  # Write on the host, not through a root-owned container bind mount. This keeps
+  # the archive owned by the caller so Linux users can chmod/read it afterward.
+  local temporary_archive
+  temporary_archive="$(mktemp "$destination/.${archive_name}.XXXXXX")"
+  if docker run --rm \
     -v "$volume:/source:ro" \
-    -v "$destination:/backup" \
     alpine:3.20 \
-    tar -czf "/backup/$archive_name" -C /source .
+    tar -czf - -C /source . > "$temporary_archive"; then
+    mv -f "$temporary_archive" "$destination/$archive_name"
+  else
+    rm -f "$temporary_archive"
+    return 1
+  fi
 }
 
 restore_volume() {
