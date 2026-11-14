@@ -14,7 +14,7 @@ import {
 } from '../../utils/aiConfig'
 import PageHeader from '../../components/PageHeader/PageHeader'
 import { useConfigStore, setLocalConfig, fetchServerStatus } from '../../store/useConfigStore'
-import { testAIConnection } from '../../utils/apiHelpers'
+import { extractErrorMessage, saveDeepSeekKey, testAIConnection } from '../../utils/apiHelpers'
 import './AISettings.css'
 
 type Section = 'overview' | 'quickstart' | 'providers' | 'article' | 'cover' | 'search' | 'advanced' | 'cdn'
@@ -37,6 +37,8 @@ const SEARCH_LABELS: Record<AIConfig['searchProvider'], string> = {
   deepseek: 'DeepSeek', zhipu: '智谱', searxng: 'SearXNG', serper: 'Serper', bing: 'Bing',
 }
 
+const DEEPSEEK_KEYS_URL = 'https://platform.deepseek.com/api_keys'
+
 export default function AISettings() {
   const navigate = useNavigate()
   const storeState = useConfigStore()
@@ -48,13 +50,39 @@ export default function AISettings() {
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
   const [activeSection, setActiveSection] = useState<Section>('overview')
+  const [deepseekKey, setDeepseekKey] = useState('')
+  const [deepseekSaving, setDeepseekSaving] = useState(false)
+  const [deepseekKeyResult, setDeepseekKeyResult] = useState<{ ok: boolean; msg: string } | null>(null)
 
   useEffect(() => {
     setConfig(loadAIConfig())
     fetchServerStatus()
   }, [])
 
-  const handleSave = () => {
+  const saveAccountKey = async (key: string) => {
+    if (deepseekSaving) return false
+    setDeepseekSaving(true)
+    setDeepseekKeyResult(null)
+    try {
+      await saveDeepSeekKey(key)
+      setDeepseekKey('')
+      setShowKeys(keys => ({ ...keys, 'deepseek-common': false }))
+      await fetchServerStatus()
+      setDeepseekKeyResult({ ok: true, msg: key ? 'DeepSeek Key 已保存' : '账号 Key 已移除' })
+      return true
+    } catch (error) {
+      setDeepseekKeyResult({ ok: false, msg: extractErrorMessage(error, 'DeepSeek Key 保存失败') })
+      return false
+    } finally {
+      setDeepseekSaving(false)
+    }
+  }
+
+  const handleSave = async () => {
+    if (deepseekKey.trim() && !await saveAccountKey(deepseekKey.trim())) {
+      setActiveSection('providers')
+      return
+    }
     setLocalConfig(config)
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
@@ -117,6 +145,7 @@ export default function AISettings() {
   // ── 配置状态（每个 key 的状态） ──────────────────────────────────────────
   const deepseekSelected = config.articleProvider === 'deepseek'
   const deepseekReady = Boolean(serverStatus?.deepseekReady)
+  const accountDeepseekReady = Boolean(serverStatus?.deepseekAccountConfigured)
   const localArticleReady = !deepseekSelected && (config.articleProvider === 'maas'
     ? Boolean(config.maasApiKey)
     : config.articleProvider === 'zhipu'
@@ -148,12 +177,14 @@ export default function AISettings() {
     {
       id: 'article', icon: <Zap size={18} />, name: '文章模型',
       detail: [selectedArticlePreset?.name, config.articleModel].filter(Boolean).join(' · '),
-      status: localArticleReady ? '浏览器已配置' : (deepseekSelected ? deepseekReady : serverStatus?.articleReady) ? '服务端已配置' : '待配置',
+      status: localArticleReady ? '浏览器已配置' : deepseekSelected && accountDeepseekReady ? '账号已配置'
+        : (deepseekSelected ? deepseekReady : serverStatus?.articleReady) ? '服务端已配置' : '待配置',
     },
     {
       id: 'search', icon: <Search size={18} />, name: '联网与来源核查',
       detail: searchUsesDeepSeek ? 'DeepSeek' : searchUsesZhipu ? '智谱' : searchUsesFallback ? 'Serper / SearXNG' : SEARCH_LABELS[config.searchProvider],
-      status: searchUsesDeepSeek ? '服务端已配置' : searchUsesZhipu || searchReady ? '已配置' : searchUsesFallback ? '将尝试备用搜索' : '待配置',
+      status: searchUsesDeepSeek ? accountDeepseekReady ? '账号已配置' : '服务端已配置'
+        : searchUsesZhipu || searchReady ? '已配置' : searchUsesFallback ? '将尝试备用搜索' : '待配置',
     },
     {
       id: 'cover', icon: <Image size={18} />, name: '封面生成',
@@ -171,7 +202,7 @@ export default function AISettings() {
         actions={(
           <div className="as-header-actions">
             <button className="as-usage-btn" onClick={() => navigate('/token-usage')}>Token 用量</button>
-            <button className={`as-save-btn${saved ? ' as-save-btn--ok' : ''}`} onClick={handleSave}>
+            <button className={`as-save-btn${saved ? ' as-save-btn--ok' : ''}`} disabled={deepseekSaving} onClick={() => void handleSave()}>
               {saved ? <Check size={14} /> : <Save size={14} />}
               {saved ? '已保存' : '保存'}
             </button>
@@ -304,13 +335,12 @@ export default function AISettings() {
                 <div className="as-quick-heading">
                   <div>
                     <h3>DeepSeek 写作与素材</h3>
-                    <p>文章用 deepseek-flash，素材搜索、链接读取、文件解析和语音复用服务端配置。</p>
-                    {!deepseekReady && <p>请管理员先在服务端启用 DeepSeek 并配置 API Key。</p>}
+                    <p>文章用 deepseek-flash，网页搜索、链接读取、文件和语音共用 DeepSeek 公共 Key。</p>
                   </div>
                   <button
                     className="as-quick-apply"
-                    disabled={!deepseekReady}
                     onClick={() => {
+                      if (!deepseekReady) { setActiveSection('providers'); return }
                       const preset = PROVIDER_PRESETS.find(provider => provider.id === 'deepseek')
                       if (!preset) return
                       setLocalConfig({
@@ -320,7 +350,7 @@ export default function AISettings() {
                       navigate('/')
                     }}
                   >
-                    <Sparkles size={15} />保存并使用 DeepSeek
+                    <Sparkles size={15} />{deepseekReady ? '保存并使用 DeepSeek' : '配置 DeepSeek Key'}
                   </button>
                 </div>
               </div>
@@ -337,7 +367,33 @@ export default function AISettings() {
             <div className="as-panel">
               <div className="as-panel-header">
                 <h2 className="as-panel-title">服务商公共 Key</h2>
-                <p className="as-panel-desc">同一服务商的多个工具默认复用一个 Key；工具自己的 Key 非空时优先使用工具 Key</p>
+                <p className="as-panel-desc">同一家服务商的多个功能可以共用一个 Key。</p>
+              </div>
+              <div className="as-card">
+                <div className="as-card-label-row">
+                  <span className="as-card-section-label">DeepSeek</span>
+                  <span className="as-card-tag as-card-tag--teal">
+                    {accountDeepseekReady ? '账号已配置' : deepseekReady ? '使用服务端 Key' : '待配置'}
+                  </span>
+                </div>
+                <p className="as-card-desc">文章生成、网页搜索和读取、OCR、语音转写和朗读共用此 Key。Key 保存在服务端，仅当前账号可用。</p>
+                <div className="as-field">
+                  <label className="as-label" htmlFor="as-deepseek-key">DeepSeek 公共 API Key</label>
+                  <div className="as-key-wrap">
+                    <input id="as-deepseek-key" className="as-input as-input-mono"
+                      type={showKeys['deepseek-common'] ? 'text' : 'password'} autoComplete="off"
+                      value={deepseekKey} maxLength={256} disabled={deepseekSaving}
+                      onChange={e => { setDeepseekKey(e.target.value); setDeepseekKeyResult(null) }}
+                      placeholder={accountDeepseekReady ? '已保存，填写新 Key 可替换' : '填写 DeepSeek 开放平台的 API Key'} />
+                    <button type="button" className="as-eye-btn" aria-label={showKeys['deepseek-common'] ? '隐藏 DeepSeek Key' : '显示 DeepSeek Key'}
+                      onClick={() => toggleKey('deepseek-common')}>{showKeys['deepseek-common'] ? <EyeOff size={14} /> : <Eye size={14} />}</button>
+                  </div>
+                  <p className="as-hint">前往 <a href={DEEPSEEK_KEYS_URL} target="_blank" rel="noreferrer">DeepSeek 开放平台</a> 获取。填好后点击右上角「保存」。</p>
+                  <div className="as-test-row">
+                    {accountDeepseekReady && <button type="button" className="as-btn-test" disabled={deepseekSaving} onClick={() => void saveAccountKey('')}>移除账号 Key</button>}
+                    {deepseekKeyResult && <span role="status" className={`as-test-msg as-test-msg--${deepseekKeyResult.ok ? 'ok' : 'err'}`}>{deepseekKeyResult.msg}</span>}
+                  </div>
+                </div>
               </div>
               <div className="as-card">
                 <div className="as-card-label-row">
@@ -461,7 +517,10 @@ export default function AISettings() {
                 <div className="as-card-divider" />
 
                 {deepseekSelected ? (
-                  <p className="as-hint">deepseek-flash · {deepseekReady ? '服务端已启用。使用模型或测试连接会产生 Token 费用。' : '请管理员在服务端启用 DeepSeek 并配置 API Key。'}</p>
+                  <div>
+                    <p className="as-hint">deepseek-flash · {deepseekReady ? '已配置。使用模型或测试连接会产生 Token 费用。' : '填写 DeepSeek 公共 Key 后即可使用。'}</p>
+                    {!deepseekReady && <button className="as-text-button" onClick={() => setActiveSection('providers')}>前往公共 Key</button>}
+                  </div>
                 ) : config.articleProvider === 'maas' ? (
                   <>
                     <div className="as-row-2">
@@ -780,7 +839,7 @@ export default function AISettings() {
                 <p className="as-card-desc">智谱搜索适合中文素材，可复用文章模型的智谱 Key；SearXNG 无需 API Key；Serper / Bing 需单独注册</p>
                 <div className="as-provider-grid">
                   {[
-                    { id: 'deepseek', name: 'DeepSeek 搜索', desc: '搜索网页、读取原文', url: 'https://api-docs.deepseek.com/zh-cn/guides/search/', tip: '使用服务端 Key' },
+                    { id: 'deepseek', name: 'DeepSeek 搜索', desc: '搜索网页、读取原文', url: 'https://api-docs.deepseek.com/zh-cn/guides/search/', tip: '复用 DeepSeek 公共 Key' },
                     { id: 'zhipu', name: '智谱搜索（推荐）', desc: '中文检索，支持摘要、来源和发布日期', url: 'https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys', tip: '可复用智谱文章模型 Key' },
                     { id: 'searxng', name: 'SearXNG', desc: '开源聚合，231 个搜索引擎，无需 Key', url: 'https://docs.searxng.org/admin/installation-docker.html', tip: 'Docker 一键部署，零成本' },
                     { id: 'serper', name: 'Serper.dev', desc: '支持 Google / 百度，2500 次/月免费', url: 'https://serper.dev', tip: '免费注册，2500 次/月' },
@@ -853,7 +912,10 @@ export default function AISettings() {
                 )}
 
                 {config.searchProvider === 'deepseek' && (
-                  <p className="as-hint">{deepseekReady ? '服务端已启用。搜索和读取网页按调用计费。' : '请管理员在服务端启用 DeepSeek 并配置 API Key。'}</p>
+                  <div>
+                    <p className="as-hint">{deepseekReady ? '搜索和读取网页按调用计费。' : '搜索和读取网页使用 DeepSeek 公共 Key。'}</p>
+                    {!deepseekReady && <button className="as-text-button" onClick={() => setActiveSection('providers')}>前往公共 Key</button>}
+                  </div>
                 )}
                 {/* 智谱 / Serper / Bing API Key */}
                 {config.searchProvider !== 'searxng' && config.searchProvider !== 'deepseek' && (
@@ -889,12 +951,16 @@ export default function AISettings() {
               <div className="as-card">
                 <div className="as-card-label-row">
                   <span className="as-card-section-label">公众号文章采集</span>
-                  <span className="as-card-tag as-card-tag--teal">付费服务</span>
                 </div>
                 <p className="as-card-desc">
-                  在“素材采集”中按关键词搜索公众号文章，并通过同一服务读取正文。密钥仅从服务端环境变量读取。
+                  在「素材 → 公众号采集」里选来源，搜索后可勾选文章正文加入素材。
                 </p>
                 <div className="as-provider-grid">
+                  <div className={`as-provider-tile${serverStatus?.wechatCollectorReady?.yuanbao ? ' as-provider-tile--active' : ''}`}>
+                    <span className="as-pt-name">元宝 AI 搜索</span>
+                    <span className="as-pt-desc">默认来源 · 自动解析公众号原文</span>
+                    <span className="as-pt-hint">{serverStatus?.wechatCollectorReady?.yuanbao ? '服务端已启用，无需填写 Key' : '由服务端启用，无需填写 Key'}</span>
+                  </div>
                   <a
                     className={`as-provider-tile${serverStatus?.wechatCollectorReady?.tikhub ? ' as-provider-tile--active' : ''}`}
                     href="https://user.tikhub.io/dashboard/api"
@@ -919,7 +985,7 @@ export default function AISettings() {
                   </a>
                 </div>
                 <p className="as-hint">
-                  修改环境变量后需要重启后端。平台不会把密钥返回给浏览器或写入日志。
+                  TikHub 和极致了数据为可选付费来源，使用各自的服务端 Key。
                 </p>
               </div>
 

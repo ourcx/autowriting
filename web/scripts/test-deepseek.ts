@@ -88,7 +88,7 @@ const { db } = await import('../server/db.ts')
 try {
   const model = createArticleModel({
     articleProvider: 'deepseek', articleApiKey: 'unrelated-test-key', articleBaseUrl: 'https://example.invalid', articleModel: 'wrong-model',
-  }, client)
+  }, undefined, client)
   const messages = [{ role: 'user', content: '用已审核的素材生成中文候选稿' }]
   responseBody = {
     choices: [{ finish_reason: 'stop', message: { content: '# 标题\n\n审核通过的中文正文' } }],
@@ -114,7 +114,7 @@ try {
   const beforeFailure = requests.length
   await assert.rejects(() => model.complete({ messages }, 3), /HTTP 500/)
   assert.equal(requests.length, beforeFailure + 1)
-  await assert.rejects(() => createArticleModel({ articleProvider: 'deepseek' }, disabled).stream({ messages }), /尚未启用/)
+  await assert.rejects(() => createArticleModel({ articleProvider: 'deepseek' }, undefined, disabled).stream({ messages }), /尚未启用/)
   console.log('DeepSeek article model keeps the workflow stream contract and releases only reviewed content')
 } finally {
   db.close()

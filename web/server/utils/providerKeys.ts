@@ -1,5 +1,5 @@
 import type { AIConfig } from "../types.ts"
-import { DEEPSEEK_APP_CONFIG } from "../config.ts"
+import { resolveDeepSeekConfig } from "../deepseekCredentials.ts"
 import { isDeepSeekReady } from "./deepseek.ts"
 
 function clean(value: unknown): string {
@@ -33,8 +33,8 @@ export function resolveArticleApiKey(config: AIConfig): string {
   return ""
 }
 
-export function hasArticleApiKey(config: AIConfig): boolean {
-  if (config.articleProvider === "deepseek") return isDeepSeekReady(DEEPSEEK_APP_CONFIG)
+export function hasArticleApiKey(config: AIConfig, userId?: string): boolean {
+  if (config.articleProvider === "deepseek") return isDeepSeekReady(resolveDeepSeekConfig(userId))
   return config.articleProvider === "maas"
     ? Boolean(clean(config.maasApiKey))
     : Boolean(resolveArticleApiKey(config))

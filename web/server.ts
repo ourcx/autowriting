@@ -3,7 +3,7 @@
  */
 import express from "express"
 import type { RequestHandler } from "express"
-import { PORT, HOST, PROJECT_ROOT, DRAFTS_DIR, CACHE_DIR, SERVER_AI_CONFIG, DEEPSEEK_APP_CONFIG, STATIC_DIR } from "./server/config.ts"
+import { PORT, HOST, PROJECT_ROOT, DRAFTS_DIR, CACHE_DIR, SERVER_AI_CONFIG, DEEPSEEK_APP_CONFIG, STATIC_DIR, YUANBAO_SEARCH_ENABLED } from "./server/config.ts"
 import { logger } from "./server/logger.ts"
 import { performanceMonitorMiddleware } from "./server/performanceMonitor.ts"
 import articlesRouter from "./server/routes/articles.ts"
@@ -177,6 +177,7 @@ app.get("/api/config/status", (_req, res) => {
     dalleReady: hasCoverKey, stabilityReady: hasStabilityKey, siliconflowReady: hasSiliconflowKey,
     doubaoReady: hasDoubaoKey, zhipuReady: hasZhipuKey,
     wechatCollectorReady: {
+      yuanbao: YUANBAO_SEARCH_ENABLED,
       tikhub: !!SERVER_AI_CONFIG.tikhubApiKey,
       dajiala: !!SERVER_AI_CONFIG.dajialaApiKey,
     },

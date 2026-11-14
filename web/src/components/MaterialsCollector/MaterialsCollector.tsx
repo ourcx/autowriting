@@ -59,6 +59,7 @@ interface Props {
   glmApiKey?:     string
   jinaApiKey?:    string
   wechatCollectorReady?: {
+    yuanbao?: boolean
     tikhub: boolean
     dajiala: boolean
   }
@@ -138,7 +139,8 @@ export default function MaterialsCollector({
   const canSearch = deepSeekSearch ? canUseDeepSeek : searchProvider === 'searxng'
     || (searchProvider === 'zhipu' ? !!(glmApiKey || searchApiKey) : !!searchApiKey)
   const usingYuanbao = wechatProvider === 'yuanbao'
-  const canSearchWechat = usingYuanbao || wechatCollectorReady[wechatProvider]
+  const yuanbaoAvailable = wechatCollectorReady.yuanbao !== false
+  const canSearchWechat = usingYuanbao ? yuanbaoAvailable : wechatCollectorReady[wechatProvider]
 
   useEffect(() => () => yuanbaoRequest.current?.abort(), [articleId])
 
@@ -705,7 +707,7 @@ export default function MaterialsCollector({
               </div>
             ) : deepSeekSearch ? (
               <div className="mc-search-tip mc-search-tip--hint">
-                {deepseekReady ? 'DeepSeek 搜索 · 点击单条结果的「读全文」可读取原文' : 'DeepSeek 尚未在服务端启用'}
+                {deepseekReady ? 'DeepSeek 搜索 · 点击单条结果的「读全文」可读取原文' : '请在 AI 配置的「公共 Key」中配置 DeepSeek'}
               </div>
             ) : !canSearch ? (
               <div className="mc-search-tip mc-search-tip--warn">
@@ -725,7 +727,7 @@ export default function MaterialsCollector({
           <div className="mc-wechat-search">
             <div className="mc-provider-toggle mc-provider-toggle--wechat" aria-label="公众号采集来源">
               {([
-                ['yuanbao', '元宝 AI 搜索', '自动解析原文'],
+                ['yuanbao', '元宝 AI 搜索', yuanbaoAvailable ? '自动解析原文' : '服务端未启用'],
                 ['tikhub', 'TikHub', wechatCollectorReady.tikhub ? '$0.01 / 次' : '未配置'],
                 ['dajiala', '极致了数据', wechatCollectorReady.dajiala ? '约 ¥0.5 / 次' : '未配置'],
               ] as Array<[WechatSearchSource, string, string]>).map(([provider, label, detail]) => (
@@ -792,9 +794,9 @@ export default function MaterialsCollector({
             </div>
 
             {usingYuanbao ? (
-              <div className="mc-search-tip mc-search-tip--hint">
-                <BookOpen size={12} />
-                搜索词会发送给元宝。回答和解析后的公众号正文可分别勾选。
+              <div className={`mc-search-tip mc-search-tip--${yuanbaoAvailable ? 'hint' : 'warn'}`}>
+                {yuanbaoAvailable ? <BookOpen size={12} /> : <AlertCircle size={12} />}
+                {yuanbaoAvailable ? '回答和解析后的公众号正文可分别勾选。' : '当前服务器未启用元宝 AI 搜索。'}
               </div>
             ) : (
               <div className={`mc-search-tip${canSearchWechat ? ' mc-search-tip--paid' : ' mc-search-tip--warn'}`}>

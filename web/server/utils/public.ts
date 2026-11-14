@@ -9,7 +9,6 @@ import axios from "axios"
 import { Readable } from "node:stream"
 import {
   SERVER_AI_CONFIG,
-  DEEPSEEK_APP_CONFIG,
   XIAOHONGSHU_DEBUG_DIR,
   XIAOHONGSHU_DEBUG_MAX_BYTES,
   XIAOHONGSHU_DEBUG_RETENTION_DAYS,
@@ -27,6 +26,7 @@ import type { AIConfig } from "../types.ts"
 import { logger } from "../logger.ts"
 import { resolveArticleApiKey } from "./providerKeys.ts"
 import { createDeepSeekClient, DEEPSEEK_MODEL, DEEPSEEK_ORIGIN } from "./deepseek.ts"
+import { resolveDeepSeekConfig } from "../deepseekCredentials.ts"
 
 // ── LLM 请求构建（统一入口）────────────────────────────────────────────────────
 
@@ -69,14 +69,13 @@ interface ArticleCompletion {
   usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
 }
 
-const deepSeekArticleClient = createDeepSeekClient(DEEPSEEK_APP_CONFIG)
-
-export function createArticleModel(config: AIConfig, deepseek = deepSeekArticleClient) {
+export function createArticleModel(config: AIConfig, userId?: string, deepseek?: ReturnType<typeof createDeepSeekClient>) {
   const { url, model, headers } = buildLLMRequest(config)
   const isDeepSeek = config.articleProvider === "deepseek"
+  const deepseekClient = isDeepSeek ? deepseek ?? createDeepSeekClient(resolveDeepSeekConfig(userId)) : undefined
   async function complete(body: Record<string, unknown>, maxRetries = 3, timeoutMs = 90000, signal?: AbortSignal): Promise<{ data: ArticleCompletion }> {
-    if (!isDeepSeek) return callLLMWithRetry(url, { ...body, model }, headers, maxRetries, timeoutMs, signal)
-    const { content, usage } = await deepseek.complete(body, signal, timeoutMs)
+    if (!deepseekClient) return callLLMWithRetry(url, { ...body, model }, headers, maxRetries, timeoutMs, signal)
+    const { content, usage } = await deepseekClient.complete(body, signal, timeoutMs)
     return { data: { choices: [{ message: { content }, finish_reason: "stop" }], usage } }
   }
 

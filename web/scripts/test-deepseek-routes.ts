@@ -13,23 +13,27 @@ process.env.DRAFTS_DIR = path.join(root, 'drafts')
 process.env.LEGACY_DATA_DIR = ''
 process.env.JWT_SECRET = 'deepseek-test-local-only'
 const { createDeepSeekRouter } = await import('../server/routes/deepseek.ts')
-const { db, findUserByUsername } = await import('../server/db.ts')
+const { default: settingsRouter } = await import('../server/routes/settings.ts')
+const { db, createUser, findUserByUsername } = await import('../server/db.ts')
 const user = findUserByUsername('admin')!
 const token = jwt.sign({ id: user.id, tokenVersion: 0 }, process.env.JWT_SECRET)
 const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 let calls = 0
 let toolResult: unknown = { results: [{ title: 'Fixture', url: 'https://example.com', snippet: 'Mock result' }] }
 const config = { enabled: true, apiKey: 'test-placeholder' }
-const client = createDeepSeekClient(config, async input => {
+let upstreamAuthorization = ''
+const clientFactory = (effective: typeof config) => createDeepSeekClient(effective, async (input, init) => {
   calls++
+  upstreamAuthorization = new Headers(init?.headers).get('Authorization') || ''
   if (String(input).endsWith('/tts')) return new Response('RIFFxxxxWAVE', { headers: { 'content-type': 'audio/wav' } })
   const result = String(input).endsWith('/files') ? { id: 'file-api-current-request' } : toolResult
   return new Response(JSON.stringify(result), { headers: { 'content-type': 'application/json' } })
 })
 const app = express()
 app.use(express.json())
-app.use('/api/deepseek', createDeepSeekRouter(config, client))
-app.use('/disabled', createDeepSeekRouter({ enabled: false, apiKey: '' }, client))
+app.use('/api/settings', settingsRouter)
+app.use('/api/deepseek', createDeepSeekRouter(config, clientFactory))
+app.use('/disabled', createDeepSeekRouter({ enabled: false, apiKey: '' }, clientFactory))
 let releaseCall: () => void = () => {}
 let markStarted: () => void = () => {}
 const started = new Promise<void>(resolve => { markStarted = resolve })
@@ -38,7 +42,7 @@ const heldClient = createDeepSeekClient(config, async () => {
   markStarted(); await held
   return new Response(JSON.stringify({ results: [] }), { headers: { 'content-type': 'application/json' } })
 })
-app.use('/concurrency', createDeepSeekRouter(config, heldClient))
+app.use('/concurrency', createDeepSeekRouter(config, () => heldClient))
 const server = app.listen(0, '127.0.0.1')
 await new Promise<void>(resolve => server.once('listening', resolve))
 const address = server.address()
@@ -56,7 +60,7 @@ try {
   const disabled = await post('/disabled/search', { query: 'test', confirmedCost: true })
   assert.equal(disabled.status, 503)
   const status = await fetch(`${base}/api/deepseek/status`, { headers })
-  assert.deepEqual(await status.json(), { enabled: true, configured: true })
+  assert.deepEqual(await status.json(), { enabled: true, configured: true, accountConfigured: false })
   assert.equal(status.headers.get('cache-control'), 'private, no-store')
   assert.equal((await post('/api/deepseek/search', { query: 'test' })).status, 400)
   assert.equal((await post('/api/deepseek/search', { query: 'test', confirmedCost: true, apiKey: 'bad' })).status, 400)
@@ -112,6 +116,31 @@ try {
   for (let i = 0; i < 21; i++) await post('/api/deepseek/search', { query: 'test' })
   assert.equal((await post('/api/deepseek/search', { query: 'test', confirmedCost: true })).status, 429)
   assert.equal(calls, 7)
+  const otherId = 'route-test-other'
+  createUser(otherId, 'other', 'fixture-password-hash')
+  const otherHeaders = { ...headers, Authorization: `Bearer ${jwt.sign({ id: otherId, tokenVersion: 0 }, process.env.JWT_SECRET)}` }
+  const update = (apiKey: string, auth = headers) => fetch(`${base}/disabled/key`, {
+    method: 'PUT', headers: auth, body: JSON.stringify({ apiKey }),
+  })
+  const accountKey = 'fixture-private-deepseek'
+  assert.equal((await update(accountKey, { ...headers, Authorization: '' })).status, 401)
+  assert.equal((await update('bad key')).status, 400)
+  const saved = await update(` ${accountKey} `)
+  assert.deepEqual(await saved.json(), { enabled: true, configured: true, accountConfigured: true })
+  const otherStatus = await fetch(`${base}/disabled/status`, { headers: otherHeaders })
+  assert.deepEqual(await otherStatus.json(), { enabled: false, configured: false, accountConfigured: false })
+  const privateKeyPath = `/api/settings/${encodeURIComponent(`deepseek_api_key:${user.id}`)}`
+  for (const auth of [headers, otherHeaders]) {
+    const list = await fetch(`${base}/api/settings`, { headers: auth })
+    assert.doesNotMatch(await list.text(), /fixture-private-deepseek|deepseek_api_key/)
+    assert.equal((await fetch(`${base}${privateKeyPath}`, { headers: auth })).status, 403)
+    assert.equal((await fetch(`${base}${privateKeyPath}`, { method: 'PUT', headers: auth, body: JSON.stringify({ value: '' }) })).status, 403)
+  }
+  toolResult = { results: [] }
+  assert.equal((await post('/disabled/search', { query: 'test', confirmedCost: true })).status, 200)
+  assert.equal(upstreamAuthorization, `Bearer ${accountKey}`)
+  assert.deepEqual(await (await update('')).json(), { enabled: false, configured: false, accountConfigured: false })
+  assert.equal((await post('/disabled/search', { query: 'test', confirmedCost: true })).status, 503)
   console.log('DeepSeek route auth, disabled state, consent, isolation, validation, safety and rate limit tests passed')
 } finally {
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))

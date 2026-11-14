@@ -5,6 +5,7 @@
 
 import { useSyncExternalStore } from 'react'
 import { loadAIConfig, saveAIConfig, AIConfig } from '../utils/aiConfig'
+import { fetchDeepSeekStatus } from '../utils/apiHelpers'
 
 // ── 服务端配置状态（从 /api/config/status 拉取）──
 export interface ServerConfigStatus {
@@ -22,7 +23,9 @@ export interface ServerConfigStatus {
   openrouterReady: boolean
   zhipuReady: boolean
   deepseekReady: boolean
+  deepseekAccountConfigured?: boolean
   wechatCollectorReady: {
+    yuanbao?: boolean
     tikhub: boolean
     dajiala: boolean
   }
@@ -73,9 +76,17 @@ export async function fetchServerStatus() {
   state = { ...state, serverStatusLoading: true }
   notify()
   try {
-    const res = await fetch('/api/config/status')
+    const [res, deepseek] = await Promise.all([
+      fetch('/api/config/status'),
+      fetchDeepSeekStatus().catch(() => null),
+    ])
     if (res.ok) {
       const data: ServerConfigStatus = await res.json()
+      // 匿名状态只包含部署配置，账号 Key 的状态由鉴权接口单独返回。
+      if (deepseek) {
+        data.deepseekReady ||= Boolean(deepseek.enabled && deepseek.configured)
+        data.deepseekAccountConfigured = Boolean(deepseek.accountConfigured)
+      }
       state = { ...state, serverStatus: data, serverStatusLoading: false }
     } else {
       state = { ...state, serverStatusLoading: false }

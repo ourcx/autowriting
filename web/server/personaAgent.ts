@@ -159,7 +159,7 @@ export async function analyzeCreatorPersona(
     throw new PersonaAgentInputError("AI 配置不正确")
   }
   const config: AIConfig = { ...SERVER_AI_CONFIG, ...(rawConfig as Partial<AIConfig> || {}) }
-  if (!hasArticleApiKey(config)) throw new PersonaAgentInputError("请先配置文章生成模型的 API Key")
+  if (!hasArticleApiKey(config, userId)) throw new PersonaAgentInputError("请先配置文章生成模型的 API Key")
 
   const accountInfo = normalizeAccountInfo(input.accountInfo)
   const publishedArticles = normalizePublishedArticles(input.publishedArticles)
@@ -195,7 +195,7 @@ ${formatLocalArticles(localArticles) || "没有本地成稿"}
 6. 返回一个 JSON 对象，不要 Markdown，不要解释。必须包含这些字符串字段：
 accountName、accountInfo、personalExperiences、historicalArticles、speakingStyle、expertise、values、audienceRelationship、otherNotes。`
 
-  const { complete } = createArticleModel(config)
+  const { complete } = createArticleModel(config, userId)
   const response = await complete({
     messages: [
       {

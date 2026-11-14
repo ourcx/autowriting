@@ -77,14 +77,14 @@ router.post('/generate-style', async (req, res) => {
 
     const aiConfig = { ...SERVER_AI_CONFIG, ...clientAiConfig }
 
-    if (!hasArticleApiKey(aiConfig) && aiConfig.articleProvider !== 'maas') {
+    if (!hasArticleApiKey(aiConfig, req.user.id) && aiConfig.articleProvider !== 'maas') {
       return res.status(400).json({ error: '未配置 AI API Key' })
     }
     if (aiConfig.articleProvider === 'maas' && !aiConfig.maasApiKey) {
       return res.status(400).json({ error: '未配置 MaaS API Key' })
     }
 
-    const { model, complete } = createArticleModel(aiConfig)
+    const { model, complete } = createArticleModel(aiConfig, req.user.id)
 
     // 从数据库读取样式生成提示词（支持用户自定义覆盖）
     const stylePromptData = getEffectivePrompt('prompt-style-generate')

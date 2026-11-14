@@ -1,10 +1,11 @@
-import { Router, type ErrorRequestHandler, type RequestHandler, type Response, type NextFunction } from 'express'
+import { Router, type ErrorRequestHandler, type RequestHandler, type Response } from 'express'
 import multer from 'multer'
 import { rateLimit } from 'express-rate-limit'
 import { z } from 'zod'
 import type { AuthedRequest } from '../types.ts'
 import { authMiddleware } from '../authMiddleware.ts'
 import { DEEPSEEK_APP_CONFIG } from '../config.ts'
+import { getAccountDeepSeekKey, resolveDeepSeekConfig, setAccountDeepSeekKey } from '../deepseekCredentials.ts'
 import { createDeepSeekClient, isDeepSeekReady, DeepSeekError, type DeepSeekConfig, type DeepSeekFile } from '../utils/deepseek.ts'
 
 const confirmation = z.union([z.literal(true), z.literal('true')])
@@ -19,6 +20,7 @@ const fetchSchema = z.object({ confirmedCost: confirmation, url: z.string().max(
 const ocrSchema = z.object({ confirmedCost: confirmation, purpose: z.enum(['text_recognition', 'rich_layout_recognition']).default('text_recognition') }).strict()
 const asrSchema = z.object({ confirmedCost: confirmation }).strict()
 const ttsSchema = z.object({ confirmedCost: confirmation, text: z.string().min(1).max(20000), voice: z.enum(['stella', 'tide']).default('stella') }).strict()
+const keySchema = z.object({ apiKey: z.string().trim().max(256).regex(/^[\x21-\x7E]*$/) }).strict()
 const documentUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 32 * 1024 * 1024, files: 1, fields: 8, fieldSize: 128 * 1024, parts: 9 } }).single('file')
 const audioUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 1, fields: 1, parts: 3 } }).single('file')
 const DOCUMENT_TYPES = new Set(['pdf', 'doc', 'docx', 'ppt', 'pptx', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tif', 'tiff'])
@@ -35,20 +37,34 @@ function inputFile(file: UploadFile | undefined, mode: 'document' | 'text' | 'au
   return { name: file.originalname, bytes: file.buffer, mimeType: file.mimetype }
 }
 
-const run = (handler: (_req: DeepSeekRequest, _res: Response, _next: NextFunction) => unknown): RequestHandler => (req, res, next) => {
+type DeepSeekClient = ReturnType<typeof createDeepSeekClient>
+
+const run = (handler: (_req: DeepSeekRequest, _res: Response, _client: DeepSeekClient) => unknown): RequestHandler => (req, res, next) => {
   res.locals.deepseekProcessing = true
-  Promise.resolve(handler(req, res, next)).catch(next).finally(() => res.locals.releaseDeepSeek?.())
+  Promise.resolve(handler(req, res, res.locals.deepseekClient)).catch(next).finally(() => res.locals.releaseDeepSeek?.())
 }
 
-/** Injectable client is only used by local tests; HTTP clients cannot override credentials or hosts. */
-export function createDeepSeekRouter(config: DeepSeekConfig = DEEPSEEK_APP_CONFIG, client = createDeepSeekClient(config)) {
+export function createDeepSeekRouter(config: DeepSeekConfig = DEEPSEEK_APP_CONFIG, clientFactory = createDeepSeekClient) {
   const router = Router()
   router.use(authMiddleware)
   router.use((_req, res, next) => { res.setHeader('Cache-Control', 'private, no-store'); next() })
-  router.get('/status', (_req, res) => res.json({ enabled: config.enabled, configured: Boolean(config.apiKey.trim()) }))
+  function getStatus(userId: string) {
+    const accountConfigured = Boolean(getAccountDeepSeekKey(userId))
+    return { enabled: accountConfigured || config.enabled, configured: accountConfigured || Boolean(config.apiKey.trim()), accountConfigured }
+  }
+  router.get('/status', (req, res) => res.json(getStatus((req as AuthedRequest).user!.id)))
+  router.put('/key', (req, res) => {
+    const input = keySchema.safeParse(req.body)
+    if (!input.success) { res.status(400).json({ error: '请填写有效的 DeepSeek API Key' }); return }
+    const userId = (req as AuthedRequest).user!.id
+    setAccountDeepSeekKey(userId, input.data.apiKey)
+    res.json(getStatus(userId))
+  })
   router.use((req, res, next) => {
-    if (!isDeepSeekReady(config)) { res.status(503).json({ error: 'DeepSeek 尚未启用或未配置服务端密钥' }); return }
+    const effective = resolveDeepSeekConfig((req as AuthedRequest).user!.id, config)
+    if (!isDeepSeekReady(effective)) { res.status(503).json({ error: '请在「AI 配置 → 更多 → 公共 Key」配置 DeepSeek' }); return }
     if (req.method !== 'POST') { res.status(405).json({ error: '不支持该方法' }); return }
+    res.locals.deepseekClient = clientFactory(effective)
     next()
   })
   router.use(rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, keyGenerator: req => (req as AuthedRequest).user!.id,
@@ -68,7 +84,7 @@ export function createDeepSeekRouter(config: DeepSeekConfig = DEEPSEEK_APP_CONFI
     req.setTimeout(30_000, () => { if (!res.locals.deepseekProcessing) req.destroy() })
     next()
   })
-  router.post('/chat', documentUpload, run(async (req, res) => {
+  router.post('/chat', documentUpload, run(async (req, res, client) => {
     const input = chatSchema.parse(req.body)
     const content: Array<{ type: 'text'; text: string } | { type: 'file'; file_id: string }> = [{ type: 'text', text: input.prompt }]
     if (req.file) {
@@ -80,23 +96,23 @@ export function createDeepSeekRouter(config: DeepSeekConfig = DEEPSEEK_APP_CONFI
     const result = await client.chat({ messages: [{ role: 'user', content }], thinking: input.thinking, webSearch: input.webSearch, readUrl: input.readUrl })
     res.json(result)
   }))
-  router.post('/search', run(async (req, res) => {
+  router.post('/search', run(async (req, res, client) => {
     const input = searchSchema.parse(req.body)
     res.json({ results: await client.search(input.query, input.count) })
   }))
-  router.post('/fetch', run(async (req, res) => {
+  router.post('/fetch', run(async (req, res, client) => {
     const input = fetchSchema.parse(req.body)
     res.json(await client.fetchUrl(input.url))
   }))
-  router.post('/ocr', documentUpload, run(async (req, res) => {
+  router.post('/ocr', documentUpload, run(async (req, res, client) => {
     const input = ocrSchema.parse(req.body)
     res.json(await client.ocr(inputFile(req.file, 'document'), input.purpose))
   }))
-  router.post('/asr', audioUpload, run(async (req, res) => {
+  router.post('/asr', audioUpload, run(async (req, res, client) => {
     asrSchema.parse(req.body)
     res.json(await client.transcribe(inputFile(req.file, 'audio')))
   }))
-  router.post('/tts', run(async (req, res) => {
+  router.post('/tts', run(async (req, res, client) => {
     const input = ttsSchema.parse(req.body)
     const response = await client.speak(input.text, input.voice)
     const audio = Buffer.from(await response.arrayBuffer())

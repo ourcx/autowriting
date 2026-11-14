@@ -412,7 +412,7 @@ router.post("/article-metadata", async (req, res) => {
   if (isTitleOverSafetyLimit(title)) {
     return res.status(400).json({ error: `标题异常过长，最多 ${TITLE_SAFETY_MAX_LENGTH} 个字` })
   }
-  if (!hasArticleApiKey(aiConfig) && aiConfig.articleProvider !== "maas") {
+  if (!hasArticleApiKey(aiConfig, req.user!.id) && aiConfig.articleProvider !== "maas") {
     return res.status(400).json({ error: "请先在 AI 配置中填写文章模型的 API Key" })
   }
   if (aiConfig.articleProvider === "maas" && !aiConfig.maasApiKey) {
@@ -420,7 +420,7 @@ router.post("/article-metadata", async (req, res) => {
   }
 
   try {
-    const { complete } = createArticleModel(aiConfig)
+    const { complete } = createArticleModel(aiConfig, req.user!.id)
     const response = await complete({
       messages: [
         {

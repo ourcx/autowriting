@@ -292,7 +292,7 @@ export const PROVIDER_PRESETS: Array<{
     desc: 'V4.1 Flash，用于大纲、素材整理和文章生成',
     defaultBaseUrl: 'https://api.deepseek.com',
     models: ['deepseek-flash'],
-    tip: '使用服务端统一配置的 Key',
+    tip: '复用「公共 Key」中的 DeepSeek Key',
     url: 'https://platform.deepseek.com/'
   },
   {

@@ -19,13 +19,22 @@ try {
   let failSave = false
   let prematureEof = false
   let generatedInput
+  let accountKeyConfigured = false
   page.on('pageerror', error => errors.push(error.message))
   await page.addInitScript(() => localStorage.setItem('auth_token', 'candidate-ui-fixture'))
   await page.route('**/api/**', async route => {
     const request = route.request()
     const pathname = new URL(request.url()).pathname
     if (pathname === '/api/auth/me') return route.fulfill({ json: { user: { id: 'fixture', username: 'fixture', role: 'admin' } } })
-    if (pathname === '/api/config/status') return route.fulfill({ json: { articleReady: true } })
+    if (pathname === '/api/config/status') return route.fulfill({ json: { articleReady: true, deepseekReady: false, wechatCollectorReady: { yuanbao: true, tikhub: false, dajiala: false } } })
+    if (pathname === '/api/deepseek/key') {
+      const { apiKey } = request.postDataJSON()
+      assert.equal(request.method(), 'PUT')
+      assert.ok(apiKey === 'local-config-placeholder' || apiKey === '')
+      accountKeyConfigured = Boolean(apiKey)
+      return route.fulfill({ json: { accountConfigured: accountKeyConfigured, enabled: accountKeyConfigured, configured: accountKeyConfigured } })
+    }
+    if (pathname === '/api/deepseek/status') return route.fulfill({ json: { accountConfigured: accountKeyConfigured, enabled: accountKeyConfigured, configured: accountKeyConfigured } })
     if (pathname === '/api/articles/fixture/candidates') {
       if (request.method() === 'GET') return route.fulfill({ json: rows })
       const input = request.postDataJSON()
@@ -178,7 +187,22 @@ try {
   await page.getByRole('heading', { name: '快速配置', exact: true }).waitFor()
   await settings.getByRole('button', { name: '联网', exact: true }).click()
   await page.getByRole('heading', { name: '联网与来源核查', exact: true }).waitFor()
+  await page.getByText('元宝 AI 搜索', { exact: true }).waitFor()
+  await page.getByText('服务端已启用，无需填写 Key', { exact: true }).waitFor()
   await settings.getByRole('button', { name: '更多', exact: true }).click()
+  const deepseekKey = page.getByLabel('DeepSeek 公共 API Key')
+  assert.equal(await deepseekKey.getAttribute('type'), 'password')
+  await deepseekKey.fill('local-config-placeholder')
+  await page.getByRole('button', { name: '保存', exact: true }).click()
+  await page.getByRole('status').filter({ hasText: 'DeepSeek Key 已保存' }).waitFor()
+  assert.equal(await deepseekKey.inputValue(), '')
+  assert.equal(await page.evaluate(() => JSON.stringify(localStorage).includes('local-config-placeholder')), false)
+  await page.reload()
+  await settings.getByRole('button', { name: '更多', exact: true }).click()
+  const removeKey = page.getByRole('button', { name: '移除账号 Key', exact: true })
+  await removeKey.click()
+  await page.getByRole('status').filter({ hasText: '账号 Key 已移除' }).waitFor()
+  await removeKey.waitFor({ state: 'hidden' })
   await page.getByRole('button', { name: '图片存储', exact: true }).click()
   await page.getByRole('heading', { name: '图床配置', exact: true }).waitFor()
   await page.setViewportSize({ width: 1440, height: 960 })

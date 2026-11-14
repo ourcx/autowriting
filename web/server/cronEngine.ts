@@ -83,7 +83,7 @@ async function collectMaterialsIfEnabled(job, topic, aiConfig) {
   try {
     // collectMaterials 通过 Provider 架构自动检测可用的搜索引擎
     // 不再需要 bingApiKey/jinaApiKey 参数，配置从环境变量和 AI 配置中获取
-    const dataset = await collectMaterials(topic, aiConfig)
+    const dataset = await collectMaterials(topic, aiConfig, job.userId)
     return dataset
   } catch (err) {
     // 素材收集失败不阻断整体流程，只记录警告
@@ -108,7 +108,7 @@ async function fetchTrending(job, aiConfig) {
     if (!aiConfig.articleApiKey) throw new Error('AI 未配置：请编辑此任务，在「AI 接口」区块填写 API Key')
   }
 
-  const { complete } = createArticleModel(aiConfig)
+  const { complete } = createArticleModel(aiConfig, job.userId)
   const today = nowDay()
 
   let resp
@@ -156,7 +156,7 @@ async function generateArticle(userId: string, topic: string, aiConfig: AIConfig
     materialsSection = `# 参考素材（从网络搜索和爬取获得）\n\n${materialsMarkdown}\n\n**重要提示**：\n- 以上素材仅供参考，请提取关键信息和数据\n- 必须用自己的语言重新组织，不要直接复制粘贴\n- 引用数据时要标注来源（如"根据某网站报道"）\n- 保持客观和真实，不要编造不存在的信息\n\n`
   }
   
-  const { complete } = createArticleModel(aiConfig)
+  const { complete } = createArticleModel(aiConfig, userId)
   const today = nowDay()
 
   const resp = await complete({
@@ -192,7 +192,7 @@ ${materialsDataset ? '- 充分利用上面提供的参考素材，但要用自�
 
 // ── 步骤 3：生成 CSS 样式 ─────────────────────────────────────────────────────
 
-async function generateStyle(stylePrompt, aiConfig) {
+async function generateStyle(stylePrompt, aiConfig, userId: string) {
   if (!stylePrompt) {
     // 返回一个简洁默认样式
     return `#wemd { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; font-size: 15px; line-height: 1.8; color: #333; padding: 0 16px; }
@@ -217,7 +217,7 @@ async function generateStyle(stylePrompt, aiConfig) {
 #wemd tr:nth-child(even) td { background: #f5f8ff; }`
   }
 
-  const { complete } = createArticleModel(aiConfig)
+  const { complete } = createArticleModel(aiConfig, userId)
 
   const STYLE_SYSTEM = `你是一名专业的微信公众号 CSS 设计师。
 
@@ -418,11 +418,11 @@ export async function runCronJob(jobId) {
     addStep('style', 'running', '正在生成 CSS 样式...')
     let css
     try {
-      css = await generateStyle(job.stylePrompt, aiConfig)
+      css = await generateStyle(job.stylePrompt, aiConfig, job.userId)
       addStep('style', 'success', `CSS 已生成（${css.length} 字节）`)
     } catch (e) {
       addStep('style', 'warn', `样式生成失败，使用默认样式: ${e.message}`)
-      css = await generateStyle(null, aiConfig)  // 降级为默认
+      css = await generateStyle(null, aiConfig, job.userId)  // 降级为默认
     }
 
     // ── Step 4: 转换为 HTML ───────────────────────────────────────────────

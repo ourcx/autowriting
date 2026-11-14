@@ -1,12 +1,11 @@
-import { DEEPSEEK_APP_CONFIG, SERVER_AI_CONFIG } from "./config.ts"
+import { SERVER_AI_CONFIG } from "./config.ts"
+import { resolveDeepSeekConfig } from "./deepseekCredentials.ts"
 import type { AIConfig } from "./types.ts"
 import { createDeepSeekClient, isDeepSeekReady } from "./utils/deepseek.ts"
 import { resolveZhipuApiKey } from "./utils/providerKeys.ts"
 import { createSearchProvider } from "./utils/search/providers/index.ts"
 import type { SearchResult } from "./utils/search/types.ts"
 import { webFetch } from "./utils/search/webFetcher.ts"
-
-const deepseek = createDeepSeekClient(DEEPSEEK_APP_CONFIG)
 
 export function publicSourceUrl(value: string): string {
   try {
@@ -24,13 +23,15 @@ export interface WritingWebResearch {
   read: (_url: string, _signal: AbortSignal) => Promise<string>
 }
 
-export function createWritingWebResearch(config: AIConfig): WritingWebResearch {
+export function createWritingWebResearch(config: AIConfig, userId?: string): WritingWebResearch {
   const provider = String(config.searchProvider || SERVER_AI_CONFIG.searchProvider || "")
-  const deepseekReady = isDeepSeekReady(DEEPSEEK_APP_CONFIG)
+  const deepseekConfig = resolveDeepSeekConfig(userId)
+  const deepseekReady = isDeepSeekReady(deepseekConfig)
   const searchApiKey = String(config.searchApiKey || SERVER_AI_CONFIG.searchApiKey || "")
   const zhipuApiKey = resolveZhipuApiKey(config)
   const defaultSearch = !provider || (provider === "serper" && !searchApiKey)
   if (deepseekReady && (provider === "deepseek" || defaultSearch)) {
+    const deepseek = createDeepSeekClient(deepseekConfig)
     return {
       async search(query, signal) {
         const rows = await deepseek.search(query, 5, signal)

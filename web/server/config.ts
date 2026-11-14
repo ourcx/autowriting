@@ -239,7 +239,7 @@ export const SERVER_AI_CONFIG = {
   dajialaApiKey: process.env.DAJIALA_API_KEY || '',
 }
 
-// DeepSeek 应用能力：默认关闭，密钥仅留在服务端，不复用浏览器提供的 URL/Key。
+// 控制部署级共享 Key。账号 Key 另走认证接口，工具请求只发往官方地址。
 export const DEEPSEEK_APP_CONFIG = {
   enabled: process.env.DEEPSEEK_APP_ENABLED === 'true',
   apiKey: process.env.DEEPSEEK_API_KEY || '',

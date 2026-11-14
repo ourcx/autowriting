@@ -1093,6 +1093,22 @@ export async function parseDeepSeekMaterial(file: File, purpose: "text_recogniti
   return deepSeekRequest("ocr", form)
 }
 
+export interface DeepSeekServiceStatus {
+  enabled: boolean
+  configured: boolean
+  accountConfigured: boolean
+}
+
+export async function fetchDeepSeekStatus(): Promise<DeepSeekServiceStatus> {
+  const { data } = await axios.get<DeepSeekServiceStatus>('/api/deepseek/status')
+  return data
+}
+
+export async function saveDeepSeekKey(apiKey: string): Promise<DeepSeekServiceStatus> {
+  const { data } = await axios.put<DeepSeekServiceStatus>('/api/deepseek/key', { apiKey })
+  return data
+}
+
 export function deepSeekRequest(operation: "tts", body: Record<string, unknown>, signal?: AbortSignal): Promise<Blob>
 export function deepSeekRequest<T extends object = Record<string, unknown>>(operation: DeepSeekOperation | "status", body?: Record<string, unknown> | FormData, signal?: AbortSignal): Promise<T>
 export async function deepSeekRequest(operation: DeepSeekOperation | "status", body?: Record<string, unknown> | FormData, signal?: AbortSignal): Promise<Record<string, unknown> | Blob> {

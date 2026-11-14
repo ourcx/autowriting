@@ -6,26 +6,23 @@
 
 在文章「素材」页，可直接搜索网页、读取原文、OCR 解析、转写语音，或发起带联网、读链接和附件的调研。调研引用和搜索来源会随选中的素材一起保存。「审核」页可朗读当前公众号正文。旧链接 `/deepseek` 会跳转到 AI 配置。
 
-配置位于 `server/config.ts`，默认关闭：
+在「AI 配置 → 更多 → 公共 Key」保存账号自己的 DeepSeek API Key，再选择 DeepSeek 文章模型或搜索服务。该 Key 供当前账号的文章、素材工具和定时任务共用。可以录入新 Key 替换，或在页面移除。浏览器只查询配置状态，通用设置接口也不会返回该 Key。
+
+部署级共享配置位于 `server/config.ts`，默认关闭。账号没有配置自己的 Key 时才使用部署级配置。
 
 ```dotenv
 DEEPSEEK_APP_ENABLED=false
 DEEPSEEK_API_KEY=
 ```
 
-启用前在服务端私有环境填入自己的 DeepSeek Key。禁止放入 `VITE_` 变量、前端存储或 Git。客户端仅请求 `https://api.deepseek.com`，禁用重定向，不接受浏览器传来的自定义服务地址。构造方式：
-
-```ts
-import { DEEPSEEK_APP_CONFIG } from '../config.ts'
-import { createDeepSeekClient } from './deepseek.ts'
-const deepseek = createDeepSeekClient(DEEPSEEK_APP_CONFIG)
-```
+客户端只向官方 `https://api.deepseek.com` 发出调用，禁用重定向。工具请求只接收操作所需的数据和费用确认。
 
 ## HTTP 接口与使用
 
 均在 `/api/deepseek` 下，要求当前用户 JWT 登录；Agent API Key 不获得额外权限。
 
-- `GET /status`：仅返回 enabled/configured，不返回密钥。
+- `GET /status`：返回 enabled、configured、accountConfigured 三个布尔状态。
+- `PUT /key`：为当前账号保存或替换 `{apiKey}`。传空字符串移除账号 Key。响应只含配置状态。
 - `POST /chat`：JSON `{prompt, thinking?, webSearch?, readUrl?, confirmedCost:true}`；也可 multipart 加一个 `file` 及 `purpose`。不会接受外部 file_id 或任意聊天历史。
 - `POST /search`：JSON `{query, count?, confirmedCost:true}`。
 - `POST /fetch`：JSON `{url, confirmedCost:true}`。
@@ -33,7 +30,7 @@ const deepseek = createDeepSeekClient(DEEPSEEK_APP_CONFIG)
 - `POST /asr`：multipart `file`、`confirmedCost=true`。
 - `POST /tts`：JSON `{text, voice?, confirmedCost:true}`，返回 audio/wav。
 
-默认关闭时 POST 返回 503，未登录返回 401，缺少费用确认/非法参数返回 400。接口严格拒绝额外字段。素材采集在调用前确认数据发送与费用。写作使用选定的文章服务，审核页朗读在提交正文前确认。DeepSeek 调用不自动重试。
+账号和部署两处都未启用时工具请求返回 503，未登录返回 401，缺少费用确认/非法参数返回 400。接口严格拒绝额外字段。素材采集在调用前确认数据发送与费用。写作使用选定的文章服务，审核页朗读在提交正文前确认。DeepSeek 调用不自动重试。
 
 上传内容会传给 DeepSeek；`/files` 文件保留遵循上游政策，本应用不提供上传后立即删除保证。不要上传未经授权的隐私资料。当前语音是上传 WAV/Ogg 和下载/播放 WAV，不请求麦克风权限、不隐式录音。
 
@@ -64,7 +61,7 @@ pnpm --dir web verify
 
 `test:deepseek` 使用临时数据库验证登录、默认关闭、费用确认、额外字段/跨用户文件 ID 拒绝、文件校验、限流和拒答；同时覆盖请求路径和参数、multipart 字段顺序、安全拒答、不完整回答、HTTP 200 内嵌错误、不重试、输入长度、内网 URL、音频响应类型和签名上下文保留。不需要 Key。`pnpm --dir web smoke` 另覆盖真实服务中的 DeepSeek 鉴权与默认关闭状态。
 
-关闭 `DEEPSEEK_APP_ENABLED` 会停用 DeepSeek 模型和工具。可在 AI 配置切换文章模型和搜索服务，已入库素材继续可用。
+关闭 `DEEPSEEK_APP_ENABLED` 会停用部署级共享 Key。个人 Key 可在公共 Key 页面移除。
 
 ## 官方来源（2026-11-13 核实）
 
