@@ -146,6 +146,26 @@ function findMainContainer(html: string): string {
   return html
 }
 
+function articleContainer(html: string, id: string): string {
+  const start = new RegExp(`<(div|section|article)\\b[^>]*\\bid\\s*=\\s*["']${id}["'][^>]*>`, "i").exec(html)
+  if (!start) return ""
+  const tag = new RegExp(`<(/?)${start[1]}\\b[^>]*>`, "gi")
+  const contentStart = start.index + start[0].length
+  tag.lastIndex = contentStart
+  let depth = 1
+  for (let match = tag.exec(html); match; match = tag.exec(html)) {
+    depth += match[1] ? -1 : 1
+    if (depth === 0) return html.slice(contentStart, match.index)
+  }
+  return ""
+}
+
+export function usablePageText(content: string): boolean {
+  const text = content.trim()
+  return text.length > 0 && !/^\[(?:安全拦截|频率限制|抓取失败|内容提取失败|未提取到正文|超时)\]/.test(text)
+    && !/(?:环境异常.{0,40}完成验证|完成安全验证后|此内容因违规无法查看|该内容已被发布者删除|该内容已删除|该内容暂时无法查看|访问过于频繁|robot check|just a moment|access denied|target .* returned status code|warning: .*captcha)/i.test(text.slice(0, 650))
+}
+
 /**
  * HTML → Markdown 简易转换
  * - h1-h6 → # ~ ######
@@ -329,10 +349,12 @@ export async function webFetch(url: string, options: FetchOptions = {}): Promise
 
     // 4. HTML 正文提取
     const cleaned = cleanNoiseTags(html)
-    const container = findMainContainer(cleaned)
+    // 微信正文有稳定的容器 ID。验证页、已删除页和导航不能当作文章。
+    const wechatArticle = new URL(resp.url || url).hostname === "mp.weixin.qq.com"
+    const container = wechatArticle ? articleContainer(cleaned, "js_content") : findMainContainer(cleaned)
     const markdown = htmlToMarkdown(container)
 
-    if (markdown.length < 50) {
+    if (markdown.length < (wechatArticle ? 12 : 50) || !usablePageText(markdown)) {
       logger.warn("WEB-FETCH", "正文提取后内容过短", { url, length: markdown.length })
       return `[未提取到正文] ${url} 可能是 JS 渲染页面或防爬墙，本期范围内不再重试。`
     }

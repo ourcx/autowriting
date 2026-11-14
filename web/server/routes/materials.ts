@@ -22,7 +22,7 @@ import { resolveZhipuApiKey } from '../utils/providerKeys.ts'
 import { authMiddleware } from '../authMiddleware.js'
 import { validateArticleId } from '../articleIdMiddleware.ts'
 import { ArticleContentConflictError, resolveArticleFiles } from '../articleStorage.ts'
-import { webFetch } from '../utils/search/webFetcher.js'
+import { ArticlePageReadError, readArticlePage } from '../utils/search/readArticlePage.ts'
 import { assertPublicHttpUrl } from '../utils/networkPolicy.ts'
 import { searchYuanbao, YuanbaoSearchError } from '../utils/yuanbaoSearch.ts'
 import {
@@ -121,90 +121,32 @@ router.get('/:articleId', (req, res) => {
   }
 })
 
-// ── 工具：尝试 Jina Reader（快速超时，失败时静默降级）────────────────────────
-async function fetchJinaText(url, apiKey = '') {
-  const jinaUrl = `https://r.jina.ai/${url}`
-  const headers = {
-    'Accept': 'text/plain',
-    'X-Return-Format': 'markdown',
-    'X-Timeout': '8',
-  }
-  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
-  const resp = await fetch(jinaUrl, {
-    headers,
-    signal: AbortSignal.timeout(10000),
-  })
-  if (!resp.ok) throw new Error(`Jina ${resp.status}`)
-  const text = await resp.text()
-  if (text.length < 50) throw new Error('Jina 返回内容为空')
-  return text.slice(0, 8000)
-}
-
-// ── POST /api/materials/fetch-url ─────────────────────────────────────────────
-// 读取 URL 正文：优先 Jina Reader，不可用则降级到内置 WebFetcher
-//   WebFetcher 三层防护：URL 安全检查 → 频率限制 → HTML 正文提取转 Markdown
+// ── 网页正文读取 ─────────────────────────────────────────────────────────
 router.post('/fetch-url', async (req, res) => {
   const { url, jinaApiKey = '' } = req.body
-  if (!url) return res.status(400).json({ error: '缺少 url 参数' })
-
-  let content = ''
-  let method = ''
-
-  // 尝试 Jina Reader（快速超时 10s）
+  if (typeof url !== 'string' || !url.trim()) return res.status(400).json({ error: '缺少 url 参数' })
   try {
-    content = await fetchJinaText(url, jinaApiKey)
-    method = 'jina'
-  } catch (jinaErr) {
-    logger.warn('MATERIALS', `Jina Reader 不可用，降级 WebFetcher: ${jinaErr.message}`)
-    // 降级：使用内置 WebFetcher（安全策略 + HTML→Markdown）
-    content = await webFetch(url, { maxChars: 8000 })
-    method = 'webfetch'
-    if (!content || content.startsWith('[')) {
-      return res.status(500).json({ error: content || '抓取失败，可能是 JS 渲染页面或防爬墙' })
-    }
+    const result = await readArticlePage(url, { jinaApiKey })
+    res.json({ ...result, url })
+  } catch (error) {
+    res.status(500).json({ error: error instanceof ArticlePageReadError ? error.message : '网页读取失败' })
   }
-
-  res.json({ content, url, method })
 })
 
-// ── POST /api/materials/fetch-url-batch ───────────────────────────────────────
-// 批量读取多个 URL 的全文：Jina 优先，降级 WebFetcher（并发上限 3）
 router.post('/fetch-url-batch', async (req, res) => {
   const { urls, jinaApiKey = '' } = req.body
-  if (!Array.isArray(urls) || urls.length === 0) {
-    return res.status(400).json({ error: '缺少 urls 参数' })
-  }
-
-  const CONCURRENCY = 3
+  if (!Array.isArray(urls) || urls.length === 0) return res.status(400).json({ error: '缺少 urls 参数' })
   const results = []
-
-  for (let i = 0; i < urls.length; i += CONCURRENCY) {
-    const batch = urls.slice(i, i + CONCURRENCY)
-    const batchResults = await Promise.allSettled(
-      batch.map(async (url) => {
-        let content = ''
-        let ok = false
-        try {
-          content = await fetchJinaText(url, jinaApiKey)
-          ok = true
-        } catch {
-          content = await webFetch(url, { maxChars: 8000 })
-          ok = content.length > 0 && !content.startsWith('[')
-        }
-        return { url, content, ok }
-      })
-    )
-
-    for (let j = 0; j < batchResults.length; j++) {
-      const r = batchResults[j]
-      if (r.status === 'fulfilled') {
-        results.push(r.value)
-      } else {
-        results.push({ url: batch[j], content: '', ok: false, error: r.reason?.message || '读取失败' })
+  for (let i = 0; i < urls.length; i += 3) {
+    results.push(...await Promise.all(urls.slice(i, i + 3).map(async (url: string) => {
+      try {
+        const { content } = await readArticlePage(url, { jinaApiKey })
+        return { url, content, ok: true }
+      } catch (error) {
+        return { url, content: '', ok: false, error: error instanceof ArticlePageReadError ? error.message : '网页读取失败' }
       }
-    }
+    })))
   }
-
   res.json({ results })
 })
 

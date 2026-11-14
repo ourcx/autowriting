@@ -1,7 +1,7 @@
 import { chromium, type Page } from 'playwright'
 import { z } from 'zod'
 import type { YuanbaoArticle, YuanbaoSearchResult } from '../../shared/yuanbaoSearch.ts'
-import { webFetch } from './search/webFetcher.ts'
+import { readArticlePage } from './search/readArticlePage.ts'
 
 const PAGE_URL = 'https://so.qq.com/iaimode/search'
 const SEARCH_URL = 'https://lizhiassistant.search.qq.com/browser_aimode/aimode/query_get'
@@ -283,8 +283,8 @@ export async function searchYuanbao(query: string, clientSignal: AbortSignal): P
       const batch = result.articles.slice(index, index + ARTICLE_CONCURRENCY)
       await Promise.all(batch.map(async article => {
         const signal = AbortSignal.any([clientSignal, AbortSignal.timeout(6500)])
-        const content = await webFetch(article.url, { signal, sameOrigin: true })
-        if (content && !/^\[(?:安全拦截|频率限制|未提取到正文|超时)\]/.test(content)) article.content = content
+        try { article.content = (await readArticlePage(article.url, { signal, sameOrigin: true })).content }
+        catch { clientSignal.throwIfAborted() }
       }))
     }
     return result

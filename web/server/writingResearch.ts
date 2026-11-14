@@ -5,14 +5,16 @@ import { createDeepSeekClient, isDeepSeekReady } from "./utils/deepseek.ts"
 import { resolveZhipuApiKey } from "./utils/providerKeys.ts"
 import { createSearchProvider } from "./utils/search/providers/index.ts"
 import type { SearchResult } from "./utils/search/types.ts"
-import { webFetch } from "./utils/search/webFetcher.ts"
+import { readArticlePage } from "./utils/search/readArticlePage.ts"
 
 export function publicSourceUrl(value: string): string {
   try {
     const url = new URL(value)
     if (!["https:", "http:"].includes(url.protocol) || url.username || url.password
       || (url.port && !["80", "443"].includes(url.port)) || value.length > 2048) return ""
-    if ([...url.searchParams.keys()].some(key => /^(?:access[_-]?token|token|auth|api[_-]?key|key|password|sig(?:nature)?|x-amz-.+|x-oss-.+)$/i.test(key))) return ""
+    const wechatArticle = url.hostname === "mp.weixin.qq.com" && url.pathname === "/s"
+    if ([...url.searchParams.keys()].some(key => /^(?:access[_-]?token|token|auth|api[_-]?key|key|password|sig(?:nature)?|x-amz-.+|x-oss-.+)$/i.test(key)
+      && !(wechatArticle && key === "signature"))) return ""
     url.hash = ""
     return url.href
   } catch { return "" }
@@ -30,8 +32,12 @@ export function createWritingWebResearch(config: AIConfig, userId?: string): Wri
   const searchApiKey = String(config.searchApiKey || SERVER_AI_CONFIG.searchApiKey || "")
   const zhipuApiKey = resolveZhipuApiKey(config)
   const defaultSearch = !provider || (provider === "serper" && !searchApiKey)
-  if (deepseekReady && (provider === "deepseek" || defaultSearch)) {
-    const deepseek = createDeepSeekClient(deepseekConfig)
+  const deepseek = deepseekReady && (provider === "deepseek" || defaultSearch) ? createDeepSeekClient(deepseekConfig) : undefined
+  const read: WritingWebResearch["read"] = async (url, signal) => (await readArticlePage(url, {
+    signal, maxChars: 24_000, jinaApiKey: String(config.jinaApiKey || SERVER_AI_CONFIG.jinaApiKey || ""),
+    fetchWithDeepSeek: deepseek ? async (page, deadline) => (await deepseek.fetchUrl(page, deadline)).content : undefined,
+  })).content
+  if (deepseek) {
     return {
       async search(query, signal) {
         const rows = await deepseek.search(query, 5, signal)
@@ -40,7 +46,7 @@ export function createWritingWebResearch(config: AIConfig, userId?: string): Wri
           source: row.siteName, datePublished: row.datePublished,
         }))
       },
-      async read(url, signal) { return (await deepseek.fetchUrl(url, signal)).content },
+      read,
     }
   }
   const configuredSearxng = String(config.searxngUrl || SERVER_AI_CONFIG.searxngUrl || "")
@@ -56,10 +62,6 @@ export function createWritingWebResearch(config: AIConfig, userId?: string): Wri
 
   return {
     ...(searchProvider && { search: (query: string, signal: AbortSignal) => searchProvider.search(query, 5, signal) }),
-    async read(url, signal) {
-      const content = await webFetch(url, { maxChars: 24000, signal, textOnly: true })
-      if (!content.trim() || /^\[(?:安全拦截|频率限制|抓取失败|内容提取失败|未提取到正文|超时)/.test(content)) throw new Error("网页正文读取失败")
-      return content
-    },
+    read,
   }
 }
