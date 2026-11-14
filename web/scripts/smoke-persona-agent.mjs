@@ -88,6 +88,7 @@ export async function smokePersonaAgent(base, token) {
     assert.ok(result.persona.sourceArticleCount >= 2)
     assert.equal(result.sources.publishedArticleCount, 1)
     assert.ok(result.sources.localArticleCount >= 1)
+    assert.ok(!Object.hasOwn(modelRequest, "max_tokens"))
     assert.match(modelRequest.messages[1].content, /人设分析历史文章/)
     assert.match(modelRequest.messages[1].content, /已发布回归记录/)
   } finally {

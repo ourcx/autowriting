@@ -18,6 +18,11 @@ export async function smokeArticleStream(base, token) {
     req.on('data', chunk => { body += chunk })
     req.on('end', () => {
       modelRequests.push(JSON.parse(body))
+      if (call === 3) {
+        res.writeHead(200, { 'Content-Type': 'text/event-stream' })
+        res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: '# 未完成的改稿' }, finish_reason: 'length' }] })}\n\n`)
+        return
+      }
       const timer = setTimeout(() => {
         timers.delete(timer)
         res.writeHead(200, { 'Content-Type': 'text/event-stream' })
@@ -84,6 +89,21 @@ export async function smokeArticleStream(base, token) {
     assert.equal(article.articleToutiao, content)
     assert.deepEqual(article.workflow.generationContext.referenceArticleIds, ['reference-smoke'])
     assert.ok(article.workflow.generationContext.promptIds.length >= 1, '工作流应记录生成提示词')
+
+    const deai = await fetch(`${base}/api/articles/${articleId}/deai/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        article: content.repeat(3),
+        aiConfig: { articleProvider: 'openai-compat', articleApiKey: 'smoke-only', articleModel: 'smoke-model', articleBaseUrl: `http://127.0.0.1:${model.address().port}/v1` },
+      }),
+      signal: AbortSignal.timeout(5000),
+    })
+    const deaiEvents = await deai.text()
+    assert.match(deaiEvents, /event: error[\s\S]*长度截断/)
+    assert.doesNotMatch(deaiEvents, /event: done/)
+    assert.equal(calls, 3)
+    assert.ok(modelRequests.every(body => !Object.hasOwn(body, 'max_tokens')))
   } finally {
     timers.forEach(clearTimeout)
     for (const server of [proxy, model]) {

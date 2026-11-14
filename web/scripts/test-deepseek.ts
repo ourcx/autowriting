@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { consumeOpenAiContentStream } from '../server/utils/openAiStream.ts'
-import { createDeepSeekClient } from '../server/utils/deepseek.ts'
+import { createDeepSeekClient, DeepSeekOutputLengthError } from '../server/utils/deepseek.ts'
 
 const requests: Array<{ url: string; init: RequestInit }> = []
 let responseBody: unknown = {}
@@ -40,10 +40,11 @@ assert.deepEqual(body.safety_check, { level: 'high' })
 assert.deepEqual(body.tools, [{ type: 'deepseek_web_search' }, { type: 'deepseek_read_url' }])
 assert.equal(body.stream, false)
 assert.equal(body.response_format, undefined)
+assert.ok(!Object.hasOwn(body, 'max_tokens'))
 responseBody = { choices: [{ finish_reason: 'content_filter', message: { content: 'must never be returned' } }] }
 await assert.rejects(() => client.chat({ messages: [{ role: 'user', content: 'test' }] }), /安全检查/)
 responseBody = { choices: [{ finish_reason: 'length', message: { content: 'incomplete' } }] }
-await assert.rejects(() => client.chat({ messages: [{ role: 'user', content: 'test' }] }), /未完整/)
+await assert.rejects(() => client.chat({ messages: [{ role: 'user', content: 'test' }] }), DeepSeekOutputLengthError)
 responseBody = { error: { message: 'secret upstream details' } }
 await assert.rejects(() => client.search('test'), error => error instanceof Error && !error.message.includes('secret'))
 responseStatus = 429
@@ -95,13 +96,14 @@ try {
     usage: { prompt_tokens: 12, completion_tokens: 15, total_tokens: 27 },
   }
   assert.equal(model.model, 'deepseek-flash')
-  const approved = await model.stream({ messages, max_tokens: 8192 })
+  const approved = await model.stream({ messages })
   assert.equal(await consumeOpenAiContentStream(approved.data, () => {}, { requireCompletion: true }), '# 标题\n\n审核通过的中文正文')
   assert.equal(requests.at(-1)?.url, 'https://api.deepseek.com/chat/completions')
   const workflowRequest = JSON.parse(String(requests.at(-1)?.init.body))
   assert.deepEqual(workflowRequest.safety_check, { level: 'high' })
   assert.equal(workflowRequest.model, 'deepseek-flash')
   assert.equal(workflowRequest.stream, false)
+  assert.ok(!Object.hasOwn(workflowRequest, 'max_tokens'))
   assert.equal(workflowRequest.tools, undefined, 'Writing never starts a paid web search on its own')
   assert.equal(new Headers(requests.at(-1)?.init.headers).get('authorization'), 'Bearer test-placeholder-not-a-secret')
   assert.equal((await model.complete({ messages })).data.usage?.total_tokens, 27)

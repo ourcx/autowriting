@@ -33,6 +33,7 @@ import {
 import { readXiumiReference, validateXiumiUrl } from "../utils/xiumiReference.ts"
 import { parseXiumiImageUrl, readXiumiImage } from "../utils/xiumiImage.ts"
 import { hasArticleApiKey } from "../utils/providerKeys.ts"
+import { DeepSeekOutputLengthError } from "../utils/deepseek.ts"
 
 const router = Router()
 router.use(authMiddleware)
@@ -74,8 +75,6 @@ router.post("/xiumi-reference", async (req, res) => {
 
 const PROMPT_MAX_LENGTH = 3000
 const CANVAS_LLM_TIMEOUT_MS = 300000
-const BLOCK_MAX_TOKENS = 16000
-const BLOCK_CHUNK_MAX_TOKENS = 6000
 const BLOCK_CHUNK_SOURCE_LIMIT = 8
 const BLOCK_CHUNK_THRESHOLD = BLOCK_CHUNK_SOURCE_LIMIT
 const DESIGN_PLAN_SYSTEM_PROMPT = `你是视觉设计文件分析器。输入会包含原始 Design System、设计说明、SVG、XML、JSON 或 Markdown，以及系统模板。
@@ -581,8 +580,13 @@ async function callStructuredCanvas(
   maxRetries = 3,
 ): Promise<CanvasCompletionData> {
   if (articleModel.isDeepSeek) {
-    const response = await articleModel.complete(body, 1, CANVAS_LLM_TIMEOUT_MS)
-    return response.data
+    try {
+      return (await articleModel.complete(body, 1, CANVAS_LLM_TIMEOUT_MS)).data
+    } catch (error) {
+      // 只传截断状态，交给现有的分段或修复流程，不接收未经审核的半截结果。
+      if (error instanceof DeepSeekOutputLengthError) return { choices: [{ finish_reason: "length" }] }
+      throw error
+    }
   }
   try {
     const response = await articleModel.complete({
@@ -615,7 +619,6 @@ async function analyzeDesignBrief(input: {
         { role: "user", content: input.prompt },
       ],
       temperature: 0.1,
-      max_tokens: 3500,
       stream: false,
     }, 2)
     for (const candidate of completionCandidates(completion)) {
@@ -818,7 +821,6 @@ ${minimumExample}`,
     const first = await callStructuredCanvas(input.articleModel, {
       messages,
       temperature: 0.1,
-      max_tokens: BLOCK_CHUNK_MAX_TOKENS,
       stream: false,
     }, 2)
     attempts.push(first)
@@ -865,7 +867,6 @@ ${malformed ? `待修复输出：${malformed}` : "上一轮被截断，请从头
           },
         ],
         temperature: 0,
-        max_tokens: BLOCK_CHUNK_MAX_TOKENS,
         stream: false,
       }, 2)
       attempts.push(repair)
@@ -943,7 +944,6 @@ async function generateCanvasWithRepair(input: {
   const first = await callStructuredCanvas(input.articleModel, {
     messages,
     temperature: 0.2,
-    max_tokens: 8000,
     stream: false,
   })
   input.onAttempt?.(first, 1)
@@ -977,7 +977,6 @@ async function generateCanvasWithRepair(input: {
         },
       ],
       temperature: 0,
-      max_tokens: 8000,
       stream: false,
     }, 2)
     input.onAttempt?.(repair, 2)
@@ -1056,7 +1055,6 @@ async function generateBlockWithRepair(input: {
   const first = await callStructuredCanvas(input.articleModel, {
     messages,
     temperature: 0.2,
-    max_tokens: BLOCK_MAX_TOKENS,
     stream: false,
   })
 
@@ -1108,7 +1106,6 @@ ${sourceManifest}`,
         },
       ],
       temperature: 0,
-      max_tokens: BLOCK_MAX_TOKENS,
       stream: false,
     }, 2)
     try {
@@ -1175,7 +1172,7 @@ router.post("/generate", async (req: AuthedRequest, res) => {
     const articleModel = createArticleModel(aiConfig)
     const { model } = articleModel
     // #region debug-point BCD:before-upstream
-    if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "pre-fix", hypothesisId: "B,C,D", traceId: debugTraceId, location: "server/routes/canvas.ts:before-upstream", msg: "[DEBUG] Canvas upstream request starting", data: { elapsedMs: Date.now() - debugStartedAt, provider: aiConfig.articleProvider, model, sourceCount: sources.length, maxTokens: 8000 }, ts: Date.now() }) }).catch(() => {})
+    if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "pre-fix", hypothesisId: "B,C,D", traceId: debugTraceId, location: "server/routes/canvas.ts:before-upstream", msg: "[DEBUG] Canvas upstream request starting", data: { elapsedMs: Date.now() - debugStartedAt, provider: aiConfig.articleProvider, model, sourceCount: sources.length }, ts: Date.now() }) }).catch(() => {})
     // #endregion
     const generated = await generateCanvasWithRepair({
       articleModel,

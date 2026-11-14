@@ -117,7 +117,6 @@ ${baseCSS.slice(0, 2000)}
         { role: 'user',   content: userPrompt },
       ],
       temperature: 0.8,
-      max_tokens: 3000,
     })
 
     const usage = response.data.usage

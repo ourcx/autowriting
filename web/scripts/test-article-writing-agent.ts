@@ -11,6 +11,7 @@ process.env.LOG_DIR = join(directory, "logs")
 const { readArticlePage } = await import("../server/utils/search/readArticlePage.ts")
 const { preservesDraftAnchors } = await import("../server/writingAgentPolicy.ts")
 const { prepareArticleWriting, WritingAgentModelError } = await import("../server/articleWritingAgent.ts")
+const { reviseArticleDraft } = await import("../server/writingRevision.ts")
 const { findWritingExamples } = await import("../server/rag.ts")
 const { db, setSetting } = await import("../server/db.ts")
 const { buildWritingContext } = await import("../server/writingContext.ts")
@@ -222,6 +223,33 @@ try {
   assert.match(recovered.prompt, /写作提纲[\s\S]*按公告写项目边界/)
   assert.ok(failureReasons.includes("模型回复不是有效 JSON。"))
   assert.ok(failureReasons.some(reason => reason.includes("HTTP 429") && reason.includes("沿用调研")))
+  const longOutline = `先核对项目范围。${"再按已读来源整理公开信息。".repeat(330)}完整提纲到此结束。`
+  const withLongOutline = await prepareArticleWriting({
+    ...base,
+    complete: async (_messages, phase) => phase === "outline" ? longOutline : '{"action":"finish","plan":{}}',
+  })
+  assert.ok(withLongOutline.prompt.includes(longOutline))
+
+  const sampleDraft = "# 校舍建设\n\n" + Array.from({ length: 7 }, (_, index) => `公告原句 ${index + 1}。`).join("\n\n")
+  const reviewIssues = Array.from({ length: 7 }, (_, index) => ({ excerpt: `公告原句 ${index + 1}。`, action: "保留出处，调整语序。" }))
+  for (const { reply, notes, outcome } of [
+    { reply: JSON.stringify({ issues: reviewIssues }), notes: 7, outcome: "changes_requested" },
+    { reply: "我建议直接改写。", notes: 0, outcome: "failed" },
+  ]) {
+    const revisionSteps: { kind: string; status?: string; output?: string }[] = []
+    const result = await reviseArticleDraft({
+      draft: sampleDraft, signal, model: "fixture", progress: () => {},
+      startStep: kind => step => revisionSteps.push({ kind, ...step }),
+      complete: async (system, user) => {
+        if (system.includes("独立审稿 Agent")) return reply
+        assert.equal(JSON.parse(user).notes.length, notes)
+        return sampleDraft
+      },
+    })
+    assert.ok(result.approved)
+    assert.equal(revisionSteps[0].status, outcome)
+    if (outcome === "failed") assert.match(revisionSteps[0].output || "", /审稿回复不是有效 JSON/)
+  }
   const abort = new AbortController()
   abort.abort()
   await assert.rejects(() => prepareArticleWriting({ ...base, signal: abort.signal, complete: async () => { throw new Error("不应调用模型") } }), { name: "AbortError" })

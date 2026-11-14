@@ -1009,7 +1009,7 @@ export async function fetchBlob(url: string, init: RequestInit = {}): Promise<Bl
   }
 }
 
-// ── 连通性测试（发 max_tokens=1 的最小请求） ──
+// ── 连通性测试 ──
 export async function testAIConnection(cfg: AIConfig): Promise<{ ok: boolean; msg: string }> {
   if (cfg.articleProvider === "deepseek") {
     try {
@@ -1047,8 +1047,7 @@ export async function testAIConnection(cfg: AIConfig): Promise<{ ok: boolean; ms
       headers,
       body: JSON.stringify({
         model,
-        messages: [{ role: 'user', content: 'hi' }],
-        max_tokens: 1,
+        messages: [{ role: 'user', content: '请只回复「连接正常」。' }],
       }),
     })
     if (res.ok) {

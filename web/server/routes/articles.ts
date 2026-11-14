@@ -525,11 +525,12 @@ ${materials}
         { role: 'user',   content: userPrompt },
       ],
       temperature: 0.9,
-      max_tokens: 4096,
       stream: false,
     })
 
-    const article = stripEmoji(response.data.choices[0].message.content)
+    const choice = response.data.choices[0]
+    if (choice?.finish_reason === 'length') throw new Error('上游模型返回了长度截断，未保存未完成的正文')
+    const article = stripEmoji(choice.message.content)
     const articlePath = getArticlePath(articleId, 'article', req.user.id)
     writeArticleSafely({ articlePath, articleId, userId: req.user.id, content: article })
     recordArticleWorkflowEvent({
@@ -733,7 +734,6 @@ ${materials}
             { role: 'user',   content: prompt },
           ],
           temperature: 0.9,
-          max_tokens: 8192,
         },
         { timeout: 120000, signal: generationController.signal }
       )
@@ -940,7 +940,6 @@ uiBlocks 字段说明（必须根据实际问题选择，不要强行凑数）�
         { role: 'user',   content: prompt },
       ],
       temperature: 0.3,
-      max_tokens: 2000,
     }, { timeout: 120000 })
 
     // ── 4. 逐 chunk 转发 + 增量解析 partial-result ───────────────────────────
@@ -1134,7 +1133,6 @@ router.post('/:articleId/inline-edit', async (req, res) => {
         { role: 'user', content: prompt },
       ],
       temperature: 0.65,
-      max_tokens: 1200,
     })
 
     const usage = llmRes.data.usage
@@ -1195,7 +1193,6 @@ ${task}
         { role: 'user',   content: prompt },
       ],
       temperature: 0.8,
-      max_tokens: 1024,
     })
 
     const usage = llmRes.data.usage
@@ -1271,7 +1268,6 @@ ${materials}
         { role: 'user',   content: prompt },
       ],
       temperature: 0.5,
-      max_tokens: 2048,
     })
 
     const usage = llmRes.data.usage
@@ -1298,6 +1294,7 @@ ${materials}
 router.post('/:articleId/deai/stream', async (req, res) => {
   const { articleId } = req.params
   const { article, aiConfig } = req.body
+  const controller = new AbortController()
 
   // SSE 响应头
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
@@ -1307,8 +1304,9 @@ router.post('/:articleId/deai/stream', async (req, res) => {
   res.flushHeaders()
 
   const send = (event, data) => {
-    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+    if (!res.destroyed && !res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
   }
+  res.once('close', () => { if (!res.writableEnded) controller.abort() })
 
   let fullText = ''
 
@@ -1339,7 +1337,7 @@ router.post('/:articleId/deai/stream', async (req, res) => {
 
 ${article}`
 
-    const { model, stream } = createArticleModel(cfg)
+    const { model, stream, isDeepSeek } = createArticleModel(cfg)
 
     send('status', { step: 'deai', message: 'AI 正在去除 AI 腔调...' })
 
@@ -1349,51 +1347,23 @@ ${article}`
         { role: 'user', content: userPrompt },
       ],
       temperature: 0.6,
-      max_tokens: 4096,
+    }, { signal: controller.signal, timeout: isDeepSeek ? 300000 : 120000 })
+
+    // 上游明确截断的改稿不能以“完成”交给前端替换原稿。
+    await consumeOpenAiContentStream(upstreamRes.data, content => {
+      const cleanContent = stripEmoji(content)
+      fullText += cleanContent
+      if (cleanContent) send('chunk', { text: cleanContent })
+    }, { requireCompletion: true })
+    recordTokenUsage({
+      articleId, userId: req.user.id, operation: 'deai', model,
+      outputTokens: Math.ceil(fullText.length / 1.5),
     })
-
-    let buffer = ''
-
-    upstreamRes.data.on('data', (chunk) => {
-      buffer += chunk.toString('utf-8')
-      const lines = buffer.split('\n')
-      buffer = lines.pop()
-
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed || trimmed === 'data: [DONE]') continue
-        if (!trimmed.startsWith('data:')) continue
-        try {
-          const json    = JSON.parse(trimmed.slice(5).trim())
-          const content = json.choices?.[0]?.delta?.content
-          if (content) {
-            const cleanContent = stripEmoji(content)
-            fullText += cleanContent
-            if (cleanContent) send('chunk', { text: cleanContent })
-          }
-        } catch { /* 忽略解析失败的行 */ }
-      }
-    })
-
-    upstreamRes.data.on('end', () => {
-      fullText = stripEmoji(fullText)
-      recordTokenUsage({
-        articleId, userId: req.user.id, operation: 'deai', model,
-        outputTokens: Math.ceil(fullText.length / 1.5),
-      })
-      send('done', { article: fullText })
-      res.end()
-    })
-
-    upstreamRes.data.on('error', (e) => {
-      console.error('[DeAI] 上游流错误:', e.message)
-      send('error', { message: e.message })
-      res.end()
-    })
-
-    req.on('close', () => { if (!res.writableEnded) res.end() })
+    send('done', { article: fullText })
+    res.end()
 
   } catch (error) {
+    if (controller.signal.aborted) return
     console.error('[DeAI] 失败:', error.response?.data || error.message)
     const msg = error.response?.data?.error?.message || error.message
     send('error', { message: msg })

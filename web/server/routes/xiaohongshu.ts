@@ -435,7 +435,6 @@ router.post("/article-metadata", async (req, res) => {
         },
       ],
       temperature: 0.5,
-      max_tokens: 500,
       stream: false,
     })
     const output = response.data.choices[0]?.message?.content ?? ""

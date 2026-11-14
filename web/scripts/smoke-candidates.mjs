@@ -207,10 +207,12 @@ export async function smokeWritingAgent(base, token) {
     assert.equal(partial.status, 'interrupted')
     assert.equal(partial.trace.find(step => step.kind === 'search')?.status, 'skipped')
     assert.equal(partial.trace.at(-1).status, 'failed')
+    assert.match(partial.trace.at(-1).output, /上游模型返回了长度截断/)
     continuation = true
     stopReason = 'stop'
     assert.match(await run(), /event: done/)
     assert.deepEqual(modelBodies.map(body => Boolean(body.stream)), [false, false, true, true, false, false, false])
+    assert.ok(modelBodies.every(body => !Object.hasOwn(body, 'max_tokens')))
     assert.equal(modelBodies.at(-4).messages.at(-2).content, partial.content)
     assert.deepEqual(modelBodies.at(-1).messages.map(({ role }) => role), ['system', 'user'])
     assert.equal(rewrites.length, 2)

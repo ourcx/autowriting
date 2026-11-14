@@ -7,13 +7,13 @@ import { stripEmoji } from "../../shared/contentProduction.ts"
 import { acquireCandidate, CandidateError, interruptCandidateTrace, publicCandidate, readCandidate, saveCandidate } from "../generationCandidates.ts"
 import type { CandidateTraceStep } from "../../shared/generationCandidate.ts"
 import { createArticleModel } from "./public.ts"
-import { consumeOpenAiContentStream } from "./openAiStream.ts"
+import { consumeOpenAiContentStream, OpenAiOutputLengthError } from "./openAiStream.ts"
 import { startSseHeartbeat } from "../sseHeartbeat.ts"
 import { logger } from "../logger.ts"
 import type { AIConfig } from "../types.ts"
 import { buildWritingContext } from "../writingContext.ts"
 import { hasArticleApiKey } from "./providerKeys.ts"
-import { prepareArticleWriting, WritingAgentModelError, type StartWritingStep } from "../articleWritingAgent.ts"
+import { prepareArticleWriting, WritingAgentModelError, type StartWritingStep, type WritingAgentMessage } from "../articleWritingAgent.ts"
 import { buildCandidateSearchQuery, findWritingExamples } from "../rag.ts"
 import { createWritingWebResearch } from "../writingResearch.ts"
 import { reviseArticleDraft } from "../writingRevision.ts"
@@ -94,6 +94,38 @@ export async function streamCandidate(userId: string, articleId: string, id: str
       : ""
     const { model, complete: completeModel, stream, isDeepSeek } = createArticleModel(config)
     candidate.model = model
+    async function completeStep(messages: WritingAgentMessage[], operation: "generate" | "deai", timeout: number) {
+      try {
+        // 由上游决定输出额度。这里设置的是连接等待时间，不给各阶段另加输出长度限制。
+        const { data } = await completeModel({ messages, temperature: 0.2 }, 1, timeout, controller.signal)
+        const usage = data.usage
+        if (usage) {
+          try {
+            recordTokenUsage({
+              articleId, userId, model, operation, inputTokens: usage.prompt_tokens,
+              outputTokens: usage.completion_tokens, totalTokens: usage.total_tokens,
+            })
+          } catch { logger.warn("GENERATION", "模型用量记录失败", { articleId, candidateId: id, operation }) }
+        }
+        const choice = data.choices?.[0]
+        if (choice?.finish_reason === "length") throw new WritingAgentModelError("上游模型返回了长度截断，可能达到输出额度或上下文限制。")
+        if (choice?.finish_reason === "content_filter") throw new WritingAgentModelError("模型未通过内容审核。")
+        if (choice?.finish_reason && choice.finish_reason !== "stop") throw new WritingAgentModelError("上游模型提前结束，未返回完整结果。")
+        const content = choice?.message?.content?.trim()
+        if (!content) throw new WritingAgentModelError("模型未返回文本。")
+        return content
+      } catch (error) {
+        controller.signal.throwIfAborted()
+        // 只向轨迹透露安全的错误类别，不保存上游请求、响应体或密钥。
+        if (error instanceof DeepSeekError) throw new WritingAgentModelError(error.message)
+        if (axios.isAxiosError(error)) {
+          if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT") throw new WritingAgentModelError("模型请求超时。")
+          const status = error.response?.status
+          if (status) throw new WritingAgentModelError(`模型请求失败（HTTP ${status}）。`)
+        }
+        throw error
+      }
+    }
     const progress = (message: string) => {
       controller.signal.throwIfAborted()
       candidate.message = message
@@ -123,38 +155,7 @@ export async function streamCandidate(userId: string, articleId: string, id: str
       const prepared = await prepareArticleWriting({
         task: input.task, materials: input.materials, sourceArticle: hasSourceArticle ? sourceArticle : "",
         platform: candidate.platform, examples, writingContext: context, web, progress, startStep, signal: controller.signal,
-        async complete(messages, phase, signal) {
-          try {
-            const { data } = await completeModel({
-              messages, max_tokens: phase === "outline" ? 2200 : phase === "query" ? 180 : 1500, temperature: 0.2,
-            }, 1, 60_000, signal)
-            const usage = data.usage
-            if (usage) {
-              try {
-                recordTokenUsage({
-                  articleId, userId, model, operation: "generate", inputTokens: usage.prompt_tokens,
-                  outputTokens: usage.completion_tokens, totalTokens: usage.total_tokens,
-                })
-              } catch { logger.warn("GENERATION", "调研用量记录失败", { articleId, candidateId: id }) }
-            }
-            const choice = data.choices?.[0]
-            if (choice?.finish_reason === "length") throw new WritingAgentModelError("模型回复达到输出上限。")
-            if (choice?.finish_reason === "content_filter") throw new WritingAgentModelError("模型未通过内容审核。")
-            const content = choice?.message?.content?.trim()
-            if (!content) throw new WritingAgentModelError("模型未返回文本。")
-            return content
-          } catch (error) {
-            signal.throwIfAborted()
-            // 只向轨迹透露安全的错误类别，不保存上游请求、响应体或密钥。
-            if (error instanceof DeepSeekError) throw new WritingAgentModelError(error.message)
-            if (axios.isAxiosError(error)) {
-              if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT") throw new WritingAgentModelError("模型请求超时。")
-              const status = error.response?.status
-              if (status) throw new WritingAgentModelError(`模型请求失败（HTTP ${status}）。`)
-            }
-            throw error
-          }
-        },
+        complete: messages => completeStep(messages, "generate", 60_000),
       })
       controller.signal.throwIfAborted()
       writingContext = prepared.prompt
@@ -197,12 +198,11 @@ ${input.writingAgent ? "涉及新增事实时就近引用已读网页的真实 U
     if (!candidate.draftComplete) {
       if (input.writingAgent) progress("正在按作者语气写正文")
       const finishWriting = startStep("write", initialLength ? "继续写正文" : "生成正文", model)
-      const upstream = await stream({ messages, temperature: 0.85, max_tokens: 8192 }, {
+      const upstream = await stream({ messages, temperature: 0.85 }, {
         timeout: isDeepSeek ? 300000 : 120000, signal: controller.signal,
       })
       await consumeOpenAiContentStream(upstream.data, text => {
         const cleanText = stripEmoji(text)
-        if (candidate.content.length + cleanText.length > 100000) throw new Error("候选稿超过长度限制，请缩短任务")
         candidate.firstChunkAt ||= new Date().toISOString()
         candidate.content += cleanText
         streamedCharacters += cleanText.length
@@ -218,20 +218,8 @@ ${input.writingAgent ? "涉及新增事实时就近引用已读网页的真实 U
     if (input.writingAgent) {
       const revision = await reviseArticleDraft({
         draft: candidate.content, signal: controller.signal, model, progress, startStep,
-        async complete(system, user, maxTokens, timeout) {
-          const { data } = await completeModel({
-            messages: [{ role: "system", content: system }, { role: "user", content: user }],
-            max_tokens: maxTokens, temperature: 0.2,
-          }, 1, timeout, controller.signal)
-          if (data.usage) {
-            try {
-              recordTokenUsage({ articleId, userId, model, operation: "deai", inputTokens: data.usage.prompt_tokens,
-                outputTokens: data.usage.completion_tokens, totalTokens: data.usage.total_tokens })
-            } catch { logger.warn("GENERATION", "审稿用量记录失败", { articleId, candidateId: id }) }
-          }
-          const choice = data.choices[0]
-          if (choice?.finish_reason !== "stop" || !choice.message.content?.trim()) throw new Error("未收到完整结果")
-          return choice.message.content
+        complete(system, user, timeout) {
+          return completeStep([{ role: "system", content: system }, { role: "user", content: user }], "deai", timeout)
         },
       })
       approved = revision.approved
@@ -252,7 +240,8 @@ ${input.writingAgent ? "涉及新增事实时就近引用已读网页的真实 U
       if (step.status !== "running") continue
       step.status = controller.signal.aborted ? "interrupted" : "failed"
       step.finishedAt = candidate.finishedAt
-      step.output = "这一步没有完成。"
+      step.output = !controller.signal.aborted && (error instanceof DeepSeekError || error instanceof OpenAiOutputLengthError)
+        ? error.message : "这一步没有完成。"
     }
     try { checkpoint() } catch {
       candidate.message += "；候选稿保存失败，请先复制正文"

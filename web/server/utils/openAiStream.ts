@@ -9,6 +9,8 @@ interface OpenAiStreamChunk {
   }>
 }
 
+export class OpenAiOutputLengthError extends Error {}
+
 /**
  * 按 UTF-8 字符边界解析 OpenAI 兼容 SSE，并在流结束时消费没有换行的尾段。
  * 网络分片不保证落在字符或 SSE 行边界，不能对每个 Buffer 单独调用 toString。
@@ -63,7 +65,7 @@ export function consumeOpenAiContentStream(
         }
       }
       if (choice?.finish_reason === 'length') {
-        finish(new Error('输出达到模型长度上限，可继续生成余下内容'))
+        finish(new OpenAiOutputLengthError('上游模型返回了长度截断，已保留正文，可继续生成'))
       } else if (choice?.finish_reason === 'stop') completed = true
       else if (choice?.finish_reason) finish(new Error(`模型提前结束（${choice.finish_reason}），请检查已生成内容`))
     }

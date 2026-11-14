@@ -1,12 +1,12 @@
 import { z } from "zod"
 import { stripEmoji } from "../shared/contentProduction.ts"
-import type { StartWritingStep } from "./articleWritingAgent.ts"
+import { describeWritingModelFailure, type StartWritingStep } from "./articleWritingAgent.ts"
 import { draftAnchorIssues, WRITING_EDITOR_RULES, WRITING_REVIEW_RULES } from "./writingAgentPolicy.ts"
 
 const reviewSchema = z.object({ issues: z.array(z.object({
-  excerpt: z.string().trim().min(1).max(300),
-  action: z.string().trim().min(1).max(280),
-})).max(6) })
+  excerpt: z.string().trim().min(1),
+  action: z.string().trim().min(1),
+})) })
 
 interface WritingRevisionOptions {
   draft: string
@@ -14,7 +14,7 @@ interface WritingRevisionOptions {
   model: string
   startStep: StartWritingStep
   progress: (_message: string) => void
-  complete: (_system: string, _user: string, _maxTokens: number, _timeout: number) => Promise<string>
+  complete: (_system: string, _user: string, _timeout: number) => Promise<string>
 }
 
 export async function reviseArticleDraft({ draft, signal, model, startStep, progress, complete }: WritingRevisionOptions) {
@@ -22,7 +22,7 @@ export async function reviseArticleDraft({ draft, signal, model, startStep, prog
   const finishReview = startStep("review", "独立审稿", model)
   let notes: string[] = []
   try {
-    const raw = await complete(WRITING_REVIEW_RULES, draft, 1250, 45_000)
+    const raw = await complete(WRITING_REVIEW_RULES, draft, 45_000)
     signal.throwIfAborted()
     const review = reviewSchema.parse(JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "")))
     notes = review.issues.filter(issue => draft.includes(issue.excerpt)).map(issue => `原句：${issue.excerpt}\n修改建议：${issue.action}`)
@@ -30,9 +30,11 @@ export async function reviseArticleDraft({ draft, signal, model, startStep, prog
       status: notes.length ? "changes_requested" : "done",
       output: notes.length ? notes.join("\n\n") : "未发现需要定向修改的句子，交给优化 Agent 做最后通读。",
     })
-  } catch {
+  } catch (error) {
     signal.throwIfAborted()
-    finishReview({ status: "failed", output: "审稿意见未返回。优化 Agent 会按文章表达规则独立通读。" })
+    const reason = error instanceof SyntaxError ? "审稿回复不是有效 JSON。"
+      : error instanceof z.ZodError ? "审稿回复缺少有效的原句或修改建议。" : describeWritingModelFailure(error)
+    finishReview({ status: "failed", output: `${reason} 优化 Agent 会按文章表达规则独立通读。` })
   }
 
   let issues: string[] = []
@@ -45,12 +47,12 @@ export async function reviseArticleDraft({ draft, signal, model, startStep, prog
       // 两次都从同一初稿修改，避免把上一次错引的数据带进返工稿。
       edited = stripEmoji(await complete(WRITING_EDITOR_RULES, JSON.stringify({
         draft, notes, corrections: issues,
-      }), 8192, 90_000)).trim()
+      }), 90_000)).trim()
       signal.throwIfAborted()
       finishEdit({ output: `收到 ${edited.length} 字改稿，等待复核。` })
-    } catch {
+    } catch (error) {
       signal.throwIfAborted()
-      finishEdit({ status: "failed", output: "优化 Agent 未返回完整改稿。" })
+      finishEdit({ status: "failed", output: describeWritingModelFailure(error) })
       issues = ["上次没有拿到完整正文。重新从初稿改写，返回全文和结尾。"]
       continue
     }

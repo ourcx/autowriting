@@ -207,7 +207,6 @@ accountName、accountInfo、personalExperiences、historicalArticles、speakingS
       { role: "user", content: prompt },
     ],
     temperature: 0.2,
-    max_tokens: 2500,
     stream: false,
   })
   const content = response.data.choices[0]?.message?.content

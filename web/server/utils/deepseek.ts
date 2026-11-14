@@ -21,7 +21,6 @@ export interface DeepSeekChatOptions {
   thinking?: boolean
   webSearch?: boolean
   readUrl?: boolean
-  maxTokens?: number
 }
 export interface DeepSeekCitation {
   type: 'url_citation'
@@ -42,6 +41,7 @@ export class DeepSeekError extends Error {
     this.status = status
   }
 }
+export class DeepSeekOutputLengthError extends DeepSeekError {}
 
 export const DEEPSEEK_ORIGIN = 'https://api.deepseek.com'
 export const DEEPSEEK_MODEL = 'deepseek-flash'
@@ -116,7 +116,6 @@ export function createDeepSeekClient(config: DeepSeekConfig, transport: typeof f
     // 审核在模型生成结束后才完成，调用方只接收审核通过的完整正文。
     const data = await json('/chat/completions', {
       messages: body.messages,
-      max_tokens: body.max_tokens,
       temperature: body.temperature,
       ...(Array.isArray(body.tools) && body.tools.length ? { tools: body.tools } : {}),
       model: DEEPSEEK_MODEL,
@@ -126,7 +125,8 @@ export function createDeepSeekClient(config: DeepSeekConfig, transport: typeof f
     }, signal, timeoutMs)
     const choice = object(Array.isArray(data.choices) ? data.choices[0] : undefined)
     if (choice.finish_reason === 'content_filter') throw new DeepSeekError('内容未通过 DeepSeek 安全检查', 422)
-    if (choice.finish_reason !== 'stop') throw new DeepSeekError('DeepSeek 未完整生成回答，请减少输入或调整输出上限')
+    if (choice.finish_reason === 'length') throw new DeepSeekOutputLengthError('DeepSeek 返回了长度截断，可能达到输出额度或上下文限制。')
+    if (choice.finish_reason !== 'stop') throw new DeepSeekError('DeepSeek 未返回完整结果。')
     const message = object(choice.message)
     if (typeof message.content !== 'string' || !message.content.trim()) throw new DeepSeekError('DeepSeek 未返回文本回答')
     return { message, content: message.content, usage: object(data.usage) }
@@ -150,14 +150,12 @@ export function createDeepSeekClient(config: DeepSeekConfig, transport: typeof f
         }
       }
       if (fileCount > 20 || textBytes > 8 * MiB) throw new DeepSeekError('最多 20 个文件、8 MiB 文本', 400)
-      const maxTokens = options.maxTokens ?? 4096
-      if (!Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 8192) throw new DeepSeekError('输出 Token 上限必须为 1–8192', 400)
       const tools = [
         ...(options.webSearch ? [{ type: 'deepseek_web_search' }] : []),
         ...(options.readUrl ? [{ type: 'deepseek_read_url' }] : []),
       ]
       const { message, content, usage } = await complete({
-        messages: options.messages, thinking: options.thinking, max_tokens: maxTokens, tools,
+        messages: options.messages, thinking: options.thinking, tools,
       })
       const annotations: DeepSeekCitation[] = []
       for (const raw of Array.isArray(message.annotations) ? message.annotations : []) {

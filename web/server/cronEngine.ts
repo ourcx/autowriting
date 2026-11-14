@@ -136,7 +136,6 @@ async function fetchTrending(job, aiConfig) {
         },
       ],
       temperature: 0.9,
-      max_tokens: 300,
     })
   } catch (err) {
     const status = err.response?.status
@@ -189,7 +188,6 @@ ${materialsDataset ? '- 充分利用上面提供的参考素材，但要用自�
       },
     ],
     temperature: 0.85,
-    max_tokens: 4096,
   })
 
   return stripEmoji(resp.data.choices[0].message.content.trim())
@@ -248,7 +246,6 @@ async function generateStyle(stylePrompt, aiConfig) {
       },
     ],
     temperature: 0.7,
-    max_tokens: 2500,
   })
 
   const css = resp.data.choices[0].message.content.trim()

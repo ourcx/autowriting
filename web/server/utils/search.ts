@@ -131,7 +131,6 @@ export async function generateSearchPlan(topic: string, aiConfig: AIConfig): Pro
         { role: "user", content: userPrompt },
       ],
       temperature: 0.7,
-      max_tokens: 1000,
     })
 
     const content = resp.data.choices[0].message.content.trim()
