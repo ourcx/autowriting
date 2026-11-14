@@ -15,6 +15,7 @@ import { hasArticleApiKey } from "./providerKeys.ts"
 import { prepareArticleWriting, type StartWritingStep } from "../articleWritingAgent.ts"
 import { buildCandidateSearchQuery, findWritingExamples } from "../rag.ts"
 import { createWritingWebResearch } from "../writingResearch.ts"
+import { WRITING_EDITOR_RULES, preservesDraftAnchors } from "../writingAgentPolicy.ts"
 import { nowDay } from "./date.ts"
 
 export async function streamCandidate(userId: string, articleId: string, id: string, rawConfig: unknown, response: Response): Promise<void> {
@@ -32,6 +33,7 @@ export async function streamCandidate(userId: string, articleId: string, id: str
     if (!response.destroyed && !response.writableEnded) response.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
   }
   let lastSaved = 0
+  let streamedCharacters = 0
   const initialLength = candidate.content.length
   const checkpoint = () => {
     candidate.updatedAt = new Date().toISOString()
@@ -170,22 +172,56 @@ ${input.writingAgent ? "涉及新增事实时就近引用已读网页的真实 U
         { role: "user", content: "上次输出中断。只从最后一个字符之后续写剩余正文，不重复已有内容，不重写标题，不加续写说明，完成结尾。" },
       ] : []),
     ]
-    if (input.writingAgent) progress("正在按作者语气写正文")
-    const finishWriting = startStep("write", initialLength ? "继续写正文" : "生成正文", model)
-    const upstream = await stream({ messages, temperature: 0.85, max_tokens: 8192 }, {
-      timeout: isDeepSeek ? 300000 : 120000, signal: controller.signal,
-    })
-    await consumeOpenAiContentStream(upstream.data, text => {
-      const cleanText = stripEmoji(text)
-      if (candidate.content.length + cleanText.length > 100000) throw new Error("候选稿超过长度限制，请缩短任务")
-      candidate.firstChunkAt ||= new Date().toISOString()
-      candidate.content += cleanText
-      if (Date.now() - lastSaved >= 1000) checkpoint()
-      if (cleanText) send("chunk", { text: cleanText })
-    }, { requireCompletion: true })
-    candidate.content = stripEmoji(candidate.content)
-    controller.signal.throwIfAborted()
-    finishWriting({ output: `本次生成 ${candidate.content.length - initialLength} 字正文。` })
+    if (!candidate.draftComplete) {
+      if (input.writingAgent) progress("正在按作者语气写正文")
+      const finishWriting = startStep("write", initialLength ? "继续写正文" : "生成正文", model)
+      const upstream = await stream({ messages, temperature: 0.85, max_tokens: 8192 }, {
+        timeout: isDeepSeek ? 300000 : 120000, signal: controller.signal,
+      })
+      await consumeOpenAiContentStream(upstream.data, text => {
+        const cleanText = stripEmoji(text)
+        if (candidate.content.length + cleanText.length > 100000) throw new Error("候选稿超过长度限制，请缩短任务")
+        candidate.firstChunkAt ||= new Date().toISOString()
+        candidate.content += cleanText
+        streamedCharacters += cleanText.length
+        if (Date.now() - lastSaved >= 1000) checkpoint()
+        if (cleanText) send("chunk", { text: cleanText })
+      }, { requireCompletion: true })
+      candidate.content = stripEmoji(candidate.content)
+      controller.signal.throwIfAborted()
+      if (input.writingAgent) candidate.draftComplete = true
+      finishWriting({ output: `本次生成 ${candidate.content.length - initialLength} 字正文。` })
+    }
+    if (input.writingAgent) {
+      progress("正在独立审稿，清理套话和重复表述")
+      const finishReview = startStep("edit", "独立审稿", model)
+      try {
+        // 独立编辑调用只读初稿，不带入调研指令、过程或推理上下文。
+        const draft = candidate.content
+        const { data } = await completeModel({
+          messages: [{ role: "system", content: WRITING_EDITOR_RULES }, { role: "user", content: draft }],
+          max_tokens: 8192, temperature: 0.25,
+        }, 1, 120_000, controller.signal)
+        controller.signal.throwIfAborted()
+        const choice = data.choices[0]
+        const edited = stripEmoji(choice?.message.content || "").trim()
+        if (choice?.finish_reason !== "stop" || !preservesDraftAnchors(draft, edited)) {
+          finishReview({ status: "skipped", output: "审稿结果未通过引用与完整性检查，已保留初稿。" })
+        } else {
+          candidate.content = edited
+          finishReview({ output: "已完成表达复审，核对了数字、引文和链接。" })
+        }
+        if (data.usage) {
+          try {
+            recordTokenUsage({ articleId, userId, model, operation: "deai", inputTokens: data.usage.prompt_tokens,
+              outputTokens: data.usage.completion_tokens, totalTokens: data.usage.total_tokens })
+          } catch { logger.warn("GENERATION", "审稿用量记录失败", { articleId, candidateId: id }) }
+        }
+      } catch {
+        controller.signal.throwIfAborted()
+        finishReview({ status: "failed", output: "审稿模型未完成，已保留初稿。" })
+      }
+    }
     candidate.status = "complete"
     candidate.message = "生成完成"
     candidate.finishedAt = new Date().toISOString()
@@ -209,9 +245,9 @@ ${input.writingAgent ? "涉及新增事实时就近引用已读网页的真实 U
     logger.warn("GENERATION", "候选稿中断", { articleId, candidateId: id, characters: candidate.content.length })
     send("error", { candidate: publicCandidate(candidate), message: candidate.message })
   } finally {
-    if (candidate.content.length > initialLength && candidate.model) {
+    if (streamedCharacters > 0 && candidate.model) {
       try {
-        recordTokenUsage({ articleId, userId, operation: "generate", model: candidate.model, outputTokens: Math.ceil((candidate.content.length - initialLength) / 1.5) })
+        recordTokenUsage({ articleId, userId, operation: "generate", model: candidate.model, outputTokens: Math.ceil(streamedCharacters / 1.5) })
       } catch { logger.warn("GENERATION", "候选稿用量记录失败", { articleId, candidateId: id }) }
     }
     clearTimeout(deadline)

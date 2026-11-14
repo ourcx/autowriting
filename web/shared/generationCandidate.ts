@@ -22,7 +22,7 @@ export interface CandidateTraceStep {
   id: string
   attempt: number
   title: string
-  kind: "context" | "history" | "decision" | "search" | "read" | "find" | "outline" | "write"
+  kind: "context" | "history" | "decision" | "search" | "read" | "find" | "outline" | "write" | "edit"
   status: CandidateTraceStatus
   startedAt: string
   finishedAt?: string

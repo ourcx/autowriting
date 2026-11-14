@@ -131,6 +131,8 @@ export async function smokeWritingAgent(base, token) {
   const modelBodies = []
   let stopReason = 'length'
   let continuation = false
+  const draft = '# 校舍建设进展\n\n目前能确定的只有一件事：已公示设计招标。开工时间仍未知。'
+  const rewritten = '# 校舍建设进展\n\n学校公示了设计招标，开工日期尚未公布。'
   const model = createServer(async (request, response) => {
     let raw = ''
     for await (const chunk of request) raw += chunk
@@ -138,11 +140,13 @@ export async function smokeWritingAgent(base, token) {
     modelBodies.push(input)
     if (input.stream) {
       response.writeHead(200, { 'Content-Type': 'text/event-stream' })
-      const content = continuation ? '开工时间仍未知。' : '# 校舍建设进展\n\n已公示设计招标。'
+      const content = continuation ? '开工时间仍未知。' : draft.replace('开工时间仍未知。', '')
       response.end(`data: ${JSON.stringify({ choices: [{ delta: { content }, finish_reason: stopReason }] })}\n\n`)
       return
     }
-    const content = input.messages[0].content.includes('调研 Agent')
+    const content = input.messages[0].content.includes('独立中文审稿编辑')
+      ? rewritten
+      : input.messages[0].content.includes('调研 Agent')
       ? '{"action":"finish","plan":{"angle":"公开招标进展"}}'
       : '先讲已经公示的招标，再说明开工时间未知。'
     response.writeHead(200, { 'Content-Type': 'application/json' })
@@ -188,10 +192,14 @@ export async function smokeWritingAgent(base, token) {
     continuation = true
     stopReason = 'stop'
     assert.match(await run(), /event: done/)
-    assert.deepEqual(modelBodies.map(body => Boolean(body.stream)), [false, false, true, true])
-    assert.equal(modelBodies.at(-1).messages.at(-2).content, partial.content)
+    assert.deepEqual(modelBodies.map(body => Boolean(body.stream)), [false, false, true, true, false])
+    assert.equal(modelBodies.at(-2).messages.at(-2).content, partial.content)
+    assert.deepEqual(modelBodies.at(-1).messages.map(({ role }) => role), ['system', 'user'])
+    assert.equal(modelBodies.at(-1).messages[1].content, draft)
     const [stored] = await json(`${root}/candidates`)
-    assert.match(stored.content, /开工时间仍未知/)
+    assert.equal(stored.content, rewritten)
+    assert.equal(stored.trace.find(step => step.kind === 'edit')?.status, 'done')
+    assert.ok(!Object.hasOwn(stored, 'draftComplete'))
     assert.ok(stored.referenceArticleIds.includes(history))
     assert.deepEqual(stored.trace.filter(step => step.kind === 'write').map(step => [step.attempt, step.status]), [[1, 'failed'], [2, 'done']])
     assert.equal(stored.trace.filter(step => step.kind === 'history').length, 1)

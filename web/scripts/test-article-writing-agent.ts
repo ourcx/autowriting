@@ -7,6 +7,8 @@ const directory = mkdtempSync(join(tmpdir(), "article-writing-agent-"))
 process.env.DATA_DIR = join(directory, "data")
 process.env.DRAFTS_DIR = join(directory, "drafts")
 process.env.LOG_DIR = join(directory, "logs")
+const { readArticlePage } = await import("../server/utils/search/readArticlePage.ts")
+const { preservesDraftAnchors } = await import("../server/writingAgentPolicy.ts")
 const { prepareArticleWriting } = await import("../server/articleWritingAgent.ts")
 const { findWritingExamples } = await import("../server/rag.ts")
 const { db, setSetting } = await import("../server/db.ts")
@@ -83,6 +85,45 @@ try {
   }
   const malformed = await prepareArticleWriting({ ...base, complete: async system => system.includes("调研 Agent") ? "无效动作" : "根据现有素材写作" })
   assert.match(malformed.prompt, /根据现有素材写作/)
+  const realFetch = globalThis.fetch
+  const publicUrl = "https://1.1.1.1/fixture"
+  try {
+    globalThis.fetch = async input => {
+      assert.equal(String(input), publicUrl)
+      const page = new Response(
+        `<body><nav>导航 ${"甲".repeat(180)}</nav><div id="js_content"><div><p>公众号嵌套容器中的第一段正文。</p></div><p>第二段也应读取。</p></div><footer>页脚</footer></body>`,
+        { headers: { "Content-Type": "text/html" } },
+      )
+      Object.defineProperty(page, "url", { value: "https://mp.weixin.qq.com/s/fixture" })
+      return page
+    }
+    const page = await readArticlePage(publicUrl, { sameOrigin: true })
+    assert.equal(page.method, "webfetch")
+    assert.match(page.content, /第一段正文[\s\S]*第二段/)
+    assert.doesNotMatch(page.content, /导航|页脚/)
+    await assert.rejects(readArticlePage("http://127.0.0.1/test"), /无法通过公网访问/)
+    globalThis.fetch = async () => new Response(
+      "<body><main>环境异常，请先完成验证</main>" + " ".repeat(220) + "</body>",
+      { headers: { "Content-Type": "text/html" } },
+    )
+    const fallback = await readArticlePage(publicUrl, {
+      fetchWithDeepSeek: async () => "[校方公告](https://example.com) 仅公示设计招标。",
+    })
+    assert.equal(fallback.method, "deepseek")
+    assert.match(fallback.content, /^\[校方公告\]/)
+  } finally { globalThis.fetch = realFetch }
+
+  const originalDraft = "# 招标进展\n\n能确定的只有一件事：公告于 5 月 10 日发布。原文「设计招标」见[公告](https://example.com/a)。"
+  const rewrite = "# 招标进展\n\n公告于 5 月 10 日发布，原文「设计招标」见[公告](https://example.com/a)。"
+  assert.equal(preservesDraftAnchors(originalDraft, rewrite), true)
+  assert.equal(preservesDraftAnchors(originalDraft, rewrite.replace("10 日", "11 日")), false)
+  assert.equal(preservesDraftAnchors(originalDraft, rewrite.replace("设计招标", "正式开工")), false)
+  assert.equal(preservesDraftAnchors(originalDraft, rewrite.replace("/a)", "/b)")), false)
+  assert.equal(preservesDraftAnchors(originalDraft, rewrite + "据说投资 72 万。"), false)
+  const unavailable = await prepareArticleWriting({
+    ...base, complete: async () => { throw new Error("provider temporarily unavailable") },
+  })
+  assert.match(unavailable.prompt, /已有用户素材/)
   const fallbackCalls: string[] = []
   const fallback = await prepareArticleWriting({
     ...base, task: "查公开项目的最新进展",

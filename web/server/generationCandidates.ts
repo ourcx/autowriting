@@ -7,6 +7,7 @@ import type { CandidateInput, GenerationCandidate } from "../shared/generationCa
 interface StoredCandidate extends GenerationCandidate {
   input: CandidateInput
   writingBrief?: string
+  draftComplete?: boolean
 }
 
 export class CandidateError extends Error {
@@ -25,9 +26,10 @@ function filename(userId: string, articleId: string, id: string): string {
 }
 
 export function publicCandidate(stored: StoredCandidate): GenerationCandidate {
-  const { input, writingBrief, ...candidate } = stored
+  const { input, writingBrief, draftComplete, ...candidate } = stored
   void input
   void writingBrief
+  void draftComplete
   return candidate
 }
 
