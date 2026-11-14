@@ -69,6 +69,13 @@ interface ArticleCompletion {
   usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
 }
 
+/**
+ * 创建文章模型
+ * @param config 配置
+ * @param userId 
+ * @param deepseek 
+ * @returns 
+ */
 export function createArticleModel(config: AIConfig, userId?: string, deepseek?: ReturnType<typeof createDeepSeekClient>) {
   const { url, model, headers } = buildLLMRequest(config)
   const isDeepSeek = config.articleProvider === "deepseek"
@@ -102,7 +109,7 @@ export async function callLLMWithRetry(
   url: string,
   body: Record<string, unknown>,
   headers: Record<string, string>,
-  maxRetries = 3,
+  maxRetries = 6,
   timeoutMs = 90000,
   signal?: AbortSignal,
 ): Promise<{ data: ArticleCompletion }> {
