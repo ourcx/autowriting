@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom'
 
 import { toast } from '../Toast/Toast'
 import './CoverGenerator.css'
-import { loadAIConfig, type CoverProvider } from '../../utils/aiConfig'
-import { generateCoverImage, generateOpenRouterCoverInBrowser, uploadBase64Image } from '../../utils/apiHelpers'
+import { loadAIConfig, loadGenCliPairingCode, type CoverProvider } from '../../utils/aiConfig'
+import { generateCoverImage, generateCoverWithLocalGenCli, generateOpenRouterCoverInBrowser, uploadBase64Image } from '../../utils/apiHelpers'
 
 interface CoverGeneratorProps {
   title: string
@@ -30,6 +30,13 @@ const PROVIDERS: ProviderOption[] = [
     desc: 'OpenRouter，浏览器直连',
     requiresKey: 'openrouterApiKey',
     keyLabel: 'OpenRouter API Key',
+  },
+  {
+    id: 'gencli',
+    name: 'Gen CLI',
+    desc: '本机调用 GPT Image 2',
+    requiresKey: null,
+    keyLabel: '本机配对码',
   },
   {
     id: 'zhipu',
@@ -135,6 +142,10 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
 
   useEffect(() => {
     const cfg  = loadAIConfig()
+    if (provider === 'gencli') {
+      setMissingKey(loadGenCliPairingCode() ? null : '本机配对码')
+      return
+    }
     const prov = PROVIDERS.find(p => p.id === provider)
     if (!prov || !prov.requiresKey) {
       setMissingKey(null)
@@ -157,6 +168,12 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
 
     try {
       const aiConfig = loadAIConfig()
+      if (provider === 'gencli') {
+        const { imageUrl } = await generateCoverWithLocalGenCli(customPrompt, loadGenCliPairingCode())
+        setGeneratedImage(imageUrl)
+        persistCover(imageUrl)
+        return
+      }
 
       const body: Record<string, unknown> = {
         title,
@@ -183,7 +200,7 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
         body.baseImageUrl = generatedImage
       }
 
-      let data = provider === 'openrouter'
+      let data: { imageUrl: string; warning?: string } = provider === 'openrouter'
         ? await generateOpenRouterCoverInBrowser(customPrompt, aiConfig.openrouterApiKey)
         : await generateCoverImage(body)
 
@@ -230,7 +247,7 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
     if (!generatedImage) return
     const a = document.createElement('a')
     a.href = generatedImage
-    a.download = `cover-${Date.now()}.png`
+    a.download = `cover-${Date.now()}.${generatedImage.startsWith('data:image/jpeg;') ? 'jpg' : 'png'}`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -240,10 +257,11 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
     if (!generatedImage) return
     setIsSavingToLibrary(true)
     try {
+      const jpeg = generatedImage.startsWith('data:image/jpeg;')
       await uploadBase64Image({
         data: generatedImage,
-        mimeType: 'image/png',
-        originalName: `cover-${title}-${Date.now()}.png`,
+        mimeType: jpeg ? 'image/jpeg' : 'image/png',
+        originalName: `cover-${title}-${Date.now()}.${jpeg ? 'jpg' : 'png'}`,
       })
       toast.success('已保存到图片库')
     } catch (err) {
@@ -384,6 +402,9 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
           <div className="cg-notice cg-notice--info">
             GPT Image 2 会从当前浏览器直接请求 OpenRouter。Key 在「AI 配置 → 封面生成」中保存，不经过部署服务器。
           </div>
+        )}
+        {provider === 'gencli' && (
+          <div className="cg-notice cg-notice--info">由本机 Gen CLI 调用模型，生成后可在这里预览、下载或手动保存到图片库。</div>
         )}
 
         {/* 图像提示词 */}

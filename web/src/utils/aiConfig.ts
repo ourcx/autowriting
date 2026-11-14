@@ -16,7 +16,7 @@ function authFetch(url: string, init: RequestInit = {}): Promise<Response> {
 }
 
 export type ArticleProvider = 'maas' | 'openai' | 'openai-compat' | 'zhipu' | 'deepseek'
-export type CoverProvider = 'local' | 'openai' | 'openrouter' | 'stability' | 'siliconflow' | 'z-image' | 'qwen-edit' | 'doubao' | 'zhipu'
+export type CoverProvider = 'local' | 'openai' | 'openrouter' | 'gencli' | 'stability' | 'siliconflow' | 'z-image' | 'qwen-edit' | 'doubao' | 'zhipu'
 
 export interface AIConfig {
   // 服务商公共 Key（工具自己的 Key 非空时仍优先使用工具 Key）
@@ -183,6 +183,14 @@ export const CONFIG_PRESETS = [
 
 /** 同步读取（优先 localStorage，保证组件渲染不阻塞） */
 export function loadAIConfig(): AIConfig {
+  const config = loadStoredAIConfig()
+  try {
+    if (localStorage.getItem(GENCLI_COVER_KEY) === 'on') return { ...config, coverProvider: 'gencli' }
+  } catch { /* ignore */ }
+  return config
+}
+
+function loadStoredAIConfig(): AIConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
@@ -190,6 +198,18 @@ export function loadAIConfig(): AIConfig {
     }
   } catch { /* ignore */ }
   return { ...DEFAULT_CONFIG }
+}
+
+const GENCLI_PAIRING_KEY = 'dashy-gencli-pairing'
+const GENCLI_COVER_KEY = 'dashy-gencli-cover'
+
+export function loadGenCliPairingCode(): string {
+  try { return localStorage.getItem(GENCLI_PAIRING_KEY) || '' }
+  catch { return '' }
+}
+
+export function saveGenCliPairingCode(code: string): void {
+  localStorage.setItem(GENCLI_PAIRING_KEY, code.trim())
 }
 
 /**
@@ -207,12 +227,11 @@ export async function syncAIConfigFromServer(): Promise<AIConfig | null> {
       typeof data.value === 'string'
         ? (JSON.parse(data.value) as Partial<AIConfig>)
         : (data.value as Partial<AIConfig>)
-    // OpenRouter Key 只属于当前浏览器，服务端配置同步不能覆盖它。
-    const merged = { ...DEFAULT_CONFIG, ...serverConfig, openrouterApiKey: loadAIConfig().openrouterApiKey }
+    const merged = { ...DEFAULT_CONFIG, ...serverConfig, openrouterApiKey: loadStoredAIConfig().openrouterApiKey }
     // 写回 localStorage 保证后续同步读取拿到最新值
     localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
     window.dispatchEvent(new CustomEvent('ai-config-updated'))
-    return merged
+    return loadAIConfig()
   } catch {
     return null
   }
@@ -220,14 +239,17 @@ export async function syncAIConfigFromServer(): Promise<AIConfig | null> {
 
 /** 保存配置：同步写 localStorage + 异步写服务端 */
 export function saveAIConfig(config: AIConfig): void {
+  // 保留服务器封面选择供定时任务使用。本机选择和配对码各自只保存在浏览器。
+  const browserGenCli = config.coverProvider === 'gencli'
+  const persisted = browserGenCli ? { ...config, coverProvider: loadStoredAIConfig().coverProvider } : config
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(config))
+    localStorage.setItem(GENCLI_COVER_KEY, browserGenCli ? 'on' : '')
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted))
     window.dispatchEvent(new CustomEvent('ai-config-updated'))
   } catch { /* ignore */ }
 
-  // 其他配置沿用服务端同步；OpenRouter Key 按用户要求只保存在当前浏览器。
-  const { openrouterApiKey: _browserOnlyKey, ...serverConfig } = config
-  authFetch('/api/settings', {
+  const { openrouterApiKey: _browserOnlyKey, ...serverConfig } = persisted
+  void authFetch('/api/settings', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body:    JSON.stringify({ 'ai-config': serverConfig }),
@@ -342,5 +364,6 @@ export const COVER_PROVIDER_PRESETS = [
   { id: 'qwen-edit'   as CoverProvider, name: 'Qwen 图片编辑', desc: 'SiliconFlow，对已有封面精修' },
   { id: 'openai'      as CoverProvider, name: 'DALL-E 3',      desc: '需要 OpenAI API Key' },
   { id: 'openrouter'  as CoverProvider, name: 'GPT Image 2',   desc: 'OpenRouter Key 保存在当前浏览器' },
+  { id: 'gencli'     as CoverProvider, name: 'Gen CLI',      desc: '从当前电脑调用 GPT Image 2' },
   { id: 'stability'   as CoverProvider, name: 'Stability AI',  desc: '需要 Stability API Key' },
 ]

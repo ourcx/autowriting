@@ -4,7 +4,7 @@
  * ============================================================ */
 
 import { useSyncExternalStore } from 'react'
-import { loadAIConfig, saveAIConfig, AIConfig } from '../utils/aiConfig'
+import { loadAIConfig, loadGenCliPairingCode, saveAIConfig, AIConfig } from '../utils/aiConfig'
 import { fetchDeepSeekStatus } from '../utils/apiHelpers'
 
 // ── 服务端配置状态（从 /api/config/status 拉取）──
@@ -116,6 +116,7 @@ export function isCoverReady(s: ConfigState): boolean {
   const { localConfig, serverStatus } = s
   if (localConfig.coverProvider === 'local') return true
   if (localConfig.coverProvider === 'openrouter') return Boolean(localConfig.openrouterApiKey)
+  if (localConfig.coverProvider === 'gencli') return Boolean(loadGenCliPairingCode())
   const localReady = localConfig.coverProvider === 'doubao'
     ? Boolean(localConfig.doubaoApiKey && localConfig.doubaoModel)
     : ['siliconflow', 'z-image', 'qwen-edit'].includes(localConfig.coverProvider)

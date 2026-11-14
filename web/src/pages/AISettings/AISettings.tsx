@@ -8,13 +8,15 @@ import {
 import {
   AIConfig,
   loadAIConfig,
+  loadGenCliPairingCode,
+  saveGenCliPairingCode,
   PROVIDER_PRESETS,
   COVER_PROVIDER_PRESETS,
   CONFIG_PRESETS,
 } from '../../utils/aiConfig'
 import PageHeader from '../../components/PageHeader/PageHeader'
 import { useConfigStore, setLocalConfig, fetchServerStatus } from '../../store/useConfigStore'
-import { extractErrorMessage, saveDeepSeekKey, testAIConnection } from '../../utils/apiHelpers'
+import { extractErrorMessage, saveDeepSeekKey, testAIConnection, testLocalGenCli } from '../../utils/apiHelpers'
 import './AISettings.css'
 
 type Section = 'overview' | 'quickstart' | 'providers' | 'article' | 'cover' | 'search' | 'advanced' | 'cdn'
@@ -53,6 +55,9 @@ export default function AISettings() {
   const [deepseekKey, setDeepseekKey] = useState('')
   const [deepseekSaving, setDeepseekSaving] = useState(false)
   const [deepseekKeyResult, setDeepseekKeyResult] = useState<{ ok: boolean; msg: string } | null>(null)
+  const [gencliTesting, setGencliTesting] = useState(false)
+  const [gencliCode, setGencliCode] = useState(loadGenCliPairingCode)
+  const [gencliResult, setGencliResult] = useState<{ ok: boolean; msg: string } | null>(null)
 
   useEffect(() => {
     setConfig(loadAIConfig())
@@ -83,6 +88,14 @@ export default function AISettings() {
       setActiveSection('providers')
       return
     }
+    try { saveGenCliPairingCode(gencliCode) }
+    catch {
+      if (config.coverProvider === 'gencli') {
+        setActiveSection('cover')
+        setGencliResult({ ok: false, msg: '浏览器未能保存本机配对码' })
+        return
+      }
+    }
     setLocalConfig(config)
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
@@ -110,6 +123,19 @@ export default function AISettings() {
     const result = await testAIConnection(config)
     setTestResult(result)
     setTesting(false)
+  }
+
+  const checkGenCli = async () => {
+    setGencliTesting(true)
+    setGencliResult(null)
+    try {
+      await testLocalGenCli(gencliCode)
+      setGencliResult({ ok: true, msg: '本机客户端已连接' })
+    } catch (error) {
+      setGencliResult({ ok: false, msg: extractErrorMessage(error, '本机客户端连接失败') })
+    } finally {
+      setGencliTesting(false)
+    }
   }
 
   // 应用快速预设
@@ -189,7 +215,8 @@ export default function AISettings() {
     {
       id: 'cover', icon: <Image size={18} />, name: '封面生成',
       detail: coverName,
-      status: config.coverProvider === 'local' ? '本地生成' : localCoverReady ? '浏览器已配置'
+      status: config.coverProvider === 'local' ? '本地生成'
+        : config.coverProvider === 'gencli' ? gencliCode.trim() ? '本机配对' : '待配对' : localCoverReady ? '浏览器已配置'
         : config.coverProvider === serverStatus?.coverProvider && serverStatus.coverReady ? '服务端已配置' : '待配置',
     },
   ] as const
@@ -797,6 +824,27 @@ export default function AISettings() {
                   </p>
                 </div>
               </div>
+              )}
+
+              {config.coverProvider === 'gencli' && (
+                <div className="as-card">
+                  <div className="as-card-section-label">本机 Gen CLI · GPT Image 2</div>
+                  <p className="as-card-desc">在已安装 gencli 的电脑上<a href="/dashy-gencli.py" download>下载本机客户端</a>，在下载目录运行下方命令，然后填入终端显示的配对码。</p>
+                  <code>python3 dashy-gencli.py</code>
+                  <div className="as-field">
+                    <label className="as-label" htmlFor="as-gencli-pairing">本机配对码</label>
+                    <input className="as-input as-input-mono" id="as-gencli-pairing" type="password" autoComplete="off"
+                      maxLength={80} disabled={gencliTesting} value={gencliCode}
+                      onChange={e => { setGencliCode(e.target.value); setGencliResult(null) }} />
+                    <p className="as-hint">配对码只保存在当前浏览器，重启客户端后会换一个码。</p>
+                  </div>
+                  <div className="as-test-row">
+                    <button className="as-btn-test" onClick={() => void checkGenCli()} disabled={gencliTesting || !gencliCode.trim()}>
+                      {gencliTesting ? '连接中…' : '测试本机连接'}
+                    </button>
+                    {gencliResult && <span role="status" className={`as-test-msg as-test-msg--${gencliResult.ok ? 'ok' : 'err'}`}>{gencliResult.msg}</span>}
+                  </div>
+                </div>
               )}
 
               {config.coverProvider === 'openrouter' && (

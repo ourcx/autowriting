@@ -4,7 +4,7 @@ import { parseCanvasLibraryImage, type CanvasLibraryImage } from "../../shared/c
  * ============================================================ */
 
 import axios, { AxiosError } from 'axios'
-import { AIConfig } from './aiConfig'
+import { AIConfig, loadGenCliPairingCode } from './aiConfig'
 import { CanvasDocument, parseCanvasDocument } from '../../shared/canvasDsl'
 import type { CanvasSource } from '../../shared/canvasArticle'
 import {
@@ -119,6 +119,7 @@ export function isLocalApiKeyConfigured(cfg: AIConfig): boolean {
 export function isLocalCoverKeyConfigured(cfg: AIConfig): boolean {
   if (cfg.coverProvider === 'local') return true
   if (cfg.coverProvider === 'openrouter') return Boolean(cfg.openrouterApiKey)
+  if (cfg.coverProvider === 'gencli') return Boolean(loadGenCliPairingCode())
   if (cfg.coverProvider === 'doubao') return Boolean(cfg.doubaoApiKey && cfg.doubaoModel)
   if (cfg.coverProvider === 'zhipu') return Boolean(cfg.zhipuImageApiKey || cfg.zhipuApiKey)
   if (['siliconflow', 'z-image', 'qwen-edit'].includes(cfg.coverProvider)) return Boolean(cfg.siliconflowApiKey)
@@ -859,6 +860,61 @@ export async function generateCoverImage(input: Record<string, unknown>): Promis
     return response.data as { imageUrl: string; warning?: string }
   } catch (error) {
     throw normalizeApiError(error)
+  }
+}
+
+async function callLocalGenCli(path: "status" | "generate", code: string, prompt?: string): Promise<Response> {
+  if (!code.trim()) throw new Error("请在「AI 配置 → 封面」填写本机配对码。")
+  // 浏览器直接访问回环地址。使用原生 fetch，避免传出 Dashy 的登录请求头。
+  const init: RequestInit & { targetAddressSpace: "loopback" } = {
+    method: "POST",
+    credentials: "omit",
+    redirect: "error",
+    targetAddressSpace: "loopback",
+    headers: { "Content-Type": "application/json", "X-Dashy-Pairing": code.trim() },
+    body: JSON.stringify(prompt === undefined ? {} : { prompt }),
+    signal: AbortSignal.timeout(path === "status" ? 5000 : 415_000),
+  }
+  let response: Response
+  try {
+    response = await fetch(`http://127.0.0.1:18472/${path}`, init)
+  } catch {
+    throw new Error("连不上本机 Gen CLI。请确认终端客户端在运行，并允许浏览器访问本机网络。")
+  }
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({})) as { error?: string }
+    throw new Error(data.error || `本机 Gen CLI 请求失败（${response.status}）`)
+  }
+  return response
+}
+
+export async function testLocalGenCli(code: string): Promise<void> {
+  const data = await (await callLocalGenCli("status", code)).json() as { ready?: boolean }
+  if (!data.ready) throw new Error("本机 Gen CLI 客户端没有就绪。")
+}
+
+export async function generateCoverWithLocalGenCli(prompt: string, code: string): Promise<{ imageUrl: string }> {
+  const image = await (await callLocalGenCli("generate", code, prompt.trim())).blob()
+  if (!/^image\/(?:png|jpeg|webp)$/.test(image.type) || !image.size || image.size > 10 * 1024 * 1024) {
+    throw new Error("本机 Gen CLI 返回的图片格式或大小无效。")
+  }
+  const bitmap = await createImageBitmap(image).catch(() => { throw new Error("浏览器无法解码 Gen CLI 返回的图片。") })
+  try {
+    // 统一为 JPEG 并缩小到封面尺寸，保持预览刷新和发布时可读取。
+    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height))
+    const canvas = document.createElement("canvas")
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale))
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale))
+    const context = canvas.getContext("2d")
+    if (!context) throw new Error("浏览器无法读取 Gen CLI 图片。")
+    context.fillStyle = "#fff"
+    context.fillRect(0, 0, canvas.width, canvas.height)
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    const imageUrl = canvas.toDataURL("image/jpeg", 0.9)
+    if (!imageUrl.startsWith("data:image/jpeg;base64,")) throw new Error("浏览器未能生成封面预览。")
+    return { imageUrl }
+  } finally {
+    bitmap.close()
   }
 }
 
