@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react"
-import { AlertCircle, Check, CheckCircle, ChevronDown, Copy, FileText, RefreshCw, Search, Square, X, Zap } from "lucide-react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { AlertCircle, CheckCircle, Copy, ExternalLink, FileText, RefreshCw, Square, X, Zap } from "lucide-react"
 import {
   createGenerationCandidates, extractErrorMessage, fetchGenerationCandidates,
-  fetchJson, streamGenerationCandidate,
+  streamGenerationCandidate,
 } from "../../utils/apiHelpers"
 import type { CandidatePlatform, CandidateTarget, GenerationCandidate } from "../../../shared/generationCandidate"
 import "./GenerateModal.css"
@@ -18,13 +18,6 @@ interface Props {
   onClose: () => void
 }
 
-interface ReferenceArticle {
-  dir: string
-  title: string
-  snippet: string
-  sim: number
-  types?: string[]
-}
 const STATUS = { queued: "排队中", generating: "生成中", complete: "已完成", interrupted: "已中断" }
 
 export default function GenerateModal({ articleId, task, materials, sourceArticle = "", aiConfig, initialPlatform = "wechat", onComplete, onClose }: Props) {
@@ -36,25 +29,19 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
   const [creating, setCreating] = useState(false)
   const [applying, setApplying] = useState(false)
   const [error, setError] = useState("")
-  const [references, setReferences] = useState<ReferenceArticle[]>([])
-  const [selected, setSelected] = useState<string[]>([])
-  const [referencesLoading, setReferencesLoading] = useState(false)
-  const [referenceError, setReferenceError] = useState("")
   const [loading, setLoading] = useState(true)
   const controllers = useRef(new Map<string, AbortController>())
   const stopped = useRef(false)
   const starting = useRef(false)
   const mounted = useRef(true)
-  const referencesController = useRef<AbortController | null>(null)
-  const preparationController = useRef<AbortController | null>(null)
-  const [now, setNow] = useState(Date.now())
+  const [now, setNow] = useState(() => Date.now())
   const active = rows.find(row => row.id === activeId)
   const busy = creating || rows.some(row => row.status === "generating")
 
   const update = (id: string, patch: Partial<GenerationCandidate>) => {
     if (mounted.current) setRows(previous => previous.map(row => row.id === id ? { ...row, ...patch } : row))
   }
-  const reload = async () => {
+  const reload = useCallback(async () => {
     setLoading(true)
     setError("")
     try {
@@ -65,7 +52,7 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
     } catch (cause) {
       if (mounted.current) setError(extractErrorMessage(cause))
     } finally { if (mounted.current) setLoading(false) }
-  }
+  }, [articleId])
   useEffect(() => {
     mounted.current = true
     void reload()
@@ -74,10 +61,8 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
       mounted.current = false
       stopped.current = true
       running.forEach(controller => controller.abort())
-      referencesController.current?.abort()
-      preparationController.current?.abort()
     }
-  }, [articleId])
+  }, [reload])
   useEffect(() => {
     if (!busy) return
     const timer = setInterval(() => setNow(Date.now()), 1000)
@@ -95,29 +80,6 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
     return () => clearInterval(timer)
   }, [articleId, busy, creating])
 
-  const loadReferences = async () => {
-    const controller = new AbortController()
-    referencesController.current?.abort()
-    referencesController.current = controller
-    setReferencesLoading(true)
-    setReferenceError("")
-    try {
-      const token = localStorage.getItem("auth_token")
-      const result = await fetchJson<{ candidates: ReferenceArticle[] }>("/api/rag/candidates", {
-        method: "POST", signal: controller.signal,
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ query: task, materials, topK: 8, aiConfig }),
-      })
-      if (mounted.current && !controller.signal.aborted) {
-        const candidates = result.candidates || []
-        setReferences(candidates)
-        setSelected(candidates.slice(0, 2).map(candidate => candidate.dir))
-      }
-    } catch (cause) {
-      if (!controller.signal.aborted && mounted.current) setReferenceError(extractErrorMessage(cause))
-    } finally { if (mounted.current) setReferencesLoading(false) }
-  }
-
   const run = async (candidate: GenerationCandidate): Promise<GenerationCandidate | null> => {
     if (controllers.current.has(candidate.id)) return null
     const controller = new AbortController()
@@ -134,6 +96,7 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
           setRows(previous => previous.map(row => row.id === candidate.id
             ? { ...row, content: row.content + event.text, firstChunkAt: row.firstChunkAt || new Date().toISOString(), message: "正在写作" } : row))
         }
+        if (event.event === "status" && event.message) update(candidate.id, { message: event.message })
         if (event.event === "error") update(candidate.id, { status: "interrupted", message: event.message || "生成中断" })
       })
     } catch (cause) {
@@ -148,39 +111,22 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
     stopped.current = false
     setCreating(true)
     setError("")
-    const preparation = new AbortController()
-    preparationController.current = preparation
-    const preparationTimeout = setTimeout(() => preparation.abort(), 20000)
     try {
-      let selectedRagContext = ""
-      if (selected.length) {
-        const token = localStorage.getItem("auth_token")
-        const context = await fetchJson<{ context: string }>("/api/rag/context", {
-          method: "POST", signal: preparation.signal,
-          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-          body: JSON.stringify({ dirs: selected }),
-        })
-        selectedRagContext = context.context || ""
-      }
-      if (stopped.current || !mounted.current) return
       const created = await createGenerationCandidates(articleId, {
-        task, materials, sourceArticle, platform, count, selectedRagContext, referenceArticleIds: selected,
+        task, materials, sourceArticle, platform, count, selectedRagContext: "", referenceArticleIds: [], writingAgent: true,
       })
       if (stopped.current || !mounted.current) return
       setRows(previous => [...created, ...previous])
       setActiveId(created[0].id)
-      clearTimeout(preparationTimeout)
       await Promise.all(created.map(candidate => run(candidate)))
     } catch (cause) { if (mounted.current) setError(extractErrorMessage(cause)) }
     finally {
-      clearTimeout(preparationTimeout)
       starting.current = false
       if (mounted.current) setCreating(false)
     }
   }
   const stop = () => {
     stopped.current = true
-    preparationController.current?.abort()
     controllers.current.forEach(controller => controller.abort())
   }
   const close = () => { stop(); onClose() }
@@ -206,12 +152,6 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
     try { await navigator.clipboard.writeText(content) }
     catch { setError("复制失败，请选中正文后手动复制") }
   }
-  const toggleReference = (dir: string) => {
-    if (busy) return
-    setSelected(previous => previous.includes(dir) ? previous.filter(id => id !== dir) : [...previous, dir])
-  }
-  const similarityTone = (sim: number) => sim >= 80 ? "high" : sim >= 60 ? "medium" : "low"
-
   return <div className="gm-overlay">
     <section className="gm-modal gc-modal" role="dialog" aria-modal="true" aria-label="生成候选稿">
       <header className="gm-header">
@@ -240,50 +180,7 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
           {busy ? "生成中" : platform === "both" ? "生成双平台版本" : `生成${platform === "wechat" ? "公众号母稿" : "今日头条版本"}`}
         </button>
       </div>
-      <details className="gc-references">
-        <summary>
-          <span className="gc-reference-summary"><ChevronDown size={15} /><strong>更多设置</strong><span>往期参考已选 {selected.length} 篇</span></span>
-          {references.length > 0 && <span className="gc-reference-total">{references.length} 篇相关</span>}
-        </summary>
-        <div className="gc-reference-body">
-          <p className="gc-cost">本次会调用模型 {platform === "both" ? count * 2 : count} 次。所选公众号与今日头条版本会同时生成。</p>
-          <div className="gc-reference-actions">
-            <div><strong>参考文章</strong><span>只影响本次生成，不会修改原文</span></div>
-            <button className="gc-reference-search" disabled={referencesLoading || busy} onClick={() => void loadReferences()}>
-              {referencesLoading ? <RefreshCw size={14} className="gm-spinner" /> : <Search size={14} />}
-              {referencesLoading ? "检索中" : references.length ? "重新检索" : "检索往期文章"}
-            </button>
-          </div>
-          {referenceError && <div className="gc-reference-error" role="alert"><AlertCircle size={14} />{referenceError}</div>}
-          {!referencesLoading && !referenceError && references.length === 0 && (
-            <div className="gc-reference-empty">按需检索，不会阻塞直接生成</div>
-          )}
-          {references.length > 0 && <div className="gc-reference-grid">
-            {references.map(reference => {
-              const checked = selected.includes(reference.dir)
-              const tone = similarityTone(reference.sim)
-              return <button
-                type="button"
-                key={reference.dir}
-                className={`gc-reference-card gc-reference-card--${tone} ${checked ? "gc-reference-card--selected" : ""}`}
-                aria-pressed={checked}
-                disabled={busy}
-                onClick={() => toggleReference(reference.dir)}
-              >
-                <span className="gc-reference-check">{checked && <Check size={13} />}</span>
-                <span className="gc-reference-content">
-                  <strong>{reference.title}</strong>
-                  <span className="gc-reference-meta">
-                    <span title={reference.dir}>{reference.dir}</span>
-                    <em>{reference.sim}% 相似</em>
-                  </span>
-                  <span className="gc-reference-snippet">{reference.snippet || "暂无摘要"}</span>
-                </span>
-              </button>
-            })}
-          </div>}
-        </div>
-      </details>
+      <p className="gc-cost">自动查找历史文章和表达样本，按需搜索网页、核对来源，再拟提纲和成文。会发起多次模型请求，联网搜索和读取网页可能另行计费。</p>
       {error && <div className="gc-error" role="alert"><AlertCircle size={16} />{error}</div>}
       <div className="gc-toolbar">
         <span>{busy ? "候选稿生成中" : loading ? "正在读取候选稿" : "候选稿"}</span>
@@ -307,6 +204,14 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
               <button className="gm-icon-btn" title="复制正文" aria-label={`复制${row.label}`} disabled={!row.content} onClick={() => void copy(row.content)}><Copy size={15} /></button>
             </header>
             <p className={row.status === "interrupted" ? "gc-error" : "gc-message"}>{row.message}</p>
+            {Boolean(row.researchSources?.length || row.referenceArticleIds?.length) && (
+              <details className="gc-evidence">
+                <summary>本次参考了 {row.referenceArticleIds?.length || 0} 篇历史文章，读了 {row.researchSources?.length || 0} 个网页</summary>
+                {!!row.researchSources?.length && <ul>{row.researchSources.map(source => (
+                  <li key={source.url}><a href={source.url} target="_blank" rel="noreferrer">{source.title} <ExternalLink size={12} /></a></li>
+                ))}</ul>}
+              </details>
+            )}
             <pre>{row.content || "等待正文输出"}</pre>
             <footer>
               {(row.status === "interrupted" || row.status === "queued") && <button className="gm-btn-secondary" disabled={busy || applying} onClick={() => { stopped.current = false; void run(row) }}><RefreshCw size={14} />{row.content ? "继续生成" : "重试生成"}</button>}

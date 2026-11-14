@@ -26,7 +26,7 @@ export function createSerperProvider(apiKey: string, engine = "google"): SearchP
       return "Serper 搜索需要有效的 API Key"
     },
 
-    async search(query: string, topK = 5): Promise<SearchResult[]> {
+    async search(query: string, topK = 5, signal?: AbortSignal): Promise<SearchResult[]> {
       if (!query) return []
 
       try {
@@ -43,7 +43,7 @@ export function createSerperProvider(apiKey: string, engine = "google"): SearchP
             num: topK,
             engine,
           }),
-          signal: AbortSignal.timeout(15000),
+          signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
         })
 
         if (!resp.ok) {

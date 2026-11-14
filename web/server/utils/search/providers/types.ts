@@ -13,5 +13,5 @@ export interface SearchProvider {
   /** 不可用时的提示信息 */
   unavailableHint(): string
   /** 执行搜索，返回结果列表 */
-  search(query: string, topK?: number): Promise<SearchResult[]>
+  search(query: string, topK?: number, signal?: AbortSignal): Promise<SearchResult[]>
 }

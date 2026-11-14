@@ -348,18 +348,13 @@ export default function ArticleEditor() {
       setActiveTab('task')
       return
     }
-    if (!data.materials.trim()) {
-      setGenerateError('请先填写或采集素材，再生成候选稿。')
-      setActiveTab('materials')
-      return
-    }
     if (!apiKeyReady) {
       setGenerateError('未配置 AI API Key，请先前往「AI 配置」页面填写后再生成。')
       return
     }
     setGenerateError(null)
     setShowGenerateModal(true)
-  }, [apiKeyReady, data.materials, data.task, setActiveTab])
+  }, [apiKeyReady, data.task, setActiveTab])
 
   useEffect(() => {
     if (!articleId) return
@@ -384,7 +379,7 @@ export default function ArticleEditor() {
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'g') {
         e.preventDefault()
-        if (data.task && data.materials) handleGenerate()
+        if (data.task.trim()) handleGenerate()
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
         e.preventDefault()
@@ -529,7 +524,7 @@ export default function ArticleEditor() {
   const nextActionDisabled = activeTab === 'task'
     ? !data.task.trim()
     : activeTab === 'materials'
-      ? !data.materials.trim()
+      ? !data.task.trim()
       : activeTab === 'article'
         ? !data.article.trim()
         : activeTab === 'analysis' || activeTab === 'xiaohongshu'
@@ -537,23 +532,21 @@ export default function ArticleEditor() {
           : activeTab === 'toutiao'
             ? data.articleToutiao.trim()
               ? false
-              : !data.task.trim() || !data.materials.trim() || !apiKeyReady
+              : !data.task.trim() || !apiKeyReady
             : false
   const showGenerateAction = activeTab === 'materials'
     || activeTab === 'article'
     || activeTab === 'analysis'
     || activeTab === 'toutiao'
-  const generationReady = Boolean(data.task.trim() && data.materials.trim() && apiKeyReady)
+  const generationReady = Boolean(data.task.trim() && apiKeyReady)
   const generationActionLabel = generationPlatform === 'toutiao'
     ? data.articleToutiao.trim() ? '继续生成头条候选稿' : '生成头条候选稿'
     : data.article.trim() ? '继续生成候选稿' : '生成候选稿'
   const generationActionTitle = !data.task.trim()
     ? '请先填写写作任务'
-    : !data.materials.trim()
-      ? '请先填写或采集素材'
-      : !apiKeyReady
-        ? '请先配置 AI API Key'
-        : generationActionLabel
+    : !apiKeyReady
+      ? '请先配置 AI API Key'
+      : generationActionLabel
 
   function handleNextAction() {
     if (activeTab === 'task') setActiveTab('materials')
@@ -1013,7 +1006,7 @@ export default function ArticleEditor() {
                   <button className="btn btn-primary" onClick={() => setActiveTab(publishPlatform === 'toutiao' ? 'toutiao' : 'article')}>
                     <Edit3 size={16} />去编辑正文
                   </button>
-                  <button className="btn btn-secondary" onClick={handleGenerate} disabled={!data.task.trim() || !data.materials.trim()}>
+                  <button className="btn btn-secondary" onClick={handleGenerate} disabled={!data.task.trim() || !apiKeyReady}>
                     <Zap size={16} />生成文章
                   </button>
                 </div>}

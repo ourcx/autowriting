@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
-import { mkdtemp } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -18,7 +18,7 @@ try {
   let articleToutiao = ''
   let failSave = false
   let prematureEof = false
-  let referenceCalls = 0
+  let generatedInput
   page.on('pageerror', error => errors.push(error.message))
   await page.addInitScript(() => localStorage.setItem('auth_token', 'candidate-ui-fixture'))
   await page.route('**/api/**', async route => {
@@ -29,6 +29,7 @@ try {
     if (pathname === '/api/articles/fixture/candidates') {
       if (request.method() === 'GET') return route.fulfill({ json: rows })
       const input = request.postDataJSON()
+      generatedInput = input
       rows = input.platform === 'both'
         ? Array.from({ length: input.count }, (_, index) => ['wechat', 'toutiao'].map(platform => ({
           id: `pair-${index}-${platform}`, batchId: 'pair-batch', pairId: `pair-${index}`,
@@ -56,6 +57,8 @@ try {
       }
       row.content = `# ${row.label}标题\n\n${'这是候选正文。'.repeat(90)}`
       row.status = id === 'candidate-1' && firstTry ? 'interrupted' : 'complete'
+      row.referenceArticleIds = ['20260901-campus', '20260820-career']
+      row.researchSources = [{ title: '校方公告', url: 'https://example.com/notice', read: true }]
       row.message = row.status === 'complete' ? '生成完成' : '输出达到模型长度上限，可继续生成'
       active--
       // A final SSE event without a newline must still be consumed by the browser.
@@ -71,13 +74,8 @@ try {
       }
       return route.fulfill({ json: { title: '候选验收', task: '校园选题', materials: '本篇素材', article, articleToutiao, workflow: {} } })
     }
-    if (pathname === '/api/rag/candidates') {
-      referenceCalls++
-      return route.fulfill({ json: { candidates: [
-        { dir: '20260901-campus', title: '广州高校就业数据为什么突然受关注', snippet: '梳理近三年高校就业数据、行业变化和毕业生选择。', sim: 92, types: ['article'] },
-        { dir: '20260820-career', title: '大学生求职真正卡住的环节', snippet: '从简历、实习和岗位匹配三个方面分析求职难点。', sim: 78, types: ['article'] },
-        { dir: '20260718-data', title: '如何看懂一份就业质量报告', snippet: '解释就业率、升学率与统计口径之间的区别。', sim: 55, types: ['article'] },
-      ] } })
+    if (pathname === '/api/rag/candidates' || pathname === '/api/rag/context') {
+      throw new Error('文章生成应在服务端自动查找历史文章')
     }
     return route.fulfill({ json: {} })
   })
@@ -95,22 +93,17 @@ try {
   await page.getByRole('button', { name: '继续生成候选稿', exact: true }).click()
   await page.getByRole('dialog', { name: '生成候选稿' }).waitFor()
   assert.equal(await page.getByRole('button', { name: '公众号 + 今日头条', exact: true }).isVisible(), true)
-  await page.getByText('更多设置', { exact: true }).click()
-  const referenceSearch = page.getByRole('button', { name: '检索往期文章', exact: true })
-  await referenceSearch.click()
-  await page.getByText('3 篇相关', { exact: true }).waitFor()
-  assert.equal(referenceCalls, 1)
-  assert.equal(await page.locator('.gc-reference-card').count(), 3)
-  assert.equal(await page.locator('.gc-reference-card[aria-pressed="true"]').count(), 2)
-  assert.equal(await page.locator('.gc-references input[type="checkbox"]').count(), 0)
-  const searchBox = await page.getByRole('button', { name: '重新检索', exact: true }).boundingBox()
-  assert.ok(searchBox.height <= 34 && searchBox.width < 150)
-  await page.screenshot({ path: join(screenshots, 'references-desktop.png'), fullPage: true })
+  await page.getByText(/自动查找历史文章和表达样本/).waitFor()
+  assert.equal(await page.getByRole('button', { name: '检索往期文章' }).count(), 0)
   await page.getByRole('group', { name: '候选数量' }).getByRole('button', { name: '3', exact: true }).click()
   await page.getByRole('button', { name: '生成公众号母稿', exact: true }).click()
   await page.getByText('2 篇已完成', { exact: true }).waitFor()
   assert.equal(maxActive, 3)
   assert.equal(calls.length, 3)
+  assert.equal(generatedInput.writingAgent, true)
+  assert.deepEqual(generatedInput.referenceArticleIds, [])
+  await page.getByText('本次参考了 2 篇历史文章，读了 1 个网页', { exact: true }).click()
+  await page.getByRole('link', { name: '校方公告' }).waitFor()
   assert.equal(article, '# 原有正文\n\n原文不应被候选稿替换。')
   await page.getByRole('button', { name: '对比全文', exact: true }).click()
   assert.equal(await page.locator('.gc-draft').count(), 3)
@@ -131,13 +124,7 @@ try {
   await page.getByText('3 篇已完成', { exact: true }).waitFor()
   assert.equal(calls.length, 4, 'reopening must not regenerate completed candidates')
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.getByText('更多设置', { exact: true }).click()
-  await page.getByRole('button', { name: '检索往期文章', exact: true }).click()
-  await page.getByText('3 篇相关', { exact: true }).waitFor()
-  assert.equal(await page.locator('.gc-reference-grid').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length), 1)
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
-  await page.screenshot({ path: join(screenshots, 'references-mobile.png'), fullPage: true })
-  await page.getByText('更多设置', { exact: true }).click()
   await page.screenshot({ path: join(screenshots, 'candidates-mobile.png'), fullPage: true })
   prematureEof = true
   await page.getByRole('button', { name: '生成公众号母稿', exact: true }).click()
@@ -166,5 +153,5 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
   await page.screenshot({ path: join(screenshots, 'editor-flow-mobile.png'), fullPage: true })
   assert.deepEqual(errors, [])
-  console.log(`Candidate concurrency, compare, recovery, apply failure, reopen and mobile passed. Screenshots: ${screenshots}`)
-} finally { await browser.close() }
+  console.log('Candidate concurrency, automatic research references, compare, recovery, apply failure, reopen and mobile passed.')
+} finally { await browser.close(); await rm(screenshots, { recursive: true, force: true }) }

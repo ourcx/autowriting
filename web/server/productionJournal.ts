@@ -70,7 +70,7 @@ export function selectCandidate(userId: string, articleId: string, articlePath: 
   if (workflow.selectedCandidateId !== candidateId) workflow.selectionCount = (workflow.selectionCount || 0) + 1
   workflow.selectedCandidateId = candidateId
   workflow.generationContext = {
-    platforms: ["wechat"], referenceArticleIds: candidate.input.referenceArticleIds,
+    platforms: ["wechat"], referenceArticleIds: candidate.referenceArticleIds ?? candidate.input.referenceArticleIds,
     promptIds: candidate.promptIds || ["prompt-article-generate"],
   }
   delete workflow.feedback

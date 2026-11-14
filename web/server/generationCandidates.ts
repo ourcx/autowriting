@@ -6,6 +6,7 @@ import type { CandidateInput, GenerationCandidate } from "../shared/generationCa
 
 interface StoredCandidate extends GenerationCandidate {
   input: CandidateInput
+  writingBrief?: string
 }
 
 export class CandidateError extends Error {
@@ -24,8 +25,9 @@ function filename(userId: string, articleId: string, id: string): string {
 }
 
 export function publicCandidate(stored: StoredCandidate): GenerationCandidate {
-  const { input, ...candidate } = stored
+  const { input, writingBrief, ...candidate } = stored
   void input
+  void writingBrief
   return candidate
 }
 
@@ -76,14 +78,16 @@ export function parseCandidateInput(value: unknown): CandidateInput {
   if (data.platform !== "wechat" && data.platform !== "toutiao" && data.platform !== "both") throw new CandidateError("生成平台不正确")
   const count = data.count ?? 1
   if (typeof count !== "number" || !Number.isInteger(count) || count < 1 || count > 3) throw new CandidateError("一次只能生成 1–3 篇")
+  const writingAgent = data.writingAgent === true
   const references = data.referenceArticleIds ?? []
   if (!Array.isArray(references) || references.length > 8 || references.some(id => typeof id !== "string" || id.length > 160)) {
     throw new CandidateError("参考文章参数不正确")
   }
   return {
-    task: text("task", 30000, true), materials: text("materials", 150000, true),
+    task: text("task", 30000, true), materials: text("materials", 150000, !writingAgent),
     sourceArticle: text("sourceArticle", 100000), selectedRagContext: text("selectedRagContext", 50000),
     referenceArticleIds: references, platform: data.platform, count,
+    ...(writingAgent ? { writingAgent } : {}),
   }
 }
 

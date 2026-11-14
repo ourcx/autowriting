@@ -75,7 +75,7 @@ export function createArticleModel(config: AIConfig, deepseek = deepSeekArticleC
   const { url, model, headers } = buildLLMRequest(config)
   const isDeepSeek = config.articleProvider === "deepseek"
   async function complete(body: Record<string, unknown>, maxRetries = 3, timeoutMs = 90000, signal?: AbortSignal): Promise<{ data: ArticleCompletion }> {
-    if (!isDeepSeek) return callLLMWithRetry(url, { ...body, model }, headers, maxRetries, timeoutMs)
+    if (!isDeepSeek) return callLLMWithRetry(url, { ...body, model }, headers, maxRetries, timeoutMs, signal)
     const { content, usage } = await deepseek.complete(body, signal, timeoutMs)
     return { data: { choices: [{ message: { content }, finish_reason: "stop" }], usage } }
   }
@@ -105,12 +105,15 @@ export async function callLLMWithRetry(
   headers: Record<string, string>,
   maxRetries = 3,
   timeoutMs = 90000,
+  signal?: AbortSignal,
 ): Promise<{ data: ArticleCompletion }> {
   let lastErr: unknown
   for (let i = 0; i < maxRetries; i++) {
     try {
-      return await axios.post(url, body, { headers, timeout: timeoutMs })
+      signal?.throwIfAborted()
+      return await axios.post(url, body, { headers, timeout: timeoutMs, signal })
     } catch (err: unknown) {
+      signal?.throwIfAborted()
       lastErr = err
       const axiosErr = err as { response?: { status?: number }; message?: string }
       const status = axiosErr.response?.status

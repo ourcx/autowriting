@@ -16,7 +16,7 @@ import { DATA_DIR, DRAFTS_DIR, SERVER_AI_CONFIG } from "./config.ts"
 import type { AIConfig, SearchResult } from "./types.ts"
 import { logger } from "./logger.ts"
 import { replaceDirectoryAtomically } from "./utils/atomicDirectory.ts"
-import { formatWechatAudienceEvidence } from "./wechatAnalyticsStore.ts"
+import { formatWechatAudienceEvidence, getWechatAnalyticsSnapshots } from "./wechatAnalyticsStore.ts"
 import { getExampleArticles } from "./db.ts"
 import { resolveEmbeddingApiKey } from "./utils/providerKeys.ts"
 import { hasZhipuKnowledge, retrieveZhipuKnowledge } from "./utils/zhipuKnowledge.ts"
@@ -391,16 +391,15 @@ interface RawDoc {
   }
 }
 
-function collectDocs(userId?: string): RawDoc[] {
+function collectDocs(userId?: string, articleOnly = false): RawDoc[] {
   const docs: RawDoc[] = []
   const draftsDir = getUserDraftsDir(userId)
   if (!fs.existsSync(draftsDir)) return docs
 
-  const dirs = fs.readdirSync(draftsDir).filter((f) => /^\d{8}/.test(f))
+  const dirs = fs.readdirSync(draftsDir, { withFileTypes: true }).filter(entry => entry.isDirectory() && /^\d{8}/.test(entry.name)).map(entry => entry.name)
   for (const dir of dirs) {
     const base = path.join(draftsDir, dir)
-    const files = [
-      { file: path.join(base, "raw", "article_raw.md"), type: "article" as const },
+    const files = articleOnly ? [] : [
       { file: path.join(base, "prompt", "task.md"), type: "task" as const },
       { file: path.join(base, "prompt", "materials.md"), type: "materials" as const },
     ]
@@ -414,7 +413,7 @@ function collectDocs(userId?: string): RawDoc[] {
       }
     }
     const promptDir = path.join(base, "prompt")
-    if (fs.existsSync(promptDir)) {
+    if (!articleOnly && fs.existsSync(promptDir)) {
       for (const f of fs.readdirSync(promptDir)) {
         const fp = path.join(promptDir, f)
         if (!fs.statSync(fp).isFile()) continue
@@ -428,11 +427,10 @@ function collectDocs(userId?: string): RawDoc[] {
       }
     }
     const rawDir = path.join(base, "raw")
-    if (fs.existsSync(rawDir)) {
+    if (fs.existsSync(rawDir) && fs.lstatSync(rawDir).isDirectory()) {
       for (const f of fs.readdirSync(rawDir)) {
         const fp = path.join(rawDir, f)
-        if (!fs.statSync(fp).isFile()) continue
-        if (f === "article_raw.md") continue
+        if (!fs.lstatSync(fp).isFile()) continue
         if (!f.startsWith("article_raw") || !f.endsWith(".md")) continue
         const raw = fs.readFileSync(fp, "utf-8")
         const content = cleanText(raw)
@@ -878,6 +876,59 @@ export async function retrieveRelevant(query: string, { topK = DEFAULT_TOP_K, ai
     })
     return fallbackResults
   }
+}
+
+/** 从现有索引排序，并用当前磁盘正文补上刚改完、尚未入索引的文章。 */
+export async function findWritingExamples(userId: string, articleId: string, query: string, aiConfig: AIConfig, signal: AbortSignal) {
+  signal.throwIfAborted()
+  if (!userId || /[/\\\0]/.test(userId) || userId.includes("..")) return []
+  const live = collectDocs(userId, true)
+  const idFor = (source: string, dir: string) => {
+    const suffix = path.basename(source).slice("article_raw".length, -".md".length)
+    return suffix ? `${dir.slice(0, 8)}${suffix}` : dir
+  }
+  const owned = live.filter(doc => idFor(doc.metadata.source, doc.metadata.dir) !== articleId)
+  if (!owned.length) return []
+  const byPath = new Map(owned.map(doc => [doc.metadata.source, doc]))
+  const indexed = await retrieveRelevant(query, { topK: 24, aiConfig, userId, types: ["article"] })
+  signal.throwIfAborted()
+  const freshKeywords = keywordSearch(query, owned, 12)
+  const selected = new Map<string, { snippet: string; score: number }>()
+  for (const result of [...indexed, ...freshKeywords]) {
+    const doc = byPath.get(result.source)
+    if (!doc) continue
+    // 只使用仍存在的正文，并以当前正文核对索引片段，删除或改写的内容不会复用。
+    const snippet = result.content.trim().slice(0, 520)
+    if (!snippet || !doc.content.includes(snippet)) continue
+    const score = result.finalScore ?? (result.kwScore || 0) * 100
+    if (score > (selected.get(result.source)?.score ?? -1)) selected.set(result.source, { snippet, score })
+  }
+  const ranked = [...selected.entries()].sort((left, right) => right[1].score - left[1].score)
+  const confirmedArticles = new Set(getWechatAnalyticsSnapshots(userId).flatMap(snapshot => snapshot.articles.map(article => article.localArticleId).filter(Boolean)))
+  const recent = [...owned].sort((left, right) => {
+    const leftPublished = confirmedArticles.has(idFor(left.metadata.source, left.metadata.dir))
+    const rightPublished = confirmedArticles.has(idFor(right.metadata.source, right.metadata.dir))
+    return Number(rightPublished) - Number(leftPublished) || right.metadata.dir.localeCompare(left.metadata.dir)
+  })
+  if (ranked.length < 2) {
+    for (const doc of recent) {
+      if (selected.has(doc.metadata.source) || doc.content.length < 180) continue
+      ranked.push([doc.metadata.source, { snippet: "", score: 0 }])
+      if (ranked.length >= 2) break
+    }
+  }
+
+  return ranked.slice(0, 3).flatMap(([source, match]) => {
+    const doc = byPath.get(source)
+    if (!doc) return []
+    const lines = doc.content.split("\n").map(line => line.trim()).filter(Boolean)
+    const title = lines[0]?.replace(/^#+\s*/, "").slice(0, 120) || doc.metadata.dir
+    const opening = lines.slice(1).join("\n").slice(0, 460)
+    return [{
+      id: idFor(source, doc.metadata.dir), title,
+      excerpt: [opening, match.snippet && !opening.includes(match.snippet) ? match.snippet : ""].filter(Boolean).join("\n…\n").slice(0, 900),
+    }]
+  })
 }
 
 export interface AggregatedArticleCandidate {

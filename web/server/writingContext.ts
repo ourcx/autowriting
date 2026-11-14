@@ -13,6 +13,7 @@ interface WritingContextOptions {
   includeWritingGuide?: boolean
   includePerformanceEvidence?: boolean
   referenceContext?: string
+  compactForAgent?: boolean
 }
 
 function boundedMemory(value: unknown): string {
@@ -28,6 +29,7 @@ export async function buildWritingContext(
     includeWritingGuide = true,
     includePerformanceEvidence = true,
     referenceContext = "",
+    compactForAgent = false,
   }: WritingContextOptions = {},
 ): Promise<string> {
   const writingProfile = normalizeCreatorWritingProfile(getSetting(`creator_writing_profile:${userId}`))
@@ -36,9 +38,13 @@ export async function buildWritingContext(
   const memory = boundedMemory(getSetting(`global_memory:${userId}`))
   const performance = includePerformanceEvidence ? await formatExampleContext(userId) : ""
   const writingGuide = includeWritingGuide ? getWritingGuideContent().trim() : ""
+  const confirmedExpressions = formatCreatorExperiences(userId)
+  const baseline = compactForAgent
+    ? ARTICLE_WRITING_BASELINE.split("\n").slice(0, 4).join("\n")
+    : ARTICLE_WRITING_BASELINE
   const sections = [
     persona,
-    ARTICLE_WRITING_BASELINE,
+    baseline,
     `# 上下文使用顺序
 1. 本篇任务与素材决定当前情境、事实边界和交付目标。
 2. 已确认作者人设用于确定叙述身份，不能据此补写未确认的个人经历。
@@ -46,11 +52,11 @@ export async function buildWritingContext(
 4. 长期背景只提供稳定事实，不能覆盖本篇素材。
 5. 历史表现只用于提出选题和内容假设，不能证明某种句式、篇幅或模板有效。
 6. 往期文章只参考展开方式，不复制旧事实。`,
-    writingGuide ? `# 通用写作规范\n${writingGuide}` : "",
+    writingGuide ? `# 通用写作规范\n${compactForAgent ? writingGuide.slice(0, 2500) : writingGuide}` : "",
     profile,
-    formatCreatorExperiences(userId),
-    memory ? `# 长期背景记忆\n${memory}` : "",
-    performance,
+    compactForAgent ? confirmedExpressions.slice(0, 1600) : confirmedExpressions,
+    memory ? `# 长期背景记忆\n${compactForAgent ? memory.slice(0, 1600) : memory}` : "",
+    compactForAgent ? performance.slice(0, 900) : performance,
     referenceContext.trim(),
   ].map(section => section.trim()).filter(Boolean)
   return `${sections.join("\n\n")}\n\n`

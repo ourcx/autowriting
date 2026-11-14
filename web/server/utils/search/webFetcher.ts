@@ -247,6 +247,7 @@ export interface FetchOptions {
   maxChars?: number
   signal?: AbortSignal
   sameOrigin?: boolean
+  textOnly?: boolean
 }
 
 /**
@@ -301,6 +302,10 @@ export async function webFetch(url: string, options: FetchOptions = {}): Promise
     const contentType = resp.headers.get("content-type") || ""
     const isHtml = contentType.includes("text/html") || contentType.includes("application/xhtml")
 
+    if (options.textOnly && !isHtml && !/^(text\/|application\/(?:json|xml))/i.test(contentType)) {
+      await resp.body?.cancel()
+      return ""
+    }
     if (!isHtml) {
       // 非 HTML 页面：直接返回文本
       const text = await readBounded(resp)

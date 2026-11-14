@@ -121,3 +121,81 @@ export async function smokeCandidates(base, token) {
     await new Promise(resolve => model.close(resolve))
   }
 }
+
+
+export async function smokeWritingAgent(base, token) {
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+  const id = `20261114-writing-agent-${Date.now()}`
+  const history = `20261113-history-${Date.now()}`
+  const root = `${base}/api/articles/${id}`
+  const modelBodies = []
+  let stopReason = 'length'
+  let continuation = false
+  const model = createServer(async (request, response) => {
+    let raw = ''
+    for await (const chunk of request) raw += chunk
+    const input = JSON.parse(raw)
+    modelBodies.push(input)
+    if (input.stream) {
+      response.writeHead(200, { 'Content-Type': 'text/event-stream' })
+      const content = continuation ? '开工时间仍未知。' : '# 校舍建设进展\n\n已公示设计招标。'
+      response.end(`data: ${JSON.stringify({ choices: [{ delta: { content }, finish_reason: stopReason }] })}\n\n`)
+      return
+    }
+    const content = input.messages[0].content.includes('调研 Agent')
+      ? '{"action":"finish","plan":{"angle":"公开招标进展"}}'
+      : '先讲已经公示的招标，再说明开工时间未知。'
+    response.writeHead(200, { 'Content-Type': 'application/json' })
+    response.end(JSON.stringify({ choices: [{ message: { content }, finish_reason: 'stop' }] }))
+  })
+  async function json(url, body) {
+    const res = await fetch(url, { headers, ...(body ? { method: 'POST', body: JSON.stringify(body) } : {}) })
+    assert.ok(res.ok, `${res.status} ${url}`)
+    return res.json()
+  }
+  try {
+    await new Promise(resolve => model.listen(0, '127.0.0.1', resolve))
+    const original = '# 已有正文\n\n用于确认生成不会覆盖原稿。'
+    await json(root, { task: '校舍建设', materials: '现有公告只写了设计招标', article: original })
+    await json(`${base}/api/articles/${history}`, {
+      title: '往期校舍建设', article: `# 往期校舍建设\n\n${'校舍建设先看公告，再去找执行单位和施工日期。'.repeat(13)}`,
+    })
+    const [candidate] = await json(`${root}/candidates`, {
+      task: '校舍建设', materials: '现有公告只写了设计招标', platform: 'wechat', count: 1, writingAgent: true,
+    })
+    const aiConfig = {
+      articleProvider: 'openai', articleBaseUrl: `http://127.0.0.1:${model.address().port}/v1`,
+      articleApiKey: 'smoke-article-agent', articleModel: 'fixture', searchProvider: 'deepseek',
+    }
+    const run = async () => (await fetch(`${root}/candidates/${candidate.id}/stream`, {
+      method: 'POST', headers, body: JSON.stringify({ aiConfig }),
+    })).text()
+    const interrupted = await run()
+    assert.match(interrupted, /正在检索作者的历史文章/)
+    assert.match(interrupted, /正在整理可引用证据和写作提纲/)
+    assert.match(interrupted, /正在按作者语气写正文/)
+    assert.match(interrupted, /event: error/)
+    assert.deepEqual(modelBodies.map(body => Boolean(body.stream)), [false, false, true])
+    const context = modelBodies.at(-1).messages.at(-1).content
+    assert.match(context, /先看公告，再去找执行单位/)
+    assert.match(context, /说明开工时间未知/)
+    assert.match(context, /短例子（虚构/)
+    const [partial] = await json(`${root}/candidates`)
+    assert.equal(partial.status, 'interrupted')
+    continuation = true
+    stopReason = 'stop'
+    assert.match(await run(), /event: done/)
+    assert.deepEqual(modelBodies.map(body => Boolean(body.stream)), [false, false, true, true])
+    assert.equal(modelBodies.at(-1).messages.at(-2).content, partial.content)
+    const [stored] = await json(`${root}/candidates`)
+    assert.match(stored.content, /开工时间仍未知/)
+    assert.ok(stored.referenceArticleIds.includes(history))
+    assert.ok(!Object.hasOwn(stored, 'writingBrief'))
+    assert.equal((await json(root)).article, original)
+    const saved = await json(root, { article: stored.content, selectedCandidateId: stored.id })
+    assert.ok(saved.workflow.generationContext.referenceArticleIds.includes(history))
+  } finally {
+    model.closeAllConnections()
+    await new Promise(resolve => model.close(resolve))
+  }
+}

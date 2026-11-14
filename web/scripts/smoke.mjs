@@ -11,7 +11,7 @@
 
 import { spawn } from 'node:child_process'
 import { smokeArticleStream } from './smoke-article-stream.mjs'
-import { smokeCandidates } from './smoke-candidates.mjs'
+import { smokeCandidates, smokeWritingAgent } from './smoke-candidates.mjs'
 import { smokePersonaAgent } from './smoke-persona-agent.mjs'
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -1145,6 +1145,11 @@ cases.push({
 cases.push({
   name: '候选稿并发上限、断点续写、原文保护与用户隔离',
   run: () => smokeCandidates(BASE, token),
+})
+
+cases.push({
+  name: '文章 Agent 先检索、拟提纲，再生成候选稿并记录参考',
+  run: () => smokeWritingAgent(BASE, token),
 })
 cases.push({
   name: '修改密码后原 Token 应立即失效',

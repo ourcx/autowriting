@@ -8,6 +8,7 @@
 import { logger } from "../../../logger.ts"
 import type { SearchProvider } from "./types.ts"
 import type { SearchResult } from "../types.ts"
+import { fetchPublicUrl } from "../../networkPolicy.ts"
 
 const DEFAULT_BASE_URL = "https://paulgo.io"
 
@@ -28,7 +29,7 @@ export function createSearxngProvider(baseUrl?: string, engines?: string): Searc
       return "SearXNG 实例不可用，请检查网络或更换实例地址"
     },
 
-    async search(query: string, topK = 5): Promise<SearchResult[]> {
+    async search(query: string, topK = 5, signal?: AbortSignal): Promise<SearchResult[]> {
       if (!query) return []
 
       try {
@@ -40,12 +41,13 @@ export function createSearxngProvider(baseUrl?: string, engines?: string): Searc
           pageno: "1",
         })
 
-        const resp = await fetch(`${resolvedUrl}/search?${params}`, {
+        const request = signal ? (url: string, init: RequestInit) => fetchPublicUrl(url, init, true) : fetch
+        const resp = await request(`${resolvedUrl}/search?${params}`, {
           headers: {
             "Accept": "application/json",
             "User-Agent": "Mozilla/5.0 (compatible; autowriting-bot/1.0)",
           },
-          signal: AbortSignal.timeout(15000),
+          signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
         })
 
         if (!resp.ok) {

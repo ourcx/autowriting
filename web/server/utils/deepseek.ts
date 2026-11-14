@@ -176,21 +176,21 @@ export function createDeepSeekClient(config: DeepSeekConfig, transport: typeof f
         usage,
       }
     },
-    async search(query: string, count = 10) {
+    async search(query: string, count = 10, signal?: AbortSignal) {
       requireText(query, 128, '搜索词')
       if (!Number.isInteger(count) || count < 1 || count > 50) throw new DeepSeekError('搜索结果数必须为 1–50', 400)
-      const data = await json('/v1/tools/search', { query, count, need_content: false })
+      const data = await json('/v1/tools/search', { query, count, need_content: false }, signal)
       if (!Array.isArray(data.results)) throw new DeepSeekError('DeepSeek 未返回搜索结果')
       return data.results.map((raw: unknown) => {
         const row = object(raw)
         return { title: string(row.title), url: string(row.url), snippet: string(row.snippet), summary: string(row.summary), content: string(row.content), siteName: string(row.site_name), datePublished: string(row.date) }
       }).filter(row => /^https?:\/\//i.test(row.url))
     },
-    async fetchUrl(url: string) {
+    async fetchUrl(url: string, signal?: AbortSignal) {
       enabled()
       requireText(url, 8192, 'URL')
       await assertPublicHttpUrl(url)
-      const data = await json('/v1/tools/fetch', { url })
+      const data = await json('/v1/tools/fetch', { url }, signal)
       if (typeof data.content !== 'string' || !data.content.trim()) throw new DeepSeekError('DeepSeek 未返回网页正文')
       return { title: string(data.title), content: data.content }
     },

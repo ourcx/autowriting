@@ -32,7 +32,7 @@ export function createZhipuProvider(apiKey: string, engine = "search_std"): Sear
       return "智谱搜索需要有效的 API Key"
     },
 
-    async search(query: string, topK = 5): Promise<SearchResult[]> {
+    async search(query: string, topK = 5, signal?: AbortSignal): Promise<SearchResult[]> {
       if (!query) return []
 
       try {
@@ -50,7 +50,7 @@ export function createZhipuProvider(apiKey: string, engine = "search_std"): Sear
             search_recency_filter: "noLimit",
             content_size: "medium",
           }),
-          signal: AbortSignal.timeout(30000),
+          signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000),
         })
 
         if (!resp.ok) {
