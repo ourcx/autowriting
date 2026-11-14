@@ -1,3 +1,4 @@
+import type { WritingAgentMessage } from "../server/articleWritingAgent.ts"
 import assert from "node:assert/strict"
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -9,7 +10,7 @@ process.env.DRAFTS_DIR = join(directory, "drafts")
 process.env.LOG_DIR = join(directory, "logs")
 const { readArticlePage } = await import("../server/utils/search/readArticlePage.ts")
 const { preservesDraftAnchors } = await import("../server/writingAgentPolicy.ts")
-const { prepareArticleWriting } = await import("../server/articleWritingAgent.ts")
+const { prepareArticleWriting, WritingAgentModelError } = await import("../server/articleWritingAgent.ts")
 const { findWritingExamples } = await import("../server/rag.ts")
 const { db, setSetting } = await import("../server/db.ts")
 const { buildWritingContext } = await import("../server/writingContext.ts")
@@ -34,7 +35,7 @@ try {
   const writingContext = await buildWritingContext("author", { compactForAgent: true, includeWritingGuide: false })
   assert.match(writingContext, /先说我实际看到什么/)
 
-  const prompts: string[] = []
+  const prompts: WritingAgentMessage[][] = []
   const actions: string[] = []
   const trace: { kind: string; status?: string; output?: string }[] = []
   const steps = [
@@ -49,7 +50,7 @@ try {
     task: "写一篇校舍建设进展", materials: "作者素材见 https://example.com/materials",
     platform: "wechat", sourceArticle: "", writingContext, examples, signal, progress: message => actions.push(message),
     startStep: kind => result => trace.push({ kind, ...result }),
-    complete: async (_system, user) => { prompts.push(user); return steps.shift() || "" },
+    complete: async messages => { prompts.push(messages); return steps.shift() || "" },
     web: {
       search: async query => {
         assert.equal(query, "校舍建设 官方公告")
@@ -65,9 +66,20 @@ try {
     },
   })
   assert.equal(prompts.length, 6)
-  assert.match(prompts[1], /预览声称已经开工/)
-  assert.match(prompts[2], /公告没有给出开工日期/)
-  assert.doesNotMatch(prompts.at(-1)!, /预览声称已经开工/)
+  assert.deepEqual(prompts[1].map(message => message.role), ["system", "user", "assistant", "user"])
+  assert.deepEqual(JSON.parse(prompts[1][2].content), { action: "search_web", query: "校舍建设 官方公告" })
+  assert.match(prompts[1][3].content, /搜索「校舍建设 官方公告」[\s\S]*W2 校方公告[\s\S]*预览声称已经开工/)
+  assert.deepEqual(JSON.parse(prompts[2][4].content), { action: "read_source", id: "W2" })
+  assert.match(prompts[2].at(-1)!.content, /公告没有给出开工日期/)
+  assert.equal(prompts[2][1].content, prompts[3][1].content, "后续轮次保留同一篇原任务")
+  assert.equal(prompts[2][3].content, prompts[3][3].content, "工具观察保留，网页快照不在历史中重复")
+  const outlineMessages = prompts.at(-1)!
+  assert.match(outlineMessages[0].content, /写作准备/)
+  assert.match(outlineMessages[1].content, /写一篇校舍建设进展/)
+  assert.deepEqual(outlineMessages.filter(message => message.role === "assistant").map(message => JSON.parse(message.content).action),
+    ["search_web", "read_source", "find_in_page", "find_in_materials", "finish"])
+  assert.match(outlineMessages.at(-1)!.content, /调研阶段的写作方向[\s\S]*现有公告确认了什么/)
+  assert.doesNotMatch(outlineMessages.map(message => message.content).join("\n"), /预览声称已经开工/)
   assert.match(prepared.prompt, /先说我实际看到什么/)
   assert.match(prepared.prompt, /我先找公告/)
   assert.match(prepared.prompt, /短例子（虚构/)
@@ -83,7 +95,7 @@ try {
     task: "写作任务", materials: "已有用户素材", platform: "wechat" as const, sourceArticle: "",
     writingContext: "", examples: [], signal, progress: () => {},
   }
-  const malformed = await prepareArticleWriting({ ...base, complete: async system => system.includes("调研 Agent") ? "无效动作" : "根据现有素材写作" })
+  const malformed = await prepareArticleWriting({ ...base, complete: async (_messages, phase) => phase === "decision" ? "无效动作" : "根据现有素材写作" })
   assert.match(malformed.prompt, /根据现有素材写作/)
   const realFetch = globalThis.fetch
   const publicUrl = "https://1.1.1.1/fixture"
@@ -127,8 +139,8 @@ try {
   const fallbackCalls: string[] = []
   const fallback = await prepareArticleWriting({
     ...base, task: "查公开项目的最新进展",
-    complete: async system => system.includes("仅输出一行") ? "公开项目 最新 官方进展"
-      : system.includes("调研 Agent") ? '{"action":"finish","plan":{}}' : "页面没有写开工日期。",
+    complete: async (_messages, phase) => phase === "query" ? "公开项目 最新 官方进展"
+      : phase === "decision" ? '{"action":"finish","plan":{}}' : "页面没有写开工日期。",
     web: {
       search: async query => {
         fallbackCalls.push(query)
@@ -164,13 +176,52 @@ try {
   const failedTrace: { kind: string; status?: string }[] = []
   const failedWeb = await prepareArticleWriting({
     ...base,
-    complete: async system => system.includes("调研 Agent") ? '{"action":"search_web","query":"校舍建设 官方公告"}' : "只采用已有素材",
+    complete: async (_messages, phase) => phase === "decision" ? '{"action":"search_web","query":"校舍建设 官方公告"}' : "只采用已有素材",
     startStep: kind => result => failedTrace.push({ kind, ...result }),
     web: { search: async () => { throw new Error("timeout") }, read: async () => "" },
   })
   assert.match(failedWeb.prompt, /本次没有成功完成联网搜索/)
   assert.ok(failedTrace.some(step => step.kind === "search" && step.status === "failed"))
   await assert.rejects(() => prepareArticleWriting({ ...base, materials: "", complete: async () => '{"action":"finish","plan":{}}' }), /没有可用素材/)
+  const requestEvidence: string[] = []
+  const failureReasons: string[] = []
+  const recovered = await prepareArticleWriting({
+    ...base,
+    task: "核对公开项目进展",
+    startStep: (_kind, _title) => result => { if (result.status === "failed") failureReasons.push(result.output || "") },
+    complete: async (messages, phase) => {
+      if (phase === "outline") {
+        assert.match(messages.at(-1)!.content, /写作方向[\s\S]*按公告写项目边界/)
+        throw new WritingAgentModelError("模型请求失败（HTTP 429）。")
+      }
+      const last = messages.at(-1)!.content
+      if (!messages.some(message => message.role === "assistant")) return '{"action":"search_web","query":"公开项目公告"}'
+      if (!last.includes("W1「无法访问的公告」读取失败") && !last.includes("W1 · 无法访问的公告 · 读取失败")) return '{"action":"read_source","id":"W1"}'
+      requestEvidence.push(last)
+      if (requestEvidence.length === 1) return "这不是 JSON：fixture-private-content"
+      if (requestEvidence.length === 2) {
+        assert.match(last, /模型回复不是有效 JSON/)
+        assert.match(last, /W1 · 无法访问的公告 · 读取失败/)
+        assert.doesNotMatch(messages.map(message => message.content).join("\n"), /fixture-private-content/)
+        return '{"action":"read_source","id":"W2"}'
+      }
+      return '{"action":"finish","plan":{"angle":"按公告写项目边界","outline":["施工日期尚未公开"]}}'
+    },
+    web: {
+      search: async () => [
+        { url: "https://example.com/missing", title: "无法访问的公告", snippet: "仅供预览", source: "官方" },
+        { url: "https://example.com/second", title: "后续公告", snippet: "仅供预览", source: "官方" },
+      ],
+      async read(url) {
+        if (url.endsWith("missing")) throw new Error("模拟网页失败")
+        return "施工日期尚未公开。"
+      },
+    },
+  })
+  assert.deepEqual(recovered.sources.map(source => source.title), ["后续公告"])
+  assert.match(recovered.prompt, /写作提纲[\s\S]*按公告写项目边界/)
+  assert.ok(failureReasons.includes("模型回复不是有效 JSON。"))
+  assert.ok(failureReasons.some(reason => reason.includes("HTTP 429") && reason.includes("沿用调研")))
   const abort = new AbortController()
   abort.abort()
   await assert.rejects(() => prepareArticleWriting({ ...base, signal: abort.signal, complete: async () => { throw new Error("不应调用模型") } }), { name: "AbortError" })

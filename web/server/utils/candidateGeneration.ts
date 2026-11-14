@@ -13,11 +13,12 @@ import { logger } from "../logger.ts"
 import type { AIConfig } from "../types.ts"
 import { buildWritingContext } from "../writingContext.ts"
 import { hasArticleApiKey } from "./providerKeys.ts"
-import { prepareArticleWriting, type StartWritingStep } from "../articleWritingAgent.ts"
+import { prepareArticleWriting, WritingAgentModelError, type StartWritingStep } from "../articleWritingAgent.ts"
 import { buildCandidateSearchQuery, findWritingExamples } from "../rag.ts"
 import { createWritingWebResearch } from "../writingResearch.ts"
 import { reviseArticleDraft } from "../writingRevision.ts"
 import { nowDay } from "./date.ts"
+import { DeepSeekError } from "./deepseek.ts"
 
 export async function streamCandidate(userId: string, articleId: string, id: string, rawConfig: unknown, response: Response, requestKey?: string): Promise<void> {
   const candidate = readCandidate(userId, articleId, id)
@@ -122,17 +123,37 @@ export async function streamCandidate(userId: string, articleId: string, id: str
       const prepared = await prepareArticleWriting({
         task: input.task, materials: input.materials, sourceArticle: hasSourceArticle ? sourceArticle : "",
         platform: candidate.platform, examples, writingContext: context, web, progress, startStep, signal: controller.signal,
-        async complete(system, user, signal) {
-          const { data } = await completeModel({
-            messages: [{ role: "system", content: system }, { role: "user", content: user }],
-            max_tokens: 1500, temperature: 0.2,
-          }, 1, 60_000, signal)
-          const usage = data.usage
-          if (usage) recordTokenUsage({
-            articleId, userId, model, operation: "generate", inputTokens: usage.prompt_tokens,
-            outputTokens: usage.completion_tokens, totalTokens: usage.total_tokens,
-          })
-          return data.choices[0]?.message.content || ""
+        async complete(messages, phase, signal) {
+          try {
+            const { data } = await completeModel({
+              messages, max_tokens: phase === "outline" ? 2200 : phase === "query" ? 180 : 1500, temperature: 0.2,
+            }, 1, 60_000, signal)
+            const usage = data.usage
+            if (usage) {
+              try {
+                recordTokenUsage({
+                  articleId, userId, model, operation: "generate", inputTokens: usage.prompt_tokens,
+                  outputTokens: usage.completion_tokens, totalTokens: usage.total_tokens,
+                })
+              } catch { logger.warn("GENERATION", "调研用量记录失败", { articleId, candidateId: id }) }
+            }
+            const choice = data.choices?.[0]
+            if (choice?.finish_reason === "length") throw new WritingAgentModelError("模型回复达到输出上限。")
+            if (choice?.finish_reason === "content_filter") throw new WritingAgentModelError("模型未通过内容审核。")
+            const content = choice?.message?.content?.trim()
+            if (!content) throw new WritingAgentModelError("模型未返回文本。")
+            return content
+          } catch (error) {
+            signal.throwIfAborted()
+            // 只向轨迹透露安全的错误类别，不保存上游请求、响应体或密钥。
+            if (error instanceof DeepSeekError) throw new WritingAgentModelError(error.message)
+            if (axios.isAxiosError(error)) {
+              if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT") throw new WritingAgentModelError("模型请求超时。")
+              const status = error.response?.status
+              if (status) throw new WritingAgentModelError(`模型请求失败（HTTP ${status}）。`)
+            }
+            throw error
+          }
         },
       })
       controller.signal.throwIfAborted()

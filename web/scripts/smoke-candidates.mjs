@@ -157,8 +157,14 @@ export async function smokeWritingAgent(base, token) {
       assert.match(revision.notes[0], /直接写公告发布日期/)
       content = rewrites.length === 1 ? rewritten.replace('10 日', '11 日') : rewritten
     } else if (system.includes('调研 Agent')) {
+      assert.deepEqual(input.messages.map(({ role }) => role), ['system', 'user'])
+      assert.match(user, /校舍建设/)
       content = '{"action":"finish","plan":{"angle":"公开招标进展"}}'
     } else {
+      assert.match(system, /写作准备/)
+      assert.deepEqual(input.messages.map(({ role }) => role), ['system', 'user', 'assistant', 'user'])
+      assert.equal(JSON.parse(input.messages[2].content).action, 'finish')
+      assert.match(input.messages[3].content, /公开招标进展/)
       content = '先讲已经公示的招标，再说明开工时间未知。'
     }
     response.writeHead(200, { 'Content-Type': 'application/json' })
