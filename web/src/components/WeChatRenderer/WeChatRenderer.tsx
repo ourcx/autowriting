@@ -1,3 +1,5 @@
+import { Input, Textarea } from "../FormControls/FormControls"
+import Button from "../Button/Button"
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { toast } from '../Toast/Toast'
 import { Copy, Check, Minus, Plus, ExternalLink, Send, Loader2, Image as ImageIcon, Settings, Palette, Sparkles, Wand2, Code2, ChevronDown, ClipboardPaste } from 'lucide-react'
@@ -816,9 +818,9 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
             {receipt.status === "succeeded" ? <>最近一次推送成功 · {new Date(receipt.at).toLocaleString()} · 回执 {receipt.mediaId} · 仅进入草稿箱，尚未群发</>
               : receipt.status === "failed" ? "上次推送未成功，可以重试。" : <>
                 上次请求的结果尚未确认。请先打开<a href="/drafts" target="_blank" rel="noreferrer">微信草稿箱</a>核对。
-                <input aria-label="草稿 media_id" value={confirmationId} onChange={event => setConfirmationId(event.target.value)} placeholder="已找到草稿的 media_id" />
-                <button className="btn btn-secondary btn-small" disabled={pushing || !confirmationId.trim()} onClick={() => void confirmReceipt()}>核对回执</button>
-                <button className="btn btn-secondary btn-small" disabled={pushing} onClick={() => void confirmReceipt(true)}>已核对，草稿未生成</button>
+                <Input aria-label="草稿 media_id" value={confirmationId} onChange={event => setConfirmationId(event.target.value)} placeholder="已找到草稿的 media_id" />
+                <Button variant="plain" className="btn btn-secondary btn-small" disabled={pushing || !confirmationId.trim()} onClick={() => void confirmReceipt()}>核对回执</Button>
+                <Button variant="plain" className="btn btn-secondary btn-small" disabled={pushing} onClick={() => void confirmReceipt(true)}>已核对，草稿未生成</Button>
               </>}
           </div>}
           {/* 顶部工具栏 */}
@@ -826,13 +828,13 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
             <div className="wr-toolbar-left">
               {/* 字号控制 */}
               <div className="wr-fontsize">
-                <button className="wr-fontsize-btn" onClick={() => setFontSize(s => Math.max(12, s - 1))} title="减小字号">
+                <Button variant="plain" className="wr-fontsize-btn" onClick={() => setFontSize(s => Math.max(12, s - 1))} title="减小字号">
                   <Minus size={11} />
-                </button>
+                </Button>
                 <span className="wr-fontsize-value">{fontSize}px</span>
-                <button className="wr-fontsize-btn" onClick={() => setFontSize(s => Math.min(22, s + 1))} title="增大字号">
+                <Button variant="plain" className="wr-fontsize-btn" onClick={() => setFontSize(s => Math.min(22, s + 1))} title="增大字号">
                   <Plus size={11} />
-                </button>
+                </Button>
               </div>
               <span className="wr-stat">{charCount.toLocaleString()} 字</span>
             </div>
@@ -846,22 +848,22 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                   点击复制 → 粘贴到公众号编辑器，样式自动带入
                 </span>
               )}
-              <button className={`wr-copy-btn ${copied ? 'success' : ''}`} onClick={handleCopy}>
+              <Button variant="plain" className={`wr-copy-btn ${copied ? 'success' : ''}`} onClick={handleCopy}>
                 {copied ? <Check size={15} /> : <Copy size={15} />}
                 {copied ? '已复制！' : '复制内容'}
-              </button>
+              </Button>
 
               {/* 选择封面图片按钮 */}
-              <button
+              <Button variant="plain"
                 className={`wr-cover-btn ${selectedCoverImage ? 'selected' : ''}`}
                 onClick={() => setShowImageLibrary(!showImageLibrary)}
                 title="从图片库选择推文封面"
               >
                 <ImageIcon size={15} />
                 {selectedCoverImage ? '已选封面' : '选择封面'}
-              </button>
+              </Button>
 
-              <button
+              <Button variant="plain"
                 className={`wr-push-btn ${pushDone ? 'success' : ''}`}
                 onClick={handlePushDraft}
                 disabled={pushing || pushDone || receipt?.status === "unknown" || receipt?.status === "sending"}
@@ -874,7 +876,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                     : <Send size={15} />
                 }
                 {pushing ? '推送中...' : pushDone ? '已推送！' : receipt?.status === "unknown" || receipt?.status === "sending" ? "待核对推送结果" : '推送草稿'}
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -885,13 +887,13 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
               <div className="wr-image-library-panel">
                 <div className="wr-image-library-header">
                   <h3>选择推文封面</h3>
-                  <button
+                  <Button variant="plain"
                     className="wr-image-library-close"
                     onClick={() => setShowImageLibrary(false)}
                     title="关闭"
                   >
                     ✕
-                  </button>
+                  </Button>
                 </div>
                 <div className="wr-image-library-content">
                   <ImageLibrary
@@ -916,18 +918,18 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
             <div className="wr-sidebar" style={{ width: sidebarWidth }}>
               <div className="wr-sidebar-header">
                 <p className="wr-sidebar-section-label">样式模板</p>
-                <button
+                <Button variant="plain"
                   className="wr-manage-styles-btn"
                   onClick={() => navigate('/styles')}
                   title="管理样式模板"
                 >
                   <ExternalLink size={12} />
                   管理
-                </button>
+                </Button>
               </div>
               <div className="wr-template-list">
                 {templates.map(t => (
-                  <button
+                  <Button variant="plain"
                     key={t.id}
                     className={`wr-tmpl-item ${templateId === t.id ? 'active' : ''}`}
                     onClick={() => handleSelectTemplate(t)}
@@ -941,19 +943,19 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                       <span className="wr-tmpl-desc">{t.desc}</span>
                     </div>
                     {templateId === t.id && <span className="wr-tmpl-check"><Check size={12} /></span>}
-                  </button>
+                  </Button>
                 ))}
               </div>
 
               <div className={`wr-css-editor-wrap${cssEditorOpen ? ' is-open' : ''}`}>
-                <button className="wr-css-editor-toggle" onClick={() => setCssEditorOpen(open => !open)}>
+                <Button variant="plain" className="wr-css-editor-toggle" onClick={() => setCssEditorOpen(open => !open)}>
                   <Code2 size={13} />
                   <span>高级 CSS</span>
                   <span className="wr-css-hint">实时预览</span>
                   <ChevronDown size={13} className="wr-css-chevron" />
-                </button>
+                </Button>
                 {cssEditorOpen ? (
-                  <textarea
+                  <Textarea
                     className="wr-css-textarea"
                     value={editedCss}
                     onChange={e => { setEditedCss(e.target.value); setTemplateId('custom') }}
@@ -1005,7 +1007,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
               <div className="wr-tt-cookie-panel">
                 <div className="wr-image-library-header">
                   <h3>配置今日头条 Cookie</h3>
-                  <button className="wr-image-library-close" onClick={() => setShowTtCookieModal(false)}>✕</button>
+                  <Button variant="plain" className="wr-image-library-close" onClick={() => setShowTtCookieModal(false)}>✕</Button>
                 </div>
                 <div className="wr-tt-cookie-body">
                   <div className="wr-tt-cookie-guide">
@@ -1017,7 +1019,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                       <li>点击下方“从剪贴板粘贴”，系统只会提取 Cookie</li>
                     </ol>
                   </div>
-                  <textarea
+                  <Textarea
                     className="wr-tt-cookie-textarea"
                     placeholder="粘贴“复制为 cURL”的内容，也兼容 Cookie 请求头或 JSON"
                     value={ttCookieDraft}
@@ -1026,12 +1028,12 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                     spellCheck={false}
                   />
                   <div className="wr-tt-cookie-actions">
-                    <button className="wr-tt-cookie-paste" onClick={() => void pasteTtCookie()}>
+                    <Button variant="plain" className="wr-tt-cookie-paste" onClick={() => void pasteTtCookie()}>
                       <ClipboardPaste size={14} />
                       从剪贴板粘贴
-                    </button>
+                    </Button>
                     {ttCookieBound && (
-                      <button
+                      <Button variant="plain"
                         className="wr-tt-cookie-clear"
                         onClick={() => {
                           localStorage.removeItem(TT_COOKIE_KEY)
@@ -1043,12 +1045,12 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                         }}
                       >
                         清除已保存的 Cookie
-                      </button>
+                      </Button>
                     )}
-                    <button className="wr-tt-cookie-save" onClick={handleSaveTtCookie}>
+                    <Button variant="plain" className="wr-tt-cookie-save" onClick={handleSaveTtCookie}>
                       <Check size={14} />
                       保存 Cookie
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -1062,7 +1064,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
               <div className="wr-install-log-panel">
                 <div className="wr-image-library-header">
                   <h3>Chromium 安装日志</h3>
-                  <button className="wr-image-library-close" onClick={() => setShowInstallLogs(false)}>✕</button>
+                  <Button variant="plain" className="wr-image-library-close" onClick={() => setShowInstallLogs(false)}>✕</Button>
                 </div>
                 <div className={`wr-install-log-status wr-chromium-status--${chromiumStatus}`}>
                   {(chromiumStatus === 'checking' || chromiumStatus === 'installing') && <Loader2 size={13} className="wr-spin" />}
@@ -1105,16 +1107,16 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                   复制富文本后粘贴到今日头条编辑器，标题/加粗等格式自动保留
                 </span>
               )}
-              <button
+              <Button variant="plain"
                 className={`wr-copy-btn wr-copy-btn--toutiao ${ttCopied ? 'success' : ''}`}
                 onClick={handleCopyMarkdown}
               >
                 {ttCopied ? <Check size={15} /> : <Copy size={15} />}
                 {ttCopied ? '已复制！' : '复制富文本'}
-              </button>
+              </Button>
 
               {/* Cookie 配置按钮 */}
-              <button
+              <Button variant="plain"
                 className={`wr-tt-cookie-btn ${ttCookieBound ? 'bound' : ''}`}
                 onClick={() => {
                   setTtCookieDraft(getTtCookies())
@@ -1124,10 +1126,10 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
               >
                 <Settings size={14} />
                 {ttCookieBound ? 'Cookie 已配置' : '配置 Cookie'}
-              </button>
+              </Button>
 
               {/* 发布按钮 */}
-              <button
+              <Button variant="plain"
                 className={`wr-push-btn wr-push-btn--toutiao ${ttPushDone ? 'success' : ''} ${!ttCookieBound ? 'disabled' : ''}`}
                 onClick={handleTtPublish}
                 disabled={ttPushing || ttPushDone}
@@ -1140,7 +1142,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                     : <Send size={15} />
                 }
                 {ttPushing ? '发布中...' : ttPushDone ? '发布成功！' : '发布到头条'}
-              </button>
+              </Button>
 
               <a
                 href="https://mp.toutiao.com/profile_v4/graphic/publish"
@@ -1199,22 +1201,22 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
             </div>
             <div className="wr-xhs-toolbar-actions">
               <span className={`wr-xhs-status ${xhsBound ? 'is-bound' : ''}`}>{xhsBound ? '账号已绑定' : '未绑定账号'}</span>
-              <button
+              <Button variant="plain"
                 className="wr-xhs-action wr-xhs-action--ai"
                 onClick={handleXhsGenerateMetadata}
                 disabled={xhsGenerating || xhsPushing}
               >
                 {xhsGenerating ? <Loader2 size={15} className="wr-spin" /> : <Wand2 size={15} />}
                 {xhsGenerating ? 'AI 生成中...' : 'AI 生成发布信息'}
-              </button>
-              <button
+              </Button>
+              <Button variant="plain"
                 className={`wr-xhs-action wr-xhs-action--publish ${xhsPushDone ? 'success' : ''}`}
                 onClick={handleXhsPublish}
                 disabled={xhsPushing || xhsPushDone}
               >
                 {xhsPushing ? <Loader2 size={15} className="wr-spin" /> : xhsPushDone ? <Check size={15} /> : <Send size={15} />}
                 {xhsPushing ? '同步发布中...' : xhsPushDone ? '已同步发布！' : '一键发布长文'}
-              </button>
+              </Button>
               <a
                 href="https://creator.xiaohongshu.com/publish/publish?from=menu&target=video"
                 target="_blank"
@@ -1239,7 +1241,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                 <div className="wr-xhs-settings-title"><Wand2 size={15} /><span>发布信息</span></div>
                 <label className="wr-xhs-field">
                   <span>最终发布标题 <em>{Array.from(xhsFinalTitle).length} 字</em></span>
-                  <input
+                  <Input
                     value={xhsFinalTitle}
                     onChange={event => setXhsFinalTitle(event.target.value)}
                     placeholder="AI 生成后可在此调整"
@@ -1247,7 +1249,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                 </label>
                 <label className="wr-xhs-field">
                   <span>封面摘要 <em>{xhsSummary.length}/60</em></span>
-                  <textarea
+                  <Textarea
                     value={xhsSummary}
                     maxLength={60}
                     onChange={event => setXhsSummary(event.target.value)}
@@ -1259,7 +1261,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                   <p>发布话题</p>
                   <div className="wr-xhs-topics">
                     {xhsTopics.length ? xhsTopics.map((topic, index) => (
-                      <span key={`${topic}-${index}`}>#{topic}<button onClick={() => setXhsTopics(current => current.filter((_, itemIndex) => itemIndex !== index))}>×</button></span>
+                      <span key={`${topic}-${index}`}>#{topic}<Button variant="plain" onClick={() => setXhsTopics(current => current.filter((_, itemIndex) => itemIndex !== index))}>×</Button></span>
                     )) : <small>用 AI 自动生成 3–5 个相关话题</small>}
                   </div>
                 </div>
@@ -1270,29 +1272,29 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                   <p>选择模板</p>
                   <div className="wr-xhs-option-list">
                     {XIAOHONGSHU_TEMPLATES.map(templateName => (
-                      <button
+                      <Button variant="plain"
                         key={templateName}
                         className={xhsTemplateName === templateName ? 'active' : ''}
                         onClick={() => setXhsTemplateName(templateName)}
                       >
                         {templateName}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 </section>
                 <section className="wr-xhs-option-group">
                   <p>封面类型</p>
                   <div className="wr-xhs-option-list">
-                    <button className={xhsCoverType === 'with_image' ? 'active' : ''} onClick={() => setXhsCoverType('with_image')}>有图封面</button>
-                    <button className={xhsCoverType === 'without_image' ? 'active' : ''} onClick={() => setXhsCoverType('without_image')}>无图封面</button>
+                    <Button variant="plain" className={xhsCoverType === 'with_image' ? 'active' : ''} onClick={() => setXhsCoverType('with_image')}>有图封面</Button>
+                    <Button variant="plain" className={xhsCoverType === 'without_image' ? 'active' : ''} onClick={() => setXhsCoverType('without_image')}>无图封面</Button>
                   </div>
                 </section>
               </div>
               <div className="wr-xhs-settings-card wr-xhs-settings-card--mint">
                 <div className="wr-xhs-settings-title"><Sparkles size={15} /><span>封面信息</span></div>
-                <label className="wr-xhs-toggle"><input type="checkbox" checked={xhsShowAuthor} onChange={event => setXhsShowAuthor(event.target.checked)} /> 显示作者</label>
-                <label className="wr-xhs-toggle"><input type="checkbox" checked={xhsShowReadingTime} disabled={charCount < 1500} onChange={event => setXhsShowReadingTime(event.target.checked)} /> 显示字数和时长 {charCount < 1500 ? '（满 1500 字可用）' : ''}</label>
-                <label className="wr-xhs-toggle"><input type="checkbox" checked={xhsShowSummary} onChange={event => setXhsShowSummary(event.target.checked)} /> 显示摘要</label>
+                <label className="wr-xhs-toggle"><Input type="checkbox" checked={xhsShowAuthor} onChange={event => setXhsShowAuthor(event.target.checked)} /> 显示作者</label>
+                <label className="wr-xhs-toggle"><Input type="checkbox" checked={xhsShowReadingTime} disabled={charCount < 1500} onChange={event => setXhsShowReadingTime(event.target.checked)} /> 显示字数和时长 {charCount < 1500 ? '（满 1500 字可用）' : ''}</label>
+                <label className="wr-xhs-toggle"><Input type="checkbox" checked={xhsShowSummary} onChange={event => setXhsShowSummary(event.target.checked)} /> 显示摘要</label>
               </div>
               <p className="wr-xhs-note">流程：同步排版到“写长文” → 选择模板与封面 → 等待自动保存 → 进入下一步 → 填入 AI 生成的标题、话题与原创声明 → 发布。地点、可见范围和定时不自动修改。</p>
             </aside>

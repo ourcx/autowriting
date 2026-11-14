@@ -1,3 +1,5 @@
+import { Input } from "../../components/FormControls/FormControls"
+import Button from "../../components/Button/Button"
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -228,11 +230,11 @@ export default function AISettings() {
         onBack={() => navigate(-1)}
         actions={(
           <div className="as-header-actions">
-            <button className="as-usage-btn" onClick={() => navigate('/token-usage')}>Token 用量</button>
-            <button className={`as-save-btn${saved ? ' as-save-btn--ok' : ''}`} disabled={deepseekSaving} onClick={() => void handleSave()}>
+            <Button variant="plain" className="as-usage-btn" onClick={() => navigate('/token-usage')}>Token 用量</Button>
+            <Button variant="plain" className={`as-save-btn${saved ? ' as-save-btn--ok' : ''}`} disabled={deepseekSaving} onClick={() => void handleSave()}>
               {saved ? <Check size={14} /> : <Save size={14} />}
               {saved ? '已保存' : '保存'}
-            </button>
+            </Button>
           </div>
         )}
       />
@@ -240,7 +242,7 @@ export default function AISettings() {
       <div className="as-layout">
         <nav className="as-tabs" aria-label="AI 配置分类">
           {WORKFLOW_TABS.map(tab => (
-            <button type="button" key={tab.id} aria-pressed={tabId === tab.id} onClick={() => setActiveSection(tab.id)}>{tab.label}</button>
+            <Button variant="plain" type="button" key={tab.id} aria-pressed={tabId === tab.id} onClick={() => setActiveSection(tab.id)}>{tab.label}</Button>
           ))}
         </nav>
         <main className="as-content">
@@ -248,16 +250,16 @@ export default function AISettings() {
             <section className="as-panel">
               <div className="as-overview-heading">
                 <h2 className="as-panel-title">创作服务</h2>
-                <button className="as-text-button" onClick={() => setActiveSection('quickstart')}><Sparkles size={15} /> 快速配置</button>
+                <Button variant="plain" className="as-text-button" onClick={() => setActiveSection('quickstart')}><Sparkles size={15} /> 快速配置</Button>
               </div>
               <div className="as-service-list">
                 {services.map(service => (
-                  <button type="button" className="as-service-row" key={service.id} onClick={() => setActiveSection(service.id)}>
+                  <Button variant="plain" type="button" className="as-service-row" key={service.id} onClick={() => setActiveSection(service.id)}>
                     <span className="as-service-icon">{service.icon}</span>
                     <span className="as-service-copy"><strong>{service.name}</strong><span>{service.detail}</span></span>
                     <span className="as-service-status" data-ready={service.status !== '待配置'}>{service.status}</span>
                     <ChevronRight size={16} aria-hidden="true" />
-                  </button>
+                  </Button>
                 ))}
               </div>
               <p className="as-hint">文章 Agent 会用联网服务搜索资料和核查来源。浏览器里的封面 Key 在对应服务设置中管理。</p>
@@ -267,7 +269,7 @@ export default function AISettings() {
           {more && (
             <nav className="as-subtabs" aria-label="更多 AI 设置">
               {MORE_TABS.map(tab => (
-                <button type="button" key={tab.id} aria-pressed={activeSection === tab.id} onClick={() => setActiveSection(tab.id)}>{tab.label}</button>
+                <Button variant="plain" type="button" key={tab.id} aria-pressed={activeSection === tab.id} onClick={() => setActiveSection(tab.id)}>{tab.label}</Button>
               ))}
             </nav>
           )}
@@ -276,7 +278,7 @@ export default function AISettings() {
           {activeSection === 'quickstart' && (
             <div className="as-panel">
               <div className="as-panel-header">
-                <button className="as-text-button" onClick={() => setActiveSection('overview')}>返回概览</button>
+                <Button variant="plain" className="as-text-button" onClick={() => setActiveSection('overview')}>返回概览</Button>
                 <h2 className="as-panel-title">快速配置</h2>
               </div>
 
@@ -287,13 +289,13 @@ export default function AISettings() {
                     <h3>智谱一站式方案</h3>
                     <p>文章用 GLM，封面用 GLM-Image，素材搜索也复用同一个 Key。</p>
                   </div>
-                  <button
+                  <Button variant="plain"
                     className={`as-quick-apply${recommendedApplied ? ' as-quick-apply--active' : ''}`}
                     onClick={applyRecommendedSetup}
                   >
                     {recommendedApplied ? <Check size={15} /> : <Sparkles size={15} />}
                     {recommendedApplied ? '已选用' : '一键使用'}
-                  </button>
+                  </Button>
                 </div>
 
                 <div className="as-quick-capabilities" aria-label="推荐方案能力">
@@ -316,16 +318,16 @@ export default function AISettings() {
                 <div className="as-field">
                   <label className="as-label">智谱 API Key</label>
                   <div className="as-key-wrap">
-                    <input
+                    <Input
                       className="as-input as-input-mono"
                       type={showKeys['quick-zhipu'] ? 'text' : 'password'}
                       value={config.zhipuApiKey}
                       onChange={e => set({ zhipuApiKey: e.target.value })}
                       placeholder={serverStatus?.zhipuReady ? '服务端已配置，可直接开始' : '填一次即可，不用再配置三个服务'}
                     />
-                    <button className="as-eye-btn" onClick={() => toggleKey('quick-zhipu')} aria-label="显示或隐藏 API Key">
+                    <Button variant="plain" className="as-eye-btn" onClick={() => toggleKey('quick-zhipu')} aria-label="显示或隐藏 API Key">
                       {showKeys['quick-zhipu'] ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
+                    </Button>
                   </div>
                   <p className="as-hint">
                     没有 Key？前往 <a href="https://bigmodel.cn/usercenter/proj-mgmt/apikeys" target="_blank" rel="noreferrer">智谱开放平台</a> 获取。
@@ -334,21 +336,21 @@ export default function AISettings() {
                 </div>
 
                 <div className="as-quick-actions">
-                  <button
+                  <Button variant="plain"
                     className="as-btn-test"
                     onClick={handleTest}
                     disabled={testing || !config.zhipuApiKey || !recommendedApplied}
                   >
                     {testing ? '测试中...' : '测试连接'}
-                  </button>
-                  <button
+                  </Button>
+                  <Button variant="plain"
                     className="as-quick-start"
                     onClick={handleSaveAndStart}
                     disabled={!recommendedReady}
                   >
                     保存并开始写作
                     <ArrowRight size={15} />
-                  </button>
+                  </Button>
                 </div>
                 {testResult && (
                   <span className={`as-test-msg${testResult.ok ? ' as-test-msg--ok' : ' as-test-msg--err'}`}>
@@ -364,7 +366,7 @@ export default function AISettings() {
                     <h3>DeepSeek 写作与素材</h3>
                     <p>文章用 deepseek-flash，网页搜索、链接读取、文件和语音共用 DeepSeek 公共 Key。</p>
                   </div>
-                  <button
+                  <Button variant="plain"
                     className="as-quick-apply"
                     onClick={() => {
                       if (!deepseekReady) { setActiveSection('providers'); return }
@@ -378,14 +380,14 @@ export default function AISettings() {
                     }}
                   >
                     <Sparkles size={15} />{deepseekReady ? '保存并使用 DeepSeek' : '配置 DeepSeek Key'}
-                  </button>
+                  </Button>
                 </div>
               </div>
 
-              <button className="as-detail-link" onClick={() => setActiveSection('article')}>
+              <Button variant="plain" className="as-detail-link" onClick={() => setActiveSection('article')}>
                 我想分别选择文章、封面和搜索服务
                 <ChevronRight size={14} />
-              </button>
+              </Button>
             </div>
           )}
 
@@ -407,17 +409,17 @@ export default function AISettings() {
                 <div className="as-field">
                   <label className="as-label" htmlFor="as-deepseek-key">DeepSeek 公共 API Key</label>
                   <div className="as-key-wrap">
-                    <input id="as-deepseek-key" className="as-input as-input-mono"
+                    <Input id="as-deepseek-key" className="as-input as-input-mono"
                       type={showKeys['deepseek-common'] ? 'text' : 'password'} autoComplete="off"
                       value={deepseekKey} maxLength={256} disabled={deepseekSaving}
                       onChange={e => { setDeepseekKey(e.target.value); setDeepseekKeyResult(null) }}
                       placeholder={accountDeepseekReady ? '已保存，填写新 Key 可替换' : '填写 DeepSeek 开放平台的 API Key'} />
-                    <button type="button" className="as-eye-btn" aria-label={showKeys['deepseek-common'] ? '隐藏 DeepSeek Key' : '显示 DeepSeek Key'}
-                      onClick={() => toggleKey('deepseek-common')}>{showKeys['deepseek-common'] ? <EyeOff size={14} /> : <Eye size={14} />}</button>
+                    <Button variant="plain" type="button" className="as-eye-btn" aria-label={showKeys['deepseek-common'] ? '隐藏 DeepSeek Key' : '显示 DeepSeek Key'}
+                      onClick={() => toggleKey('deepseek-common')}>{showKeys['deepseek-common'] ? <EyeOff size={14} /> : <Eye size={14} />}</Button>
                   </div>
                   <p className="as-hint">前往 <a href={DEEPSEEK_KEYS_URL} target="_blank" rel="noreferrer">DeepSeek 开放平台</a> 获取。填好后点击右上角「保存」。</p>
                   <div className="as-test-row">
-                    {accountDeepseekReady && <button type="button" className="as-btn-test" disabled={deepseekSaving} onClick={() => void saveAccountKey('')}>移除账号 Key</button>}
+                    {accountDeepseekReady && <Button variant="plain" type="button" className="as-btn-test" disabled={deepseekSaving} onClick={() => void saveAccountKey('')}>移除账号 Key</Button>}
                     {deepseekKeyResult && <span role="status" className={`as-test-msg as-test-msg--${deepseekKeyResult.ok ? 'ok' : 'err'}`}>{deepseekKeyResult.msg}</span>}
                   </div>
                 </div>
@@ -433,16 +435,16 @@ export default function AISettings() {
                 <div className="as-field">
                   <label className="as-label">智谱公共 API Key</label>
                   <div className="as-key-wrap">
-                    <input
+                    <Input
                       className="as-input as-input-mono"
                       type={showKeys['zhipu-common'] ? 'text' : 'password'}
                       value={config.zhipuApiKey}
                       onChange={e => set({ zhipuApiKey: e.target.value })}
                       placeholder="填写一次，供智谱系列工具复用"
                     />
-                    <button className="as-eye-btn" onClick={() => toggleKey('zhipu-common')}>
+                    <Button variant="plain" className="as-eye-btn" onClick={() => toggleKey('zhipu-common')}>
                       {showKeys['zhipu-common'] ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
+                    </Button>
                   </div>
                   <p className="as-hint">
                     前往 <a href="https://bigmodel.cn/usercenter/proj-mgmt/apikeys" target="_blank" rel="noreferrer">智谱开放平台</a> 获取。旧的工具级 Key 保留并优先，不会被公共 Key 覆盖。
@@ -465,14 +467,14 @@ export default function AISettings() {
                   <span className="as-card-tag as-card-tag--teal">复用智谱公共 Key</span>
                 </div>
                 <div className="as-provider-grid">
-                  <button className="as-provider-tile" onClick={() => navigate('/rag')}>
+                  <Button variant="plain" className="as-provider-tile" onClick={() => navigate('/rag')}>
                     <span className="as-pt-name">GLM 全模态知识库</span>
                     <span className="as-pt-desc">配置云知识库 ID，参与文章生成自动召回</span>
-                  </button>
-                  <button className="as-provider-tile" onClick={() => navigate('/drafts')}>
+                  </Button>
+                  <Button variant="plain" className="as-provider-tile" onClick={() => navigate('/drafts')}>
                     <span className="as-pt-name">文件解析与 OCR</span>
                     <span className="as-pt-desc">在文章素材采集器上传 PDF、Office、图片或手写稿</span>
-                  </button>
+                  </Button>
                 </div>
               </div>
               <div className="as-card">
@@ -511,14 +513,14 @@ export default function AISettings() {
                 <p className="as-card-desc">一键选择服务与模型，应用后只需填写该方案对应的 Key</p>
                 <div className="as-provider-grid">
                   {CONFIG_PRESETS.map(preset => (
-                    <button
+                    <Button variant="plain"
                       key={preset.id}
                       className="as-provider-tile"
                       onClick={() => applyPreset(preset.id)}
                     >
                       <span className="as-pt-name">{preset.name}</span>
                       <span className="as-pt-desc">{preset.desc}</span>
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>
@@ -527,7 +529,7 @@ export default function AISettings() {
                 <div className="as-card-section-label">选择服务商</div>
                 <div className="as-provider-grid">
                   {PROVIDER_PRESETS.map(p => (
-                    <button
+                    <Button variant="plain"
                       key={p.id}
                       className={`as-provider-tile${config.articleProvider === p.id ? ' as-provider-tile--active' : ''}`}
                       onClick={() => handleArticleProviderChange(p.id)}
@@ -537,7 +539,7 @@ export default function AISettings() {
                       <span className="as-pt-hint">
                         <a href={p.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>获取 Key ↗</a> {p.tip}
                       </span>
-                    </button>
+                    </Button>
                   ))}
                 </div>
 
@@ -546,14 +548,14 @@ export default function AISettings() {
                 {deepseekSelected ? (
                   <div>
                     <p className="as-hint">deepseek-flash · {deepseekReady ? '已配置。使用模型或测试连接会产生 Token 费用。' : '填写 DeepSeek 公共 Key 后即可使用。'}</p>
-                    {!deepseekReady && <button className="as-text-button" onClick={() => setActiveSection('providers')}>前往公共 Key</button>}
+                    {!deepseekReady && <Button variant="plain" className="as-text-button" onClick={() => setActiveSection('providers')}>前往公共 Key</Button>}
                   </div>
                 ) : config.articleProvider === 'maas' ? (
                   <>
                     <div className="as-row-2">
                       <div className="as-field">
                         <label className="as-label">Base URL</label>
-                        <input
+                        <Input
                           className="as-input"
                           value={config.maasBaseUrl}
                           onChange={e => set({ maasBaseUrl: e.target.value })}
@@ -562,7 +564,7 @@ export default function AISettings() {
                       </div>
                       <div className="as-field">
                         <label className="as-label">User Email</label>
-                        <input
+                        <Input
                           className="as-input"
                           value={config.maasUserEmail}
                           onChange={e => set({ maasUserEmail: e.target.value })}
@@ -573,16 +575,16 @@ export default function AISettings() {
                     <div className="as-field">
                       <label className="as-label">API Key</label>
                       <div className="as-key-wrap">
-                        <input
+                        <Input
                           className="as-input as-input-mono"
                           type={showKeys['maas'] ? 'text' : 'password'}
                           value={config.maasApiKey}
                           onChange={e => set({ maasApiKey: e.target.value })}
                           placeholder="sk-..."
                         />
-                        <button className="as-eye-btn" onClick={() => toggleKey('maas')}>
+                        <Button variant="plain" className="as-eye-btn" onClick={() => toggleKey('maas')}>
                           {showKeys['maas'] ? <EyeOff size={14} /> : <Eye size={14} />}
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   </>
@@ -591,7 +593,7 @@ export default function AISettings() {
                     <div className="as-row-2">
                       <div className="as-field as-field--grow">
                         <label className="as-label">Base URL</label>
-                        <input
+                        <Input
                           className="as-input"
                           value={config.articleBaseUrl}
                           onChange={e => set({ articleBaseUrl: e.target.value })}
@@ -600,7 +602,7 @@ export default function AISettings() {
                       </div>
                       <div className="as-field">
                         <label className="as-label">模型</label>
-                        <input
+                        <Input
                           className="as-input"
                           list="as-model-list"
                           value={config.articleModel}
@@ -617,25 +619,25 @@ export default function AISettings() {
                     <div className="as-field">
                       <label className="as-label">API Key</label>
                       <div className="as-key-wrap">
-                        <input
+                        <Input
                           className="as-input as-input-mono"
                           type={showKeys['article'] ? 'text' : 'password'}
                           value={config.articleApiKey}
                           onChange={e => set({ articleApiKey: e.target.value })}
                           placeholder={config.articleProvider === 'zhipu' ? '选填；留空复用智谱公共 Key' : 'sk-...'}
                         />
-                        <button className="as-eye-btn" onClick={() => toggleKey('article')}>
+                        <Button variant="plain" className="as-eye-btn" onClick={() => toggleKey('article')}>
                           {showKeys['article'] ? <EyeOff size={14} /> : <Eye size={14} />}
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   </>
                 )}
 
                 <div className="as-test-row">
-                  <button className="as-btn-test" onClick={handleTest} disabled={testing || (deepseekSelected && !deepseekReady)}>
+                  <Button variant="plain" className="as-btn-test" onClick={handleTest} disabled={testing || (deepseekSelected && !deepseekReady)}>
                     {testing ? '测试中...' : '测试连接'}
-                  </button>
+                  </Button>
                   {testResult && (
                     <span className={`as-test-msg${testResult.ok ? ' as-test-msg--ok' : ' as-test-msg--err'}`}>
                       {testResult.ok ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
@@ -659,14 +661,14 @@ export default function AISettings() {
                 <div className="as-card-section-label">默认封面服务</div>
                 <div className="as-provider-grid">
                   {COVER_PROVIDER_PRESETS.map(p => (
-                    <button
+                    <Button variant="plain"
                       key={p.id}
                       className={`as-provider-tile${config.coverProvider === p.id ? ' as-provider-tile--active' : ''}`}
                       onClick={() => set({ coverProvider: p.id })}
                     >
                       <span className="as-pt-name">{p.name}</span>
                       <span className="as-pt-desc">{p.desc}</span>
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>
@@ -691,16 +693,16 @@ export default function AISettings() {
                 <div className="as-field">
                   <label className="as-label">图片工具专用 Key <span className="as-label-opt">选填</span></label>
                   <div className="as-key-wrap">
-                    <input
+                    <Input
                       className="as-input as-input-mono"
                       type={showKeys['zhipu-image'] ? 'text' : 'password'}
                       value={config.zhipuImageApiKey}
                       onChange={e => set({ zhipuImageApiKey: e.target.value })}
                       placeholder="留空复用智谱公共 Key"
                     />
-                    <button className="as-eye-btn" onClick={() => toggleKey('zhipu-image')}>
+                    <Button variant="plain" className="as-eye-btn" onClick={() => toggleKey('zhipu-image')}>
                       {showKeys['zhipu-image'] ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -716,7 +718,7 @@ export default function AISettings() {
                 <div className="as-row-2">
                   <div className="as-field as-field--grow">
                     <label className="as-label">Base URL</label>
-                    <input
+                    <Input
                       className="as-input"
                       value={config.doubaoBaseUrl}
                       onChange={e => set({ doubaoBaseUrl: e.target.value })}
@@ -725,7 +727,7 @@ export default function AISettings() {
                   </div>
                   <div className="as-field">
                     <label className="as-label">模型 / Endpoint ID</label>
-                    <input
+                    <Input
                       className="as-input"
                       value={config.doubaoModel}
                       onChange={e => set({ doubaoModel: e.target.value })}
@@ -736,16 +738,16 @@ export default function AISettings() {
                 <div className="as-field">
                   <label className="as-label">方舟 API Key</label>
                   <div className="as-key-wrap">
-                    <input
+                    <Input
                       className="as-input as-input-mono"
                       type={showKeys['doubao'] ? 'text' : 'password'}
                       value={config.doubaoApiKey}
                       onChange={e => set({ doubaoApiKey: e.target.value })}
                       placeholder="填写方舟 API Key"
                     />
-                    <button className="as-eye-btn" onClick={() => toggleKey('doubao')}>
+                    <Button variant="plain" className="as-eye-btn" onClick={() => toggleKey('doubao')}>
                       {showKeys['doubao'] ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
+                    </Button>
                   </div>
                   <p className="as-hint">
                     前往 <a href="https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey" target="_blank" rel="noreferrer">火山方舟控制台</a> 获取 API Key，并先开通对应图片模型。
@@ -764,16 +766,16 @@ export default function AISettings() {
                 <div className="as-field">
                   <label className="as-label">API Key</label>
                   <div className="as-key-wrap">
-                    <input
+                    <Input
                       className="as-input as-input-mono"
                       type={showKeys['siliconflow'] ? 'text' : 'password'}
                       value={config.siliconflowApiKey}
                       onChange={e => set({ siliconflowApiKey: e.target.value })}
                       placeholder="sk-nf..."
                     />
-                    <button className="as-eye-btn" onClick={() => toggleKey('siliconflow')}>
+                    <Button variant="plain" className="as-eye-btn" onClick={() => toggleKey('siliconflow')}>
                       {showKeys['siliconflow'] ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
+                    </Button>
                   </div>
                   <p className="as-hint">
                     前往 <a href="https://cloud.siliconflow.cn/account/ak" target="_blank" rel="noreferrer">cloud.siliconflow.cn</a> 获取，注册即送免费额度
@@ -781,7 +783,7 @@ export default function AISettings() {
                 </div>
                 <div className="as-field">
                   <label className="as-label">Kolors 模型 <span className="as-label-opt">选填</span></label>
-                  <input
+                  <Input
                     className="as-input"
                     list="as-siliconflow-models"
                     value={config.siliconflowModel}
@@ -808,16 +810,16 @@ export default function AISettings() {
                 <div className="as-field">
                   <label className="as-label">{config.coverProvider === 'openai' ? 'OpenAI API Key' : 'Stability API Key'}</label>
                   <div className="as-key-wrap">
-                    <input
+                    <Input
                       className="as-input as-input-mono"
                       type={showKeys['cover'] ? 'text' : 'password'}
                       value={config.coverApiKey}
                       onChange={e => set({ coverApiKey: e.target.value })}
                       placeholder="sk-..."
                     />
-                    <button className="as-eye-btn" onClick={() => toggleKey('cover')}>
+                    <Button variant="plain" className="as-eye-btn" onClick={() => toggleKey('cover')}>
                       {showKeys['cover'] ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
+                    </Button>
                   </div>
                   <p className="as-hint">
                     {config.coverProvider === 'openai' ? '文章也使用 OpenAI 时，可以填写同一个 Key。' : '填写 Stability AI 控制台生成的 Key。'}
@@ -833,15 +835,15 @@ export default function AISettings() {
                   <code>python3 dashy-gencli.py</code>
                   <div className="as-field">
                     <label className="as-label" htmlFor="as-gencli-pairing">本机配对码</label>
-                    <input className="as-input as-input-mono" id="as-gencli-pairing" type="password" autoComplete="off"
+                    <Input className="as-input as-input-mono" id="as-gencli-pairing" type="password" autoComplete="off"
                       maxLength={80} disabled={gencliTesting} value={gencliCode}
                       onChange={e => { setGencliCode(e.target.value); setGencliResult(null) }} />
                     <p className="as-hint">配对码只保存在当前浏览器，重启客户端后会换一个码。</p>
                   </div>
                   <div className="as-test-row">
-                    <button className="as-btn-test" onClick={() => void checkGenCli()} disabled={gencliTesting || !gencliCode.trim()}>
+                    <Button variant="plain" className="as-btn-test" onClick={() => void checkGenCli()} disabled={gencliTesting || !gencliCode.trim()}>
                       {gencliTesting ? '连接中…' : '测试本机连接'}
-                    </button>
+                    </Button>
                     {gencliResult && <span role="status" className={`as-test-msg as-test-msg--${gencliResult.ok ? 'ok' : 'err'}`}>{gencliResult.msg}</span>}
                   </div>
                 </div>
@@ -856,16 +858,16 @@ export default function AISettings() {
                 <div className="as-field">
                   <label className="as-label">API Key</label>
                   <div className="as-key-wrap">
-                    <input
+                    <Input
                       className="as-input as-input-mono"
                       type={showKeys['openrouter'] ? 'text' : 'password'}
                       value={config.openrouterApiKey}
                       onChange={e => set({ openrouterApiKey: e.target.value })}
                       placeholder="sk-or-..."
                     />
-                    <button className="as-eye-btn" onClick={() => toggleKey('openrouter')}>
+                    <Button variant="plain" className="as-eye-btn" onClick={() => toggleKey('openrouter')}>
                       {showKeys['openrouter'] ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
+                    </Button>
                   </div>
                   <p className="as-hint">仅保存在当前浏览器，生成封面时由浏览器直接请求 OpenRouter，不经过部署服务器。</p>
                 </div>
@@ -894,13 +896,13 @@ export default function AISettings() {
                     { id: 'bing', name: 'Bing Search', desc: 'Microsoft，1000 次/月免费', url: 'https://portal.azure.com', tip: 'Azure Portal 创建资源' },
                   ].map(p => (
                     <div key={p.id} className="as-provider-wrap">
-                      <button
+                      <Button variant="plain"
                         className={`as-provider-tile${config.searchProvider === p.id ? ' as-provider-tile--active' : ''}`}
                         onClick={() => set({ searchProvider: p.id as AIConfig['searchProvider'] })}
                       >
                         <span className="as-pt-name">{p.name}</span>
                         <span className="as-pt-desc">{p.desc}</span>
-                      </button>
+                      </Button>
                       <p className="as-hint as-provider-hint">
                         <a href={p.url} target="_blank" rel="noreferrer">{p.id === 'deepseek' ? '官方文档 ↗' : '获取 Key ↗'}</a> {p.tip}
                       </p>
@@ -914,7 +916,7 @@ export default function AISettings() {
                     <div className="as-card-divider" />
                     <div className="as-field">
                       <label className="as-label">SearXNG 实例 URL <span className="as-label-opt">选填，默认使用公共实例</span></label>
-                      <input
+                      <Input
                         className="as-input as-input-mono"
                         value={config.searxngUrl || ''}
                         onChange={e => set({ searxngUrl: e.target.value })}
@@ -946,14 +948,14 @@ export default function AISettings() {
                         { id: 'baidu', name: '百度', desc: '国内最大' },
                         { id: 'bing', name: 'Bing', desc: '微软必应' },
                       ].map(e => (
-                        <button
+                        <Button variant="plain"
                           key={e.id}
                           className={`as-provider-tile${config.searchEngine === e.id ? ' as-provider-tile--active' : ''}`}
                           onClick={() => set({ searchEngine: e.id })}
                         >
                           <span className="as-pt-name">{e.name}</span>
                           <span className="as-pt-desc">{e.desc}</span>
-                        </button>
+                        </Button>
                       ))}
                     </div>
                   </>
@@ -962,7 +964,7 @@ export default function AISettings() {
                 {config.searchProvider === 'deepseek' && (
                   <div>
                     <p className="as-hint">{deepseekReady ? '搜索和读取网页按调用计费。' : '搜索和读取网页使用 DeepSeek 公共 Key。'}</p>
-                    {!deepseekReady && <button className="as-text-button" onClick={() => setActiveSection('providers')}>前往公共 Key</button>}
+                    {!deepseekReady && <Button variant="plain" className="as-text-button" onClick={() => setActiveSection('providers')}>前往公共 Key</Button>}
                   </div>
                 )}
                 {/* 智谱 / Serper / Bing API Key */}
@@ -972,16 +974,16 @@ export default function AISettings() {
                     <div className="as-field">
                       <label className="as-label">{config.searchProvider === 'zhipu' ? '智谱' : config.searchProvider === 'serper' ? 'Serper' : 'Bing'} API Key</label>
                       <div className="as-key-wrap">
-                        <input
+                        <Input
                           className="as-input as-input-mono"
                           type={showKeys['search'] ? 'text' : 'password'}
                           value={config.searchApiKey}
                           onChange={e => set({ searchApiKey: e.target.value })}
                           placeholder={config.searchProvider === 'zhipu' ? '选填；留空复用智谱公共 Key' : config.searchProvider === 'serper' ? 'serper.dev 注册后获取' : 'Azure Portal 获取'}
                         />
-                        <button className="as-eye-btn" onClick={() => toggleKey('search')}>
+                        <Button variant="plain" className="as-eye-btn" onClick={() => toggleKey('search')}>
                           {showKeys['search'] ? <EyeOff size={14} /> : <Eye size={14} />}
-                        </button>
+                        </Button>
                       </div>
                       <p className="as-hint">
                         {config.searchProvider === 'zhipu'
@@ -1049,16 +1051,16 @@ export default function AISettings() {
                 <div className="as-field">
                   <label className="as-label">Jina API Key <span className="as-label-opt">选填，留空走免费通道（可能被墙）</span></label>
                   <div className="as-key-wrap">
-                    <input
+                    <Input
                       className="as-input as-input-mono"
                       type={showKeys['jina'] ? 'text' : 'password'}
                       value={config.jinaApiKey || ''}
                       onChange={e => set({ jinaApiKey: e.target.value })}
                       placeholder="jina_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                     />
-                    <button className="as-eye-btn" onClick={() => toggleKey('jina')}>
+                    <Button variant="plain" className="as-eye-btn" onClick={() => toggleKey('jina')}>
                       {showKeys['jina'] ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
+                    </Button>
                   </div>
                   <p className="as-hint">
                     前往 <a href="https://jina.ai/reader" target="_blank" rel="noreferrer">jina.ai/reader</a> 注册获取，每天免费 200 次，付费可解锁更多额度
@@ -1098,14 +1100,14 @@ export default function AISettings() {
                     { id: 'github', name: 'GitHub + jsDelivr', desc: '国内访问快，免费无限制，推荐' },
                     { id: 'imgur', name: 'Imgur', desc: '全球 CDN，国内需代理' },
                   ].map(p => (
-                    <button
+                    <Button variant="plain"
                       key={p.id}
                       className={`as-provider-tile${config.cdnProvider === p.id ? ' as-provider-tile--active' : ''}`}
                       onClick={() => set({ cdnProvider: p.id as AIConfig['cdnProvider'] })}
                     >
                       <span className="as-pt-name">{p.name}</span>
                       <span className="as-pt-desc">{p.desc}</span>
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>
@@ -1124,16 +1126,16 @@ export default function AISettings() {
                   <div className="as-field">
                     <label className="as-label">Personal Access Token</label>
                     <div className="as-key-wrap">
-                      <input
+                      <Input
                         className="as-input as-input-mono"
                         type={showKeys['github'] ? 'text' : 'password'}
                         value={config.githubToken}
                         onChange={e => set({ githubToken: e.target.value })}
                         placeholder="ghp_xxxxxxxxxxxx"
                       />
-                      <button className="as-eye-btn" onClick={() => toggleKey('github')}>
+                      <Button variant="plain" className="as-eye-btn" onClick={() => toggleKey('github')}>
                         {showKeys['github'] ? <EyeOff size={14} /> : <Eye size={14} />}
-                      </button>
+                      </Button>
                     </div>
                     <p className="as-hint">
                       前往 <a href="https://github.com/settings/tokens/new" target="_blank" rel="noreferrer">GitHub → Settings → Tokens</a>，
@@ -1144,7 +1146,7 @@ export default function AISettings() {
                   <div className="as-row-2">
                     <div className="as-field as-field--grow">
                       <label className="as-label">仓库</label>
-                      <input
+                      <Input
                         className="as-input as-input-mono"
                         value={config.githubRepo}
                         onChange={e => set({ githubRepo: e.target.value })}
@@ -1154,7 +1156,7 @@ export default function AISettings() {
                     </div>
                     <div className="as-field">
                       <label className="as-label">分支</label>
-                      <input
+                      <Input
                         className="as-input as-input-mono"
                         value={config.githubBranch}
                         onChange={e => set({ githubBranch: e.target.value })}
@@ -1165,7 +1167,7 @@ export default function AISettings() {
 
                   <div className="as-field">
                     <label className="as-label">存储路径 <span className="as-label-opt">选填</span></label>
-                    <input
+                    <Input
                       className="as-input as-input-mono"
                       value={config.githubPath}
                       onChange={e => set({ githubPath: e.target.value })}
@@ -1198,16 +1200,16 @@ export default function AISettings() {
                   <div className="as-field">
                     <label className="as-label">Client ID</label>
                     <div className="as-key-wrap">
-                      <input
+                      <Input
                         className="as-input as-input-mono"
                         type={showKeys['imgur'] ? 'text' : 'password'}
                         value={config.imgurClientId}
                         onChange={e => set({ imgurClientId: e.target.value })}
                         placeholder="xxxxxxxxxxxxxxx"
                       />
-                      <button className="as-eye-btn" onClick={() => toggleKey('imgur')}>
+                      <Button variant="plain" className="as-eye-btn" onClick={() => toggleKey('imgur')}>
                         {showKeys['imgur'] ? <EyeOff size={14} /> : <Eye size={14} />}
-                      </button>
+                      </Button>
                     </div>
                     <p className="as-hint">
                       前往 <a href="https://api.imgur.com/oauth2/addclient" target="_blank" rel="noreferrer">api.imgur.com/oauth2/addclient</a>，

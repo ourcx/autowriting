@@ -1,3 +1,4 @@
+import Button from "../../components/Button/Button"
 import { useEffect, useRef, useState } from "react"
 import { Volume2 } from "lucide-react"
 import { deepSeekRequest, extractErrorMessage } from "../../utils/apiHelpers"
@@ -35,9 +36,9 @@ export default function DeepSeekReadAloud({ content }: DeepSeekReadAloudProps) {
   }
 
   return <div className="deepseek-read-aloud">
-    <button type="button" className="materials-refine-btn" disabled={busy} onClick={() => void read()}>
+    <Button variant="plain" type="button" className="materials-refine-btn" disabled={busy} onClick={() => void read()}>
       <Volume2 size={14} />{busy ? "正在生成音频…" : "DeepSeek 朗读公众号正文"}
-    </button>
+    </Button>
     {audio?.content === content && <audio controls src={audio.url} aria-label="公众号正文朗读" />}
     {error && <p role="alert">{error}</p>}
   </div>

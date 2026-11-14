@@ -1,3 +1,4 @@
+import Button from "../../components/Button/Button"
 import {
   ArrowRight,
   BookOpen,
@@ -57,18 +58,18 @@ function ProductStudio() {
       <div className="ph-studio-body">
         <aside className="ph-source-pane">
           <p className="ph-tool-label">本篇素材</p>
-          <button className="ph-source-item is-active" type="button">
+          <Button variant="plain" className="ph-source-item is-active" type="button">
             <FileText size={15} />
             采访纪要
-          </button>
-          <button className="ph-source-item" type="button">
+          </Button>
+          <Button variant="plain" className="ph-source-item" type="button">
             <BookOpen size={15} />
             往期文章
-          </button>
-          <button className="ph-source-item" type="button">
+          </Button>
+          <Button variant="plain" className="ph-source-item" type="button">
             <Library size={15} />
             网页资料
-          </button>
+          </Button>
           <div className="ph-source-note">
             <span>已引用</span>
             <strong>8 条</strong>

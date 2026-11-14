@@ -1,3 +1,4 @@
+import Button from "../../components/Button/Button"
 import {
   CANVAS_SECTION_PRESETS,
   type CanvasSectionPresetId,
@@ -16,20 +17,18 @@ export default function CanvasSectionPresetShelf({ disabled, onApply }: CanvasSe
     </div>
     <div className="cs-section-preset-grid">
       {CANVAS_SECTION_PRESETS.map(preset => (
-        <button
+        <Button variant="plain"
           key={preset.id}
           disabled={disabled}
-          onClick={event => {
-            onApply(preset.id)
-            event.currentTarget.closest("details")?.removeAttribute("open")
-          }}
+          data-ui-close=""
+          onClick={() => onApply(preset.id)}
         >
           <span className={`cs-section-preset-preview cs-section-preset-preview--${preset.id}`} aria-hidden="true">
             <i /><i /><i />
           </span>
           <strong>{preset.name}</strong>
           <small>{preset.description}</small>
-        </button>
+        </Button>
       ))}
     </div>
   </div>

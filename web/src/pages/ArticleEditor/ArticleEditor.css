@@ -258,7 +258,7 @@
 /* ── 素材面板：左右分栏 ── */
 .editor-panel--materials {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0;
   overflow: hidden;
   border: 1px solid var(--color-hairline);
@@ -288,7 +288,7 @@
   border-bottom: 1px solid var(--color-hairline);
   background: var(--color-surface-soft);
   flex-shrink: 0;
-  gap: 2px;
+  gap: 4px !important;
 }
 
 .materials-panel-header h3 {
@@ -917,7 +917,7 @@
   position: relative;
 }
 
-.editor-menu summary {
+.editor-menu .ui-collapse-trigger {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -933,21 +933,18 @@
   list-style: none;
 }
 
-.editor-menu summary::-webkit-details-marker {
-  display: none;
-}
 
-.editor-menu summary:hover,
-.editor-menu[open] summary {
+.editor-menu .ui-collapse-trigger:hover,
+.editor-menu[data-state="open"] .ui-collapse-trigger {
   background: var(--color-surface-card);
   color: var(--color-brand-teal);
 }
 
-.editor-menu summary svg:last-child {
+.editor-menu .ui-collapse-trigger svg:last-child {
   transition: transform 160ms ease;
 }
 
-.editor-menu[open] summary svg:last-child {
+.editor-menu[data-state="open"] .ui-collapse-trigger svg:last-child {
   transform: rotate(180deg);
 }
 
@@ -1579,7 +1576,7 @@
   }
 
   .editor-flow-bar .flow-step,
-  .editor-secondary-nav .editor-menu summary {
+  .editor-secondary-nav .editor-menu .ui-collapse-trigger {
     min-height: 44px;
   }
 }

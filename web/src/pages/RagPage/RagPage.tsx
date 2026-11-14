@@ -1,3 +1,5 @@
+import { Input, SelectField, Textarea } from "../../components/FormControls/FormControls"
+import Button from "../../components/Button/Button"
 /**
  * RAG 管理页  /rag
  * - Embedding 配置（远端 API / 本地模型 tab 切换）
@@ -272,7 +274,7 @@ export default function RagPage() {
 
           {/* Tab 切换 */}
           <div className="rp-tabs">
-            <button
+            <Button variant="plain"
               className={`rp-tab${configTab === 'remote' ? ' rp-tab--active' : ''}`}
               onClick={() => setConfigTab('remote')}
             >
@@ -281,15 +283,15 @@ export default function RagPage() {
                 ? <span className="rp-tab-dot rp-tab-dot--ok" />
                 : <span className="rp-tab-dot rp-tab-dot--warn" />
               }
-            </button>
-            <button
+            </Button>
+            <Button variant="plain"
               className={`rp-tab${configTab === 'local' ? ' rp-tab--active' : ''}`}
               onClick={() => setConfigTab('local')}
             >
               <Cpu size={13} />
               本地模型
               {!hasKey && <span className="rp-tab-dot rp-tab-dot--ok" />}
-            </button>
+            </Button>
             {embDirty && <span className="rp-badge-dirty" style={{ marginLeft: 'auto' }}>未保存</span>}
           </div>
 
@@ -303,7 +305,7 @@ export default function RagPage() {
                     API Key
                     <span className="rp-field-hint">留空时仅复用同服务商公共 Key；智谱端点会复用智谱公共 Key</span>
                   </label>
-                  <input
+                  <Input
                     className="rp-input rp-input-mono"
                     type="password"
                     placeholder={usesZhipuEmbedding && localConfig.zhipuApiKey ? '留空使用智谱公共 Key（已配置）' : localConfig.articleApiKey ? '留空使用文章 Key（已配置）' : 'sk-...'}
@@ -317,7 +319,7 @@ export default function RagPage() {
                     Base URL
                     <span className="rp-field-hint">OpenAI 兼容接口</span>
                   </label>
-                  <input
+                  <Input
                     className="rp-input rp-input-mono"
                     placeholder="https://api.openai.com/v1"
                     value={embUrl}
@@ -330,7 +332,7 @@ export default function RagPage() {
                     模型
                     <span className="rp-field-hint">与服务商支持的模型对应</span>
                   </label>
-                  <input
+                  <Input
                     className="rp-input rp-input-mono"
                     placeholder="text-embedding-3-small"
                     value={embModel}
@@ -341,7 +343,7 @@ export default function RagPage() {
                     {PRESET_MODELS.map(m => <option key={m} value={m} />)}
                   </datalist>
                   <div className="rp-preset-pills">
-                    <button
+                    <Button variant="plain"
                       className={`rp-preset-pill${usesZhipuEmbedding ? ' rp-preset-pill--active' : ''}`}
                       onClick={() => {
                         setEmbUrl('https://open.bigmodel.cn/api/paas/v4')
@@ -349,13 +351,13 @@ export default function RagPage() {
                         setEmbDims('2048')
                         mark()
                       }}
-                    >智谱 Embedding-3</button>
+                    >智谱 Embedding-3</Button>
                     {PRESET_MODELS.map(m => (
-                      <button
+                      <Button variant="plain"
                         key={m}
                         className={`rp-preset-pill${embModel === m ? ' rp-preset-pill--active' : ''}`}
                         onClick={() => { setEmbModel(m); mark() }}
-                      >{m}</button>
+                      >{m}</Button>
                     ))}
                   </div>
                 </div>
@@ -365,7 +367,7 @@ export default function RagPage() {
                     Dimensions
                     <span className="rp-field-hint">留空使用默认值（Qwen3 建议填 1024）</span>
                   </label>
-                  <input
+                  <Input
                     className="rp-input rp-input-mono"
                     type="number"
                     placeholder="留空使用默认值"
@@ -379,7 +381,7 @@ export default function RagPage() {
                     Instruction
                     <span className="rp-field-hint">任务指令，Qwen3-Embedding 支持</span>
                   </label>
-                  <input
+                  <Input
                     className="rp-input"
                     placeholder="如：检索与以下内容相关的往期文章"
                     value={embInstr}
@@ -392,7 +394,7 @@ export default function RagPage() {
                     Extra Headers
                     <span className="rp-field-hint">JSON 格式，如 Gitee AI 的 X-Failover-Enabled</span>
                   </label>
-                  <textarea
+                  <Textarea
                     className={`rp-textarea rp-input-mono${headersErr ? ' rp-textarea--error' : ''}`}
                     placeholder={'{\n  "X-Failover-Enabled": "true"\n}'}
                     rows={3}
@@ -420,7 +422,7 @@ export default function RagPage() {
                       批并发数
                       <span className="rp-field-hint">默认 1</span>
                     </label>
-                    <input
+                    <Input
                       className="rp-input rp-input-mono"
                       type="number" min={1} max={128}
                       value={embBatchSize}
@@ -432,7 +434,7 @@ export default function RagPage() {
                       批次延迟 (ms)
                       <span className="rp-field-hint">默认 3000</span>
                     </label>
-                    <input
+                    <Input
                       className="rp-input rp-input-mono"
                       type="number" min={0} max={10000}
                       value={embBatchDelay}
@@ -449,9 +451,9 @@ export default function RagPage() {
                     : <span className="rp-config-status--warn">未配置 Key，将使用本地模型</span>
                   }
                 </span>
-                <button className="rp-btn-primary" onClick={saveEmbConfig} disabled={!embDirty}>
+                <Button variant="plain" className="rp-btn-primary" onClick={saveEmbConfig} disabled={!embDirty}>
                   保存配置
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -502,7 +504,7 @@ export default function RagPage() {
                   </div>
                   <div className="rp-local-model-info" style={{ flex: 1 }}>
                     <div className="rp-local-model-name">自定义模型 ID</div>
-                    <input
+                    <Input
                       className="rp-input rp-input-mono"
                       style={{ marginTop: 6, height: 36 }}
                       placeholder="Xenova/your-model"
@@ -527,9 +529,9 @@ export default function RagPage() {
                     : '使用默认 multilingual-e5-small（384 维）'
                   }
                 </span>
-                <button className="rp-btn-primary" onClick={saveEmbConfig} disabled={!embDirty}>
+                <Button variant="plain" className="rp-btn-primary" onClick={saveEmbConfig} disabled={!embDirty}>
                   保存配置
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -545,7 +547,7 @@ export default function RagPage() {
                   召回模式
                   <span className="rp-field-hint">参与文章生成和本页搜索测试</span>
                 </label>
-                <select
+                <SelectField
                   className="rp-input"
                   value={knowledgeMode}
                   onChange={event => { setKnowledgeMode(event.target.value as typeof knowledgeMode); mark() }}
@@ -553,11 +555,11 @@ export default function RagPage() {
                   <option value="off">关闭，仅使用本地索引</option>
                   <option value="remote">仅智谱云知识库</option>
                   <option value="hybrid">智谱云知识库 + 本地索引</option>
-                </select>
+                </SelectField>
               </div>
               <div className="rp-field">
                 <label className="rp-field-label">检索方式</label>
-                <select
+                <SelectField
                   className="rp-input"
                   value={knowledgeRecall}
                   onChange={event => { setKnowledgeRecall(event.target.value as typeof knowledgeRecall); mark() }}
@@ -566,14 +568,14 @@ export default function RagPage() {
                   <option value="mixed">混合检索</option>
                   <option value="embedding">向量检索</option>
                   <option value="keyword">关键词检索</option>
-                </select>
+                </SelectField>
               </div>
               <div className="rp-field rp-field--span2">
                 <label className="rp-field-label">
                   知识库 ID
                   <span className="rp-field-hint">多个 ID 用逗号或换行分隔，最多 20 个</span>
                 </label>
-                <textarea
+                <Textarea
                   className="rp-textarea rp-input-mono"
                   rows={3}
                   placeholder="knowledge-id-1, knowledge-id-2"
@@ -583,7 +585,7 @@ export default function RagPage() {
                 />
               </div>
               <label className="rp-local-model-item" style={{ gridColumn: 'span 2' }}>
-                <input
+                <Input
                   type="checkbox"
                   checked={knowledgeRerank}
                   onChange={event => { setKnowledgeRerank(event.target.checked); mark() }}
@@ -606,7 +608,7 @@ export default function RagPage() {
               <a className="rp-inline-link" href="https://open.bigmodel.cn/console/knowledge" target="_blank" rel="noreferrer">
                 管理智谱知识库 <ExternalLink size={12} />
               </a>
-              <button className="rp-btn-primary" onClick={saveEmbConfig} disabled={!embDirty}>保存配置</button>
+              <Button variant="plain" className="rp-btn-primary" onClick={saveEmbConfig} disabled={!embDirty}>保存配置</Button>
             </div>
           </div>
         </section>
@@ -668,7 +670,7 @@ export default function RagPage() {
                 </div>
               </div>
             </div>
-            <button
+            <Button variant="plain"
               className={`rp-btn-primary${(building || status?.building) ? ' rp-btn-loading' : ''}`}
               onClick={handleBuild}
               disabled={building || status?.building || !canBuild}
@@ -680,7 +682,7 @@ export default function RagPage() {
             >
               <RefreshCw size={14} className={(building || status?.building) ? 'rp-spin' : ''} />
               {(building || status?.building) ? '构建中...' : status?.indexed ? '重新构建' : '立即构建'}
-            </button>
+            </Button>
           </div>
 
           {(building || status?.building) && (
@@ -706,7 +708,7 @@ export default function RagPage() {
         <section className="rp-section">
           <div className="rp-section-label">相似度搜索测试</div>
           <div className="rp-search-row">
-            <input
+            <Input
               className="rp-input"
               placeholder={status?.indexed || cloudReady ? '输入任意文本，测试知识检索效果...' : '请先构建索引或配置智谱云知识库'}
               value={query}
@@ -714,14 +716,14 @@ export default function RagPage() {
               onKeyDown={e => { if (e.key === 'Enter') handleSearch() }}
               disabled={!status?.indexed && !cloudReady}
             />
-            <button
+            <Button variant="plain"
               className="rp-btn-primary"
               onClick={handleSearch}
               disabled={searching || (!status?.indexed && !cloudReady) || !query.trim()}
             >
               <Search size={14} />
               {searching ? '检索中...' : '搜索'}
-            </button>
+            </Button>
           </div>
 
           {results !== null && (

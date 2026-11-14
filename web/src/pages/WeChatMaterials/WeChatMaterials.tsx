@@ -1,3 +1,5 @@
+import { Input, SelectField } from "../../components/FormControls/FormControls"
+import Button from "../../components/Button/Button"
 import {
   ClipboardEvent,
   DragEvent,
@@ -211,7 +213,7 @@ function MaterialDropzone({
       }}
       onDrop={handleDrop}
     >
-      <input
+      <Input
         ref={inputRef}
         className="wm-dropzone-input"
         type="file"
@@ -232,7 +234,7 @@ function MaterialDropzone({
         </span>
       </div>
       {file ? (
-        <button
+        <Button variant="plain"
           className="wm-dropzone-clear"
           type="button"
           title="移除文件"
@@ -243,7 +245,7 @@ function MaterialDropzone({
           }}
         >
           <X size={14} />
-        </button>
+        </Button>
       ) : null}
     </div>
   )
@@ -525,7 +527,7 @@ export default function WeChatMaterials() {
           <div className="wm-empty-icon"><FileImage size={36} /></div>
           <p className="wm-empty-title">尚未绑定公众号</p>
           <p className="wm-empty-desc">先去「用户页」绑定公众号，再回来上传正文图片和管理永久素材。</p>
-          <button className="wm-primary-btn" onClick={() => navigate('/account')}>前往绑定</button>
+          <Button variant="plain" className="wm-primary-btn" onClick={() => navigate('/account')}>前往绑定</Button>
         </div>
       </div>
     )
@@ -548,13 +550,13 @@ export default function WeChatMaterials() {
         onBack={() => navigate(-1)}
         actions={
           <>
-          <button className="wm-secondary-btn" onClick={() => navigate('/drafts')}>
+          <Button variant="plain" className="wm-secondary-btn" onClick={() => navigate('/drafts')}>
             草稿箱
-          </button>
-          <button className="wm-secondary-btn" disabled={loading} onClick={() => fetchMaterials(0, true)}>
+          </Button>
+          <Button variant="plain" className="wm-secondary-btn" disabled={loading} onClick={() => fetchMaterials(0, true)}>
             <RefreshCw size={14} className={loading ? 'wm-spin' : ''} />
             刷新
-          </button>
+          </Button>
           </>
         }
       />
@@ -593,35 +595,35 @@ export default function WeChatMaterials() {
               />
               <div className="wm-upload-footer">
                 <span>支持 JPG、PNG，服务端会自动压缩到微信要求</span>
-                <button className="wm-primary-btn" disabled={contentImageUploading || !contentImageFile} onClick={handleUploadContentImage}>
+                <Button variant="plain" className="wm-primary-btn" disabled={contentImageUploading || !contentImageFile} onClick={handleUploadContentImage}>
                   {contentImageUploading ? <Loader2 size={14} className="wm-spin" /> : <Upload size={14} />}
                   {contentImageUploading ? '上传中...' : '上传正文图片'}
-                </button>
+                </Button>
               </div>
             </div>
             {contentImageUrl ? (
               <div className="wm-result">
                 <div className="wm-result-head">
                   <span>微信正文图片 URL</span>
-                  <button className="wm-chip-btn" onClick={() => setContentImageUrl('')}>
+                  <Button variant="plain" className="wm-chip-btn" onClick={() => setContentImageUrl('')}>
                     <X size={13} />
                     清空
-                  </button>
+                  </Button>
                 </div>
                 <code>{contentImageUrl}</code>
                 <div className="wm-action-row">
-                  <button className="wm-chip-btn" onClick={() => copyText(contentImageUrl, '已复制正文图片 URL')}>
+                  <Button variant="plain" className="wm-chip-btn" onClick={() => copyText(contentImageUrl, '已复制正文图片 URL')}>
                     <Link2 size={13} />
                     复制 URL
-                  </button>
-                  <button className="wm-chip-btn" onClick={() => copyText(`![${contentImageAlt.replace(/[[\]]/g, '')}](${contentImageUrl})`, '已复制 Markdown 图片语法')}>
+                  </Button>
+                  <Button variant="plain" className="wm-chip-btn" onClick={() => copyText(`![${contentImageAlt.replace(/[[\]]/g, '')}](${contentImageUrl})`, '已复制 Markdown 图片语法')}>
                     <Copy size={13} />
                     复制 Markdown
-                  </button>
-                  <button className="wm-chip-btn" onClick={() => copyText(`<img src="${contentImageUrl}" alt="${escapeHtmlAttribute(contentImageAlt)}" />`, '已复制 HTML 图片代码')}>
+                  </Button>
+                  <Button variant="plain" className="wm-chip-btn" onClick={() => copyText(`<img src="${contentImageUrl}" alt="${escapeHtmlAttribute(contentImageAlt)}" />`, '已复制 HTML 图片代码')}>
                     <Copy size={13} />
                     复制 HTML
-                  </button>
+                  </Button>
                   <a className="wm-chip-btn" href={contentImageUrl} target="_blank" rel="noreferrer">
                     <ExternalLink size={13} />
                     打开图片
@@ -638,7 +640,7 @@ export default function WeChatMaterials() {
             <div className="wm-upload-stack">
               <label className="wm-field">
                 <span>素材类型</span>
-                <select
+                <SelectField
                   value={uploadType}
                   onChange={e => {
                     setUploadType(e.target.value as UploadMaterialType)
@@ -649,7 +651,7 @@ export default function WeChatMaterials() {
                   <option value="image">图片</option>
                   <option value="voice">音频</option>
                   <option value="video">视频</option>
-                </select>
+                </SelectField>
               </label>
               <MaterialDropzone
                 accept={uploadAccept(uploadType)}
@@ -662,7 +664,7 @@ export default function WeChatMaterials() {
                 <div className="wm-form-grid">
                   <label className="wm-field">
                     <span>视频标题</span>
-                    <input
+                    <Input
                       type="text"
                       value={uploadTitle}
                       onChange={e => setUploadTitle(e.target.value)}
@@ -671,7 +673,7 @@ export default function WeChatMaterials() {
                   </label>
                   <label className="wm-field">
                     <span>视频简介</span>
-                    <input
+                    <Input
                       type="text"
                       value={uploadIntroduction}
                       onChange={e => setUploadIntroduction(e.target.value)}
@@ -682,10 +684,10 @@ export default function WeChatMaterials() {
               ) : null}
               <div className="wm-upload-footer">
                 <span>上传成功后可在素材库中查看并复制 media_id</span>
-                <button className="wm-primary-btn" disabled={uploading || !uploadFile} onClick={handleUploadMaterial}>
+                <Button variant="plain" className="wm-primary-btn" disabled={uploading || !uploadFile} onClick={handleUploadMaterial}>
                   {uploading ? <Loader2 size={14} className="wm-spin" /> : <Upload size={14} />}
                   {uploading ? '上传中...' : '上传永久素材'}
-                </button>
+                </Button>
               </div>
             </div>
           </article>
@@ -694,7 +696,7 @@ export default function WeChatMaterials() {
         {error ? (
           <div className="wm-error-bar">
             <span>{error}</span>
-            <button onClick={() => fetchMaterials(0, true)}>重试</button>
+            <Button variant="plain" onClick={() => fetchMaterials(0, true)}>重试</Button>
           </div>
         ) : null}
 
@@ -710,20 +712,20 @@ export default function WeChatMaterials() {
               {(Object.keys(typeMeta) as MaterialType[]).map(type => {
                 const Icon = typeMeta[type].icon
                 return (
-                  <button
+                  <Button variant="plain"
                     key={type}
                     className={`wm-type-tab ${materialType === type ? 'is-active' : ''}`}
                     onClick={() => setMaterialType(type)}
                   >
                     <Icon size={14} />
                     {typeMeta[type].label}
-                  </button>
+                  </Button>
                 )
               })}
             </div>
             <label className="wm-search">
               <Search size={15} />
-              <input
+              <Input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="按标题、文件名、media_id 搜索"
@@ -741,9 +743,9 @@ export default function WeChatMaterials() {
                   <div className="wm-section-title">已选素材</div>
                   <div className="wm-section-desc">{selectedMaterialName || detail.media_id}</div>
                 </div>
-                <button className="wm-icon-btn" onClick={() => { setDetail(null); setDetailError(null); revokeDetailFileUrl() }}>
+                <Button variant="plain" className="wm-icon-btn" onClick={() => { setDetail(null); setDetailError(null); revokeDetailFileUrl() }}>
                   <X size={14} />
-                </button>
+                </Button>
               </div>
               <div className="wm-detail-grid">
                 <div className="wm-detail-meta">
@@ -756,12 +758,12 @@ export default function WeChatMaterials() {
                     <code>{detail.media_id}</code>
                   </div>
                   <div className="wm-action-row">
-                    <button className="wm-chip-btn" onClick={() => copyText(detail.media_id, '已复制 media_id')}>
+                    <Button variant="plain" className="wm-chip-btn" onClick={() => copyText(detail.media_id, '已复制 media_id')}>
                       <Copy size={13} />
                       复制 media_id
-                    </button>
+                    </Button>
                     {(detail.type === 'image' || detail.type === 'voice') ? (
-                      <button
+                      <Button variant="plain"
                         className="wm-chip-btn"
                         disabled={!canOpenDetailFile}
                         onClick={() => {
@@ -771,7 +773,7 @@ export default function WeChatMaterials() {
                       >
                         {detailFileLoading ? <Loader2 size={13} className="wm-spin" /> : <ExternalLink size={13} />}
                         {detailFileLoading ? '加载中...' : '打开文件'}
-                      </button>
+                      </Button>
                     ) : null}
                     {detail.down_url ? (
                       <a className="wm-chip-btn" href={detail.down_url} target="_blank" rel="noreferrer">
@@ -865,36 +867,36 @@ export default function WeChatMaterials() {
               <div className="wm-image-grid">
                 {filteredItems.map(item => (
                   <article key={item.media_id} className="wm-image-card">
-                    <button className="wm-image-frame" onClick={() => openDetail(item)}>
+                    <Button variant="plain" className="wm-image-frame" onClick={() => openDetail(item)}>
                       {item.url ? (
                         <img src={wxImg(item.url) || item.url} alt={`${item.name || item.media_id}图片素材预览`} loading="lazy" />
                       ) : (
                         <div className="wm-image-placeholder"><FileImage size={20} /></div>
                       )}
-                    </button>
+                    </Button>
                     <div className="wm-card-body">
                       <div className="wm-card-title" title={item.name || item.media_id}>{item.name || '未命名图片'}</div>
                       <div className="wm-card-meta">{formatTime(item.update_time)}</div>
                       <div className="wm-card-code" title={item.media_id}>{item.media_id}</div>
                       <div className="wm-action-row">
-                        <button className="wm-chip-btn" onClick={() => openDetail(item)}><Eye size={13} />查看</button>
-                        <button className="wm-chip-btn" onClick={() => copyText(item.media_id, '已复制 media_id')}><Copy size={13} />复制 ID</button>
+                        <Button variant="plain" className="wm-chip-btn" onClick={() => openDetail(item)}><Eye size={13} />查看</Button>
+                        <Button variant="plain" className="wm-chip-btn" onClick={() => copyText(item.media_id, '已复制 media_id')}><Copy size={13} />复制 ID</Button>
                         {item.url ? (
-                          <button className="wm-chip-btn" onClick={() => {
+                          <Button variant="plain" className="wm-chip-btn" onClick={() => {
                             if (!item.url) return
                             copyText(item.url, '已复制图片 URL')
                           }}>
                             <Link2 size={13} />
                             复制 URL
-                          </button>
+                          </Button>
                         ) : null}
                         {item.url ? (
                           <a className="wm-chip-btn" href={item.url} target="_blank" rel="noreferrer"><ExternalLink size={13} />打开</a>
                         ) : null}
-                        <button className="wm-chip-btn wm-chip-btn--danger" disabled={deleting === item.media_id} onClick={() => handleDelete(item)}>
+                        <Button variant="plain" className="wm-chip-btn wm-chip-btn--danger" disabled={deleting === item.media_id} onClick={() => handleDelete(item)}>
                           {deleting === item.media_id ? <Loader2 size={13} className="wm-spin" /> : <Trash2 size={13} />}
                           删除
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   </article>
@@ -918,12 +920,12 @@ export default function WeChatMaterials() {
                         {firstNews?.digest ? <div className="wm-list-digest">{firstNews.digest}</div> : null}
                       </div>
                       <div className="wm-action-row">
-                        <button className="wm-chip-btn" onClick={() => openDetail(item)}><Eye size={13} />查看详情</button>
-                        <button className="wm-chip-btn" onClick={() => copyText(item.media_id, '已复制 media_id')}><Copy size={13} />复制 ID</button>
-                        <button className="wm-chip-btn wm-chip-btn--danger" disabled={deleting === item.media_id} onClick={() => handleDelete(item)}>
+                        <Button variant="plain" className="wm-chip-btn" onClick={() => openDetail(item)}><Eye size={13} />查看详情</Button>
+                        <Button variant="plain" className="wm-chip-btn" onClick={() => copyText(item.media_id, '已复制 media_id')}><Copy size={13} />复制 ID</Button>
+                        <Button variant="plain" className="wm-chip-btn wm-chip-btn--danger" disabled={deleting === item.media_id} onClick={() => handleDelete(item)}>
                           {deleting === item.media_id ? <Loader2 size={13} className="wm-spin" /> : <Trash2 size={13} />}
                           删除
-                        </button>
+                        </Button>
                       </div>
                     </article>
                   )
@@ -933,10 +935,10 @@ export default function WeChatMaterials() {
 
             {items.length < total ? (
               <div className="wm-load-more">
-                <button className="wm-secondary-btn" disabled={loading} onClick={() => fetchMaterials(offset, false)}>
+                <Button variant="plain" className="wm-secondary-btn" disabled={loading} onClick={() => fetchMaterials(offset, false)}>
                   {loading ? <Loader2 size={14} className="wm-spin" /> : null}
                   加载更多
-                </button>
+                </Button>
               </div>
             ) : null}
           </section>

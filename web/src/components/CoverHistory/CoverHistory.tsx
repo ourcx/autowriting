@@ -1,3 +1,4 @@
+import Button from "../Button/Button"
 import React, { useState, useEffect } from 'react'
 import { Trash2, RefreshCw, Download, Copy } from 'lucide-react'
 import axios from 'axios'
@@ -126,13 +127,13 @@ export const CoverHistory: React.FC = () => {
       <div className="history-header">
         <h3>📜 生成历史</h3>
         <div className="header-actions">
-          <button className="btn-icon" onClick={fetchHistory} title="刷新">
+          <Button variant="plain" className="btn-icon" onClick={fetchHistory} title="刷新">
             <RefreshCw size={18} />
-          </button>
+          </Button>
           {history.length > 0 && (
-            <button className="btn-icon danger" onClick={handleClearAll} title="清除所有">
+            <Button variant="plain" className="btn-icon danger" onClick={handleClearAll} title="清除所有">
               <Trash2 size={18} />
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -185,7 +186,7 @@ export const CoverHistory: React.FC = () => {
                 </p>
               </div>
               <div className="item-actions">
-                <button
+                <Button variant="plain"
                   className="btn-action"
                   onClick={(e) => {
                     e.stopPropagation()
@@ -194,8 +195,8 @@ export const CoverHistory: React.FC = () => {
                   title="下载"
                 >
                   <Download size={16} />
-                </button>
-                <button
+                </Button>
+                <Button variant="plain"
                   className="btn-action"
                   onClick={(e) => {
                     e.stopPropagation()
@@ -204,8 +205,8 @@ export const CoverHistory: React.FC = () => {
                   title="复制 URL"
                 >
                   <Copy size={16} />
-                </button>
-                <button
+                </Button>
+                <Button variant="plain"
                   className="btn-action danger"
                   onClick={(e) => {
                     e.stopPropagation()
@@ -214,7 +215,7 @@ export const CoverHistory: React.FC = () => {
                   title="删除"
                 >
                   <Trash2 size={16} />
-                </button>
+                </Button>
               </div>
             </div>
           ))}

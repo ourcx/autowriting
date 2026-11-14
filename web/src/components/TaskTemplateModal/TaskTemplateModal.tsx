@@ -1,3 +1,5 @@
+import { Input, Textarea } from "../FormControls/FormControls"
+import Button from "../Button/Button"
 import { useState } from 'react'
 import { X, Save } from 'lucide-react'
 import {
@@ -36,7 +38,7 @@ export default function TaskTemplateModal({ initial, onClose, onSaved }: Props) 
         {/* Header */}
         <div className="ttm-header">
           <span className="ttm-title">{initial ? '编辑模板' : '新建写作模板'}</span>
-          <button className="ttm-close" onClick={onClose}><X size={16} /></button>
+          <Button variant="plain" className="ttm-close" onClick={onClose}><X size={16} /></Button>
         </div>
 
         {/* Body */}
@@ -44,7 +46,7 @@ export default function TaskTemplateModal({ initial, onClose, onSaved }: Props) 
           <div className="ttm-field-row">
             <div className="ttm-field ttm-field--name">
               <label className="ttm-label">模板名称</label>
-              <input
+              <Input
                 className="ttm-input"
                 value={tmpl.name}
                 onChange={e => set({ name: e.target.value })}
@@ -54,7 +56,7 @@ export default function TaskTemplateModal({ initial, onClose, onSaved }: Props) 
             </div>
             <div className="ttm-field ttm-field--desc">
               <label className="ttm-label">简介 <span className="ttm-opt">选填</span></label>
-              <input
+              <Input
                 className="ttm-input"
                 value={tmpl.desc}
                 onChange={e => set({ desc: e.target.value })}
@@ -67,7 +69,7 @@ export default function TaskTemplateModal({ initial, onClose, onSaved }: Props) 
           <div className="ttm-field">
             <label className="ttm-label">模板内容</label>
             <p className="ttm-hint">写成 Markdown 格式，应用后会直接填入「写作任务要求」输入框</p>
-            <textarea
+            <Textarea
               className="ttm-textarea"
               value={tmpl.content}
               onChange={e => set({ content: e.target.value })}
@@ -79,15 +81,15 @@ export default function TaskTemplateModal({ initial, onClose, onSaved }: Props) 
 
         {/* Footer */}
         <div className="ttm-footer">
-          <button className="ttm-btn-cancel" onClick={onClose}>取消</button>
-          <button
+          <Button variant="plain" className="ttm-btn-cancel" onClick={onClose}>取消</Button>
+          <Button variant="plain"
             className="ttm-btn-save"
             onClick={handleSave}
             disabled={!tmpl.name.trim()}
           >
             <Save size={14} />
             保存模板
-          </button>
+          </Button>
         </div>
       </div>
     </div>

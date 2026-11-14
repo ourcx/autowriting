@@ -1,3 +1,4 @@
+import Button from "../Button/Button"
 import React, { useCallback, useEffect, useState } from 'react'
 import { Check, Image as ImageIcon, Trash2 } from 'lucide-react'
 import { showConfirm } from '../Toast/Toast'
@@ -130,20 +131,20 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({
         <div className="filter-section">
           <h4>分类</h4>
           <div className="filter-options">
-            <button
+            <Button variant="plain"
               className={`filter-btn ${!selectedCategory ? 'active' : ''}`}
               onClick={() => setSelectedCategory(null)}
             >
               全部
-            </button>
+            </Button>
             {categories.map((cat) => (
-              <button
+              <Button variant="plain"
                 key={cat}
                 className={`filter-btn ${selectedCategory === cat ? 'active' : ''}`}
                 onClick={() => setSelectedCategory(cat)}
               >
                 {cat}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -153,13 +154,13 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({
             <h4>标签</h4>
             <div className="filter-tags">
               {allTags.map((tag) => (
-                <button
+                <Button variant="plain"
                   key={tag}
                   className={`tag-btn ${selectedTags.includes(tag) ? 'active' : ''}`}
                   onClick={() => toggleTag(tag)}
                 >
                   {tag}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -182,14 +183,14 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({
               <div key={image.id} className={`image-card${selected ? ' is-selected' : ''}`}>
                 <div className="image-preview">
                   {onImageSelect ? (
-                    <button
+                    <Button variant="plain"
                       className="image-preview-button"
                       type="button"
                       onClick={() => onImageSelect(image)}
                       aria-label={`${selectionLabel}：${image.title || '未命名图片'}`}
                     >
                       <img src={image.imageUrl} alt={`${image.title || '未命名'}图片素材`} />
-                    </button>
+                    </Button>
                   ) : (
                     <img src={image.imageUrl} alt={`${image.title || '未命名'}图片素材`} />
                   )}
@@ -213,7 +214,7 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({
                   </p>
                   <div className="image-actions">
                     {onImageSelect && (
-                      <button
+                      <Button variant="plain"
                         className="btn-select-image"
                         type="button"
                         onClick={() => onImageSelect(image)}
@@ -221,9 +222,9 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({
                       >
                         {selected ? <Check size={15} /> : <ImageIcon size={15} />}
                         {selected ? '已设为封面' : selectionLabel}
-                      </button>
+                      </Button>
                     )}
-                    <button
+                    <Button variant="plain"
                       className="btn-delete"
                       type="button"
                       onClick={() => handleDeleteImage(image.id)}
@@ -231,7 +232,7 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({
                       aria-label={`删除图片：${image.title || '未命名图片'}`}
                     >
                       <Trash2 size={15} />
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>

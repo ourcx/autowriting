@@ -6,6 +6,7 @@
 
 - 缩进 2 空格，LF 换行
 - 前端 TS 文件：**双引号**（与 JSX 一致）；后端 ESM JS：**单引号、无分号**
+- 页面和业务组件用共享的 `Button` 和 `FormControls`，直接渲染按钮、表单或折叠标签只放在组件层。
 - 包管理器只认 `pnpm`，锁文件只认 [`web/pnpm-lock.yaml`](web/pnpm-lock.yaml)
 - 不写 `any`、不写 `@ts-ignore`、不写 `@ts-expect-error`（如需逃生，必须注释具体原因，且只能在测试或临时调试代码中）
 

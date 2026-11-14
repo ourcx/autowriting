@@ -1,3 +1,5 @@
+import { Input } from "../FormControls/FormControls"
+import Button from "../Button/Button"
 import { useState, useEffect } from 'react'
 import { Search, Copy, X, Zap, ChevronRight } from 'lucide-react'
 import { fetchJson } from '../../utils/apiHelpers'
@@ -76,15 +78,15 @@ export default function PromptSelector({ onSelect, onClose, category }: PromptSe
               <p>快速选择预设提示词或自定义提示词</p>
             </div>
           </div>
-          <button className="ps-close-btn" onClick={onClose}>
+          <Button variant="plain" className="ps-close-btn" onClick={onClose}>
             <X size={20} />
-          </button>
+          </Button>
         </div>
 
         {/* Search */}
         <div className="ps-search-bar">
           <Search size={16} />
-          <input
+          <Input
             type="text"
             placeholder="搜索提示词..."
             value={searchText}
@@ -97,13 +99,13 @@ export default function PromptSelector({ onSelect, onClose, category }: PromptSe
         {/* Categories */}
         <div className="ps-categories">
           {categories.map((cat) => (
-            <button
+            <Button variant="plain"
               key={cat}
               className={`ps-category-btn ${selectedCategory === cat ? 'active' : ''}`}
               onClick={() => setSelectedCategory(cat)}
             >
               {cat === 'all' ? '全部' : cat}
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -149,12 +151,12 @@ export default function PromptSelector({ onSelect, onClose, category }: PromptSe
           <div className="ps-preview-section">
             <div className="ps-preview-header">
               <h3>{selectedPrompt.name}</h3>
-              <button
+              <Button variant="plain"
                 className="ps-preview-toggle"
                 onClick={() => setShowPreview(!showPreview)}
               >
                 {showPreview ? '隐藏' : '显示'}预览
-              </button>
+              </Button>
             </div>
             {showPreview && (
               <div className="ps-preview-content">
@@ -162,7 +164,7 @@ export default function PromptSelector({ onSelect, onClose, category }: PromptSe
               </div>
             )}
             <div className="ps-preview-actions">
-              <button
+              <Button variant="plain"
                 className="ps-copy-btn"
                 onClick={() => {
                   navigator.clipboard.writeText(selectedPrompt.content)
@@ -171,13 +173,13 @@ export default function PromptSelector({ onSelect, onClose, category }: PromptSe
               >
                 <Copy size={14} />
                 复制内容
-              </button>
-              <button
+              </Button>
+              <Button variant="plain"
                 className="ps-use-btn"
                 onClick={() => handleSelectPrompt(selectedPrompt)}
               >
                 使用此提示词
-              </button>
+              </Button>
             </div>
           </div>
         )}

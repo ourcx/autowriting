@@ -1,3 +1,4 @@
+import Button from "../Button/Button"
 import { useState, useEffect, useRef } from 'react'
 import {
   BarChart3, Clock, FileText, Eye,
@@ -399,13 +400,13 @@ function UIBlockLeadRewriteRenderer({ block }: { block: UIBlockLeadRewrite }) {
         <div className="clay-lead-panel clay-lead-panel--after" style={{ background: 'rgba(255,255,255,0.22)' }}>
           <div className="clay-lead-tag" style={{ color: theme.text }}>改写后</div>
           <div className="clay-lead-text" style={{ color: theme.text, fontWeight: 500 }}>{block.rewritten}</div>
-          <button
+          <Button variant="plain"
             className="clay-lead-copy"
             onClick={handleCopy}
             style={{ background: theme.text, color: theme.bg }}
           >
             {copied ? '已复制' : '复制'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -912,10 +913,10 @@ export default function ContentStats({ content, title, articleId, task, onArticl
       {/* ── 目录折叠 ─────────────────────────────────────────────────────────── */}
       {headings.length > 0 && (
         <div className="toc-section">
-          <button className="toc-toggle" onClick={() => setTocOpen(v => !v)}>
+          <Button variant="plain" className="toc-toggle" onClick={() => setTocOpen(v => !v)}>
             {tocOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             文章目录（{headings.length} 个标题）
-          </button>
+          </Button>
           {tocOpen && (
             <ul className="toc-list">
               {headings.map((h, i) => (
@@ -936,7 +937,7 @@ export default function ContentStats({ content, title, articleId, task, onArticl
             去 AI 味复审
             <span className="deai-subtitle">删套话、改过渡词、修标点</span>
           </div>
-          <button
+          <Button variant="plain"
             className={`btn-deai ${deaiLoading ? 'loading' : ''}`}
             onClick={handleDeai}
             disabled={deaiLoading || content.trim().length < 100}
@@ -945,7 +946,7 @@ export default function ContentStats({ content, title, articleId, task, onArticl
               ? <><span className="spinner-sm" />处理中...</>
               : <><Wand2 size={13} />{showDeaiPanel && deaiResult ? '重新处理' : '开始处理'}</>
             }
-          </button>
+          </Button>
         </div>
 
         {showDeaiPanel && (
@@ -954,9 +955,9 @@ export default function ContentStats({ content, title, articleId, task, onArticl
               <span className="deai-panel-label">
                 {deaiLoading ? '正在改写...' : deaiError ? '处理失败' : '改写预览'}
               </span>
-              <button className="deai-panel-close" onClick={handleDiscardDeai} title="关闭">
+              <Button variant="plain" className="deai-panel-close" onClick={handleDiscardDeai} title="关闭">
                 <X size={13} />
-              </button>
+              </Button>
             </div>
 
             {deaiError && (
@@ -981,9 +982,9 @@ export default function ContentStats({ content, title, articleId, task, onArticl
 
             {!deaiLoading && !deaiError && deaiResult && (
               <div className="deai-panel-footer">
-                <button className="deai-btn-discard" onClick={handleDiscardDeai}>放弃</button>
+                <Button variant="plain" className="deai-btn-discard" onClick={handleDiscardDeai}>放弃</Button>
                 {onArticleChange && (
-                  <button className="deai-btn-apply" onClick={handleApplyDeai}>应用到编辑器</button>
+                  <Button variant="plain" className="deai-btn-apply" onClick={handleApplyDeai}>应用到编辑器</Button>
                 )}
               </div>
             )}
@@ -1001,7 +1002,7 @@ export default function ContentStats({ content, title, articleId, task, onArticl
           </div>
           <div className="analysis-header-right">
             {saved && <span className="saved-badge">已保存</span>}
-            <button
+            <Button variant="plain"
               className={`btn-analyze ${analyzing ? 'loading' : ''}`}
               onClick={handleAnalyze}
               disabled={analyzing || content.trim().length < 100}
@@ -1010,7 +1011,7 @@ export default function ContentStats({ content, title, articleId, task, onArticl
                 ? <><span className="spinner-sm" />{analyzeProgress || '分析中...'}</>
                 : <><Sparkles size={13} />{result ? '重新分析' : '开始分析'}</>
               }
-            </button>
+            </Button>
           </div>
         </div>
 

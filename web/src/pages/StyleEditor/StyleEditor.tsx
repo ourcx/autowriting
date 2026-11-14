@@ -1,3 +1,4 @@
+import { Input, Textarea } from "../../components/FormControls/FormControls"
 import Button from "../../components/Button/Button"
 import { generateArticleStyle, extractErrorMessage } from "../../utils/apiHelpers"
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
@@ -322,7 +323,7 @@ export default function StyleEditor() {
           <div className="se-sidebar-section">
             <p className="se-section-label">内置模板</p>
             {builtinList.map(t => (
-              <button
+              <Button variant="plain"
                 key={t.id}
                 className={`se-tmpl-item ${selectedId === t.id ? 'active' : ''}`}
                 disabled={aiGenerating}
@@ -336,23 +337,23 @@ export default function StyleEditor() {
                   </span>
                   <span className="se-tmpl-desc">{t.desc}</span>
                 </div>
-              </button>
+              </Button>
             ))}
           </div>
 
           <div className="se-sidebar-section">
             <div className="se-section-row">
               <p className="se-section-label">我的模板</p>
-              <button className="se-new-btn" onClick={handleNewTemplate} disabled={aiGenerating} title="新建模板">
+              <Button variant="plain" className="se-new-btn" onClick={handleNewTemplate} disabled={aiGenerating} title="新建模板">
                 <Plus size={13} />
                 新建
-              </button>
+              </Button>
             </div>
             {customList.length === 0 && (
               <p className="se-no-custom">克隆内置模板或新建开始</p>
             )}
             {customList.map(t => (
-              <button
+              <Button variant="plain"
                 key={t.id}
                 className={`se-tmpl-item ${selectedId === t.id ? 'active' : ''}`}
                 disabled={aiGenerating}
@@ -363,7 +364,7 @@ export default function StyleEditor() {
                   <span className="se-tmpl-name">{t.name}</span>
                   <span className="se-tmpl-desc">{t.desc || '自定义模板'}</span>
                 </div>
-              </button>
+              </Button>
             ))}
           </div>
         </aside>
@@ -382,7 +383,7 @@ export default function StyleEditor() {
           <div className="se-meta-bar">
             <div className="se-meta-field">
               <label className="se-meta-label">模板名称</label>
-              <input
+              <Input
                 className="se-meta-input"
                 value={editName}
                 onChange={e => { setEditName(e.target.value); setIsDirty(true) }}
@@ -392,7 +393,7 @@ export default function StyleEditor() {
             </div>
             <div className="se-meta-field">
               <label className="se-meta-label">描述</label>
-              <input
+              <Input
                 className="se-meta-input"
                 value={editDesc}
                 onChange={e => { setEditDesc(e.target.value); setIsDirty(true) }}
@@ -403,7 +404,7 @@ export default function StyleEditor() {
             <div className="se-meta-field se-meta-field-color">
               <label className="se-meta-label">主题色</label>
               <div className="se-color-wrap">
-                <input
+                <Input
                   type="color"
                   className="se-color-picker"
                   value={editColor}
@@ -422,7 +423,7 @@ export default function StyleEditor() {
 
           {/* ── AI 样式生成面板 ── */}
           <div className={`se-ai-panel ${aiPanelOpen ? 'open' : ''}`}>
-            <button
+            <Button variant="plain"
               className="se-ai-toggle"
               onClick={() => setAiPanelOpen(v => !v)}
             >
@@ -432,7 +433,7 @@ export default function StyleEditor() {
               <span className="se-ai-toggle-chevron">
                 {aiPanelOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
               </span>
-            </button>
+            </Button>
 
             {aiPanelOpen && (
               <div className="se-ai-body">
@@ -450,17 +451,17 @@ export default function StyleEditor() {
                     '温暖阅读感，橘色标题',
                     '极简黑白，大字号',
                   ].map(tag => (
-                    <button
+                    <Button variant="plain"
                       key={tag}
                       className="se-ai-tag"
                       onClick={() => setAiPrompt(tag)}
                     >
                       {tag}
-                    </button>
+                    </Button>
                   ))}
                 </div>
 
-                <textarea
+                <Textarea
                   className="se-ai-input"
                   value={aiPrompt}
                   onChange={e => setAiPrompt(e.target.value)}
@@ -469,7 +470,7 @@ export default function StyleEditor() {
                 />
 
                 <div className="se-ai-actions">
-                  <button
+                  <Button variant="plain"
                     className="se-ai-btn-generate"
                     onClick={handleAIGenerate}
                     disabled={aiGenerating || !aiPrompt.trim()}
@@ -478,16 +479,16 @@ export default function StyleEditor() {
                       ? <><Loader2 size={14} className="se-ai-spin" /> 生成中...</>
                       : <><Wand2 size={14} /> 生成 CSS</>
                     }
-                  </button>
-                  {aiPreviewCss && <button className="se-ai-btn-apply" onClick={() => setAiPreviewCss('')}>取消预览</button>}
+                  </Button>
+                  {aiPreviewCss && <Button variant="plain" className="se-ai-btn-apply" onClick={() => setAiPreviewCss('')}>取消预览</Button>}
                   {aiPreviewCss && (
-                    <button
+                    <Button variant="plain"
                       className="se-ai-btn-apply"
                       onClick={handleApplyAI}
                     >
                       <Check size={14} />
                       {isBuiltin ? "另存为我的模板" : "应用到编辑器"}
-                    </button>
+                    </Button>
                   )}
                 </div>
 
@@ -511,7 +512,7 @@ export default function StyleEditor() {
           </div>
 
           {/* CSS Textarea */}
-          <textarea
+          <Textarea
             ref={cssTextareaRef}
             className="se-css-textarea"
             value={editCss}
@@ -542,36 +543,36 @@ export default function StyleEditor() {
             </div>
             <div className="se-preview-controls">
               <div className="se-segmented" aria-label="预览内容">
-                <button
+                <Button variant="plain"
                   className={previewMode === 'article' ? 'active' : ''}
                   onClick={() => setPreviewMode('article')}
                   title="文章预览"
                 >
                   <FileText size={13} />
-                </button>
-                <button
+                </Button>
+                <Button variant="plain"
                   className={previewMode === 'components' ? 'active' : ''}
                   onClick={() => setPreviewMode('components')}
                   title="组件总览"
                 >
                   <LayoutGrid size={13} />
-                </button>
+                </Button>
               </div>
               <div className="se-segmented" aria-label="预览宽度">
-                <button
+                <Button variant="plain"
                   className={previewViewport === 'mobile' ? 'active' : ''}
                   onClick={() => setPreviewViewport('mobile')}
                   title="手机宽度"
                 >
                   <Smartphone size={13} />
-                </button>
-                <button
+                </Button>
+                <Button variant="plain"
                   className={previewViewport === 'wide' ? 'active' : ''}
                   onClick={() => setPreviewViewport('wide')}
                   title="宽屏预览"
                 >
                   <Monitor size={13} />
-                </button>
+                </Button>
               </div>
             </div>
           </div>

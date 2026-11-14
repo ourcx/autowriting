@@ -1,3 +1,5 @@
+import { Input, SelectField, Textarea } from "../../components/FormControls/FormControls"
+import Button from "../../components/Button/Button"
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -274,12 +276,12 @@ export default function PromptsPage() {
       <div className="pp-editor">
         <div className="pp-editor-head">
           <span className="pp-editor-title">新建提示词</span>
-          <button className="pp-icon-btn" onClick={() => setIsCreating(false)}>✕</button>
+          <Button variant="plain" className="pp-icon-btn" onClick={() => setIsCreating(false)}>✕</Button>
         </div>
         <div className="pp-editor-body">
           <div className="pp-field">
             <label>名称 <em>*</em></label>
-            <input
+            <Input
               type="text"
               value={newPrompt.name || ''}
               onChange={e => setNewPrompt({ ...newPrompt, name: e.target.value })}
@@ -288,18 +290,18 @@ export default function PromptsPage() {
           </div>
           <div className="pp-field">
             <label>分类 <em>*</em></label>
-            <select
+            <SelectField
               value={newPrompt.category || 'article'}
               onChange={e => setNewPrompt({ ...newPrompt, category: e.target.value })}
             >
               {Object.entries(CATEGORY_LABELS).map(([val, label]) => (
                 <option key={val} value={val}>{label}</option>
               ))}
-            </select>
+            </SelectField>
           </div>
           <div className="pp-field">
             <label>描述</label>
-            <input
+            <Input
               type="text"
               value={newPrompt.description || ''}
               onChange={e => setNewPrompt({ ...newPrompt, description: e.target.value })}
@@ -308,7 +310,7 @@ export default function PromptsPage() {
           </div>
           <div className="pp-field pp-field--grow">
             <label>内容 <em>*</em></label>
-            <textarea
+            <Textarea
               value={newPrompt.content || ''}
               onChange={e => setNewPrompt({ ...newPrompt, content: e.target.value })}
               placeholder="输入提示词内容"
@@ -316,10 +318,10 @@ export default function PromptsPage() {
             />
           </div>
           <div className="pp-editor-actions">
-            <button className="pp-btn-primary" onClick={handleSaveNew} disabled={saving}>
+            <Button variant="plain" className="pp-btn-primary" onClick={handleSaveNew} disabled={saving}>
               {saving ? '创建中...' : '创建'}
-            </button>
-            <button className="pp-btn-secondary" onClick={() => setIsCreating(false)}>取消</button>
+            </Button>
+            <Button variant="plain" className="pp-btn-secondary" onClick={() => setIsCreating(false)}>取消</Button>
           </div>
         </div>
       </div>
@@ -335,12 +337,12 @@ export default function PromptsPage() {
               <span className="pp-editor-hint">内置提示词将创建自定义覆盖版本</span>
             )}
           </div>
-          <button className="pp-icon-btn" onClick={() => setShowEditor(false)}>✕</button>
+          <Button variant="plain" className="pp-icon-btn" onClick={() => setShowEditor(false)}>✕</Button>
         </div>
         <div className="pp-editor-body">
           <div className="pp-field">
             <label>变更说明（可选）</label>
-            <input
+            <Input
               type="text"
               value={changeNote}
               onChange={e => setChangeNote(e.target.value)}
@@ -350,13 +352,13 @@ export default function PromptsPage() {
           <div className="pp-field pp-field--grow">
             <div className="pp-field-row">
               <label>内容 <em>*</em></label>
-              <button className="pp-toggle-preview" onClick={() => setShowPreview(!showPreview)}>
+              <Button variant="plain" className="pp-toggle-preview" onClick={() => setShowPreview(!showPreview)}>
                 {showPreview ? <EyeOff size={13} /> : <Eye size={13} />}
                 {showPreview ? '隐藏预览' : '显示预览'}
-              </button>
+              </Button>
             </div>
             <div className="pp-editor-split">
-              <textarea
+              <Textarea
                 value={editingContent}
                 onChange={e => setEditingContent(e.target.value)}
                 placeholder="输入提示词内容"
@@ -371,10 +373,10 @@ export default function PromptsPage() {
             </div>
           </div>
           <div className="pp-editor-actions">
-            <button className="pp-btn-primary" onClick={handleSave} disabled={saving}>
+            <Button variant="plain" className="pp-btn-primary" onClick={handleSave} disabled={saving}>
               {saving ? '保存中...' : '保存'}
-            </button>
-            <button className="pp-btn-secondary" onClick={() => setShowEditor(false)}>取消</button>
+            </Button>
+            <Button variant="plain" className="pp-btn-secondary" onClick={() => setShowEditor(false)}>取消</Button>
           </div>
         </div>
       </div>
@@ -397,38 +399,38 @@ export default function PromptsPage() {
               </div>
             </div>
             <div className="pp-detail-actions">
-              <button className="pp-icon-btn" onClick={() => handleEdit(selectedPrompt)} title="编辑">
+              <Button variant="plain" className="pp-icon-btn" onClick={() => handleEdit(selectedPrompt)} title="编辑">
                 <Edit2 size={15} />
-              </button>
-              <button className="pp-icon-btn" onClick={() => handleCopy(activeContent)} title="复制内容">
+              </Button>
+              <Button variant="plain" className="pp-icon-btn" onClick={() => handleCopy(activeContent)} title="复制内容">
                 <Copy size={15} />
-              </button>
+              </Button>
               {!selectedPrompt.isBuiltin && (
                 <>
-                  <button
+                  <Button variant="plain"
                     className="pp-icon-btn"
                     onClick={() => { setShowVersions(!showVersions); if (!showVersions) fetchVersions(selectedPrompt.id) }}
                     title="版本历史"
                   >
                     <History size={15} />
-                  </button>
-                  <button
+                  </Button>
+                  <Button variant="plain"
                     className="pp-icon-btn pp-icon-btn--danger"
                     onClick={() => handleDelete(selectedPrompt.id)}
                     title="删除"
                   >
                     <Trash2 size={15} />
-                  </button>
+                  </Button>
                 </>
               )}
               {selectedPrompt.isBuiltin && override && (
-                <button
+                <Button variant="plain"
                   className="pp-icon-btn pp-icon-btn--warn"
                   onClick={() => handleResetOverride(selectedPrompt.id)}
                   title="重置为内置默认"
                 >
                   <RotateCcw size={15} />
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -475,7 +477,7 @@ export default function PromptsPage() {
                     ? (override ? '自定义内容（生效中）' : '内置内容')
                     : '内容'}
                 </span>
-                <button className="pp-copy-btn" onClick={() => handleCopy(activeContent)}>复制</button>
+                <Button variant="plain" className="pp-copy-btn" onClick={() => handleCopy(activeContent)}>复制</Button>
               </div>
               <div className="pp-content-box">
                 <pre>{activeContent}</pre>
@@ -485,7 +487,7 @@ export default function PromptsPage() {
                 <>
                   <div className="pp-content-label-row" style={{ marginTop: 12 }}>
                     <span className="pp-section-label pp-section-label--dim">内置原始内容（参考）</span>
-                    <button className="pp-copy-btn" onClick={() => handleCopy(selectedPrompt.content)}>复制</button>
+                    <Button variant="plain" className="pp-copy-btn" onClick={() => handleCopy(selectedPrompt.content)}>复制</Button>
                   </div>
                   <div className="pp-content-box pp-content-box--dim">
                     <pre>{selectedPrompt.content}</pre>
@@ -530,9 +532,9 @@ export default function PromptsPage() {
                       <span className="pp-version-date">{new Date(v.createdAt).toLocaleDateString()}</span>
                       {v.changeNote && <span className="pp-version-note">{v.changeNote}</span>}
                     </div>
-                    <button className="pp-restore-btn" onClick={() => handleRestoreVersion(v.version)}>
+                    <Button variant="plain" className="pp-restore-btn" onClick={() => handleRestoreVersion(v.version)}>
                       恢复
-                    </button>
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -563,10 +565,10 @@ export default function PromptsPage() {
         title="提示词管理"
         icon={<Zap size={15} />}
         onBack={() => navigate(-1)}
-        actions={<button className="pp-create-btn" onClick={handleCreateNew}>
+        actions={<Button variant="plain" className="pp-create-btn" onClick={handleCreateNew}>
           <Plus size={14} />
           新建
-        </button>}
+        </Button>}
       />
 
       <div className="pp-body">
@@ -575,7 +577,7 @@ export default function PromptsPage() {
           {/* 搜索 */}
           <div className="pp-search-wrap">
             <Search size={13} className="pp-search-icon" />
-            <input
+            <Input
               type="text"
               className="pp-search"
               placeholder="搜索提示词..."
@@ -587,13 +589,13 @@ export default function PromptsPage() {
           {/* 分类标签 */}
           <div className="pp-tabs">
             {categories.map(cat => (
-              <button
+              <Button variant="plain"
                 key={cat}
                 className={`pp-tab ${selectedCategory === cat ? 'pp-tab--active' : ''}`}
                 onClick={() => setSelectedCategory(cat)}
               >
                 {cat === 'all' ? '全部' : (CATEGORY_LABELS[cat] || cat)}
-              </button>
+              </Button>
             ))}
           </div>
 

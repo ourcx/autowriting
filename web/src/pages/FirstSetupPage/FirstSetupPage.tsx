@@ -1,3 +1,5 @@
+import { Input } from "../../components/FormControls/FormControls"
+import Button from "../../components/Button/Button"
 import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import {
@@ -165,7 +167,7 @@ export default function FirstSetupPage() {
 
               <div className="fsp-provider-options" role="group" aria-label="AI 服务商">
                 {PROVIDER_PRESETS.map(provider => (
-                  <button
+                  <Button variant="plain"
                     key={provider.id}
                     type="button"
                     aria-pressed={config.articleProvider === provider.id}
@@ -173,7 +175,7 @@ export default function FirstSetupPage() {
                   >
                     <strong>{provider.name}</strong>
                     <span>{provider.desc}</span>
-                  </button>
+                  </Button>
                 ))}
               </div>
 
@@ -182,7 +184,7 @@ export default function FirstSetupPage() {
               ) : <div className="fsp-form-grid">
                 <label>
                   <span>API 地址</span>
-                  <input
+                  <Input
                     value={isMaas ? config.maasBaseUrl : config.articleBaseUrl}
                     onChange={event => updateConfig(isMaas
                       ? { maasBaseUrl: event.target.value }
@@ -192,7 +194,7 @@ export default function FirstSetupPage() {
                 </label>
                 <label>
                   <span>模型</span>
-                  <input
+                  <Input
                     value={isMaas ? "deepseek-v4-pro" : config.articleModel}
                     disabled={isMaas}
                     onChange={event => updateConfig({ articleModel: event.target.value })}
@@ -205,7 +207,7 @@ export default function FirstSetupPage() {
                 {isMaas && (
                   <label className="fsp-wide">
                     <span>用户邮箱</span>
-                    <input
+                    <Input
                       value={config.maasUserEmail}
                       onChange={event => updateConfig({ maasUserEmail: event.target.value })}
                       placeholder="name@example.com"
@@ -215,7 +217,7 @@ export default function FirstSetupPage() {
                 <label className="fsp-wide">
                   <span>API Key</span>
                   <div className="fsp-secret">
-                    <input
+                    <Input
                       type={showKey ? "text" : "password"}
                       value={isMaas ? config.maasApiKey : config.articleApiKey}
                       onChange={event => updateConfig(isMaas
@@ -224,9 +226,9 @@ export default function FirstSetupPage() {
                       placeholder="填写服务商提供的 API Key"
                       autoComplete="new-password"
                     />
-                    <button type="button" onClick={() => setShowKey(value => !value)} title={showKey ? "隐藏 API Key" : "显示 API Key"}>
+                    <Button variant="plain" type="button" onClick={() => setShowKey(value => !value)} title={showKey ? "隐藏 API Key" : "显示 API Key"}>
                       {showKey ? <EyeOff size={17} /> : <Eye size={17} />}
-                    </button>
+                    </Button>
                   </div>
                 </label>
               </div>}
@@ -242,10 +244,10 @@ export default function FirstSetupPage() {
                 <a href={selectedPreset?.url} target="_blank" rel="noreferrer">
                   获取服务商 Key <ExternalLink size={14} />
                 </a>
-                <button className="fsp-primary" onClick={() => void verifyAI()} disabled={testing}>
+                <Button variant="plain" className="fsp-primary" onClick={() => void verifyAI()} disabled={testing}>
                   {testing ? <Loader2 className="fsp-spin" size={17} /> : <CheckCircle2 size={17} />}
                   {testing ? "正在测试连接" : "保存并测试连接"}
-                </button>
+                </Button>
               </footer>
             </div>
           ) : (
@@ -283,13 +285,13 @@ export default function FirstSetupPage() {
               </div>
 
               <footer className="fsp-actions">
-                <button className="fsp-secondary" onClick={() => navigate("/account?from=setup")}>
+                <Button variant="plain" className="fsp-secondary" onClick={() => navigate("/account?from=setup")}>
                   现在连接账号
-                </button>
-                <button className="fsp-primary" onClick={() => void createFirstArticle()} disabled={creating}>
+                </Button>
+                <Button variant="plain" className="fsp-primary" onClick={() => void createFirstArticle()} disabled={creating}>
                   {creating ? <Loader2 className="fsp-spin" size={17} /> : <ArrowRight size={17} />}
                   {creating ? "正在创建" : connectedCount ? "创建第一篇文章" : "暂不连接，创建第一篇文章"}
-                </button>
+                </Button>
               </footer>
             </div>
           )}

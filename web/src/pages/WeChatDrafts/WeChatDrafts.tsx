@@ -1,3 +1,5 @@
+import { Input } from "../../components/FormControls/FormControls"
+import Button from "../../components/Button/Button"
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -389,7 +391,7 @@ export default function WeChatDrafts() {
           <div className="wd-empty-icon"><Link2 size={36} /></div>
           <p className="wd-empty-title">尚未绑定公众号</p>
           <p className="wd-empty-desc">前往「用户页」绑定公众号后，即可查看草稿箱和已发布文章</p>
-          <button className="wd-goto-btn" onClick={() => navigate('/account')}>前往绑定</button>
+          <Button variant="plain" className="wd-goto-btn" onClick={() => navigate('/account')}>前往绑定</Button>
         </div>
       </div>
     )
@@ -410,7 +412,7 @@ export default function WeChatDrafts() {
         subtitle="草稿、已发布文章与永久素材"
         onBack={() => navigate(-1)}
         actions={<>
-        <button
+        <Button variant="plain"
           className="wd-refresh-btn"
           title="刷新"
           disabled={draftLoading || pubLoading || matLoading}
@@ -421,17 +423,17 @@ export default function WeChatDrafts() {
           }}
         >
           <RefreshCw size={14} className={(draftLoading || pubLoading || matLoading) ? 'wd-spin' : ''} />
-        </button>
-        <button className="wd-refresh-btn" title="素材管理" onClick={() => navigate('/wechat/materials')}>
+        </Button>
+        <Button variant="plain" className="wd-refresh-btn" title="素材管理" onClick={() => navigate('/wechat/materials')}>
           <Image size={14} />
-        </button>
+        </Button>
         </>}
       />
 
       {/* ── Tabs ── */}
       <div className="wd-tabs">
         {tabs.map(t => (
-          <button
+          <Button variant="plain"
             key={t.id}
             className={`wd-tab${tab === t.id ? ' wd-tab--active' : ''}`}
             onClick={() => setTab(t.id)}
@@ -441,7 +443,7 @@ export default function WeChatDrafts() {
             {t.count > 0 && (
               <span className="wd-tab-count">{t.count}</span>
             )}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -453,7 +455,7 @@ export default function WeChatDrafts() {
           {draftError && (
             <div className="wd-error-bar">
               {draftError}
-              <button onClick={() => fetchDrafts(0)}>重试</button>
+              <Button variant="plain" onClick={() => fetchDrafts(0)}>重试</Button>
             </div>
           )}
           {draftLoading && drafts.length === 0 && (
@@ -489,7 +491,7 @@ export default function WeChatDrafts() {
                     </div>
                     <div className="wd-card-actions">
                       {/* 导入编辑 */}
-                      <button
+                      <Button variant="plain"
                         className="wd-btn wd-btn--import"
                         disabled={!!importing || !!deleting || !!publishing}
                         onClick={() => handleImport(item)}
@@ -500,9 +502,9 @@ export default function WeChatDrafts() {
                           : <Download size={12} />
                         }
                         导入编辑
-                      </button>
+                      </Button>
                       {/* 发布 */}
-                      <button
+                      <Button variant="plain"
                         className="wd-btn wd-btn--publish"
                         disabled={!!importing || !!deleting || !!publishing}
                         onClick={() => openPublishDialog(item, index)}
@@ -513,7 +515,7 @@ export default function WeChatDrafts() {
                           : <Send size={12} />
                         }
                         发布
-                      </button>
+                      </Button>
                       {/* 预览 */}
                       {item.url && (
                         <a
@@ -528,7 +530,7 @@ export default function WeChatDrafts() {
                         </a>
                       )}
                       {/* 删除 */}
-                      <button
+                      <Button variant="plain"
                         className="wd-btn wd-btn--delete"
                         disabled={!!importing || !!deleting || !!publishing}
                         onClick={() => handleDeleteDraft(item)}
@@ -538,14 +540,14 @@ export default function WeChatDrafts() {
                           ? <Loader2 size={12} className="wd-spin" />
                           : <Trash2 size={12} />
                         }
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 ))}
               </div>
               {drafts.length < draftTotal && (
                 <div className="wd-load-more">
-                  <button
+                  <Button variant="plain"
                     className="wd-load-more-btn"
                     onClick={() => fetchDrafts(draftOffset)}
                     disabled={draftLoading}
@@ -554,7 +556,7 @@ export default function WeChatDrafts() {
                       ? <><div className="wd-spinner wd-spinner--sm" />加载中...</>
                       : `加载更多（还有 ${draftTotal - drafts.length} 篇）`
                     }
-                  </button>
+                  </Button>
                 </div>
               )}
             </main>
@@ -582,7 +584,7 @@ export default function WeChatDrafts() {
           {pubError && !pubNoAuth && (
             <div className="wd-error-bar">
               {pubError}
-              <button onClick={() => { setPubLoaded(false); fetchPublished(0) }}>重试</button>
+              <Button variant="plain" onClick={() => { setPubLoaded(false); fetchPublished(0) }}>重试</Button>
             </div>
           )}
           {pubLoading && pubItems.length === 0 && (
@@ -667,7 +669,7 @@ export default function WeChatDrafts() {
               </div>
               {pubItems.length < pubTotal && (
                 <div className="wd-load-more">
-                  <button
+                  <Button variant="plain"
                     className="wd-load-more-btn"
                     onClick={() => fetchPublished(pubOffset)}
                     disabled={pubLoading}
@@ -676,7 +678,7 @@ export default function WeChatDrafts() {
                       ? <><div className="wd-spinner wd-spinner--sm" />加载中...</>
                       : `加载更多（还有 ${pubTotal - pubItems.length} 篇）`
                     }
-                  </button>
+                  </Button>
                 </div>
               )}
             </main>
@@ -692,13 +694,13 @@ export default function WeChatDrafts() {
           {/* 素材类型切换 */}
           <div className="wd-mat-toolbar">
             {(['image','voice','video'] as const).map(t => (
-              <button
+              <Button variant="plain"
                 key={t}
                 className={`wd-mat-type-btn${matType === t ? ' wd-mat-type-btn--active' : ''}`}
                 onClick={() => setMatType(t)}
               >
                 {{ image: '图片', voice: '音频', video: '视频' }[t]}
-              </button>
+              </Button>
             ))}
             {matTotal > 0 && (
               <span className="wd-mat-total">共 {matTotal} 个素材</span>
@@ -708,7 +710,7 @@ export default function WeChatDrafts() {
           {matError && (
             <div className="wd-error-bar">
               {matError}
-              <button onClick={() => { setMatLoaded(false) }}>重试</button>
+              <Button variant="plain" onClick={() => { setMatLoaded(false) }}>重试</Button>
             </div>
           )}
           {matLoading && matItems.length === 0 && (
@@ -732,7 +734,7 @@ export default function WeChatDrafts() {
                       <div className="wd-mat-img-wrap">
                         <img src={wxImg(item.url)!} alt={`${item.name || '未命名'}图片素材预览`} loading="lazy" />
                         <div className="wd-mat-img-overlay">
-                          <button
+                          <Button variant="plain"
                             className="wd-mat-del-btn"
                             onClick={() => handleDeleteMaterial(item)}
                             disabled={matDeleting === item.media_id}
@@ -742,7 +744,7 @@ export default function WeChatDrafts() {
                               ? <Loader2 size={13} className="wd-spin" />
                               : <Trash2 size={13} />
                             }
-                          </button>
+                          </Button>
                           <a href={item.url} target="_blank" rel="noreferrer" className="wd-mat-open-btn">
                             <ExternalLink size={13} />
                           </a>
@@ -766,7 +768,7 @@ export default function WeChatDrafts() {
                         </div>
                       </div>
                       <div className="wd-card-actions">
-                        <button
+                        <Button variant="plain"
                           className="wd-btn wd-btn--delete"
                           onClick={() => handleDeleteMaterial(item)}
                           disabled={matDeleting === item.media_id}
@@ -776,7 +778,7 @@ export default function WeChatDrafts() {
                             ? <Loader2 size={12} className="wd-spin" />
                             : <Trash2 size={12} />
                           }
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   )
@@ -785,7 +787,7 @@ export default function WeChatDrafts() {
 
               {matItems.length < matTotal && (
                 <div className="wd-load-more">
-                  <button
+                  <Button variant="plain"
                     className="wd-load-more-btn"
                     onClick={() => fetchMaterials(matOffset, matType)}
                     disabled={matLoading}
@@ -794,7 +796,7 @@ export default function WeChatDrafts() {
                       ? <><div className="wd-spinner wd-spinner--sm" />加载中...</>
                       : `加载更多（还有 ${matTotal - matItems.length} 个）`
                     }
-                  </button>
+                  </Button>
                 </div>
               )}
             </main>
@@ -815,7 +817,7 @@ export default function WeChatDrafts() {
                 <p>微信后台发布</p>
                 <h2 id="wd-publish-title">{publishTarget.item.title}</h2>
               </div>
-              <button
+              <Button variant="plain"
                 className="wd-publish-close"
                 onClick={() => setPublishTarget(null)}
                 disabled={Boolean(publishing)}
@@ -823,7 +825,7 @@ export default function WeChatDrafts() {
                 aria-label="关闭发布设置"
               >
                 <X size={18} />
-              </button>
+              </Button>
             </header>
 
             <div className="wd-publish-summary">
@@ -837,7 +839,7 @@ export default function WeChatDrafts() {
                   <strong>声明原创</strong>
                   <small>仅在确认文章文字为原创时开启</small>
                 </span>
-                <input
+                <Input
                   type="checkbox"
                   checked={publishOptions.declareOriginal}
                   onChange={event => updatePublishOption('declareOriginal', event.target.checked)}
@@ -856,14 +858,14 @@ export default function WeChatDrafts() {
                     ['fans', '仅关注者'],
                     ['off', '关闭'],
                   ] as Array<[WechatCommentMode, string]>).map(([value, label]) => (
-                    <button
+                    <Button variant="plain"
                       key={value}
                       type="button"
                       aria-pressed={publishOptions.commentMode === value}
                       onClick={() => selectCommentMode(value)}
                     >
                       {label}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>
@@ -873,7 +875,7 @@ export default function WeChatDrafts() {
                   <strong>流量主广告</strong>
                   <small>进入广告设置并选择“打开全部广告”</small>
                 </span>
-                <input
+                <Input
                   type="checkbox"
                   checked={publishOptions.enableAllAds}
                   onChange={event => updatePublishOption('enableAllAds', event.target.checked)}
@@ -890,8 +892,8 @@ export default function WeChatDrafts() {
             </div>
 
             <footer className="wd-publish-actions">
-              <button type="button" onClick={() => setPublishTarget(null)} disabled={Boolean(publishing)}>取消</button>
-              <button
+              <Button variant="plain" type="button" onClick={() => setPublishTarget(null)} disabled={Boolean(publishing)}>取消</Button>
+              <Button variant="plain"
                 type="button"
                 className="wd-publish-confirm"
                 onClick={() => void handlePublishDraft()}
@@ -899,7 +901,7 @@ export default function WeChatDrafts() {
               >
                 {publishing ? <Loader2 size={15} className="wd-spin" /> : <Send size={15} />}
                 {publishing ? '正在核对并发表' : '确认发表'}
-              </button>
+              </Button>
             </footer>
           </section>
         </div>

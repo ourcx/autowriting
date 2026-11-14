@@ -1,3 +1,4 @@
+import Button from "../Button/Button"
 /**
  * 全局 Toast 通知组件
  * 用法：
@@ -154,16 +155,16 @@ export default function ToastProvider() {
             <span className="toast-icon">{ICONS[t.type]}</span>
             <span className="toast-msg">{t.message}</span>
             {t.action && (
-              <button
+              <Button variant="plain"
                 className="toast-action"
                 onClick={() => { t.action!.onClick(); removeToast(t.id) }}
               >
                 {t.action.label}
-              </button>
+              </Button>
             )}
-            <button className="toast-close" onClick={e => { e.stopPropagation(); removeToast(t.id) }}>
+            <Button variant="plain" className="toast-close" onClick={e => { e.stopPropagation(); removeToast(t.id) }}>
               <X size={13} />
-            </button>
+            </Button>
           </div>
         ))}
       </div>
@@ -175,18 +176,18 @@ export default function ToastProvider() {
             <p className="toast-dialog-msg">{c.message}</p>
             {c.detail && <p className="toast-dialog-detail">{c.detail}</p>}
             <div className="toast-dialog-actions">
-              <button
+              <Button variant="plain"
                 className="toast-dialog-cancel"
                 onClick={() => handleConfirmCancel(c)}
               >
                 {c.cancelText ?? '取消'}
-              </button>
-              <button
+              </Button>
+              <Button variant="plain"
                 className={`toast-dialog-confirm ${c.danger ? 'danger' : ''}`}
                 onClick={() => handleConfirmOk(c)}
               >
                 {c.confirmText ?? '确定'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

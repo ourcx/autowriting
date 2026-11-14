@@ -1,10 +1,13 @@
+import { Collapse } from "../FormControls/FormControls"
+import Button from "../Button/Button"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Activity, AlertCircle, CheckCircle, Copy, ExternalLink, FileText, RefreshCw, Square, X, Zap } from "lucide-react"
+import { Activity, AlertCircle, CheckCircle, Copy, FileText, Loader2, RefreshCw, Square, X, Zap } from "lucide-react"
 import {
   createGenerationCandidates, extractErrorMessage, fetchGenerationCandidates,
   streamGenerationCandidate,
 } from "../../utils/apiHelpers"
 import type { CandidatePlatform, CandidateTarget, GenerationCandidate } from "../../../shared/generationCandidate"
+import SourceList from "./SourceList"
 import CandidateTrajectory from "./CandidateTrajectory"
 import "./GenerateModal.css"
 
@@ -173,82 +176,82 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
     <section className="gm-modal gc-modal" role="dialog" aria-modal="true" aria-label="生成候选稿">
       <header className="gm-header">
         <div className="gm-header-left"><strong className="gm-title">生成候选稿</strong><span className="gm-footer-note">{rows.filter(row => row.status === "complete").length} 篇已完成</span></div>
-        <button className="gm-icon-btn" onClick={close} title="关闭并保留候选稿" aria-label="关闭生成窗口"><X size={18} /></button>
+        <Button variant="plain" className="gm-icon-btn" onClick={close} title="关闭并保留候选稿" aria-label="关闭生成窗口"><X size={18} /></Button>
       </header>
-      <div className="gc-settings">
+      {!busy && <div className="gc-settings">
         <fieldset className="gc-choice">
           <legend>生成平台</legend>
           <div className="gc-segmented" role="group" aria-label="生成平台">
-            <button type="button" aria-pressed={platform === "wechat"} disabled={busy} onClick={() => setPlatform("wechat")}>公众号母稿</button>
-            <button type="button" aria-pressed={platform === "both"} disabled={busy} onClick={() => setPlatform("both")}>公众号 + 今日头条</button>
-            <button type="button" aria-pressed={platform === "toutiao"} disabled={busy} onClick={() => setPlatform("toutiao")}>今日头条版本</button>
+            <Button variant="plain" type="button" aria-pressed={platform === "wechat"} disabled={busy} onClick={() => setPlatform("wechat")}>公众号母稿</Button>
+            <Button variant="plain" type="button" aria-pressed={platform === "both"} disabled={busy} onClick={() => setPlatform("both")}>公众号 + 今日头条</Button>
+            <Button variant="plain" type="button" aria-pressed={platform === "toutiao"} disabled={busy} onClick={() => setPlatform("toutiao")}>今日头条版本</Button>
           </div>
         </fieldset>
         <fieldset className="gc-choice">
           <legend>候选数量</legend>
           <div className="gc-count-options" role="group" aria-label="候选数量">
             {[1, 2, 3].map(value => (
-              <button type="button" key={value} aria-pressed={count === value} disabled={busy} onClick={() => setCount(value)}>{value}</button>
+              <Button variant="plain" type="button" key={value} aria-pressed={count === value} disabled={busy} onClick={() => setCount(value)}>{value}</Button>
             ))}
           </div>
         </fieldset>
-        <button className="gm-btn-primary gc-generate-button" disabled={busy || loading || applying} onClick={() => void start()}>
+        <Button variant="primary" className="gc-generate-button" disabled={busy || loading || applying} onClick={() => void start()}>
           <Zap size={14} />
           {busy ? "生成中" : platform === "both" ? "生成双平台版本" : `生成${platform === "wechat" ? "公众号母稿" : "今日头条版本"}`}
-        </button>
-      </div>
-      <p className="gc-cost">先查历史文章和公开网页，再核对原文、拟提纲、写正文。模型请求和联网工具可能分别计费。</p>
+        </Button>
+      </div>}
+      {!busy && <p className="gc-cost">先查历史文章和公开网页，再核对原文、起草和审稿。模型请求和联网工具可能分别计费。</p>}
       {error && <div className="gc-error" role="alert"><AlertCircle size={16} />{error}</div>}
       <div className="gc-toolbar">
-        <span>{busy ? "候选稿生成中" : loading ? "正在读取候选稿" : "候选稿"}</span>
-        <div>
-          <button className="gm-btn-secondary" disabled={busy || loading} onClick={() => void reload()} title="刷新候选稿"><RefreshCw size={14} /></button>
-          <button className="gm-btn-secondary" aria-pressed={view === "draft"} onClick={() => setView("draft")}>正文</button>
-          <button className="gm-btn-secondary" aria-pressed={view === "trace"} onClick={() => setView("trace")}><Activity size={14} />生成轨迹</button>
-          <button className="gm-btn-secondary" aria-pressed={comparing} onClick={() => setView(comparing ? "draft" : "compare")}>对比全文</button>
-          {busy && <button className="gm-btn-secondary" onClick={stop}><Square size={12} />停止生成</button>}
+        <div className="gc-view-switch" role="group" aria-label="候选稿视图">
+          <Button className="gc-view" aria-pressed={view === "draft"} onClick={() => setView("draft")}><FileText size={14} />正文</Button>
+          <Button className="gc-view" aria-pressed={view === "trace"} onClick={() => setView("trace")}><Activity size={14} />生成轨迹</Button>
+          <Button className="gc-view" aria-pressed={comparing} onClick={() => setView(comparing ? "draft" : "compare")}>对比全文</Button>
+        </div>
+        <div className="gc-toolbar-actions">
+          {busy ? <>
+            <span className="gc-live"><Loader2 size={14} className="gc-spin" aria-hidden="true" />生成中</span>
+            <Button onClick={stop}><Square size={12} />停止生成</Button>
+          </> : <Button className="gc-refresh" disabled={loading} onClick={() => void reload()} aria-label="刷新候选稿" title="刷新候选稿"><RefreshCw size={14} /></Button>}
         </div>
       </div>
       <div className={`gc-workspace ${comparing ? "gc-workspace--compare" : ""}`}>
         <nav className="gc-list" aria-label="候选稿列表">
-          {rows.map(row => <button key={row.id} className={row.id === activeId ? "gc-row gc-row--active" : "gc-row"} onClick={() => setActiveId(row.id)}>
+          {rows.map(row => <Button variant="plain" key={row.id} className={row.id === activeId ? "gc-row gc-row--active" : "gc-row"} aria-current={row.id === activeId ? "true" : undefined} onClick={() => setActiveId(row.id)}>
             <strong>{row.content.match(/^#\s+(.+)$/m)?.[1] || row.label}</strong>
             <span>{row.platform === "wechat" ? "公众号" : "头条"} · {STATUS[row.status]} · {row.content.length} 字</span>
             <small>{new Date(row.createdAt).toLocaleTimeString()} · {Math.max(0, Math.round(((row.finishedAt ? Date.parse(row.finishedAt) : now) - Date.parse(row.createdAt)) / 1000))} 秒</small>
-          </button>)}
+          </Button>)}
         </nav>
         <div className="gc-drafts">
           {view === "trace" && active && <div className="gc-trace-draft">
             <CandidateTrajectory key={active.id} candidate={active} now={now} />
             {active.status !== "generating" && <div className="gc-trace-actions">
-              {active.status === "complete" ? <button className="gm-btn-primary" onClick={() => setView("draft")}>
+              {active.status === "complete" ? <Button variant="plain" className="gm-btn-primary" onClick={() => setView("draft")}>
                 <FileText size={14} />查看正文
-              </button> : <button className="gm-btn-secondary" disabled={busy || applying} onClick={() => { stopped.current = false; void run(active) }}>
+              </Button> : <Button variant="plain" className="gm-btn-secondary" disabled={busy || applying} onClick={() => { stopped.current = false; void run(active) }}>
                 <RefreshCw size={14} />{active.content ? "继续生成" : "重试生成"}
-              </button>}
+              </Button>}
             </div>}
           </div>}
           {view !== "trace" && (comparing ? rows.filter(row => row.batchId === active?.batchId) : active ? [active] : []).map(row => <article className="gc-draft" key={row.id}>
             <header><strong>{row.label}</strong><span>{STATUS[row.status]}</span>
-              <button className="gm-icon-btn" title="复制正文" aria-label={`复制${row.label}`} disabled={!row.content} onClick={() => void copy(row.content)}><Copy size={15} /></button>
+              <Button variant="plain" className="gm-icon-btn" title="复制正文" aria-label={`复制${row.label}`} disabled={!row.content} onClick={() => void copy(row.content)}><Copy size={15} /></Button>
             </header>
             <p className={row.status === "interrupted" ? "gc-error" : "gc-message"}>{row.message}</p>
             {Boolean(row.researchSources?.length || row.referenceArticleIds?.length) && (
-              <details className="gc-evidence">
-                <summary>本次参考了 {row.referenceArticleIds?.length || 0} 篇历史文章，读了 {row.researchSources?.length || 0} 个网页</summary>
-                {!!row.researchSources?.length && <ul>{row.researchSources.map(source => (
-                  <li key={source.url}><a href={source.url} target="_blank" rel="noreferrer">{source.title} <ExternalLink size={12} /></a></li>
-                ))}</ul>}
-              </details>
+              <Collapse className="gc-evidence" label={<>本次参考了 {row.referenceArticleIds?.length || 0} 篇历史文章，读了 {row.researchSources?.length || 0} 个网页</>}>
+                {!!row.researchSources?.length && <SourceList sources={row.researchSources} />}
+              </Collapse>
             )}
             <pre>{row.content || "等待正文输出"}</pre>
             <footer>
-              {(row.status === "interrupted" || row.status === "queued") && <button className="gm-btn-secondary" disabled={busy || applying} onClick={() => { stopped.current = false; void run(row) }}><RefreshCw size={14} />{row.content ? "继续生成" : "重试生成"}</button>}
-              <button
+              {(row.status === "interrupted" || row.status === "queued") && <Button variant="plain" className="gm-btn-secondary" disabled={busy || applying} onClick={() => { stopped.current = false; void run(row) }}><RefreshCw size={14} />{row.content ? "继续生成" : "重试生成"}</Button>}
+              <Button variant="plain"
                 className="gm-btn-primary"
                 disabled={row.status !== "complete" || applying || Boolean(row.pairId && !rows.some(item => item.pairId === row.pairId && item.id !== row.id && item.status === "complete"))}
                 onClick={() => void apply(row)}
-              ><CheckCircle size={14} />{applying ? "保存中" : row.pairId ? "选用这一组" : "选用此稿"}</button>
+              ><CheckCircle size={14} />{applying ? "保存中" : row.pairId ? "选用这一组" : "选用此稿"}</Button>
             </footer>
           </article>)}
           {!active && <div className="gc-empty"><FileText size={30} /><span>{loading ? "读取中" : "暂无候选稿"}</span></div>}

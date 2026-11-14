@@ -1,3 +1,5 @@
+import { Input, SelectField } from "../FormControls/FormControls"
+import Button from "../Button/Button"
 import { useRef, useState } from "react"
 import { FileCheck2, FileUp, ShieldCheck, X } from "lucide-react"
 import {
@@ -58,7 +60,7 @@ export default function CanvasDesignInput({
       <label className="cdi-template">
         <ShieldCheck size={15} />
         <span>受控模板</span>
-        <select
+        <SelectField
           value={templateId}
           onChange={event => onTemplateChange(event.target.value as CanvasDesignTemplateId)}
         >
@@ -67,7 +69,7 @@ export default function CanvasDesignInput({
               {template.name} · {template.description}
             </option>
           ))}
-        </select>
+        </SelectField>
       </label>
 
       <div
@@ -91,7 +93,7 @@ export default function CanvasDesignInput({
           if (file) void readFile(file)
         }}
       >
-        <input
+        <Input
           ref={inputRef}
           type="file"
           accept=".txt,.md,.json,.svg,.xml,.drawio,text/plain,text/markdown,application/json,image/svg+xml"
@@ -104,7 +106,7 @@ export default function CanvasDesignInput({
         {fileName ? <FileCheck2 size={15} /> : <FileUp size={15} />}
         <span>{fileName ? `${fileName} · AI 将直接读取原文` : "拖入 design 文件作为视觉参考"}</span>
         {fileName ? (
-          <button
+          <Button variant="plain"
             type="button"
             title="移除设计文件"
             onClick={event => {
@@ -113,7 +115,7 @@ export default function CanvasDesignInput({
             }}
           >
             <X size={14} />
-          </button>
+          </Button>
         ) : null}
       </div>
     </div>

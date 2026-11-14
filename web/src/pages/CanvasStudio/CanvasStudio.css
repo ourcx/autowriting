@@ -208,7 +208,7 @@
   margin: 0 0 6px;
 }
 
-.cs-xiumi-help summary {
+.cs-xiumi-help .ui-collapse-trigger {
   cursor: pointer;
 }
 
@@ -662,7 +662,7 @@
     flex: 0 0 auto;
   }
 
-  .cs-tools-menu > summary {
+  .cs-tools-menu > .ui-collapse-trigger {
     display: flex;
     align-items: center;
     min-height: 44px;
@@ -714,7 +714,7 @@
   flex: 0 0 auto;
   border-bottom: 1px solid var(--color-hairline);
 }
-.cs-design-reference summary {
+.cs-design-reference .ui-collapse-trigger {
   padding: 7px 20px;
   color: var(--color-muted);
   font-size: 11px;
@@ -789,14 +789,14 @@
 }
 
 /* 选择段落时优先展示局部样式，整篇背景等低频选项收起，缩短编辑路径。 */
-.cs-root .wbe-global-settings > summary { cursor: pointer; font-size: 12px; color: var(--color-muted); }
+.cs-root .wbe-global-settings > .ui-collapse-trigger { cursor: pointer; font-size: 12px; color: var(--color-muted); }
 .cs-root .wbe-global-settings > label,
 .cs-root .wbe-global-settings > div { margin-top: 14px; }
 
 /* 素材使用实际资源缩略图，插入与模板切换保持两个明确入口。 */
 .cs-material-shelf { margin: 12px 0; padding: 14px 18px; border: 1px solid var(--border-color, #dedbd5); border-radius: 12px; }
-.cs-material-shelf summary { cursor: pointer; font-weight: 600; }
-.cs-material-shelf summary span { font-weight: 400; color: #777; margin-left: 12px; font-size: 12px; }
+.cs-material-shelf .ui-collapse-trigger { cursor: pointer; font-weight: 600; }
+.cs-material-shelf .ui-collapse-trigger span { font-weight: 400; color: #777; margin-left: 12px; font-size: 12px; }
 .cs-material-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; }
 .cs-material-grid button { width: 158px; display: grid; gap: 6px; padding: 10px; border: 1px solid #e7e0d6; border-radius: 8px; background: #fffaf2; cursor: pointer; text-align: left; color: #544c45; }
 .cs-material-grid img { width: 100%; height: 76px; object-fit: contain; }
@@ -811,7 +811,7 @@
 /* 低频入口共用一行，面板浮层展开，不改变编辑器可用高度。 */
 .cs-tools { display: flex; align-items: center; gap: 20px; position: relative; flex: 0 0 auto; padding: 0 20px; border-bottom: 1px solid var(--color-hairline); }
 .cs-tools-menu { border: 0; }
-.cs-tools-menu > summary { padding: 8px 0; cursor: pointer; font-size: 12px; color: var(--color-body); }
+.cs-tools-menu > .ui-collapse-trigger { padding: 8px 0; cursor: pointer; font-size: 12px; color: var(--color-body); }
 .cs-tools-popover { position: absolute; top: 100%; left: 12px; right: 12px; max-width: 1000px; z-index: 30; max-height: min(480px, 65vh); overflow: auto; padding: 12px; background: var(--color-canvas); border: 1px solid var(--color-hairline); border-radius: 8px; box-shadow: 0 8px 24px #0002; }
 .cs-tools .cs-material-shelf { margin: 0 0 8px; padding: 10px; }
 .cs-toolbar { padding: 8px 16px; }
@@ -830,7 +830,7 @@
 
 /* 明确选择与键盘焦点，悬停不移动卡片，避免误触。 */
 .cs-template-card:hover { border-color: var(--color-brand-mint); background: var(--color-canvas); }
-.cs-template-card:focus-visible, .cs-tools-menu > summary:focus-visible { outline: 2px solid var(--color-brand-teal); outline-offset: 2px; }
+.cs-template-card:focus-visible, .cs-tools-menu > .ui-collapse-trigger:focus-visible { outline: 2px solid var(--color-brand-teal); outline-offset: 2px; }
 .cs-template-card.is-active { border-color: var(--color-brand-teal); box-shadow: inset 0 0 0 1px var(--color-brand-teal); }
 
 /* 章节组件只保存可复用的视觉预设，内容和章节归属仍由编辑器维护。 */

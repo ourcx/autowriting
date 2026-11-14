@@ -1,3 +1,5 @@
+import { Collapse, Input, SelectField, Textarea } from "../FormControls/FormControls"
+import Button from "../Button/Button"
 import { CANVAS_MATERIALS, getCanvasMaterial } from "../../../shared/canvasMaterialLibrary"
 import { PublicationFrame, PublicationMaterial } from "./PublicationFrame"
 import type { CSSProperties, ReactNode, RefObject } from "react"
@@ -1073,7 +1075,7 @@ function NumberField({
   return (
     <label>
       <span>{label}</span>
-      <input
+      <Input
         type="number"
         min={min}
         max={max}
@@ -1100,18 +1102,18 @@ function ColorField({
     <label>
       <span>{label}</span>
       <div className="wbe-color-field">
-        <input
+        <Input
           type="color"
           value={value === "transparent" ? fallback : value}
           onChange={event => onChange(event.target.value)}
         />
-        <button
+        <Button variant="plain"
           type="button"
           className={value === "transparent" ? "active" : ""}
           onClick={() => onChange("transparent")}
         >
           透明
-        </button>
+        </Button>
       </div>
     </label>
   )
@@ -1148,7 +1150,7 @@ function SurfaceFields({
     <>
       <label>
         <span>背景效果</span>
-        <select
+        <SelectField
           value={surface.kind}
           onChange={event => onChange({
             ...surface,
@@ -1163,13 +1165,13 @@ function SurfaceFields({
           <option value="grid">网格</option>
           <option value="ruled-paper">横线稿纸</option>
           <option value="generated">AI 生成背景</option>
-        </select>
+        </SelectField>
       </label>
       {surface.kind === "generated" ? (
         <>
           <label>
             <span>背景生成提示词</span>
-            <textarea
+            <Textarea
               rows={6}
               value={surface.prompt}
               onChange={event => onChange({ ...surface, prompt: event.target.value })}
@@ -1178,7 +1180,7 @@ function SurfaceFields({
           <div className="wbe-property-grid">
             <label>
               <span>图片比例</span>
-              <select
+              <SelectField
                 value={surface.imageSize}
                 onChange={event => onChange({
                   ...surface,
@@ -1191,11 +1193,11 @@ function SurfaceFields({
                 <option value="square">方图</option>
                 <option value="portrait_4_3">竖图 4:3</option>
                 <option value="portrait_16_9">竖图 16:9</option>
-              </select>
+              </SelectField>
             </label>
             <label>
               <span>铺设方式</span>
-              <select
+              <SelectField
                 value={surface.fit}
                 onChange={event => onChange({
                   ...surface,
@@ -1205,7 +1207,7 @@ function SurfaceFields({
                 <option value="cover">覆盖</option>
                 <option value="contain">完整显示</option>
                 <option value="tile">平铺纹理</option>
-              </select>
+              </SelectField>
             </label>
             <ColorField
               label="遮罩颜色"
@@ -1405,7 +1407,7 @@ export default function WechatBlockEditor({
             const source = block.type === "content" ? sourceMap.get(block.sourceId) : undefined
             return (
               <div className="wbe-block-group" key={block.id}>
-                <button
+                <Button variant="plain"
                   className={selectedId === block.id ? "active" : ""}
                   onClick={() => onSelect(block.id)}
                 >
@@ -1425,21 +1427,21 @@ export default function WechatBlockEditor({
                                 : <Type size={14} />}
                   </span>
                   <span>{blockLabel(block, source)}</span>
-                </button>
+                </Button>
                 {block.type === "section" ? (
                   <div className="wbe-section-children">
                     {block.sourceIds.map(sourceId => {
                       const childSource = sourceMap.get(sourceId)
                       const childSelectionId = `${block.id}::${sourceId}`
                       return (
-                        <button
+                        <Button variant="plain"
                           key={sourceId}
                           className={selectedId === childSelectionId ? "active" : ""}
                           onClick={() => onSelect(childSelectionId)}
                         >
                           {childSource?.kind === "image" ? <ImageIcon size={13} /> : <Type size={13} />}
                           <span>{childSource?.text?.split("\n")[0] || childSource?.alt || "内容"}</span>
-                        </button>
+                        </Button>
                       )
                     })}
                   </div>
@@ -1449,27 +1451,27 @@ export default function WechatBlockEditor({
           })}
         </div>
         <div className="wbe-outline-actions">
-          <button
+          <Button variant="plain"
             title="上移装饰或素材"
             disabled={!selectedBlock || !isAuxiliaryBlock(selectedBlock)}
             onClick={() => moveAuxiliary(-1)}
           >
             <ArrowUp size={15} />
-          </button>
-          <button
+          </Button>
+          <Button variant="plain"
             title="下移装饰或素材"
             disabled={!selectedBlock || !isAuxiliaryBlock(selectedBlock)}
             onClick={() => moveAuxiliary(1)}
           >
             <ArrowDown size={15} />
-          </button>
-          <button
+          </Button>
+          <Button variant="plain"
             title="删除装饰或素材"
             disabled={!selectedBlock || !isAuxiliaryBlock(selectedBlock)}
             onClick={deleteAuxiliary}
           >
             <Trash2 size={15} />
-          </button>
+          </Button>
         </div>
       </aside>
 
@@ -1495,15 +1497,14 @@ export default function WechatBlockEditor({
           样式属性
         </div>
         <div className="wbe-properties">
-          <details className="wbe-global-settings" open={!selectedBlock && !selectedSection}>
-            <summary>整篇样式</summary>
+          <Collapse className="wbe-global-settings" defaultOpen={!selectedBlock && !selectedSection} label={<>整篇样式</>}>
           <label>
             <span>排版名称</span>
-            <input value={document.name} onChange={event => updateDocument({ name: event.target.value })} />
+            <Input value={document.name} onChange={event => updateDocument({ name: event.target.value })} />
           </label>
           <label>
             <span>字体</span>
-            <select
+            <SelectField
               value={document.font}
               onChange={event => updateDocument({ font: event.target.value as WechatBlockDocument["font"] })}
             >
@@ -1512,7 +1513,7 @@ export default function WechatBlockEditor({
               <option value="rounded">圆润黑体</option>
               <option value="friendly">设计文件字体</option>
               <option value="editorial">杂志编辑字体</option>
-            </select>
+            </SelectField>
           </label>
           <div className="wbe-property-grid">
             <ColorField label="正文背景" value={document.background} fallback="#ffffff" onChange={background => updateDocument({ background })} />
@@ -1533,14 +1534,14 @@ export default function WechatBlockEditor({
             })}
           />
 
-          </details>
+          </Collapse>
 
           {selectedBlock?.type === "content" ? (
             <>
               <div className="wbe-property-heading">{blockLabel(selectedBlock, sourceMap.get(selectedBlock.sourceId))}</div>
               <label>
                 <span>内容版式</span>
-                <select
+                <SelectField
                   value={selectedBlock.variant}
                   disabled={sourceMap.get(selectedBlock.sourceId)?.kind === "image"}
                   onChange={event => updateBlock({ variant: event.target.value as WechatContentBlock["variant"] })}
@@ -1556,7 +1557,7 @@ export default function WechatBlockEditor({
                   <option value="metric">数据强调</option>
                   <option value="dropcap">首字下沉</option>
                   <option value="image">图片</option>
-                </select>
+                </SelectField>
               </label>
               <div className="wbe-property-grid">
                 <ColorField label="文字" value={selectedBlock.color} fallback="#262626" onChange={color => updateBlock({ color })} />
@@ -1578,34 +1579,34 @@ export default function WechatBlockEditor({
               </div>
               <label>
                 <span>对齐</span>
-                <select value={selectedBlock.align} onChange={event => updateBlock({ align: event.target.value as WechatContentBlock["align"] })}>
+                <SelectField value={selectedBlock.align} onChange={event => updateBlock({ align: event.target.value as WechatContentBlock["align"] })}>
                   <option value="left">左对齐</option>
                   <option value="center">居中</option>
                   <option value="right">右对齐</option>
-                </select>
+                </SelectField>
               </label>
               <div className="wbe-text-format" role="group" aria-label="文字格式">
-                <button
+                <Button variant="plain"
                   className={selectedBlock.fontWeight >= 700 ? "active" : ""}
                   title="粗体"
                   onClick={() => updateBlock({ fontWeight: selectedBlock.fontWeight >= 700 ? 400 : 700 })}
                 >
                   B
-                </button>
-                <button
+                </Button>
+                <Button variant="plain"
                   className={selectedBlock.fontStyle === "italic" ? "active" : ""}
                   title="斜体"
                   onClick={() => updateBlock({ fontStyle: selectedBlock.fontStyle === "italic" ? "normal" : "italic" })}
                 >
                   I
-                </button>
-                <button
+                </Button>
+                <Button variant="plain"
                   className={selectedBlock.textDecoration === "underline" ? "active" : ""}
                   title="下划线"
                   onClick={() => updateBlock({ textDecoration: selectedBlock.textDecoration === "underline" ? "none" : "underline" })}
                 >
                   U
-                </button>
+                </Button>
               </div>
             </>
           ) : null}
@@ -1615,7 +1616,7 @@ export default function WechatBlockEditor({
               <div className="wbe-property-heading">AI SVG 装饰</div>
               <label>
                 <span>SVG Path</span>
-                <textarea value={selectedBlock.d} rows={7} onChange={event => updateBlock({ d: event.target.value })} />
+                <Textarea value={selectedBlock.d} rows={7} onChange={event => updateBlock({ d: event.target.value })} />
               </label>
               <div className="wbe-property-grid">
                 <ColorField label="填充" value={selectedBlock.fill} fallback="#ffffff" onChange={fill => updateBlock({ fill })} />
@@ -1631,16 +1632,16 @@ export default function WechatBlockEditor({
           {selectedBlock?.type === "asset" ? (
             <>
               <div className="wbe-property-heading">图片素材</div>
-              <label><span>素材来源</span><select aria-label="素材来源" value={selectedBlock.materialId || (selectedBlock.libraryImage ? "library" : "generated")}
+              <label><span>素材来源</span><SelectField aria-label="素材来源" value={selectedBlock.materialId || (selectedBlock.libraryImage ? "library" : "generated")}
                 onChange={event => updateBlock({ materialId: getCanvasMaterial(event.target.value)?.id })}>
                 {selectedBlock.libraryImage ? <option value="library">已选图库照片</option> : null}
                 {selectedBlock.prompt ? <option value="generated">AI 生成图片</option> : null}
                 {CANVAS_MATERIALS.map(material => <option key={material.id} value={material.id}>{material.name}</option>)}
-              </select></label>
+              </SelectField></label>
               {!selectedBlock.materialId && !selectedBlock.libraryImage ? <>
               <label>
                 <span>图片生成提示词</span>
-                <textarea
+                <Textarea
                   value={selectedBlock.prompt}
                   rows={7}
                   onChange={event => updateBlock({ prompt: event.target.value })}
@@ -1648,7 +1649,7 @@ export default function WechatBlockEditor({
               </label>
               <label>
                 <span>图片比例</span>
-                <select
+                <SelectField
                   value={selectedBlock.imageSize}
                   onChange={event => updateBlock({
                     imageSize: event.target.value as WechatAssetBlock["imageSize"],
@@ -1660,7 +1661,7 @@ export default function WechatBlockEditor({
                   <option value="square">方图</option>
                   <option value="portrait_4_3">竖图 4:3</option>
                   <option value="portrait_16_9">竖图 16:9</option>
-                </select>
+                </SelectField>
               </label>
               </> : null}
               <div className="wbe-property-grid">
@@ -1671,7 +1672,7 @@ export default function WechatBlockEditor({
               </div>
               <label>
                 <span>对齐</span>
-                <select
+                <SelectField
                   value={selectedBlock.align}
                   onChange={event => updateBlock({
                     align: event.target.value as WechatAssetBlock["align"],
@@ -1680,7 +1681,7 @@ export default function WechatBlockEditor({
                   <option value="left">左对齐</option>
                   <option value="center">居中</option>
                   <option value="right">右对齐</option>
-                </select>
+                </SelectField>
               </label>
             </>
           ) : null}
@@ -1690,7 +1691,7 @@ export default function WechatBlockEditor({
               <div className="wbe-property-heading">点击切换素材</div>
               <label>
                 <span>切换前图片提示词</span>
-                <textarea
+                <Textarea
                   value={selectedBlock.beforePrompt}
                   rows={5}
                   onChange={event => updateBlock({ beforePrompt: event.target.value })}
@@ -1698,7 +1699,7 @@ export default function WechatBlockEditor({
               </label>
               <label>
                 <span>切换后图片提示词</span>
-                <textarea
+                <Textarea
                   value={selectedBlock.afterPrompt}
                   rows={5}
                   onChange={event => updateBlock({ afterPrompt: event.target.value })}
@@ -1706,7 +1707,7 @@ export default function WechatBlockEditor({
               </label>
               <label>
                 <span>图片比例</span>
-                <select
+                <SelectField
                   value={selectedBlock.imageSize}
                   onChange={event => updateBlock({
                     imageSize: event.target.value as WechatSwitcherBlock["imageSize"],
@@ -1718,7 +1719,7 @@ export default function WechatBlockEditor({
                   <option value="square">方图</option>
                   <option value="portrait_4_3">竖图 4:3</option>
                   <option value="portrait_16_9">竖图 16:9</option>
-                </select>
+                </SelectField>
               </label>
               <div className="wbe-property-grid">
                 <NumberField label="宽度" value={selectedBlock.width} min={120} max={677} onChange={width => updateBlock({ width })} />
@@ -1728,7 +1729,7 @@ export default function WechatBlockEditor({
               </div>
               <label>
                 <span>对齐</span>
-                <select
+                <SelectField
                   value={selectedBlock.align}
                   onChange={event => updateBlock({
                     align: event.target.value as WechatSwitcherBlock["align"],
@@ -1737,7 +1738,7 @@ export default function WechatBlockEditor({
                   <option value="left">左对齐</option>
                   <option value="center">居中</option>
                   <option value="right">右对齐</option>
-                </select>
+                </SelectField>
               </label>
             </>
           ) : null}
@@ -1747,7 +1748,7 @@ export default function WechatBlockEditor({
               <div className="wbe-property-heading">分隔线组件</div>
               <label>
                 <span>线型</span>
-                <select
+                <SelectField
                   value={selectedBlock.style}
                   onChange={event => updateBlock({
                     style: event.target.value as WechatDividerBlock["style"],
@@ -1758,7 +1759,7 @@ export default function WechatBlockEditor({
                   <option value="dotted">点线</option>
                   <option value="double">双线</option>
                   <option value="gradient">渐变线</option>
-                </select>
+                </SelectField>
               </label>
               <div className="wbe-property-grid">
                 <ColorField label="主色" value={selectedBlock.color} fallback="#5263a5" onChange={color => updateBlock({ color })} />
@@ -1770,7 +1771,7 @@ export default function WechatBlockEditor({
               </div>
               <label>
                 <span>对齐</span>
-                <select
+                <SelectField
                   value={selectedBlock.align}
                   onChange={event => updateBlock({
                     align: event.target.value as WechatDividerBlock["align"],
@@ -1779,23 +1780,23 @@ export default function WechatBlockEditor({
                   <option value="left">左对齐</option>
                   <option value="center">居中</option>
                   <option value="right">右对齐</option>
-                </select>
+                </SelectField>
               </label>
             </>
           ) : null}
 
           {selectedBlock?.type === "section" ? (
             <>
-              <label><span>纸张结构</span><select aria-label="纸张结构" value={selectedBlock.frame || "none"}
+              <label><span>纸张结构</span><SelectField aria-label="纸张结构" value={selectedBlock.frame || "none"}
                 onChange={event => updateBlock({ frame: event.target.value === "none" ? undefined : event.target.value as WechatSectionBlock["frame"] })}>
                 <option value="none">普通布局</option><option value="notebook">活页纸章节</option>
                 <option value="letter">简洁信纸</option><option value="ticket">虚线票券</option>
                 <option value="photo">夹板相框</option><option value="collage">错位照片组合</option>
-              </select></label>
+              </SelectField></label>
               <div className="wbe-property-heading">组合区域 · {selectedBlock.sourceIds.length} 项</div>
               <label>
                 <span>布局</span>
-                <select
+                <SelectField
                   aria-label="章节布局"
                   value={selectedBlock.layout}
                   onChange={event => updateBlock({ layout: event.target.value as WechatSectionBlock["layout"] })}
@@ -1809,12 +1810,12 @@ export default function WechatBlockEditor({
                   <option value="steps">步骤流</option>
                   <option value="media-text">媒体 + 文字</option>
                   <option value="grid">内容网格</option>
-                </select>
+                </SelectField>
               </label>
               {["two-column", "comparison", "feature", "editorial", "media-text"].includes(selectedBlock.layout) ? (
                 <label>
                   <span>双栏比例</span>
-                  <select
+                  <SelectField
                     value={selectedBlock.columnRatio}
                     onChange={event => updateBlock({
                       columnRatio: event.target.value as WechatSectionBlock["columnRatio"],
@@ -1823,13 +1824,13 @@ export default function WechatBlockEditor({
                     <option value="1:1">1 : 1</option>
                     <option value="1:2">1 : 2</option>
                     <option value="2:1">2 : 1</option>
-                  </select>
+                  </SelectField>
                 </label>
               ) : null}
               {selectedBlock.layout === "media-text" ? (
                 <label>
                   <span>媒体位置</span>
-                  <select
+                  <SelectField
                     value={selectedBlock.mediaPosition}
                     onChange={event => updateBlock({
                       mediaPosition: event.target.value as WechatSectionBlock["mediaPosition"],
@@ -1837,13 +1838,13 @@ export default function WechatBlockEditor({
                   >
                     <option value="left">左侧</option>
                     <option value="right">右侧</option>
-                  </select>
+                  </SelectField>
                 </label>
               ) : null}
               {selectedBlock.layout === "grid" ? (
                 <label>
                   <span>网格列数</span>
-                  <select
+                  <SelectField
                     value={selectedBlock.columns}
                     onChange={event => updateBlock({
                       columns: Number(event.target.value) as WechatSectionBlock["columns"],
@@ -1851,13 +1852,13 @@ export default function WechatBlockEditor({
                   >
                     <option value={2}>两列</option>
                     <option value={3}>三列</option>
-                  </select>
+                  </SelectField>
                 </label>
               ) : null}
               <div className="wbe-property-grid">
                 <label>
                   <span>视觉预设</span>
-                  <select
+                  <SelectField
                     value={selectedBlock.preset}
                     onChange={event => updateBlock({
                       preset: event.target.value as WechatSectionBlock["preset"],
@@ -1868,11 +1869,11 @@ export default function WechatBlockEditor({
                     <option value="feature">重点区域</option>
                     <option value="editorial">杂志卡片</option>
                     <option value="callout">提示区域</option>
-                  </select>
+                  </SelectField>
                 </label>
                 <label>
                   <span>强调边</span>
-                  <select
+                  <SelectField
                     value={selectedBlock.accentStyle}
                     onChange={event => updateBlock({
                       accentStyle: event.target.value as WechatSectionBlock["accentStyle"],
@@ -1883,11 +1884,11 @@ export default function WechatBlockEditor({
                     <option value="left">左侧</option>
                     <option value="bottom">底部</option>
                     <option value="tri-color">三色轨道</option>
-                  </select>
+                  </SelectField>
                 </label>
                 <label>
                   <span>阴影</span>
-                  <select
+                  <SelectField
                     value={selectedBlock.shadow}
                     onChange={event => updateBlock({
                       shadow: event.target.value as WechatSectionBlock["shadow"],
@@ -1895,12 +1896,12 @@ export default function WechatBlockEditor({
                   >
                     <option value="none">无阴影</option>
                     <option value="soft">柔和阴影</option>
-                  </select>
+                  </SelectField>
                 </label>
               </div>
               <label>
                 <span>语义图标</span>
-                <select
+                <SelectField
                   value={selectedBlock.icon?.kind === "lucide" ? selectedBlock.icon.name : "none"}
                   onChange={event => {
                     const name = event.target.value
@@ -1925,7 +1926,7 @@ export default function WechatBlockEditor({
                   <option value="check-circle">完成</option>
                   <option value="arrow-right">下一步</option>
                   <option value="bar-chart">数据</option>
-                </select>
+                </SelectField>
               </label>
               {selectedBlock.icon ? (
                 <div className="wbe-property-grid">
@@ -1966,7 +1967,7 @@ export default function WechatBlockEditor({
                 onChange={surfaceStyle => updateBlock({ surfaceStyle })}
               />
               <label className="wbe-checkbox-field">
-                <input
+                <Input
                   type="checkbox"
                   checked={selectedBlock.divider}
                   onChange={event => updateBlock({ divider: event.target.checked })}
@@ -1987,7 +1988,7 @@ export default function WechatBlockEditor({
                 <>
                   <label>
                     <span>文字版式</span>
-                    <select
+                    <SelectField
                       value={selectedSectionText.variant}
                       onChange={event => updateSectionItemStyle({
                         variant: event.target.value as Exclude<WechatContentBlock["variant"], "image">,
@@ -2003,7 +2004,7 @@ export default function WechatBlockEditor({
                       <option value="overline">眉题</option>
                       <option value="metric">数据强调</option>
                       <option value="dropcap">首字下沉</option>
-                    </select>
+                    </SelectField>
                   </label>
                   <div className="wbe-property-grid">
                     <ColorField label="文字" value={selectedSectionText.color} fallback="#262626" onChange={color => updateSectionItemStyle({ color })} />
@@ -2023,37 +2024,37 @@ export default function WechatBlockEditor({
                   </div>
                   <label>
                     <span>对齐</span>
-                    <select
+                    <SelectField
                       value={selectedSectionText.align}
                       onChange={event => updateSectionItemStyle({ align: event.target.value as WechatContentBlock["align"] })}
                     >
                       <option value="left">左对齐</option>
                       <option value="center">居中</option>
                       <option value="right">右对齐</option>
-                    </select>
+                    </SelectField>
                   </label>
                   <div className="wbe-text-format" role="group" aria-label="文字格式">
-                    <button
+                    <Button variant="plain"
                       className={selectedSectionText.fontWeight >= 700 ? "active" : ""}
                       title="粗体"
                       onClick={() => updateSectionItemStyle({ fontWeight: selectedSectionText.fontWeight >= 700 ? 400 : 700 })}
                     >
                       B
-                    </button>
-                    <button
+                    </Button>
+                    <Button variant="plain"
                       className={selectedSectionText.fontStyle === "italic" ? "active" : ""}
                       title="斜体"
                       onClick={() => updateSectionItemStyle({ fontStyle: selectedSectionText.fontStyle === "italic" ? "normal" : "italic" })}
                     >
                       I
-                    </button>
-                    <button
+                    </Button>
+                    <Button variant="plain"
                       className={selectedSectionText.textDecoration === "underline" ? "active" : ""}
                       title="下划线"
                       onClick={() => updateSectionItemStyle({ textDecoration: selectedSectionText.textDecoration === "underline" ? "none" : "underline" })}
                     >
                       U
-                    </button>
+                    </Button>
                   </div>
                 </>
               )}

@@ -1,3 +1,5 @@
+import { Input } from "../../components/FormControls/FormControls"
+import Button from "../../components/Button/Button"
 import { useState, useEffect, useRef } from 'react'
 import { Plus, Calendar, FileText, Trash2, ArrowRight, RefreshCw, Zap, Server, HardDrive, AlertTriangle, Upload, Search, MessageCircle, Newspaper, BookOpen, X, LayoutList, Rows } from 'lucide-react'
 import { fetchArticleList, fetchArticleWorkflowMetrics, deleteArticle, type WorkflowMetrics } from '../../utils/apiHelpers'
@@ -249,7 +251,7 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
       <div className="dash-empty">
         <div className="dash-empty-icon"><FileText size={32} /></div>
         <p>{empty}</p>
-        {(query || filter !== 'all') && <button className="dash-text-btn" onClick={() => { setQuery(''); setFilter('all') }}>清除筛选</button>}
+        {(query || filter !== 'all') && <Button variant="plain" className="dash-text-btn" onClick={() => { setQuery(''); setFilter('all') }}>清除筛选</Button>}
       </div>
     )
     return (
@@ -265,7 +267,7 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
               key={article.id}
               className="dash-article-item"
             >
-              <button className="dash-article-left" onClick={() => onEditArticle?.(article.id, article.title)} aria-label={`继续编辑：${article.title || '未命名文章'}`}>
+              <Button variant="plain" className="dash-article-left" onClick={() => onEditArticle?.(article.id, article.title)} aria-label={`继续编辑：${article.title || '未命名文章'}`}>
                 <div className="dash-article-dot" data-status={article.status} />
                 <div>
                   <p className="dash-article-title">
@@ -285,26 +287,26 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
                     )}
                   </div>
                 </div>
-              </button>
+              </Button>
               <div className="dash-article-right">
                 {['review', 'ready', 'wechat_draft', 'generated', 'published'].includes(article.status) && (
                   <div className="dash-platform-actions">
-                    <button className="dash-wechat-publish" title="公众号预览与推送" aria-label={`公众号：${article.title}`} onClick={() => onPublishArticle(article.id, article.title, 'wechat')}>
+                    <Button variant="plain" className="dash-wechat-publish" title="公众号预览与推送" aria-label={`公众号：${article.title}`} onClick={() => onPublishArticle(article.id, article.title, 'wechat')}>
                       <MessageCircle size={16} />
                       <span>推微信</span>
-                    </button>
-                    <button title="今日头条预览与发布" aria-label={`今日头条：${article.title}`} onClick={() => onPublishArticle(article.id, article.title, 'toutiao')}><Newspaper size={16} /></button>
-                    <button title="小红书预览与发布" aria-label={`小红书：${article.title}`} onClick={() => onPublishArticle(article.id, article.title, 'xiaohongshu')}><BookOpen size={16} /></button>
+                    </Button>
+                    <Button variant="plain" title="今日头条预览与发布" aria-label={`今日头条：${article.title}`} onClick={() => onPublishArticle(article.id, article.title, 'toutiao')}><Newspaper size={16} /></Button>
+                    <Button variant="plain" title="小红书预览与发布" aria-label={`小红书：${article.title}`} onClick={() => onPublishArticle(article.id, article.title, 'xiaohongshu')}><BookOpen size={16} /></Button>
                   </div>
                 )}
-                <button
+                <Button variant="plain"
                   className="dash-delete-btn"
                   onClick={e => handleDelete(article.id, e)}
                   title="删除"
                   aria-label={`删除：${article.title}`}
                 >
                   <Trash2 size={13} />
-                </button>
+                </Button>
               </div>
             </li>
           )
@@ -331,9 +333,9 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
                   <span>{group.length} 篇</span>
                 </div>
                 {group.length > STATUS_PREVIEW_SIZE && (
-                  <button className="dash-text-btn" onClick={() => showFilteredList(item.id)}>
+                  <Button variant="plain" className="dash-text-btn" onClick={() => showFilteredList(item.id)}>
                     查看全部<ArrowRight size={14} />
-                  </button>
+                  </Button>
                 )}
               </header>
               {group.length
@@ -399,20 +401,20 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
 
           {/* 存储位置选择 */}
           <div className="dash-storage-toggle">
-            <button
+            <Button variant="plain"
               className={`dash-storage-btn ${storageMode === 'server' ? 'active' : ''}`}
               onClick={() => setStorageMode('server')}
             >
               <Server size={12} />
               存服务端
-            </button>
-            <button
+            </Button>
+            <Button variant="plain"
               className={`dash-storage-btn ${storageMode === 'local' ? 'active' : ''}`}
               onClick={() => setStorageMode('local')}
             >
               <HardDrive size={12} />
               存本地
-            </button>
+            </Button>
           </div>
 
           <div className="dash-create-fields">
@@ -421,7 +423,7 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
                 <Calendar size={12} />
                 日期
               </label>
-              <input
+              <Input
                 type="date"
                 id="article-date"
                 className="dash-input"
@@ -435,7 +437,7 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
                 标题
                 <span className="dash-optional">可选</span>
               </label>
-              <input
+              <Input
                 ref={titleRef}
                 id="article-title"
                 type="text"
@@ -446,7 +448,7 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
             </div>
           </div>
 
-          <button
+          <Button variant="plain"
             className="dash-create-btn"
             onClick={handleCreate}
             disabled={creating}
@@ -464,7 +466,7 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
                 <ArrowRight size={15} className="dash-arrow" />
               </>
             )}
-          </button>
+          </Button>
 
           {storageMode === 'local' && <p className="dash-create-hint">数据仅存此浏览器，清除缓存后会丢失。</p>}
         </div>
@@ -474,18 +476,18 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
       <main className="dash-main">
         <div className="dash-workspace-heading">
           <h1>创作工作台</h1>
-          <button className="dash-text-btn" onClick={() => titleRef.current?.focus()}><Plus size={16} />新建文章</button>
+          <Button variant="plain" className="dash-text-btn" onClick={() => titleRef.current?.focus()}><Plus size={16} />新建文章</Button>
         </div>
         {!loading && !loadError && resumeArticle && (
           <section className="dash-resume" aria-label="继续创作">
             <div><span>{STATUS_META[resumeArticle.status]?.label || '继续创作'}</span><h2>{resumeArticle.title || '未命名文章'}</h2></div>
-            <button onClick={() => resumeArticle.status === 'ready'
+            <Button variant="plain" onClick={() => resumeArticle.status === 'ready'
               ? onPublishArticle(resumeArticle.id, resumeArticle.title, 'wechat')
               : onEditArticle?.(resumeArticle.id, resumeArticle.title)}
             >
               {resumeArticle.status === 'ready' ? '发布到微信' : '继续处理'}
               <ArrowRight size={16} />
-            </button>
+            </Button>
           </section>
         )}
         {/* 本地存储警告横幅 */}
@@ -495,51 +497,51 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
             <span>
               有 <strong>{localArticles.length}</strong> 篇文章仅存在本地浏览器，清除缓存或换设备后会丢失
             </span>
-            <button
+            <Button variant="plain"
               className="dash-migrate-btn"
               onClick={handleMigrateLocal}
               disabled={migrating}
             >
               <Upload size={11} />
               {migrating ? '迁移中...' : '迁移到服务端'}
-            </button>
+            </Button>
           </div>
         )}
 
         <div className="dash-list-header">
           <h3>文章列表</h3>
           <div className="dash-view-switch" role="group" aria-label="文章列表视图">
-            <button aria-pressed={viewMode === 'status'} onClick={() => setViewMode('status')} title="按状态分类">
+            <Button variant="plain" aria-pressed={viewMode === 'status'} onClick={() => setViewMode('status')} title="按状态分类">
               <Rows size={14} />按状态
-            </button>
-            <button aria-pressed={viewMode === 'list'} onClick={() => setViewMode('list')} title="全部文章列表">
+            </Button>
+            <Button variant="plain" aria-pressed={viewMode === 'list'} onClick={() => setViewMode('list')} title="全部文章列表">
               <LayoutList size={14} />全部文章
-            </button>
+            </Button>
           </div>
           <label className="dash-search">
             <Search size={16} />
-            <input aria-label="搜索文章" value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索标题或日期" />
-            {query && <button title="清除搜索" aria-label="清除搜索" onClick={() => setQuery('')}><X size={14} /></button>}
+            <Input aria-label="搜索文章" value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索标题或日期" />
+            {query && <Button variant="plain" title="清除搜索" aria-label="清除搜索" onClick={() => setQuery('')}><X size={14} /></Button>}
           </label>
-          <button
+          <Button variant="plain"
             className="dash-refresh-btn"
             onClick={loadArticles}
             disabled={loading}
             title="刷新"
           >
             <RefreshCw size={15} className={loading ? 'dash-spin' : ''} />
-          </button>
+          </Button>
         </div>
         {(viewMode === 'list' || query) && (
           <div className="dash-filters" role="group" aria-label="文章进度筛选">
-            {filters.map(item => <button key={item.id} aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}>
+            {filters.map(item => <Button variant="plain" key={item.id} aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}>
               {item.label}<span>{allArticles.filter(article => matchesFilter(article, item.id)).length}</span>
-            </button>)}
+            </Button>)}
           </div>
         )}
 
         {loadError ? (
-          <div className="dash-empty" role="alert"><AlertTriangle size={24} /><p>文章列表加载失败</p><button className="dash-text-btn" onClick={() => void loadArticles()}>重新加载</button></div>
+          <div className="dash-empty" role="alert"><AlertTriangle size={24} /><p>文章列表加载失败</p><Button variant="plain" className="dash-text-btn" onClick={() => void loadArticles()}>重新加载</Button></div>
         ) : loading ? (
           <div className="dash-loading">
             <RefreshCw size={20} className="dash-spin" />
@@ -550,9 +552,9 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
             {renderArticleList(pagedArticles, allArticles.length ? '没有匹配的文章' : '还没有文章')}
             {visibleArticles.length > ARTICLE_PAGE_SIZE && (
               <nav className="dash-pagination" aria-label="文章列表分页">
-                <button disabled={page === 1} onClick={() => setPage(current => Math.max(1, current - 1))}>上一页</button>
+                <Button variant="plain" disabled={page === 1} onClick={() => setPage(current => Math.max(1, current - 1))}>上一页</Button>
                 <span>第 {page} / {pageCount} 页 · 共 {visibleArticles.length} 篇</span>
-                <button disabled={page === pageCount} onClick={() => setPage(current => Math.min(pageCount, current + 1))}>下一页</button>
+                <Button variant="plain" disabled={page === pageCount} onClick={() => setPage(current => Math.min(pageCount, current + 1))}>下一页</Button>
               </nav>
             )}
           </>

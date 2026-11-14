@@ -1,3 +1,4 @@
+import Button from "../../components/Button/Button"
 import { useState, useEffect } from 'react'
 import { AlertCircle, Activity, Zap, TrendingUp, RefreshCw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -156,14 +157,14 @@ export default function MonitoringPage() {
             { id: 'alerts', label: '告警', icon: AlertCircle },
             { id: 'health', label: '健康检查', icon: Zap },
           ].map(tab => (
-            <button
+            <Button variant="plain"
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
               className={`monitoring-tab ${activeTab === tab.id ? 'active' : ''}`}
             >
               <tab.icon size={18} />
               {tab.label}
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -256,10 +257,10 @@ export default function MonitoringPage() {
             )}
 
             {/* 重置按钮 */}
-            <button onClick={resetMetrics} className="monitoring-btn">
+            <Button variant="plain" onClick={resetMetrics} className="monitoring-btn">
               <RefreshCw size={16} />
               重置指标
-            </button>
+            </Button>
           </div>
         )}
 
@@ -269,13 +270,13 @@ export default function MonitoringPage() {
             {/* 日志过滤 */}
             <div className="monitoring-filters">
               {['ALL', 'ERROR', 'WARN', 'INFO'].map(level => (
-                <button
+                <Button variant="plain"
                   key={level}
                   onClick={() => setLogFilter(level as any)}
                   className={`monitoring-filter-btn ${logFilter === level ? 'active' : ''}`}
                 >
                   {level}
-                </button>
+                </Button>
               ))}
             </div>
 

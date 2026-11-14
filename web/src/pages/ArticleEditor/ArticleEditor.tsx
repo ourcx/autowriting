@@ -1,7 +1,9 @@
+import { Collapse, Input, Textarea } from "../../components/FormControls/FormControls"
+import Button from "../../components/Button/Button"
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { toast } from '../../components/Toast/Toast'
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
-import { Zap, Save, Edit3, Palette, Settings, AlertTriangle, Plus, Trash2, Pencil, Sparkles, LayoutList, CheckCircle, ChevronRight, ChevronDown, GripVertical, User, Newspaper, BookOpen, MessageCircle, HelpCircle, Image, Link2, Link2Off } from 'lucide-react'
+import { Zap, Save, Edit3, Palette, Settings, AlertTriangle, Plus, Trash2, Pencil, Sparkles, LayoutList, CheckCircle, ChevronRight, GripVertical, User, Newspaper, BookOpen, MessageCircle, HelpCircle, Image, Link2, Link2Off } from 'lucide-react'
 import { useAIReadiness, fetchServerStatus } from '../../store/useConfigStore'
 import { useAuth } from '../../store/useAuth'
 import { useEditingActivity } from './useEditingActivity'
@@ -577,9 +579,9 @@ export default function ArticleEditor() {
       <div className="editor-loading">
         <AlertTriangle size={24} />
         <p>{loadError}</p>
-        <button className="btn btn-primary" onClick={() => void fetchArticleData()}>
+        <Button variant="plain" className="btn btn-primary" onClick={() => void fetchArticleData()}>
           重新加载
-        </button>
+        </Button>
       </div>
     )
   }
@@ -591,7 +593,7 @@ export default function ArticleEditor() {
         <div className="editor-setup-banner">
           <AlertTriangle size={15} />
           <span>还没配置 AI API Key，生成文章需要先</span>
-          <button onClick={() => navigate('/settings')}>前往配置</button>
+          <Button variant="plain" onClick={() => navigate('/settings')}>前往配置</Button>
           <span>（已配置的可忽略此提示）</span>
         </div>
       )}
@@ -602,16 +604,16 @@ export default function ArticleEditor() {
           <AlertTriangle size={15} />
           <span>{generateError}</span>
           {generateError.includes('API Key') && (
-            <button onClick={() => navigate('/settings')}>去配置</button>
+            <Button variant="plain" onClick={() => navigate('/settings')}>去配置</Button>
           )}
-          <button className="editor-error-close" onClick={() => setGenerateError(null)}>✕</button>
+          <Button variant="plain" className="editor-error-close" onClick={() => setGenerateError(null)}>✕</Button>
         </div>
       )}
 
       <PageHeader
         title={<div className="header-title">
           {editingTitle ? (
-            <input
+            <Input
               type="text"
               value={data.title}
               onChange={e => setData(prev => ({ ...prev, title: e.target.value }))}
@@ -630,31 +632,31 @@ export default function ArticleEditor() {
         </div>}
         onBack={() => navigate('/')}
         actions={<div className="header-actions">
-          <button
+          <Button variant="plain"
             className="btn btn-ghost"
             onClick={() => navigate('/account?tab=writing')}
             title="管理写作 DNA、长期背景和创作证据"
             aria-label="写作资产"
           >
             <User size={16} />
-          </button>
-          <button
+          </Button>
+          <Button variant="plain"
             className="btn btn-ghost"
             onClick={() => navigate('/settings')}
             title="AI 模型和 API Key 配置"
             aria-label="AI 配置"
           >
             <Settings size={16} />
-          </button>
-          <button
+          </Button>
+          <Button variant="plain"
             className="btn btn-ghost"
             onClick={() => navigate('/styles')}
             title="管理 CSS 样式模板"
             aria-label="管理样式"
           >
             <Palette size={16} />
-          </button>
-          <button
+          </Button>
+          <Button variant="plain"
             className="btn btn-ghost"
             onClick={() => {
               setGuidePage(activeTab === 'publish' ? 'publish' : 'editor')
@@ -664,10 +666,10 @@ export default function ArticleEditor() {
             aria-label="查看当前页引导"
           >
             <HelpCircle size={16} />
-          </button>
-          <button className="btn btn-secondary" title={saving ? '保存中' : '保存'} aria-label={saving ? '保存中' : '保存'} onClick={() => void handleSave()} disabled={saving || loading}>
+          </Button>
+          <Button variant="plain" className="btn btn-secondary" title={saving ? '保存中' : '保存'} aria-label={saving ? '保存中' : '保存'} onClick={() => void handleSave()} disabled={saving || loading}>
             <Save size={20} />
-          </button>
+          </Button>
         </div>}
       />
 
@@ -681,7 +683,7 @@ export default function ArticleEditor() {
               const done = flowStepDone(step.id)
               const isActive = activeFlowStep === step.id
               return (
-                <button
+                <Button variant="plain"
                   key={step.id}
                   className={`flow-step ${isActive ? 'flow-step--active' : ''} ${done ? 'flow-step--done' : ''}`}
                   aria-current={isActive ? 'step' : undefined}
@@ -693,33 +695,31 @@ export default function ArticleEditor() {
                   </span>
                   <span className="flow-step-label">{step.label}</span>
                   {idx < MAIN_FLOW_STEPS.length - 1 && <ChevronRight size={12} className="flow-step-sep" />}
-                </button>
+                </Button>
               )
             })}
 
             <div className="editor-secondary-nav">
-              <details className="editor-menu">
-                <summary><Newspaper size={15} />平台版本<ChevronDown size={13} /></summary>
+              <Collapse className="editor-menu" closeOnAction label={<><Newspaper size={15} />平台版本</>}>
                 <div className="editor-menu-popover">
-                  <button className={activeTab === 'toutiao' ? 'active' : ''} onClick={() => setActiveTab('toutiao')}>
+                  <Button variant="plain" data-ui-close className={activeTab === 'toutiao' ? 'active' : ''} onClick={() => setActiveTab('toutiao')}>
                     <Newspaper size={15} /><span><strong>今日头条版本</strong><small>{data.articleToutiao.trim() ? '正文已就绪' : '待生成'}</small></span>
-                  </button>
-                  <button className={activeTab === 'xiaohongshu' ? 'active' : ''} onClick={() => setActiveTab('xiaohongshu')}>
+                  </Button>
+                  <Button variant="plain" data-ui-close className={activeTab === 'xiaohongshu' ? 'active' : ''} onClick={() => setActiveTab('xiaohongshu')}>
                     <BookOpen size={15} /><span><strong>小红书版本</strong><small>复用母稿并设置标题</small></span>
-                  </button>
+                  </Button>
                 </div>
-              </details>
-              <details className="editor-menu">
-                <summary><Image size={15} />辅助工具<ChevronDown size={13} /></summary>
+              </Collapse>
+              <Collapse className="editor-menu" closeOnAction label={<><Image size={15} />辅助工具</>}>
                 <div className="editor-menu-popover editor-menu-popover--right">
-                  <button className={activeTab === 'cover' ? 'active' : ''} onClick={() => setActiveTab('cover')}>
+                  <Button variant="plain" data-ui-close className={activeTab === 'cover' ? 'active' : ''} onClick={() => setActiveTab('cover')}>
                     <Image size={15} /><span><strong>封面</strong><small>{hasCover ? '已有封面' : '生成或上传封面'}</small></span>
-                  </button>
-                  <button className={activeTab === 'library' ? 'active' : ''} onClick={() => setActiveTab('library')}>
+                  </Button>
+                  <Button variant="plain" data-ui-close className={activeTab === 'library' ? 'active' : ''} onClick={() => setActiveTab('library')}>
                     <LayoutList size={15} /><span><strong>图片库</strong><small>管理图片、选择封面</small></span>
-                  </button>
+                  </Button>
                 </div>
-              </details>
+              </Collapse>
             </div>
           </div>
         </div>
@@ -736,8 +736,8 @@ export default function ArticleEditor() {
           </div>
           {recovery && <div className="editor-save-status">
             检测到上次未保存的修改。
-            <button className="btn btn-secondary btn-small" onClick={() => { setData(recovery); setRecovery(null) }}>恢复修改</button>
-            <button className="btn btn-secondary btn-small" onClick={() => { sessionStorage.removeItem(recoveryKey); setRecovery(null) }}>使用已保存版本</button>
+            <Button variant="plain" className="btn btn-secondary btn-small" onClick={() => { setData(recovery); setRecovery(null) }}>恢复修改</Button>
+            <Button variant="plain" className="btn btn-secondary btn-small" onClick={() => { sessionStorage.removeItem(recoveryKey); setRecovery(null) }}>使用已保存版本</Button>
           </div>}
           {activeTab === 'task' && (
             <div className="editor-panel editor-panel--task">
@@ -750,22 +750,22 @@ export default function ArticleEditor() {
                       className="task-tmpl-chip"
                       title={t.desc}
                     >
-                      <button
+                      <Button variant="plain"
                         className="task-tmpl-chip-btn"
                         onClick={() => setData(prev => ({ ...prev, task: t.content }))}
                       >
                         {t.name}
-                      </button>
+                      </Button>
                       {!t.isBuiltin && (
                         <span className="task-tmpl-chip-actions">
-                          <button
+                          <Button variant="plain"
                             className="task-tmpl-icon-btn"
                             title="编辑"
                             onClick={() => { setEditingTemplate(t); setShowTemplateModal(true) }}
                           >
                             <Pencil size={11} />
-                          </button>
-                          <button
+                          </Button>
+                          <Button variant="plain"
                             className="task-tmpl-icon-btn task-tmpl-icon-btn--del"
                             title="删除"
                             onClick={() => {
@@ -776,20 +776,20 @@ export default function ArticleEditor() {
                             }}
                           >
                             <Trash2 size={11} />
-                          </button>
+                          </Button>
                         </span>
                       )}
                     </div>
                   ))}
                 </div>
-                <button
+                <Button variant="plain"
                   className="task-tmpl-new-btn"
                   onClick={() => { setEditingTemplate(undefined); setShowTemplateModal(true) }}
                 >
                   <Plus size={13} />
                   新建模板
-                </button>
-                <button
+                </Button>
+                <Button variant="plain"
                   className="task-tmpl-outline-btn"
                   onClick={handleGenerateOutline}
                   disabled={generatingOutline || !data.task}
@@ -798,11 +798,11 @@ export default function ArticleEditor() {
                   {generatingOutline
                     ? <><span className="task-outline-spin" />生成中...</>
                     : <><LayoutList size={13} />生成大纲</>}
-                </button>
+                </Button>
               </div>
 
               {/* 编辑区 */}
-              <textarea
+              <Textarea
                 value={data.task}
                 onChange={e => setData(prev => ({ ...prev, task: e.target.value }))}
                 placeholder={`# 写作任务要求\n\n## 基本信息\n- **文章主题**：\n- **目标字数**：1500-2000 字\n- **发布平台**：微信公众号\n\n## 结构要求\n1. 开场：直接切入痛点或场景\n2. 这是什么：解释核心概念\n3. 怎么做：分步骤说明\n4. 踩过的坑：分享真实问题\n5. 值不值得做：给出明确判断`}
@@ -839,7 +839,7 @@ export default function ArticleEditor() {
                 <div className="panel-header materials-panel-header">
                   <div className="materials-header-top">
                     <h3>素材库</h3>
-                    <button
+                    <Button variant="plain"
                       className="materials-refine-btn"
                       onClick={handleRefineMaterials}
                       disabled={refiningMaterials || !data.materials}
@@ -848,7 +848,7 @@ export default function ArticleEditor() {
                       {refiningMaterials
                         ? <><span className="task-outline-spin" />整理中...</>
                         : <><Sparkles size={12} />AI 整理+去重</>}
-                    </button>
+                    </Button>
                   </div>
                   <p>materials.md — 可直接编辑，也可从左侧采集后写入</p>
                 </div>
@@ -861,16 +861,16 @@ export default function ArticleEditor() {
                         <GripVertical size={14} />
                         AI 生成大纲（可编辑后追加）
                       </div>
-                      <button className="outline-confirm-close" onClick={() => setPendingOutline(null)}>✕</button>
+                      <Button variant="plain" className="outline-confirm-close" onClick={() => setPendingOutline(null)}>✕</Button>
                     </div>
-                    <textarea
+                    <Textarea
                       className="outline-confirm-editor"
                       value={pendingOutline}
                       onChange={e => setPendingOutline(e.target.value)}
                     />
                     <div className="outline-confirm-actions">
-                      <button className="outline-btn-cancel" onClick={() => setPendingOutline(null)}>放弃</button>
-                      <button
+                      <Button variant="plain" className="outline-btn-cancel" onClick={() => setPendingOutline(null)}>放弃</Button>
+                      <Button variant="plain"
                         className="outline-btn-apply"
                         onClick={() => {
                           const block = `\n\n---\n\n## AI 生成大纲\n\n${pendingOutline}`
@@ -880,12 +880,12 @@ export default function ArticleEditor() {
                         }}
                       >
                         追加到素材库
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 )}
 
-                <textarea
+                <Textarea
                   value={data.materials}
                   onChange={e => setData(prev => ({ ...prev, materials: e.target.value }))}
                   placeholder={`# 素材整理\n\n## 核心数据\n- [数据点 1]\n\n## 踩过的坑\n### 坑1：[问题描述]\n- **问题**：\n- **原因**：\n- **解决**：\n\n## 个人观点\n- [观点 1]`}
@@ -936,7 +936,7 @@ export default function ArticleEditor() {
                 </div>
                 <label className="xiaohongshu-title-field">
                   <span>小红书标题 <em>{Array.from(data.xiaohongshuTitle).length} 字</em></span>
-                  <input
+                  <Input
                     value={data.xiaohongshuTitle}
                     onChange={event => setData(prev => ({ ...prev, xiaohongshuTitle: event.target.value }))}
                     placeholder={articleTitle || '输入小红书发布标题'}
@@ -981,16 +981,16 @@ export default function ArticleEditor() {
                 <div className={`publish-account-status ${publishAccountConnected ? 'is-ready' : ''}`} data-onboarding="publish-account-status">
                   {publishAccountConnected ? <Link2 size={15} /> : <Link2Off size={15} />}
                   <span>{publishAccountConnected ? '账号已连接' : '账号未连接'}</span>
-                  <button onClick={() => navigate('/account')}>{publishAccountConnected ? '管理' : '去连接'}</button>
+                  <Button variant="plain" onClick={() => navigate('/account')}>{publishAccountConnected ? '管理' : '去连接'}</Button>
                 </div>
               </div>
               <div className="publish-platforms" role="group" aria-label="发布平台" data-onboarding="publish-platforms">
                 {PUBLISH_PLATFORMS.map(platform => (
-                  <button key={platform.id} className={`publish-platform publish-platform--${platform.id}`} aria-pressed={publishPlatform === platform.id} onClick={() => selectPublishPlatform(platform.id)}>
+                  <Button variant="plain" key={platform.id} className={`publish-platform publish-platform--${platform.id}`} aria-pressed={publishPlatform === platform.id} onClick={() => selectPublishPlatform(platform.id)}>
                     <platform.icon size={18} />
                     <strong>{platform.label}</strong>
                     <span>{platform.id === 'wechat' && publishDone ? '已推送草稿' : (platform.id === 'toutiao' ? data.articleToutiao : data.article).trim() ? '正文已就绪' : '待补正文'}</span>
-                  </button>
+                  </Button>
                 ))}
               </div>
               <div className="publish-workbench-body" data-onboarding="publish-workbench">
@@ -1003,12 +1003,12 @@ export default function ArticleEditor() {
                 /> : <div className="publish-empty">
                   <BookOpen size={28} />
                   <h3>{publishPlatform === 'toutiao' ? '今日头条版本尚未生成' : '尚未添加正文'}</h3>
-                  <button className="btn btn-primary" onClick={() => setActiveTab(publishPlatform === 'toutiao' ? 'toutiao' : 'article')}>
+                  <Button variant="plain" className="btn btn-primary" onClick={() => setActiveTab(publishPlatform === 'toutiao' ? 'toutiao' : 'article')}>
                     <Edit3 size={16} />去编辑正文
-                  </button>
-                  <button className="btn btn-secondary" onClick={handleGenerate} disabled={!data.task.trim() || !apiKeyReady}>
+                  </Button>
+                  <Button variant="plain" className="btn btn-secondary" onClick={handleGenerate} disabled={!data.task.trim() || !apiKeyReady}>
                     <Zap size={16} />生成文章
-                  </button>
+                  </Button>
                 </div>}
               </div>
             </div>
@@ -1049,7 +1049,7 @@ export default function ArticleEditor() {
         {nextActionLabel && (
           <div className={`editor-next-dock ${showGenerateAction ? 'editor-next-dock--with-generate' : ''}`}>
             {showGenerateAction && (
-              <button
+              <Button variant="plain"
                 className="flow-generate-action"
                 onClick={handleGenerate}
                 disabled={saving || !generationReady}
@@ -1057,9 +1057,9 @@ export default function ArticleEditor() {
               >
                 <Zap size={16} />
                 {generationActionLabel}
-              </button>
+              </Button>
             )}
-            <button
+            <Button variant="plain"
               className="flow-next-action"
               onClick={handleNextAction}
               disabled={saving || nextActionDisabled}
@@ -1067,7 +1067,7 @@ export default function ArticleEditor() {
             >
               {nextActionLabel}
               <ChevronRight size={16} />
-            </button>
+            </Button>
           </div>
         )}
       </div>

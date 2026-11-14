@@ -1,3 +1,5 @@
+import { SelectField, Textarea } from "../FormControls/FormControls"
+import Button from "../Button/Button"
 import { useEffect, useMemo, useState } from "react"
 import { AlertTriangle, BarChart3, CheckCircle2, ExternalLink, FileSearch, GitCompare } from "lucide-react"
 import {
@@ -123,17 +125,17 @@ export default function ProductionGuidance({ article, materials, articleToutiao,
         <div className="pg-card-head"><h3>我的写作取舍</h3><span>只记录你明确确认的偏好</span></div>
         <p className="pg-help">{workflow.selectedCandidateId ? `本稿来自候选 ${workflow.selectedCandidateId.slice(0, 8)}，原始候选稿和素材仍保留。` : "本稿未关联候选稿，仍可记录修改原因。"} 原样保留的段落只表示没有修改，不自动等同于偏好。</p>
         <label className="pg-feedback-label">这次修改主要影响
-          <select value={layer} onChange={event => setLayer(event.target.value as CreatorFeedbackLayer)}>
+          <SelectField value={layer} onChange={event => setLayer(event.target.value as CreatorFeedbackLayer)}>
             {FEEDBACK_LAYER_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select>
+          </SelectField>
         </label>
         <label className="pg-feedback-label">这次为什么这样改
-          <textarea value={note} onChange={event => setNote(event.target.value)} maxLength={1000} placeholder="例如：删掉泛泛的开场，先写自己的亲身观察。"/>
+          <Textarea value={note} onChange={event => setNote(event.target.value)} maxLength={1000} placeholder="例如：删掉泛泛的开场，先写自己的亲身观察。"/>
         </label>
         <label className="pg-feedback-label">下次还想保留的表达（从正文粘贴，每行一条，最多 10 条）
-          <textarea value={expressions} onChange={event => setExpressions(event.target.value)} placeholder="只填你明确认可的表达；留空也可以。"/>
+          <Textarea value={expressions} onChange={event => setExpressions(event.target.value)} placeholder="只填你明确认可的表达；留空也可以。"/>
         </label>
-        <button className="btn btn-secondary" onClick={() => void saveFeedback()} disabled={!articleId || savingFeedback}>{savingFeedback ? "保存中…" : "保存写作取舍"}</button>
+        <Button variant="plain" className="btn btn-secondary" onClick={() => void saveFeedback()} disabled={!articleId || savingFeedback}>{savingFeedback ? "保存中…" : "保存写作取舍"}</Button>
         {!articleId && <p className="pg-help">此稿仅保存在浏览器中，移到服务器后可积累账号经验。</p>}
         {insights?.creatorExperiences?.slice(0, 3).map(item => <p className="pg-help" key={item.articleId}>
           <a href={`${articleEditorUrl(item.articleId)}?tab=analysis`}>{item.articleId}</a> · {item.layer === "general" ? "综合取舍" : WRITING_DNA_LAYER_LABELS[item.layer]}：{item.note || "已记录保留表达"}

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const base = process.env.WORKBENCH_URL || 'http://127.0.0.1:5174'
-const screenshots = await mkdtemp(join(tmpdir(), 'candidate-ui-'))
+const screenshots = process.env.CANDIDATE_SCREENSHOTS || await mkdtemp(join(tmpdir(), 'candidate-ui-'))
 const browser = await chromium.launch()
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 960 } })
@@ -20,6 +20,7 @@ try {
   let prematureEof = false
   let generatedInput
   let accountKeyConfigured = false
+  let collectedMaterials = ""
   page.on('pageerror', error => errors.push(error.message))
   await page.addInitScript(() => localStorage.setItem('auth_token', 'candidate-ui-fixture'))
   await page.route('**/api/**', async route => {
@@ -27,6 +28,17 @@ try {
     const pathname = new URL(request.url()).pathname
     if (pathname === '/api/auth/me') return route.fulfill({ json: { user: { id: 'fixture', username: 'fixture', role: 'admin' } } })
     if (pathname === '/api/config/status') return route.fulfill({ json: { articleReady: true, deepseekReady: false, wechatCollectorReady: { yuanbao: true, tikhub: false, dajiala: false } } })
+    if (pathname === '/api/materials/yuanbao-search') {
+      assert.equal(request.postDataJSON().query, "校方公告")
+      return route.fulfill({ json: { answer: '元宝回答', articles: [
+        { title: '只有摘要的公告', url: 'https://mp.weixin.qq.com/s/summary', snippet: '搜索摘要仅供参考', content: '', source: '校方' },
+        { title: '只有原文链接的公告', url: 'https://mp.weixin.qq.com/s/link', snippet: '', content: '', source: '校方' },
+      ] } })
+    }
+    if (pathname === '/api/materials/fixture/save') {
+      collectedMaterials = request.postDataJSON().content
+      return route.fulfill({ json: { success: true } })
+    }
     if (pathname === '/api/deepseek/key') {
       const { apiKey } = request.postDataJSON()
       assert.equal(request.method(), 'PUT')
@@ -99,6 +111,16 @@ try {
   assert.equal(await page.getByRole('button', { name: '下一步：填写素材', exact: true }).isEnabled(), true)
   await page.getByRole('button', { name: '下一步：填写素材', exact: true }).click()
   assert.equal(await page.getByRole('button', { name: '下一步：进入写作', exact: true }).isEnabled(), true)
+  await page.getByRole('button', { name: '公众号采集', exact: true }).click()
+  await page.getByPlaceholder('输入主题、机构或文章关键词').fill('校方公告')
+  await page.getByRole('button', { name: '搜索公众号', exact: true }).click()
+  const summaryOption = page.getByRole('checkbox', { name: /只有摘要的公告/ })
+  await summaryOption.click()
+  assert.equal(await summaryOption.getAttribute('aria-checked'), 'true')
+  await page.getByRole('checkbox', { name: /只有原文链接的公告/ }).click()
+  await page.getByRole('button', { name: '写入素材库（2）' }).click()
+  assert.match(collectedMaterials, /元宝搜索摘要，原文未读/)
+  assert.match(collectedMaterials, /仅保留原文链接，尚未读取正文/)
   await page.getByRole('button', { name: '下一步：进入写作', exact: true }).click()
   assert.equal(await page.locator('.flow-step').count(), 5)
   await page.locator('.flow-step[aria-current="step"] .flow-step-label', { hasText: '写作' }).waitFor()
@@ -122,6 +144,7 @@ try {
   await tracePanel.waitFor()
   assert.equal(await tracePanel.getByText('校舍建设 官方公告', { exact: true }).isVisible(), true)
   assert.equal(await tracePanel.getByRole('link', { name: '校方公告' }).getAttribute('href'), 'https://example.com/notice')
+  await page.screenshot({ path: join(screenshots, 'candidate-trace-desktop.png') })
   await page.getByRole('button', { name: '正文', exact: true }).click()
   await page.getByText('本次参考了 2 篇历史文章，读了 1 个网页', { exact: true }).click()
   await page.getByRole('link', { name: '校方公告' }).waitFor()
@@ -197,7 +220,24 @@ try {
   await page.getByRole('status').filter({ hasText: 'DeepSeek Key 已保存' }).waitFor()
   assert.equal(await deepseekKey.inputValue(), '')
   assert.equal(await page.evaluate(() => JSON.stringify(localStorage).includes('local-config-placeholder')), false)
-  await page.reload()
+  await page.goto(`${base}/editor/fixture?tab=materials`)
+  await page.getByRole('button', { name: 'DeepSeek 调研', exact: true }).click()
+  const parsing = page.getByRole('combobox', { name: '附件解析方式' })
+  await parsing.focus()
+  await page.keyboard.press('Space')
+  await page.getByRole('option', { name: '图文混排' }).click()
+  assert.match(await parsing.innerText(), /图文混排/)
+  const consent = page.getByRole('checkbox', { name: /同意将调研问题/ })
+  await page.getByRole('textbox', { name: '调研问题', exact: true }).fill('核对设计招标公告')
+  await consent.focus()
+  await page.keyboard.press('Space')
+  assert.equal(await consent.getAttribute('aria-checked'), 'true')
+  const consentIcon = await consent.boundingBox()
+  assert.ok(consentIcon && consentIcon.height === consentIcon.width, 'mobile touch styles must keep the checkbox indicator square')
+  assert.equal(await page.getByRole('button', { name: '开始调研' }).isEnabled(), true)
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
+  await page.screenshot({ path: join(screenshots, 'research-mobile.png') })
+  await page.goto(`${base}/settings`)
   await settings.getByRole('button', { name: '更多', exact: true }).click()
   const removeKey = page.getByRole('button', { name: '移除账号 Key', exact: true })
   await removeKey.click()
@@ -211,4 +251,4 @@ try {
   await page.getByRole('heading', { name: '文章生成', exact: true }).waitFor()
   assert.deepEqual(errors, [])
   console.log('Candidate concurrency, automatic research references, compare, recovery, apply failure, reopen and mobile passed.')
-} finally { await browser.close(); await rm(screenshots, { recursive: true, force: true }) }
+} finally { await browser.close(); if (!process.env.CANDIDATE_SCREENSHOTS) await rm(screenshots, { recursive: true, force: true }) }

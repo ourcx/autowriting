@@ -1,3 +1,5 @@
+import { Input, Textarea } from "../../components/FormControls/FormControls"
+import Button from "../../components/Button/Button"
 import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
@@ -282,13 +284,13 @@ export default function CronPage() {
         icon={<Clock size={15} />}
         onBack={() => navigate(-1)}
         actions={<div className="cp-topbar-actions">
-          <button className="cp-icon-btn" onClick={() => { loadJobs(); loadLogs() }} title="刷新">
+          <Button variant="plain" className="cp-icon-btn" onClick={() => { loadJobs(); loadLogs() }} title="刷新">
             <RefreshCw size={14} className={loading ? 'spin' : ''} />
-          </button>
+          </Button>
           {jobs.length > 0 && (
-            <button className="cp-btn-primary" onClick={openCreate}>
+            <Button variant="plain" className="cp-btn-primary" onClick={openCreate}>
               <Plus size={14} /> 新建任务
-            </button>
+            </Button>
           )}
         </div>}
       />
@@ -298,7 +300,7 @@ export default function CronPage() {
         <div className="cp-banner">
           <AlertCircle size={14} />
           <span><strong>AI 模型未配置</strong> — 定时任务需要 AI 才能运行</span>
-          <button className="cp-banner-btn" onClick={() => navigate('/settings')}>去配置</button>
+          <Button variant="plain" className="cp-banner-btn" onClick={() => navigate('/settings')}>去配置</Button>
         </div>
       )}
 
@@ -329,9 +331,9 @@ export default function CronPage() {
               ))}
             </div>
 
-            <button className="cp-btn-primary cp-btn-lg" onClick={openCreate}>
+            <Button variant="plain" className="cp-btn-primary cp-btn-lg" onClick={openCreate}>
               <Plus size={16} /> 新建第一个任务
-            </button>
+            </Button>
           </div>
         )}
 
@@ -406,23 +408,23 @@ export default function CronPage() {
                         </div>
 
                         <div className="cp-job-actions" onClick={e => e.stopPropagation()}>
-                          <button
+                          <Button variant="plain"
                             className={`cp-act${running === job.id ? ' cp-act--spin' : ''}`}
                             onClick={() => handleRun(job)}
                             disabled={!!running}
                             title="立即执行"
                           >
                             {running === job.id ? <RefreshCw size={13} className="spin" /> : <Play size={13} />}
-                          </button>
-                          <button className="cp-act" onClick={() => handleToggle(job)} title={job.enabled ? '暂停' : '启用'}>
+                          </Button>
+                          <Button variant="plain" className="cp-act" onClick={() => handleToggle(job)} title={job.enabled ? '暂停' : '启用'}>
                             {job.enabled ? <Pause size={13} /> : <Play size={13} />}
-                          </button>
-                          <button className="cp-act" onClick={() => openEdit(job)} title="编辑">
+                          </Button>
+                          <Button variant="plain" className="cp-act" onClick={() => openEdit(job)} title="编辑">
                             <Settings size={13} />
-                          </button>
-                          <button className="cp-act cp-act--danger" onClick={() => handleDelete(job)} title="删除">
+                          </Button>
+                          <Button variant="plain" className="cp-act cp-act--danger" onClick={() => handleDelete(job)} title="删除">
                             <Trash2 size={13} />
-                          </button>
+                          </Button>
                         </div>
 
                         <ChevronDown size={14} className={`cp-chevron${isExpanded ? ' cp-chevron--up' : ''}`} />
@@ -536,7 +538,7 @@ export default function CronPage() {
                 <div className="cp-modal-icon"><Clock size={15} /></div>
                 <h2>{editing ? '编辑任务' : '新建定时任务'}</h2>
               </div>
-              <button className="cp-modal-close" onClick={() => setShowForm(false)}>×</button>
+              <Button variant="plain" className="cp-modal-close" onClick={() => setShowForm(false)}>×</Button>
             </div>
 
             {/* Pipeline hint */}
@@ -556,32 +558,32 @@ export default function CronPage() {
 
               <div className="cp-field">
                 <label className="cp-label">任务名称 <span className="cp-req">*</span></label>
-                <input className="cp-input" value={form.name || ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="每日教育资讯推送" autoFocus />
+                <Input className="cp-input" value={form.name || ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="每日教育资讯推送" autoFocus />
               </div>
 
               <div className="cp-field">
                 <label className="cp-label">执行时间 <span className="cp-req">*</span></label>
                 <div className="cp-presets">
                   {CRON_PRESETS.map(p => (
-                    <button
+                    <Button variant="plain"
                       key={p.value}
                       className={`cp-preset${form.cronExpr === p.value ? ' cp-preset--on' : ''}`}
                       onClick={() => setForm(f => ({ ...f, cronExpr: p.value }))}
-                    >{p.label}</button>
+                    >{p.label}</Button>
                   ))}
                 </div>
-                <input className="cp-input cp-mono" value={form.cronExpr || ''} onChange={e => setForm(f => ({ ...f, cronExpr: e.target.value }))} placeholder="0 8 * * *" />
+                <Input className="cp-input cp-mono" value={form.cronExpr || ''} onChange={e => setForm(f => ({ ...f, cronExpr: e.target.value }))} placeholder="0 8 * * *" />
                 <p className="cp-hint">格式：分 时 日 月 周（东八区）</p>
               </div>
 
               <div className="cp-field">
                 <label className="cp-label">文章主题 <span className="cp-opt">可选 · 留空自动抓热点</span></label>
-                <textarea className="cp-textarea" value={form.topic || ''} onChange={e => setForm(f => ({ ...f, topic: e.target.value }))} placeholder="AI 辅助学习的最佳实践" rows={2} />
+                <Textarea className="cp-textarea" value={form.topic || ''} onChange={e => setForm(f => ({ ...f, topic: e.target.value }))} placeholder="AI 辅助学习的最佳实践" rows={2} />
               </div>
 
               <div className="cp-field">
                 <label className="cp-label">CSS 样式风格 <span className="cp-opt">可选 · 留空用默认简洁风格</span></label>
-                <textarea className="cp-textarea" value={form.stylePrompt || ''} onChange={e => setForm(f => ({ ...f, stylePrompt: e.target.value }))} placeholder="专业商务感，主色 #2c5f8a" rows={2} />
+                <Textarea className="cp-textarea" value={form.stylePrompt || ''} onChange={e => setForm(f => ({ ...f, stylePrompt: e.target.value }))} placeholder="专业商务感，主色 #2c5f8a" rows={2} />
               </div>
 
               <div className="cp-sep"><span>AI 接口</span></div>
@@ -596,11 +598,11 @@ export default function CronPage() {
                     { v: 'deepseek', label: 'DeepSeek 官方' },
                     { v: 'openai-compat', label: '兼容接口' },
                   ].map(p => (
-                    <button
+                    <Button variant="plain"
                       key={p.v}
                       className={`cp-preset${(form.aiConfig?.articleProvider || 'openai') === p.v ? ' cp-preset--on' : ''}`}
                       onClick={() => setForm(f => ({ ...f, aiConfig: { ...(f.aiConfig || {}), articleProvider: p.v } }))}
-                    >{p.label}</button>
+                    >{p.label}</Button>
                   ))}
                 </div>
               </div>
@@ -612,26 +614,26 @@ export default function CronPage() {
                   <div className="cp-field">
                     <label className="cp-label">MaaS API Key <span className="cp-req">*</span></label>
                     <div className="cp-secret-wrap">
-                      <input
+                      <Input
                         className="cp-input cp-mono"
                         type={showAiKey ? 'text' : 'password'}
                         value={form.aiConfig?.maasApiKey || ''}
                         onChange={e => setForm(f => ({ ...f, aiConfig: { ...(f.aiConfig || {}), maasApiKey: e.target.value } }))}
                         placeholder="QST..."
                       />
-                      <button className="cp-eye" onClick={() => setShowAiKey(s => !s)}>
+                      <Button variant="plain" className="cp-eye" onClick={() => setShowAiKey(s => !s)}>
                         {showAiKey ? <EyeOff size={13} /> : <Eye size={13} />}
-                      </button>
+                      </Button>
                     </div>
                   </div>
                   <div className="cp-row-2">
                     <div className="cp-field">
                       <label className="cp-label">MaaS 用户邮箱</label>
-                      <input className="cp-input" value={form.aiConfig?.maasUserEmail || ''} onChange={e => setForm(f => ({ ...f, aiConfig: { ...(f.aiConfig || {}), maasUserEmail: e.target.value } }))} placeholder="you@example.com" />
+                      <Input className="cp-input" value={form.aiConfig?.maasUserEmail || ''} onChange={e => setForm(f => ({ ...f, aiConfig: { ...(f.aiConfig || {}), maasUserEmail: e.target.value } }))} placeholder="you@example.com" />
                     </div>
                     <div className="cp-field">
                       <label className="cp-label">模型</label>
-                      <input className="cp-input cp-mono" value={form.aiConfig?.articleModel || ''} onChange={e => setForm(f => ({ ...f, aiConfig: { ...(f.aiConfig || {}), articleModel: e.target.value } }))} placeholder="deepseek-v4-pro" />
+                      <Input className="cp-input cp-mono" value={form.aiConfig?.articleModel || ''} onChange={e => setForm(f => ({ ...f, aiConfig: { ...(f.aiConfig || {}), articleModel: e.target.value } }))} placeholder="deepseek-v4-pro" />
                     </div>
                   </div>
                 </>
@@ -640,27 +642,27 @@ export default function CronPage() {
                   <div className="cp-field">
                     <label className="cp-label">API Key <span className="cp-req">*</span></label>
                     <div className="cp-secret-wrap">
-                      <input
+                      <Input
                         className="cp-input cp-mono"
                         type={showAiKey ? 'text' : 'password'}
                         value={form.aiConfig?.articleApiKey || ''}
                         onChange={e => setForm(f => ({ ...f, aiConfig: { ...(f.aiConfig || {}), articleApiKey: e.target.value } }))}
                         placeholder="sk-..."
                       />
-                      <button className="cp-eye" onClick={() => setShowAiKey(s => !s)}>
+                      <Button variant="plain" className="cp-eye" onClick={() => setShowAiKey(s => !s)}>
                         {showAiKey ? <EyeOff size={13} /> : <Eye size={13} />}
-                      </button>
+                      </Button>
                     </div>
                   </div>
                   {(form.aiConfig?.articleProvider === 'openai-compat') && (
                     <div className="cp-row-2">
                       <div className="cp-field">
                         <label className="cp-label">Base URL</label>
-                        <input className="cp-input cp-mono" value={form.aiConfig?.articleBaseUrl || ''} onChange={e => setForm(f => ({ ...f, aiConfig: { ...(f.aiConfig || {}), articleBaseUrl: e.target.value } }))} placeholder="https://api.example.com/v1" />
+                        <Input className="cp-input cp-mono" value={form.aiConfig?.articleBaseUrl || ''} onChange={e => setForm(f => ({ ...f, aiConfig: { ...(f.aiConfig || {}), articleBaseUrl: e.target.value } }))} placeholder="https://api.example.com/v1" />
                       </div>
                       <div className="cp-field">
                         <label className="cp-label">模型</label>
-                        <input className="cp-input cp-mono" value={form.aiConfig?.articleModel || ''} onChange={e => setForm(f => ({ ...f, aiConfig: { ...(f.aiConfig || {}), articleModel: e.target.value } }))} placeholder="gpt-4o" />
+                        <Input className="cp-input cp-mono" value={form.aiConfig?.articleModel || ''} onChange={e => setForm(f => ({ ...f, aiConfig: { ...(f.aiConfig || {}), articleModel: e.target.value } }))} placeholder="gpt-4o" />
                       </div>
                     </div>
                   )}
@@ -673,15 +675,15 @@ export default function CronPage() {
               <div className="cp-row-2">
                 <div className="cp-field">
                   <label className="cp-label">AppID</label>
-                  <input className="cp-input cp-mono" value={form.wxAppId || ''} onChange={e => setForm(f => ({ ...f, wxAppId: e.target.value }))} placeholder="REDACTED_WECHAT_APP_ID" />
+                  <Input className="cp-input cp-mono" value={form.wxAppId || ''} onChange={e => setForm(f => ({ ...f, wxAppId: e.target.value }))} placeholder="REDACTED_WECHAT_APP_ID" />
                 </div>
                 <div className="cp-field">
                   <label className="cp-label">AppSecret</label>
                   <div className="cp-secret-wrap">
-                    <input className="cp-input cp-mono" type={showSecret ? 'text' : 'password'} value={form.wxAppSecret || ''} onChange={e => setForm(f => ({ ...f, wxAppSecret: e.target.value }))} placeholder="32 位 hex" />
-                    <button className="cp-eye" onClick={() => setShowSecret(s => !s)}>
+                    <Input className="cp-input cp-mono" type={showSecret ? 'text' : 'password'} value={form.wxAppSecret || ''} onChange={e => setForm(f => ({ ...f, wxAppSecret: e.target.value }))} placeholder="32 位 hex" />
+                    <Button variant="plain" className="cp-eye" onClick={() => setShowSecret(s => !s)}>
                       {showSecret ? <EyeOff size={13} /> : <Eye size={13} />}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -694,10 +696,10 @@ export default function CronPage() {
             )}
 
             <div className="cp-modal-foot">
-              <button className="cp-btn-cancel" onClick={() => setShowForm(false)}>取消</button>
-              <button className="cp-btn-primary" onClick={handleSave} disabled={saving}>
+              <Button variant="plain" className="cp-btn-cancel" onClick={() => setShowForm(false)}>取消</Button>
+              <Button variant="plain" className="cp-btn-primary" onClick={handleSave} disabled={saving}>
                 {saving ? '保存中...' : editing ? '保存修改' : '创建任务'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

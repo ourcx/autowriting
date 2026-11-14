@@ -1,3 +1,5 @@
+import { Input } from "../../components/FormControls/FormControls"
+import Button from "../../components/Button/Button"
 import { useState, FormEvent } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { register } from '../../store/useAuth'
@@ -68,7 +70,7 @@ export default function RegisterPage() {
 
             <div className="auth-field">
               <label htmlFor="username">用户名</label>
-              <input
+              <Input
                 id="username"
                 type="text"
                 autoComplete="username"
@@ -81,7 +83,7 @@ export default function RegisterPage() {
 
             <div className="auth-field">
               <label htmlFor="password">密码</label>
-              <input
+              <Input
                 id="password"
                 type="password"
                 autoComplete="new-password"
@@ -94,7 +96,7 @@ export default function RegisterPage() {
 
             <div className="auth-field">
               <label htmlFor="confirm">确认密码</label>
-              <input
+              <Input
                 id="confirm"
                 type="password"
                 autoComplete="new-password"
@@ -105,9 +107,9 @@ export default function RegisterPage() {
               />
             </div>
 
-            <button className="auth-submit" type="submit" disabled={loading}>
+            <Button variant="plain" className="auth-submit" type="submit" disabled={loading}>
               {loading ? '注册中...' : '注册'}
-            </button>
+            </Button>
           </form>
 
           <div className="auth-footer">

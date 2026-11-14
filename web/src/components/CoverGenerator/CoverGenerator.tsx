@@ -1,3 +1,5 @@
+import { Textarea } from "../FormControls/FormControls"
+import Button from "../Button/Button"
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -362,14 +364,14 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
           <span className="cg-label">生成模型</span>
           <div className="cg-provider-grid">
             {PROVIDERS.map(p => (
-              <button
+              <Button variant="plain"
                 key={p.id}
                 className={`cg-provider-card ${provider === p.id ? 'active' : ''}`}
                 onClick={() => setProvider(p.id)}
               >
                 <span className="cg-provider-name">{p.name}</span>
                 <span className="cg-provider-desc">{p.desc}</span>
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -380,12 +382,12 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
             <span>
               {currentProvider?.keyLabel} 未配置，无法调用此模型。
             </span>
-            <button
+            <Button variant="plain"
               className="cg-notice-link"
               onClick={() => navigate('/settings')}
             >
               前往配置 →
-            </button>
+            </Button>
           </div>
         )}
 
@@ -410,7 +412,7 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
         {/* 图像提示词 */}
         <div className="cg-field">
           <span className="cg-label">图像提示词</span>
-          <textarea
+          <Textarea
             className="cg-prompt-input"
             value={customPrompt}
             onChange={e => setCustomPrompt(e.target.value)}
@@ -427,7 +429,7 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
         )}
 
         {/* 生成按钮 */}
-        <button
+        <Button variant="plain"
           className="cg-generate-btn"
           onClick={handleGenerate}
           disabled={isGenerating || !title.trim() || !customPrompt.trim() || !!missingKey}
@@ -438,7 +440,7 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
               ? '精修封面'
               : '生成封面'
           }
-        </button>
+        </Button>
 
       </div>
 
@@ -450,23 +452,23 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
               <img src={generatedImage} alt={`《${title.trim() || '未命名文章'}》封面预览`} className="cg-preview-img" />
             </div>
             <div className="cg-preview-actions">
-              <button className="cg-action-btn cg-action-btn--primary" onClick={handleDownload}>
+              <Button variant="plain" className="cg-action-btn cg-action-btn--primary" onClick={handleDownload}>
                 下载封面
-              </button>
-              <button
+              </Button>
+              <Button variant="plain"
                 className="cg-action-btn"
                 onClick={handleSaveToLibrary}
                 disabled={isSavingToLibrary}
               >
                 {isSavingToLibrary ? '保存中...' : '保存到图片库'}
-              </button>
-              <button
+              </Button>
+              <Button variant="plain"
                 className="cg-action-btn"
                 onClick={handleGenerate}
                 disabled={isGenerating}
               >
                 重新生成
-              </button>
+              </Button>
             </div>
             {/* 已有封面时也保留粘贴区，方便替换 */}
             <div

@@ -1,3 +1,5 @@
+import { Collapse, Input, SelectField } from "../../components/FormControls/FormControls"
+import Button from "../../components/Button/Button"
 import { useState } from "react"
 import { fetchCanvasLibraryImages } from "../../utils/apiHelpers"
 import { CANVAS_MATERIALS, type CanvasMaterialId, type CanvasLibraryImage } from "../../../shared/canvasMaterialLibrary"
@@ -29,40 +31,38 @@ export default function CanvasMaterialShelf({ disabled, onInsert }: CanvasMateri
     catch { setError("图库读取失败，请重试") }
     finally { setLoading(false) }
   }
-  return <><details className="cs-material-shelf">
-    <summary>装饰素材库 <span>水彩与矢量 · 插在选中内容之后</span></summary>
+  return <><Collapse className="cs-material-shelf" label={<>装饰素材库 <span>水彩与矢量 · 插在选中内容之后</span></>}>
     <div className="cs-material-filters">
-      <input
+      <Input
         aria-label="搜索装饰素材"
         placeholder="搜索花草、节庆、阅读……"
         value={materialQuery}
         onChange={event => setMaterialQuery(event.target.value)}
       />
-      <select aria-label="素材分类" value={materialCategory} onChange={event => setMaterialCategory(event.target.value)}>
+      <SelectField aria-label="素材分类" value={materialCategory} onChange={event => setMaterialCategory(event.target.value)}>
         {materialCategories.map(category => <option key={category}>{category}</option>)}
-      </select>
+      </SelectField>
       <span>{visibleMaterials.length} 款</span>
     </div>
     <div className="cs-material-grid">
-      {visibleMaterials.map(material => <button key={material.id} disabled={disabled} onClick={() => onInsert(material.id)}>
+      {visibleMaterials.map(material => <Button variant="plain" key={material.id} disabled={disabled} onClick={() => onInsert(material.id)}>
         <img src={material.src} alt={`${material.name}装饰素材预览`} /><strong>{material.name}</strong><small>{material.category}</small>
-      </button>)}
+      </Button>)}
     </div>
     {visibleMaterials.length === 0 ? <p className="cs-material-empty">没有匹配的素材，换个关键词试试。</p> : null}
-  </details>
-    <details className="cs-material-shelf" onToggle={event => {
-      if (event.currentTarget.open && images === null && !loading) void load()
-    }}>
-      <summary>照片与插画库 <span>已有图片 · 按名称筛选</span></summary>
-      <input aria-label="筛选图库图片" placeholder="搜索图片名称" value={query} onChange={event => setQuery(event.target.value)} />
+  </Collapse>
+    <Collapse className="cs-material-shelf" onOpenChange={open => {
+      if (open && images === null && !loading) void load()
+    }} label={<>照片与插画库 <span>已有图片 · 按名称筛选</span></>}>
+      <Input aria-label="筛选图库图片" placeholder="搜索图片名称" value={query} onChange={event => setQuery(event.target.value)} />
       {loading ? <p role="status">正在读取图库…</p> : null}
-      {error ? <p role="alert">{error} <button onClick={() => void load()}>重试</button></p> : null}
+      {error ? <p role="alert">{error} <Button variant="plain" onClick={() => void load()}>重试</Button></p> : null}
       {images?.length === 0 ? <p>图库中还没有可用图片；可以先在文章中上传图片。</p> : null}
       <div className="cs-material-grid">
         {images?.filter(image => image.title.toLowerCase().includes(query.trim().toLowerCase())).map(image =>
-          <button key={image.url} disabled={disabled} onClick={() => onInsert(undefined, image)}>
+          <Button variant="plain" key={image.url} disabled={disabled} onClick={() => onInsert(undefined, image)}>
             <img src={image.url} alt={`${image.title}图片预览`} loading="lazy" /><strong>{image.title}</strong><small>插入照片</small>
-          </button>)}
+          </Button>)}
       </div>
-    </details></>
+    </Collapse></>
 }

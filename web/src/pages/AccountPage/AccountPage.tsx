@@ -1,3 +1,5 @@
+import { Collapse, Input, Textarea } from "../../components/FormControls/FormControls"
+import Button from "../../components/Button/Button"
 import { ClipboardEvent, FormEvent, useCallback, useEffect, useState, type ReactNode } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import {
@@ -108,11 +110,11 @@ function CookieImportField({ id, platform, value, onChange, onInput }: CookieImp
     <div className="ap-cookie-field">
       <div className="ap-cookie-field-head">
         <label htmlFor={id}>登录信息</label>
-        <button type="button" className="ap-cookie-paste" onClick={() => void pasteFromClipboard()}>
+        <Button variant="plain" type="button" className="ap-cookie-paste" onClick={() => void pasteFromClipboard()}>
           <ClipboardPaste size={14} />从剪贴板粘贴
-        </button>
+        </Button>
       </div>
-      <textarea
+      <Textarea
         id={id}
         value={value}
         onChange={event => {
@@ -130,15 +132,14 @@ function CookieImportField({ id, platform, value, onChange, onInput }: CookieImp
           ? <span className="ap-cookie-recognized"><CheckCircle2 size={13} />已识别 {cookieInputSourceLabel(recognized.source)}，共 {recognized.count} 项</span>
           : <span>支持 cURL、Cookie 请求头和 Cookie-Editor JSON</span>}
       </div>
-      <details className="ap-cookie-help">
-        <summary>无需安装插件，查看复制步骤<ChevronDown size={14} /></summary>
+      <Collapse className="ap-cookie-help" label={<>无需安装插件，查看复制步骤</>}>
         <ol>
           <li>在电脑浏览器登录 <a href={details.url} target="_blank" rel="noreferrer">{details.label}<ExternalLink size={12} /></a></li>
           <li>按 <kbd>F12</kbd>（Mac 按 <kbd>⌥⌘I</kbd>）打开开发者工具，选择 Network 后刷新页面</li>
           <li>右键任一发往 <code>{details.host}</code> 的请求，选择 Copy → Copy as cURL</li>
           <li>回到这里点击“从剪贴板粘贴”，系统只提取 Cookie，其他请求头会被丢弃</li>
         </ol>
-      </details>
+      </Collapse>
     </div>
   )
 }
@@ -467,18 +468,18 @@ export default function AccountPage() {
         </div>
 
         <div className="ap-tabs" role="tablist" aria-label="账号设置">
-          <button role="tab" aria-selected={activeTab === "connections"} onClick={() => changeTab("connections")}>
+          <Button variant="plain" role="tab" aria-selected={activeTab === "connections"} onClick={() => changeTab("connections")}>
             <Link2 size={16} />账号连接
-          </button>
-          <button role="tab" aria-selected={activeTab === "writing"} onClick={() => changeTab("writing")}>
+          </Button>
+          <Button variant="plain" role="tab" aria-selected={activeTab === "writing"} onClick={() => changeTab("writing")}>
             <Brain size={16} />写作资产
-          </button>
+          </Button>
         </div>
 
         {activeTab === "connections" ? (
           <div className="ap-platform-list">
             <article className="ap-platform-row ap-platform-row--wechat">
-              <button
+              <Button variant="plain"
                 type="button"
                 className="ap-platform-head"
                 aria-expanded={expandedPlatform === "wechat"}
@@ -493,7 +494,7 @@ export default function AccountPage() {
                   {Number(wechatBound) + Number(wechatAnalyticsBound)}/2 项可用
                 </span>
                 <ChevronDown size={17} className={`ap-platform-chevron${expandedPlatform === "wechat" ? " is-open" : ""}`} />
-              </button>
+              </Button>
 
               {expandedPlatform === "wechat" && (
               <div className="ap-capability-grid ap-capability-grid--focused">
@@ -515,17 +516,17 @@ export default function AccountPage() {
                       {wechatAccount?.fans_limited || wechatAccount?.limited ? <p className="ap-limited">当前账号接口权限有限，部分数据暂不可获取。</p> : null}
                       {wechatError ? <p className="ap-error">{wechatError}</p> : null}
                       <div className="ap-actions">
-                        <button className="ap-btn ap-btn--secondary" onClick={() => void refreshWechat()} disabled={wechatLoading}><RefreshCw size={15} className={wechatLoading ? "ap-spin" : ""} />刷新</button>
-                        <button className="ap-icon-btn" onClick={unbindWechat} title="解绑公众号"><Link2Off size={16} /></button>
+                        <Button variant="plain" className="ap-btn ap-btn--secondary" onClick={() => void refreshWechat()} disabled={wechatLoading}><RefreshCw size={15} className={wechatLoading ? "ap-spin" : ""} />刷新</Button>
+                        <Button variant="plain" className="ap-icon-btn" onClick={unbindWechat} title="解绑公众号"><Link2Off size={16} /></Button>
                       </div>
                     </>
                   ) : (
                     <form className="ap-bind-form" onSubmit={bindWechat}>
-                      <input value={appId} onChange={event => { setAppId(event.target.value); setWechatError("") }} placeholder="AppID" autoComplete="off" />
-                      <div className="ap-password"><input type={showSecret ? "text" : "password"} value={appSecret} onChange={event => { setAppSecret(event.target.value); setWechatError("") }} placeholder="AppSecret" autoComplete="new-password" /><button type="button" onClick={() => setShowSecret(value => !value)} title={showSecret ? "隐藏 AppSecret" : "显示 AppSecret"}>{showSecret ? <EyeOff size={16} /> : <Eye size={16} />}</button></div>
+                      <Input value={appId} onChange={event => { setAppId(event.target.value); setWechatError("") }} placeholder="AppID" autoComplete="off" />
+                      <div className="ap-password"><Input type={showSecret ? "text" : "password"} value={appSecret} onChange={event => { setAppSecret(event.target.value); setWechatError("") }} placeholder="AppSecret" autoComplete="new-password" /><Button variant="plain" type="button" onClick={() => setShowSecret(value => !value)} title={showSecret ? "隐藏 AppSecret" : "显示 AppSecret"}>{showSecret ? <EyeOff size={16} /> : <Eye size={16} />}</Button></div>
                       {wechatError ? <p className="ap-error">{wechatError}</p> : null}
                       <div className="ap-actions">
-                        <button className="ap-btn ap-btn--dark" disabled={bindingWechat}>{bindingWechat ? "验证中…" : <><Link2 size={15} />连接草稿写入</>}</button>
+                        <Button variant="plain" type="submit" className="ap-btn ap-btn--dark" disabled={bindingWechat}>{bindingWechat ? "验证中…" : <><Link2 size={15} />连接草稿写入</>}</Button>
                         <a href="https://developers.weixin.qq.com/console/product/mp" target="_blank" rel="noreferrer">获取凭据<ExternalLink size={13} /></a>
                       </div>
                     </form>
@@ -533,7 +534,7 @@ export default function AccountPage() {
                 </section>
 
                 <section className={`ap-capability ap-capability--optional${showWechatAdvanced ? " is-open" : ""}`}>
-                  <button
+                  <Button variant="plain"
                     type="button"
                     className="ap-capability-title ap-capability-toggle"
                     aria-expanded={showWechatAdvanced}
@@ -543,7 +544,7 @@ export default function AccountPage() {
                     <div><h3>数据同步与后台自动化</h3><p>可选，需要看板或后台操作时再连接</p></div>
                     <span className={wechatAnalyticsBound ? "ready" : ""}>{wechatAnalyticsBound ? "已连接" : "未连接"}</span>
                     <ChevronDown size={15} className={showWechatAdvanced ? "is-open" : ""} />
-                  </button>
+                  </Button>
                   {showWechatAdvanced && (
                   <>
                   {wechatAnalyticsBound ? (
@@ -553,8 +554,8 @@ export default function AccountPage() {
                         <div><strong>微信后台会话已就绪</strong><span>同步看板或发表草稿时临时使用，后端不会持久化 Cookie</span></div>
                       </div>
                       <div className="ap-actions">
-                        <button className="ap-btn ap-btn--dark" onClick={() => navigate("/insights")}>打开数据看板</button>
-                        <button className="ap-icon-btn" onClick={unbindWechatAnalytics} title="解绑微信数据 Cookie"><Link2Off size={16} /></button>
+                        <Button variant="plain" className="ap-btn ap-btn--dark" onClick={() => navigate("/insights")}>打开数据看板</Button>
+                        <Button variant="plain" className="ap-icon-btn" onClick={unbindWechatAnalytics} title="解绑微信数据 Cookie"><Link2Off size={16} /></Button>
                       </div>
                     </>
                   ) : (
@@ -568,7 +569,7 @@ export default function AccountPage() {
                       />
                       {wechatAnalyticsError ? <p className="ap-error">{wechatAnalyticsError}</p> : null}
                       <div className="ap-actions">
-                        <button className="ap-btn ap-btn--dark" disabled={bindingWechatAnalytics}>{bindingWechatAnalytics ? "验证并同步中…" : <><Link2 size={15} />连接微信后台</>}</button>
+                        <Button variant="plain" type="submit" className="ap-btn ap-btn--dark" disabled={bindingWechatAnalytics}>{bindingWechatAnalytics ? "验证并同步中…" : <><Link2 size={15} />连接微信后台</>}</Button>
                         <a href="https://mp.weixin.qq.com" target="_blank" rel="noreferrer">打开微信后台<ExternalLink size={13} /></a>
                       </div>
                     </form>
@@ -581,7 +582,7 @@ export default function AccountPage() {
             </article>
 
             <article className="ap-platform-row">
-              <button
+              <Button variant="plain"
                 type="button"
                 className="ap-platform-head"
                 aria-expanded={expandedPlatform === "toutiao"}
@@ -591,7 +592,7 @@ export default function AccountPage() {
                 <div><h2>今日头条</h2><p>一份 Cookie 同时用于读取账号数据与发布文章。</p></div>
                 <span className={`ap-status ${toutiaoBound ? "ap-status--ok" : ""}`}>{toutiaoBound ? "已连接" : "未连接"}</span>
                 <ChevronDown size={17} className={`ap-platform-chevron${expandedPlatform === "toutiao" ? " is-open" : ""}`} />
-              </button>
+              </Button>
               {expandedPlatform === "toutiao" && (
               <section className="ap-capability ap-capability--single">
                 {toutiaoBound ? (
@@ -607,9 +608,9 @@ export default function AccountPage() {
                     {toutiaoAccount?.cached ? <p className="ap-limited">当前展示缓存数据，可手动刷新。</p> : null}
                     {toutiaoError ? <p className="ap-error">{toutiaoError}</p> : null}
                     <div className="ap-actions">
-                      <button className="ap-btn ap-btn--secondary" onClick={() => void refreshToutiao(true)} disabled={toutiaoLoading}><RefreshCw size={15} className={toutiaoLoading ? "ap-spin" : ""} />刷新</button>
+                      <Button variant="plain" className="ap-btn ap-btn--secondary" onClick={() => void refreshToutiao(true)} disabled={toutiaoLoading}><RefreshCw size={15} className={toutiaoLoading ? "ap-spin" : ""} />刷新</Button>
                       <a className="ap-icon-btn" href="https://mp.toutiao.com/profile_v4/index" target="_blank" rel="noreferrer" title="打开头条创作中心"><ExternalLink size={16} /></a>
-                      <button className="ap-icon-btn" onClick={unbindToutiao} title="解绑今日头条"><Link2Off size={16} /></button>
+                      <Button variant="plain" className="ap-icon-btn" onClick={unbindToutiao} title="解绑今日头条"><Link2Off size={16} /></Button>
                     </div>
                   </>
                 ) : (
@@ -624,7 +625,7 @@ export default function AccountPage() {
                     <div className="ap-bind-side">
                       <p>无需安装 Cookie 插件。登录头条后复制一个网络请求，即可提取登录信息。</p>
                       {toutiaoError ? <p className="ap-error">{toutiaoError}</p> : null}
-                      <button className="ap-btn ap-btn--dark" disabled={bindingToutiao}>{bindingToutiao ? "验证中…" : <><Newspaper size={15} />连接今日头条</>}</button>
+                      <Button variant="plain" type="submit" className="ap-btn ap-btn--dark" disabled={bindingToutiao}>{bindingToutiao ? "验证中…" : <><Newspaper size={15} />连接今日头条</>}</Button>
                       <a href="https://mp.toutiao.com/profile_v4/index" target="_blank" rel="noreferrer">打开创作中心<ExternalLink size={13} /></a>
                     </div>
                   </form>
@@ -634,7 +635,7 @@ export default function AccountPage() {
             </article>
 
             <article className="ap-platform-row">
-              <button
+              <Button variant="plain"
                 type="button"
                 className="ap-platform-head"
                 aria-expanded={expandedPlatform === "xiaohongshu"}
@@ -644,7 +645,7 @@ export default function AccountPage() {
                 <div><h2>小红书</h2><p>连接创作服务平台，用于图文笔记发布。</p></div>
                 <span className={`ap-status ${xiaohongshuBound ? "ap-status--ok" : ""}`}>{xiaohongshuBound ? "已连接" : "未连接"}</span>
                 <ChevronDown size={17} className={`ap-platform-chevron${expandedPlatform === "xiaohongshu" ? " is-open" : ""}`} />
-              </button>
+              </Button>
               {expandedPlatform === "xiaohongshu" && (
               <section className="ap-capability ap-capability--single">
                 {xiaohongshuBound ? (
@@ -654,9 +655,9 @@ export default function AccountPage() {
                       <div><strong>发布会话已就绪</strong><span>遇到验证码或登录失效时，需要重新导出 Cookie</span></div>
                     </div>
                     <div className="ap-actions">
-                      <button className="ap-btn ap-btn--dark" onClick={() => navigate("/")}>选择文章发布</button>
+                      <Button variant="plain" className="ap-btn ap-btn--dark" onClick={() => navigate("/")}>选择文章发布</Button>
                       <a className="ap-icon-btn" href="https://creator.xiaohongshu.com" target="_blank" rel="noreferrer" title="打开小红书创作服务平台"><ExternalLink size={16} /></a>
-                      <button className="ap-icon-btn" onClick={unbindXiaohongshu} title="解绑小红书"><Link2Off size={16} /></button>
+                      <Button variant="plain" className="ap-icon-btn" onClick={unbindXiaohongshu} title="解绑小红书"><Link2Off size={16} /></Button>
                     </div>
                   </>
                 ) : (
@@ -671,7 +672,7 @@ export default function AccountPage() {
                     <div className="ap-bind-side">
                       <p>无需安装 Cookie 插件。登录创作服务平台后复制一个网络请求即可。</p>
                       {xiaohongshuError ? <p className="ap-error">{xiaohongshuError}</p> : null}
-                      <button className="ap-btn ap-btn--dark"><BookOpen size={15} />连接小红书</button>
+                      <Button variant="plain" type="submit" className="ap-btn ap-btn--dark"><BookOpen size={15} />连接小红书</Button>
                       <a href="https://creator.xiaohongshu.com" target="_blank" rel="noreferrer">打开创作服务平台<ExternalLink size={13} /></a>
                     </div>
                   </form>
@@ -687,9 +688,9 @@ export default function AccountPage() {
                 <h2>先完成前三项</h2>
                 <p>账号定位、写作风格和长期背景需要你确认；资产来源与写作取舍由系统自动积累。</p>
               </div>
-              <button className="ap-btn ap-btn--dark" onClick={() => void saveWritingAssets()} disabled={profileLoading || profileSaving}>
+              <Button variant="plain" className="ap-btn ap-btn--dark" onClick={() => void saveWritingAssets()} disabled={profileLoading || profileSaving}>
                 {profileSaving ? "保存中…" : "保存写作资产"}
-              </button>
+              </Button>
             </div>
 
             <div className="ap-writing-nav" role="tablist" aria-label="写作资产配置">
@@ -700,7 +701,7 @@ export default function AccountPage() {
                 ["sources", "自动", "资产来源", "提示词、素材与候选", <Database size={17} />],
                 ["decisions", "自动", "确认取舍", "沉淀人工修改", <CheckCircle2 size={17} />],
               ] as Array<[WritingSection, string, string, string, ReactNode]>).map(([id, step, label, description, icon]) => (
-                <button
+                <Button variant="plain"
                   type="button"
                   role="tab"
                   key={id}
@@ -710,7 +711,7 @@ export default function AccountPage() {
                   <span className="ap-writing-nav-icon">{icon}</span>
                   <span><b>{label}</b><small>{description}</small></span>
                   <em>{step}</em>
-                </button>
+                </Button>
               ))}
             </div>
 
@@ -718,7 +719,7 @@ export default function AccountPage() {
             <section className="ap-asset-section" aria-labelledby="ap-persona-title">
               <div className="ap-asset-section-head ap-persona-head">
                 <div><span>作者身份</span><h3 id="ap-persona-title">账号人设</h3></div>
-                <button
+                <Button variant="plain"
                   type="button"
                   className="ap-btn ap-btn--dark"
                   onClick={() => void analyzePersona()}
@@ -726,11 +727,11 @@ export default function AccountPage() {
                 >
                   {personaAnalyzing ? <RefreshCw className="ap-spin" size={15} /> : <Brain size={15} />}
                   {personaAnalyzing ? "分析中…" : "分析历史文章"}
-                </button>
+                </Button>
               </div>
               <div className="ap-persona-status">
                 <label>
-                  <input
+                  <Input
                     type="checkbox"
                     checked={writingProfile.persona.enabled}
                     onChange={event => updatePersona("enabled", event.target.checked)}
@@ -747,7 +748,7 @@ export default function AccountPage() {
               <div className="ap-persona-grid">
                 <label>
                   <span>账号名称</span>
-                  <input
+                  <Input
                     value={writingProfile.persona.accountName}
                     onChange={event => updatePersona("accountName", event.target.value)}
                     placeholder="作者或账号对外使用的名称"
@@ -755,19 +756,18 @@ export default function AccountPage() {
                 </label>
                 <label>
                   <span>账号信息与定位</span>
-                  <textarea
+                  <Textarea
                     value={writingProfile.persona.accountInfo}
                     onChange={event => updatePersona("accountInfo", event.target.value)}
                     rows={3}
                     placeholder="账号介绍、长期方向、公开身份"
                   />
                 </label>
-                <details className="ap-persona-advanced">
-                  <summary>更多人设信息（可选）<ChevronDown size={14} /></summary>
+                <Collapse className="ap-persona-advanced" label={<>更多人设信息（可选）</>}>
                   <div className="ap-persona-grid ap-persona-grid--nested">
                 <label>
                   <span>人物经历</span>
-                  <textarea
+                  <Textarea
                     value={writingProfile.persona.personalExperiences}
                     onChange={event => updatePersona("personalExperiences", event.target.value)}
                     rows={4}
@@ -776,7 +776,7 @@ export default function AccountPage() {
                 </label>
                 <label>
                   <span>历史发布文章</span>
-                  <textarea
+                  <Textarea
                     value={writingProfile.persona.historicalArticles}
                     onChange={event => updatePersona("historicalArticles", event.target.value)}
                     rows={4}
@@ -785,7 +785,7 @@ export default function AccountPage() {
                 </label>
                 <label>
                   <span>说话风格</span>
-                  <textarea
+                  <Textarea
                     value={writingProfile.persona.speakingStyle}
                     onChange={event => updatePersona("speakingStyle", event.target.value)}
                     rows={3}
@@ -794,7 +794,7 @@ export default function AccountPage() {
                 </label>
                 <label>
                   <span>熟悉领域</span>
-                  <textarea
+                  <Textarea
                     value={writingProfile.persona.expertise}
                     onChange={event => updatePersona("expertise", event.target.value)}
                     rows={3}
@@ -803,7 +803,7 @@ export default function AccountPage() {
                 </label>
                 <label>
                   <span>稳定观点与价值取向</span>
-                  <textarea
+                  <Textarea
                     value={writingProfile.persona.values}
                     onChange={event => updatePersona("values", event.target.value)}
                     rows={3}
@@ -812,7 +812,7 @@ export default function AccountPage() {
                 </label>
                 <label>
                   <span>与读者的关系</span>
-                  <textarea
+                  <Textarea
                     value={writingProfile.persona.audienceRelationship}
                     onChange={event => updatePersona("audienceRelationship", event.target.value)}
                     rows={3}
@@ -821,7 +821,7 @@ export default function AccountPage() {
                 </label>
                 <label className="ap-persona-wide">
                   <span>其他人设信息</span>
-                  <textarea
+                  <Textarea
                     value={writingProfile.persona.otherNotes}
                     onChange={event => updatePersona("otherNotes", event.target.value)}
                     rows={3}
@@ -829,15 +829,14 @@ export default function AccountPage() {
                   />
                 </label>
                   </div>
-                </details>
+                </Collapse>
               </div>
               {writingProfile.persona.sourceArticleTitles.length > 0 ? (
-                <details className="ap-persona-sources">
-                  <summary>查看本次分析参考的 {writingProfile.persona.sourceArticleCount} 篇文章<ChevronDown size={14} /></summary>
+                <Collapse className="ap-persona-sources" label={<>查看本次分析参考的 {writingProfile.persona.sourceArticleCount} 篇文章</>}>
                   <ul>
                     {writingProfile.persona.sourceArticleTitles.map(title => <li key={title}>{title}</li>)}
                   </ul>
-                </details>
+                </Collapse>
               ) : null}
               <p className="ap-asset-note">人设说明“作者是谁”，六层 DNA 说明“文章怎么写”。AI 分析只生成候选，保存后才进入文章提示词。</p>
             </section>
@@ -850,12 +849,12 @@ export default function AccountPage() {
                 <p>情境决定规则是否适用，字段留空不会阻塞生成。</p>
               </div>
               <div className="ap-writing-context">
-                <label><span>主要读者</span><input value={writingProfile.audience} onChange={event => updateProfile("audience", event.target.value)} placeholder="稳定的核心读者，不写本篇临时受众" /></label>
+                <label><span>主要读者</span><Input value={writingProfile.audience} onChange={event => updateProfile("audience", event.target.value)} placeholder="稳定的核心读者，不写本篇临时受众" /></label>
                 <fieldset className="ap-platform-defaults">
                   <legend>默认平台</legend>
                   <div>
                     {([["wechat", "公众号"], ["toutiao", "今日头条"], ["xiaohongshu", "小红书"]] as Array<[PublishingPlatform, string]>).map(([platform, label]) => (
-                      <button type="button" key={platform} aria-pressed={writingProfile.defaultPlatforms[0] === platform} onClick={() => selectDefaultPlatform(platform)}>{label}</button>
+                      <Button variant="plain" type="button" key={platform} aria-pressed={writingProfile.defaultPlatforms[0] === platform} onClick={() => selectDefaultPlatform(platform)}>{label}</Button>
                     ))}
                   </div>
                 </fieldset>
@@ -864,9 +863,9 @@ export default function AccountPage() {
                 <div className="ap-dna-row">
                   <div className="ap-dna-label"><b>L1</b><div><h4>词句与节奏</h4><p>用词、句长、断句与明确禁用项</p></div></div>
                   <div className="ap-dna-fields">
-                    <label><span>常用语气</span><input value={writingProfile.tone} onChange={event => updateProfile("tone", event.target.value)} placeholder="如：直接、克制，像熟悉业务的同事" /></label>
-                    <label><span>句式与节奏</span><textarea value={writingProfile.languageStyle} onChange={event => updateProfile("languageStyle", event.target.value)} rows={3} placeholder="如：短句占多数；结论后补解释；不用破折号和分号" /></label>
-                    <label><span>禁用表达</span><input value={writingProfile.bannedPhrases.join("、")} onChange={event => updateProfile("bannedPhrases", event.target.value.split(/[，,、]/).map(item => item.trim()).filter(Boolean))} placeholder="用顿号分隔" /></label>
+                    <label><span>常用语气</span><Input value={writingProfile.tone} onChange={event => updateProfile("tone", event.target.value)} placeholder="如：直接、克制，像熟悉业务的同事" /></label>
+                    <label><span>句式与节奏</span><Textarea value={writingProfile.languageStyle} onChange={event => updateProfile("languageStyle", event.target.value)} rows={3} placeholder="如：短句占多数；结论后补解释；不用破折号和分号" /></label>
+                    <label><span>禁用表达</span><Input value={writingProfile.bannedPhrases.join("、")} onChange={event => updateProfile("bannedPhrases", event.target.value.split(/[，,、]/).map(item => item.trim()).filter(Boolean))} placeholder="用顿号分隔" /></label>
                   </div>
                 </div>
                 {([
@@ -878,7 +877,7 @@ export default function AccountPage() {
                 ] as Array<[string, string, string, WritingProfileTextField, string]>).map(([code, title, description, field, placeholder]) => (
                   <div className="ap-dna-row" key={code}>
                     <div className="ap-dna-label"><b>{code}</b><div><h4>{title}</h4><p>{description}</p></div></div>
-                    <label className="ap-dna-single"><span>{title}规则</span><textarea value={writingProfile[field]} onChange={event => updateProfile(field, event.target.value)} rows={3} placeholder={placeholder} /></label>
+                    <label className="ap-dna-single"><span>{title}规则</span><Textarea value={writingProfile[field]} onChange={event => updateProfile(field, event.target.value)} rows={3} placeholder={placeholder} /></label>
                   </div>
                 ))}
               </div>
@@ -891,7 +890,7 @@ export default function AccountPage() {
                 <div><span>稳定事实</span><h3 id="ap-memory-title">长期背景记忆</h3></div>
                 <p>{globalMemory.length} 字，生成时最多读取前 12000 字</p>
               </div>
-              <textarea
+              <Textarea
                 className="ap-memory-editor"
                 aria-label="长期背景记忆"
                 value={globalMemory}
@@ -917,10 +916,10 @@ export default function AccountPage() {
                 <div><BarChart3 size={17} /><strong>{assetOverview?.summary.highPerformanceCount ?? 0}/{assetOverview?.summary.lowPerformanceCount ?? 0}</strong><span>高 / 低表现</span></div>
               </div>
               <div className="ap-asset-links">
-                <button onClick={() => navigate("/prompts")}><Zap size={18} /><span><strong>提示词</strong><small>{assetOverview?.summary.promptCount ?? 0} 条，管理生成与审核指令</small></span><ExternalLink size={14} /></button>
-                <button onClick={() => navigate("/rag")}><Database size={18} /><span><strong>素材与往期文章</strong><small>{assetOverview?.summary.materialArticleCount ?? 0} 篇含素材，可按主题检索</small></span><ExternalLink size={14} /></button>
-                <button onClick={() => navigate("/")}><GitBranch size={18} /><span><strong>候选池</strong><small>{assetOverview?.summary.candidateCount ?? 0} 篇候选，在对应文章中选用</small></span><ExternalLink size={14} /></button>
-                <button onClick={() => navigate("/insights")}><BarChart3 size={18} /><span><strong>高低表现文章</strong><small>{assetOverview?.summary.highPerformanceCount ?? 0} 篇高表现，{assetOverview?.summary.lowPerformanceCount ?? 0} 篇低表现</small></span><ExternalLink size={14} /></button>
+                <Button variant="plain" onClick={() => navigate("/prompts")}><Zap size={18} /><span><strong>提示词</strong><small>{assetOverview?.summary.promptCount ?? 0} 条，管理生成与审核指令</small></span><ExternalLink size={14} /></Button>
+                <Button variant="plain" onClick={() => navigate("/rag")}><Database size={18} /><span><strong>素材与往期文章</strong><small>{assetOverview?.summary.materialArticleCount ?? 0} 篇含素材，可按主题检索</small></span><ExternalLink size={14} /></Button>
+                <Button variant="plain" onClick={() => navigate("/")}><GitBranch size={18} /><span><strong>候选池</strong><small>{assetOverview?.summary.candidateCount ?? 0} 篇候选，在对应文章中选用</small></span><ExternalLink size={14} /></Button>
+                <Button variant="plain" onClick={() => navigate("/insights")}><BarChart3 size={18} /><span><strong>高低表现文章</strong><small>{assetOverview?.summary.highPerformanceCount ?? 0} 篇高表现，{assetOverview?.summary.lowPerformanceCount ?? 0} 篇低表现</small></span><ExternalLink size={14} /></Button>
               </div>
             </section>
             )}

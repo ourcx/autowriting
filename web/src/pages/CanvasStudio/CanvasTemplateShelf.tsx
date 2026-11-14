@@ -1,3 +1,4 @@
+import Button from "../../components/Button/Button"
 import { useRef } from "react"
 import { WechatBlockRenderer } from "../../components/WechatBlockEditor/WechatBlockEditor"
 import { compileCanvasDesignSystem } from "../../../shared/canvasDesignSystem"
@@ -33,10 +34,10 @@ interface CanvasTemplateShelfProps {
 export default function CanvasTemplateShelf({ selected, onSelect }: CanvasTemplateShelfProps) {
   return <div className="cs-template-shelf" role="group" aria-label="文章模板">
     <div className="cs-template-intro"><strong>选择文章的气质</strong><span>先选风格，再应用到正文</span></div>
-    {previews.map(template => <button key={template.id} className={`cs-template-card${selected === template.id ? " is-active" : ""}`} aria-pressed={selected === template.id} onClick={event => { onSelect(template.id); event.currentTarget.closest("details")?.removeAttribute("open") }}>
+    {previews.map(template => <Button variant="plain" data-ui-close key={template.id} className={`cs-template-card${selected === template.id ? " is-active" : ""}`} aria-pressed={selected === template.id} onClick={() => { onSelect(template.id) }}>
       <TemplateThumbnail template={template} />
       <span><strong>{template.name}</strong><small>{template.description}</small></span>
       <span className="cs-template-check" aria-hidden="true">{selected === template.id ? "✓" : ""}</span>
-    </button>)}
+    </Button>)}
   </div>
 }

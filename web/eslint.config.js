@@ -128,6 +128,28 @@ export default tseslint.config(
     },
   },
 
+  // 页面和业务组件共用交互控件，只有组件层直接渲染这些标签。
+  {
+    files: ['src/**/*.tsx'],
+    ignores: ['src/components/Button/Button.tsx', 'src/components/FormControls/FormControls.tsx'],
+    plugins: {
+      'shared-ui': {
+        rules: {
+          'use-controls': {
+            create(context) {
+              return {
+                'JSXOpeningElement[name.name=/^(button|input|textarea|select|details|summary)$/]'(node) {
+                  context.report({ node, message: '❌ 直接渲染表单或折叠标签 | ✅ 使用 Button 或 FormControls | 📖 docs/agents/conventions.md' })
+                },
+              }
+            },
+          },
+        },
+      },
+    },
+    rules: { 'shared-ui/use-controls': 'error' },
+  },
+
   // ─────────── 后端 TypeScript（server.ts + server/**/*.ts） ───────────
   {
     files: ['server.ts', 'server/**/*.ts'],

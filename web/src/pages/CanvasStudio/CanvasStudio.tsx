@@ -1,3 +1,4 @@
+import { Collapse, Input, SelectField, Textarea } from "../../components/FormControls/FormControls"
 import Button from "../../components/Button/Button"
 import CanvasMaterialShelf from "./CanvasMaterialShelf"
 import CanvasSectionPresetShelf from "./CanvasSectionPresetShelf"
@@ -660,22 +661,22 @@ export default function CanvasStudio() {
 
       <div className="cs-toolbar">
         <div className="cs-mode-switch" role="group" aria-label="排版模式">
-          <button className={mode === "xiumi" ? "active" : ""} onClick={() => setMode("xiumi")}>
+          <Button variant="plain" className={mode === "xiumi" ? "active" : ""} onClick={() => setMode("xiumi")}>
             <LayoutTemplate size={15} />
             秀米排版
-          </button>
-          <button className={mode === "blocks" ? "active" : ""} onClick={() => setMode("blocks")}>
+          </Button>
+          <Button variant="plain" className={mode === "blocks" ? "active" : ""} onClick={() => setMode("blocks")}>
             <PanelLeft size={15} />
             旧版排版
-          </button>
-          <button className={mode === "svg" ? "active" : ""} onClick={() => setMode("svg")}>
+          </Button>
+          <Button variant="plain" className={mode === "svg" ? "active" : ""} onClick={() => setMode("svg")}>
             <Shapes size={15} />
             自由画板
-          </button>
+          </Button>
         </div>
         <label className="cs-article-select">
           <FileText size={15} />
-          <select
+          <SelectField
             value={articleId}
             onChange={event => {
               const nextArticleId = event.target.value
@@ -697,20 +698,20 @@ export default function CanvasStudio() {
                 {article.title || article.id}
               </option>
             ))}
-          </select>
+          </SelectField>
         </label>
       </div>
 
       {mode === "blocks" && <div className="cs-tools">
-      {mode === "blocks" && <details className="cs-tools-menu"><summary>主题与模板</summary><div className="cs-tools-popover">
+      {mode === "blocks" && <Collapse className="cs-tools-menu" closeOnAction label={<>主题与模板</>}><div className="cs-tools-popover">
         <CanvasTemplateShelf selected={designTemplateId} onSelect={id => {
           setDesignTemplateId(id)
         }} />
-      </div></details>}
-      {mode === "blocks" && !reading ? <details className="cs-tools-menu"><summary>章节组件</summary><div className="cs-tools-popover">
+      </div></Collapse>}
+      {mode === "blocks" && !reading ? <Collapse className="cs-tools-menu" closeOnAction label={<>章节组件</>}><div className="cs-tools-popover">
         <CanvasSectionPresetShelf disabled={!selectedSectionId || articleLoading} onApply={applySectionPreset} />
-      </div></details> : null}
-      {mode === "blocks" && !reading ? <details className="cs-tools-menu"><summary>素材库</summary><div className="cs-tools-popover">
+      </div></Collapse> : null}
+      {mode === "blocks" && !reading ? <Collapse className="cs-tools-menu" closeOnAction label={<>素材库</>}><div className="cs-tools-popover">
           {!reading ? <CanvasMaterialShelf disabled={!sources.length || articleLoading} onInsert={(materialId, libraryImage) => {
             // 辅助素材锚定正文，复用现有历史和本机保存，不另建一套素材状态。
             const selected = selectedBlockId?.split("::")[0]
@@ -729,7 +730,7 @@ export default function CanvasStudio() {
             setBlockDocument({ ...blockDocument, blocks })
             setSelectedBlockId(id)
           }} /> : null}
-      </div></details> : null}
+      </div></Collapse> : null}
       {mode === "blocks" ? <span className="cs-theme-status"><i style={{ background: blockDocument.theme.primary }} />当前主色 · {blockDocument.theme.primary} · 待用主题：{getCanvasDesignTemplate(designTemplateId).name}</span> : null}
       </div>}
 
@@ -764,11 +765,11 @@ export default function CanvasStudio() {
             </div>
             <div className="cs-edit-actions">
               <Smartphone size={15} />
-              <select aria-label="预览宽度" value={previewWidth} onChange={event => setPreviewWidth(Number(event.target.value))}>
+              <SelectField aria-label="预览宽度" value={previewWidth} onChange={event => setPreviewWidth(Number(event.target.value))}>
                 <option value={375}>手机 · 375px</option>
                 <option value={414}>大屏手机 · 414px</option>
                 <option value={677}>宽屏 · 677px</option>
-              </select>
+              </SelectField>
               <Button variant="secondary" aria-pressed={reading} onClick={() => setReading(!reading)}><Eye size={14} />{reading ? "返回编辑" : "阅读预览"}</Button>
             </div>
           </div>
@@ -798,10 +799,10 @@ export default function CanvasStudio() {
         <aside className="cs-layers">
           <div className="cs-panel-title">添加元素</div>
           <div className="cs-add-grid">
-            <button onClick={() => addNode("text")}><Type size={16} />文本</button>
-            <button onClick={() => addNode("image")}><Image size={16} />图片</button>
-            <button onClick={() => addNode("shape")}><Square size={16} />形状</button>
-            <button onClick={() => addNode("path")}><PenTool size={16} />SVG 路径</button>
+            <Button variant="plain" onClick={() => addNode("text")}><Type size={16} />文本</Button>
+            <Button variant="plain" onClick={() => addNode("image")}><Image size={16} />图片</Button>
+            <Button variant="plain" onClick={() => addNode("shape")}><Square size={16} />形状</Button>
+            <Button variant="plain" onClick={() => addNode("path")}><PenTool size={16} />SVG 路径</Button>
           </div>
 
           <div className="cs-panel-row">
@@ -810,20 +811,20 @@ export default function CanvasStudio() {
           </div>
           <div className="cs-layer-list">
             {[...document.nodes].reverse().map(node => (
-              <button
+              <Button variant="plain"
                 key={node.id}
                 className={selectedId === node.id ? "active" : ""}
                 onClick={() => setSelectedId(node.id)}
               >
                 <span className={`cs-layer-type cs-layer-type--${node.type}`}>{node.type.slice(0, 1).toUpperCase()}</span>
                 <span>{nodeLabel(node)}</span>
-              </button>
+              </Button>
             ))}
           </div>
           <div className="cs-layer-actions">
-            <button title="上移一层" onClick={() => moveLayer(1)}><ArrowUp size={15} /></button>
-            <button title="下移一层" onClick={() => moveLayer(-1)}><ArrowDown size={15} /></button>
-            <button title="删除节点" onClick={deleteSelected}><Trash2 size={15} /></button>
+            <Button variant="plain" title="上移一层" onClick={() => moveLayer(1)}><ArrowUp size={15} /></Button>
+            <Button variant="plain" title="下移一层" onClick={() => moveLayer(-1)}><ArrowDown size={15} /></Button>
+            <Button variant="plain" title="删除节点" onClick={deleteSelected}><Trash2 size={15} /></Button>
           </div>
         </aside>
 
@@ -832,7 +833,7 @@ export default function CanvasStudio() {
             <strong>{document.name}</strong>
             <div className="cs-height-control">
               <span>{document.width} ×</span>
-              <input
+              <Input
                 type="number"
                 min="320"
                 max="32000"
@@ -842,9 +843,9 @@ export default function CanvasStudio() {
                 aria-label="画布高度"
               />
               <span>px</span>
-              <button title="适应内容高度" onClick={fitCanvasHeight}>
+              <Button variant="plain" title="适应内容高度" onClick={fitCanvasHeight}>
                 <MoveVertical size={14} />
-              </button>
+              </Button>
             </div>
           </div>
           <div className="cs-canvas-shell">
@@ -861,33 +862,33 @@ export default function CanvasStudio() {
 
         <aside className="cs-inspector">
           <div className="cs-inspector-tabs">
-            <button className={inspectorTab === "properties" ? "active" : ""} onClick={() => setInspectorTab("properties")}>
+            <Button variant="plain" className={inspectorTab === "properties" ? "active" : ""} onClick={() => setInspectorTab("properties")}>
               属性
-            </button>
-            <button className={inspectorTab === "dsl" ? "active" : ""} onClick={() => setInspectorTab("dsl")}>
+            </Button>
+            <Button variant="plain" className={inspectorTab === "dsl" ? "active" : ""} onClick={() => setInspectorTab("dsl")}>
               <Braces size={14} />
               DSL
-            </button>
+            </Button>
           </div>
 
           {inspectorTab === "properties" ? (
             <div className="cs-properties">
               <label>
                 <span>画布名称</span>
-                <input value={document.name} onChange={event => setDocument(current => ({ ...current, name: event.target.value }))} />
+                <Input value={document.name} onChange={event => setDocument(current => ({ ...current, name: event.target.value }))} />
               </label>
               <label>
                 <span>背景</span>
-                <input type="color" value={document.background} onChange={event => setDocument(current => ({ ...current, background: event.target.value }))} />
+                <Input type="color" value={document.background} onChange={event => setDocument(current => ({ ...current, background: event.target.value }))} />
               </label>
               <div className="cs-property-grid">
                 <label>
                   <span>画板宽度</span>
-                  <input value={`${document.width} px`} disabled />
+                  <Input value={`${document.width} px`} disabled />
                 </label>
                 <label>
                   <span>画布高度</span>
-                  <input
+                  <Input
                     type="number"
                     min="320"
                     max="32000"
@@ -897,10 +898,10 @@ export default function CanvasStudio() {
                   />
                 </label>
               </div>
-              <button className="cs-fit-height" onClick={fitCanvasHeight}>
+              <Button variant="plain" className="cs-fit-height" onClick={fitCanvasHeight}>
                 <MoveVertical size={14} />
                 适应内容高度
-              </button>
+              </Button>
               {selectedNode ? (
                 <>
                   <div className="cs-property-heading">{nodeLabel(selectedNode)}</div>
@@ -908,19 +909,19 @@ export default function CanvasStudio() {
                     {(["x", "y", "width", "height"] as const).map(key => (
                       <label key={key}>
                         <span>{key.toUpperCase()}</span>
-                        <input type="number" value={selectedNode[key]} onChange={event => updateNode(selectedNode.id, { [key]: Number(event.target.value) })} />
+                        <Input type="number" value={selectedNode[key]} onChange={event => updateNode(selectedNode.id, { [key]: Number(event.target.value) })} />
                       </label>
                     ))}
                   </div>
                   <label>
                     <span>旋转</span>
-                    <input type="range" min="-180" max="180" value={selectedNode.rotation} onChange={event => updateNode(selectedNode.id, { rotation: Number(event.target.value) })} />
+                    <Input type="range" min="-180" max="180" value={selectedNode.rotation} onChange={event => updateNode(selectedNode.id, { rotation: Number(event.target.value) })} />
                   </label>
                   {selectedNode.type === "text" ? (
                     <>
                       <label>
                         <span>内容版式</span>
-                        <select
+                        <SelectField
                           value={selectedNode.variant}
                           onChange={event => updateNode(selectedNode.id, {
                             variant: event.target.value as typeof selectedNode.variant,
@@ -931,36 +932,36 @@ export default function CanvasStudio() {
                           <option value="card">内容卡片</option>
                           <option value="quote">引用面板</option>
                           <option value="sticky">便签</option>
-                        </select>
+                        </SelectField>
                       </label>
                       <label>
                         <span>文字</span>
-                        <textarea value={selectedNode.text} rows={5} onChange={event => updateNode(selectedNode.id, { text: event.target.value })} />
+                        <Textarea value={selectedNode.text} rows={5} onChange={event => updateNode(selectedNode.id, { text: event.target.value })} />
                       </label>
                       <div className="cs-property-grid">
-                        <label><span>字号</span><input type="number" value={selectedNode.fontSize} onChange={event => updateNode(selectedNode.id, { fontSize: Number(event.target.value) })} /></label>
-                        <label><span>颜色</span><input type="color" value={selectedNode.fill} onChange={event => updateNode(selectedNode.id, { fill: event.target.value })} /></label>
-                        <label><span>背景</span><input type="color" value={selectedNode.background === "transparent" ? "#ffffff" : selectedNode.background} onChange={event => updateNode(selectedNode.id, { background: event.target.value })} /></label>
-                        <label><span>描边</span><input type="color" value={selectedNode.borderColor === "transparent" ? "#333333" : selectedNode.borderColor} onChange={event => updateNode(selectedNode.id, { borderColor: event.target.value, borderWidth: Math.max(1, selectedNode.borderWidth) })} /></label>
+                        <label><span>字号</span><Input type="number" value={selectedNode.fontSize} onChange={event => updateNode(selectedNode.id, { fontSize: Number(event.target.value) })} /></label>
+                        <label><span>颜色</span><Input type="color" value={selectedNode.fill} onChange={event => updateNode(selectedNode.id, { fill: event.target.value })} /></label>
+                        <label><span>背景</span><Input type="color" value={selectedNode.background === "transparent" ? "#ffffff" : selectedNode.background} onChange={event => updateNode(selectedNode.id, { background: event.target.value })} /></label>
+                        <label><span>描边</span><Input type="color" value={selectedNode.borderColor === "transparent" ? "#333333" : selectedNode.borderColor} onChange={event => updateNode(selectedNode.id, { borderColor: event.target.value, borderWidth: Math.max(1, selectedNode.borderWidth) })} /></label>
                       </div>
                     </>
                   ) : null}
                   {selectedNode.type === "image" ? (
                     <label>
                       <span>图片 URL</span>
-                      <textarea value={selectedNode.src} rows={5} onChange={event => updateNode(selectedNode.id, { src: event.target.value })} />
+                      <Textarea value={selectedNode.src} rows={5} onChange={event => updateNode(selectedNode.id, { src: event.target.value })} />
                     </label>
                   ) : null}
                   {selectedNode.type === "path" ? (
                     <label>
                       <span>SVG Path</span>
-                      <textarea value={selectedNode.d} rows={6} onChange={event => updateNode(selectedNode.id, { d: event.target.value })} />
+                      <Textarea value={selectedNode.d} rows={6} onChange={event => updateNode(selectedNode.id, { d: event.target.value })} />
                     </label>
                   ) : null}
                   {selectedNode.type === "shape" || selectedNode.type === "motif" || selectedNode.type === "path" ? (
                     <div className="cs-property-grid">
-                      <label><span>填充</span><input type="color" value={selectedNode.fill === "transparent" ? "#ffffff" : selectedNode.fill} onChange={event => updateNode(selectedNode.id, { fill: event.target.value })} /></label>
-                      <label><span>描边</span><input type="color" value={selectedNode.stroke === "transparent" ? "#000000" : selectedNode.stroke} onChange={event => updateNode(selectedNode.id, { stroke: event.target.value })} /></label>
+                      <label><span>填充</span><Input type="color" value={selectedNode.fill === "transparent" ? "#ffffff" : selectedNode.fill} onChange={event => updateNode(selectedNode.id, { fill: event.target.value })} /></label>
+                      <label><span>描边</span><Input type="color" value={selectedNode.stroke === "transparent" ? "#000000" : selectedNode.stroke} onChange={event => updateNode(selectedNode.id, { stroke: event.target.value })} /></label>
                     </div>
                   ) : null}
                 </>
@@ -970,8 +971,8 @@ export default function CanvasStudio() {
             </div>
           ) : (
             <div className="cs-dsl-editor">
-              <textarea value={dslDraft} onChange={event => setDslDraft(event.target.value)} spellCheck={false} />
-              <button onClick={applyDsl}>应用 DSL</button>
+              <Textarea value={dslDraft} onChange={event => setDslDraft(event.target.value)} spellCheck={false} />
+              <Button variant="plain" onClick={applyDsl}>应用 DSL</Button>
             </div>
           )}
         </aside>

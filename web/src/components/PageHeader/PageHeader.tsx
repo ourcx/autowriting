@@ -1,3 +1,4 @@
+import Button from "../Button/Button"
 import { ReactNode } from "react"
 import { ArrowLeft } from "lucide-react"
 import "./PageHeader.css"
@@ -25,10 +26,10 @@ export default function PageHeader({
     <header className={`page-header ${className}`.trim()}>
       <div className="page-header__identity">
         {onBack ? (
-          <button className="page-header__back" onClick={onBack}>
+          <Button variant="plain" className="page-header__back" onClick={onBack}>
             <ArrowLeft size={15} />
             <span>{backLabel}</span>
-          </button>
+          </Button>
         ) : null}
         <div className="page-header__heading">
           <div className="page-header__title">

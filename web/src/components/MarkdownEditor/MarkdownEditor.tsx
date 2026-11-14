@@ -1,3 +1,5 @@
+import { Input, Textarea } from "../FormControls/FormControls"
+import Button from "../Button/Button"
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { toast } from '../Toast/Toast'
 import { Edit2, Copy, Download, Sparkles, Check, X, RotateCcw, ImagePlus, Loader2, Zap } from 'lucide-react'
@@ -400,7 +402,7 @@ export default function MarkdownEditor({
   return (
     <div className="markdown-editor">
       {/* 隐藏的文件 input */}
-      <input
+      <Input
         ref={fileInputRef}
         type="file"
         accept="image/*"
@@ -412,18 +414,18 @@ export default function MarkdownEditor({
       {/* ── Toolbar ── */}
       <div className="editor-toolbar">
         <div className="toolbar-left">
-          <button className={`toolbar-btn active`} title="编辑模式"><Edit2 size={18} />编辑</button>
+          <Button variant="plain" className={`toolbar-btn active`} title="编辑模式"><Edit2 size={18} />编辑</Button>
         </div>
         <div className="toolbar-right">
-          <button className="toolbar-btn" onClick={() => insertMarkdown('# ')} title="标题 1">H1</button>
-          <button className="toolbar-btn" onClick={() => insertMarkdown('## ')} title="标题 2">H2</button>
-          <button className="toolbar-btn" onClick={() => insertMarkdown('**', '**')} title="加粗 (Ctrl+B)"><strong>B</strong></button>
-          <button className="toolbar-btn" onClick={() => insertMarkdown('*', '*')} title="斜体 (Ctrl+I)"><em>I</em></button>
-          <button className="toolbar-btn" onClick={() => insertMarkdown('- ')} title="列表">≡</button>
-          <button className="toolbar-btn" onClick={() => insertMarkdown('[', '](url)')} title="链接">🔗</button>
-          <button className="toolbar-btn" onClick={() => insertMarkdown('```\n', '\n```')} title="代码块">{'<>'}</button>
+          <Button variant="plain" className="toolbar-btn" onClick={() => insertMarkdown('# ')} title="标题 1">H1</Button>
+          <Button variant="plain" className="toolbar-btn" onClick={() => insertMarkdown('## ')} title="标题 2">H2</Button>
+          <Button variant="plain" className="toolbar-btn" onClick={() => insertMarkdown('**', '**')} title="加粗 (Ctrl+B)"><strong>B</strong></Button>
+          <Button variant="plain" className="toolbar-btn" onClick={() => insertMarkdown('*', '*')} title="斜体 (Ctrl+I)"><em>I</em></Button>
+          <Button variant="plain" className="toolbar-btn" onClick={() => insertMarkdown('- ')} title="列表">≡</Button>
+          <Button variant="plain" className="toolbar-btn" onClick={() => insertMarkdown('[', '](url)')} title="链接">🔗</Button>
+          <Button variant="plain" className="toolbar-btn" onClick={() => insertMarkdown('```\n', '\n```')} title="代码块">{'<>'}</Button>
           <div className="toolbar-divider" />
-          <button
+          <Button variant="plain"
             className={`toolbar-btn toolbar-btn--image${uploading ? ' toolbar-btn--loading' : ''}`}
             onClick={handleImageButtonClick}
             disabled={uploading}
@@ -433,25 +435,25 @@ export default function MarkdownEditor({
               ? <Loader2 size={16} className="spin" />
               : <ImagePlus size={16} />}
             图片
-          </button>
+          </Button>
           <div className="toolbar-divider" />
-          <button
+          <Button variant="plain"
             className="toolbar-btn"
             onClick={() => setShowPromptSelector(true)}
             title="插入提示词"
           >
             <Zap size={16} />
             提示词
-          </button>
+          </Button>
           <div className="toolbar-divider" />
-          <button className="toolbar-btn" onClick={handleCopy} title="复制"><Copy size={18} /></button>
-          <button className="toolbar-btn" onClick={handleDownload} title="下载"><Download size={18} /></button>
+          <Button variant="plain" className="toolbar-btn" onClick={handleCopy} title="复制"><Copy size={18} /></Button>
+          <Button variant="plain" className="toolbar-btn" onClick={handleDownload} title="下载"><Download size={18} /></Button>
         </div>
       </div>
 
       {/* ── Editor area ── */}
       <div className="editor-container" style={{ height, position: 'relative' }}>
-        <textarea
+        <Textarea
           ref={textareaRef}
           value={value}
           onChange={e => { onChange(e.target.value); setFloatMenu(null) }}
@@ -491,7 +493,7 @@ export default function MarkdownEditor({
                 <div className="ai-float-divider" />
                 <div className="ai-float-actions">
                   {AI_ACTIONS.map(a => (
-                    <button
+                    <Button variant="plain"
                       key={a.id}
                       className={`ai-float-btn${aiLoading && aiAction === a.id ? ' ai-float-btn--loading' : ''}`}
                       onClick={() => handleAIAction(a.id)}
@@ -501,7 +503,7 @@ export default function MarkdownEditor({
                       {aiLoading && aiAction === a.id
                         ? <><span className="ai-spin" />{a.label}</>
                         : a.label}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </>
@@ -510,23 +512,23 @@ export default function MarkdownEditor({
               <div className="ai-float-result">
                 <div className="ai-float-result-text">{aiResult}</div>
                 <div className="ai-float-result-actions">
-                  <button className="ai-float-apply" onClick={applyResult}>
+                  <Button variant="plain" className="ai-float-apply" onClick={applyResult}>
                     <Check size={12} />应用
-                  </button>
-                  <button
+                  </Button>
+                  <Button variant="plain"
                     className="ai-float-retry"
                     onClick={() => { setAiResult(null); aiAction && handleAIAction(aiAction) }}
                     title="重新生成"
                   >
                     <RotateCcw size={12} />
-                  </button>
-                  <button
+                  </Button>
+                  <Button variant="plain"
                     className="ai-float-cancel"
                     onClick={() => { setAiResult(null); setFloatMenu(null) }}
                     title="关闭"
                   >
                     <X size={12} />
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}

@@ -1,3 +1,4 @@
+import { Collapse, Input, SelectField, Textarea } from "../../components/FormControls/FormControls"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { ArrowRight, BarChart3, Bookmark, BookOpen, ChevronDown, Clock3, ExternalLink, FileText, Info, Link2, RefreshCw, Search, Share2, Sparkles, Upload, Users, X } from "lucide-react"
@@ -221,29 +222,28 @@ export default function TopicInsights() {
       </div>
       <div className="topic-sync-controls">
         {!cookieBound && <Button className="topic-bind-button" onClick={() => navigate("/account")}>绑定数据 Cookie</Button>}
-        <label className="topic-switch"><input type="checkbox" checked={config.enabled} disabled={!cookieBound} onChange={event => updateConfig({ ...config, enabled: event.target.checked })}/><span />页面内定时刷新</label>
-        <label className="topic-interval"><Clock3 size={14}/><select aria-label="自动刷新间隔" value={config.intervalHours} disabled={!cookieBound || !config.enabled} onChange={event => updateConfig({ ...config, intervalHours: Number(event.target.value) })}>
+        <label className="topic-switch"><Input type="checkbox" checked={config.enabled} disabled={!cookieBound} onChange={event => updateConfig({ ...config, enabled: event.target.checked })}/><span />页面内定时刷新</label>
+        <label className="topic-interval"><Clock3 size={14}/><SelectField aria-label="自动刷新间隔" value={config.intervalHours} disabled={!cookieBound || !config.enabled} onChange={event => updateConfig({ ...config, intervalHours: Number(event.target.value) })}>
           <option value={6}>每 6 小时</option><option value={12}>每 12 小时</option><option value={24}>每天</option><option value={72}>每 3 天</option>
-        </select></label>
+        </SelectField></label>
         <Button className="topic-sync-button" disabled={!cookieBound || busy} onClick={() => void collect()}><RefreshCw size={16} className={busy ? "topic-spin" : ""}/>{busy ? "同步中" : "立即同步"}</Button>
       </div>
     </section>
     {error && <div role="alert" className="topic-error"><span>{error}</span><Button onClick={() => void load()}>重新加载</Button></div>}
-    <details className="topic-import">
-      <summary><Upload size={16} />导入离线快照</summary>
+    <Collapse className="topic-import" label={<><Upload size={16} />导入离线快照</>}>
       <p>仅在本机浏览器无法连接时使用。快照不应包含 Cookie、登录链接或 Token。</p>
-      <input type="file" accept=".json,application/json" aria-label="选择数据快照" onChange={event => {
+      <Input type="file" accept=".json,application/json" aria-label="选择数据快照" onChange={event => {
         const file = event.target.files?.[0]
         if (file && file.size <= 1000000) void file.text().then(setRaw).catch(() => setError("文件读取失败"))
         else if (file) setError("快照文件不能超过 1 MB")
       }}/>
-      <textarea aria-label="数据快照 JSON" value={raw} onChange={event => setRaw(event.target.value)} placeholder="粘贴浏览器采集的 JSON 数据" maxLength={1000000}/>
+      <Textarea aria-label="数据快照 JSON" value={raw} onChange={event => setRaw(event.target.value)} placeholder="粘贴浏览器采集的 JSON 数据" maxLength={1000000}/>
       <Button variant="primary" disabled={busy || !raw.trim()} onClick={() => void importSnapshot()}>保存数据快照</Button>
-    </details>
+    </Collapse>
     {snapshot && analysis ? <>
       <div className="topic-period">
         <div className="topic-period-account"><span>当前账号</span><strong>{snapshot.accountName}</strong></div>
-        <label className="topic-period-picker"><span>统计窗口</span><select aria-label="统计窗口" value={index} onChange={event => setIndex(Number(event.target.value))}>{snapshots.map((item, position) => <option key={`${item.accountName}-${item.period.start}-${item.period.end}`} value={position}>{item.accountName} · {item.period.start} — {item.period.end}</option>)}</select></label>
+        <label className="topic-period-picker"><span>统计窗口</span><SelectField aria-label="统计窗口" value={index} onChange={event => setIndex(Number(event.target.value))}>{snapshots.map((item, position) => <option key={`${item.accountName}-${item.period.start}-${item.period.end}`} value={position}>{item.accountName} · {item.period.start} — {item.period.end}</option>)}</SelectField></label>
         <span className="topic-collected">采集于 {new Date(snapshot.collectedAt).toLocaleString()}</span>
       </div>
       <section className="topic-dashboard" aria-labelledby="topic-dashboard-title">
@@ -309,7 +309,7 @@ export default function TopicInsights() {
       <section className="topic-workspace">
         <div className="topic-evidence">
           <div className="topic-evidence-heading"><div><p className="topic-section-kicker">文章筛选</p><h2>从历史文章里找线索</h2></div><span>筛选结果</span></div>
-          <label className="topic-search"><Search size={18}/><input value={keyword} onChange={event => setKeyword(event.target.value)} placeholder="按主题筛选，例如：保研、校园跑" aria-label="主题关键词"/></label>
+          <label className="topic-search"><Search size={18}/><Input value={keyword} onChange={event => setKeyword(event.target.value)} placeholder="按主题筛选，例如：保研、校园跑" aria-label="主题关键词"/></label>
           <p className="topic-note">{analysis.articles.length} 篇匹配 · 期间阅读人数中位数 {analysis.medianReaders?.toLocaleString() ?? "—"} · {analysis.olderArticles} 篇在统计窗口前发布</p>
           <div className="topic-table-wrap"><table><thead><tr><th>文章 / 关联工作台稿件</th><th>相对位置</th><th>发布日期</th><th>期间阅读人数</th></tr></thead><tbody>
             {pagedAnalysisArticles.map(item => <tr key={item.id}><td><strong>{item.title}</strong>
@@ -322,7 +322,7 @@ export default function TopicInsights() {
                   }
                 }}
               >
-                <button
+                <Button variant="plain"
                   type="button"
                   className="topic-article-link-trigger"
                   disabled={busy}
@@ -338,9 +338,9 @@ export default function TopicInsights() {
                     ? drafts.find(draft => draft.id === item.localArticleId)?.title || "已关联稿件"
                     : "关联工作台稿件"}</span>
                   <ChevronDown size={13}/>
-                </button>
+                </Button>
                 {activeLinkArticleId === item.id && <div className="topic-article-link-popover">
-                  <label><Search size={14}/><input
+                  <label><Search size={14}/><Input
                     autoFocus
                     value={draftQuery}
                     onChange={event => setDraftQuery(event.target.value)}
@@ -352,16 +352,16 @@ export default function TopicInsights() {
                     }}
                     placeholder="搜索标题或文章编号"
                     aria-label={`搜索要关联的稿件：${item.title}`}
-                  />{draftQuery && <button type="button" aria-label="清除稿件搜索" onClick={() => setDraftQuery("")}><X size={13}/></button>}</label>
+                  />{draftQuery && <Button variant="plain" type="button" aria-label="清除稿件搜索" onClick={() => setDraftQuery("")}><X size={13}/></Button>}</label>
                   <div role="listbox" aria-label="可关联的工作台稿件">
-                    {item.localArticleId && <button type="button" role="option" aria-selected="false" onClick={() => void chooseLinkedArticle(item.id, "")}>取消关联</button>}
-                    {matchingDrafts.map(draft => <button
+                    {item.localArticleId && <Button variant="plain" type="button" role="option" aria-selected="false" onClick={() => void chooseLinkedArticle(item.id, "")}>取消关联</Button>}
+                    {matchingDrafts.map(draft => <Button variant="plain"
                       type="button"
                       role="option"
                       aria-selected={draft.id === item.localArticleId}
                       key={draft.id}
                       onClick={() => void chooseLinkedArticle(item.id, draft.id)}
-                    ><span>{draft.title}</span><small>{draft.id}</small></button>)}
+                    ><span>{draft.title}</span><small>{draft.id}</small></Button>)}
                     {!matchingDrafts.length && <p>没有匹配的稿件</p>}
                   </div>
                   {drafts.length > DRAFT_SEARCH_LIMIT && !draftQuery && <small>输入标题可以继续查找其余 {drafts.length - DRAFT_SEARCH_LIMIT} 篇</small>}
@@ -381,8 +381,8 @@ export default function TopicInsights() {
           <p className="topic-note">{analysis.observation} 下一次对比应固定发布后的观察时长，并记录账号体量和流量来源。</p>
         </div>
         <aside className="topic-brief"><div className="topic-brief-heading"><Sparkles size={20}/><span>选题任务</span></div><h2>把问题带回素材</h2><p>你掌握的事实、现场观察和采访，决定这篇文章是否值得写。</p>
-          <label>我想回答的问题<input value={question} maxLength={200} onChange={event => setQuestion(event.target.value)} placeholder="写下一个读者真的关心的问题"/></label>
-          <label>已有线索与待补资料<textarea value={materials} maxLength={10000} onChange={event => setMaterials(event.target.value)} placeholder="原始公告链接、亲身经历、可采访的人、需要核对的数据…"/></label>
+          <label>我想回答的问题<Input value={question} maxLength={200} onChange={event => setQuestion(event.target.value)} placeholder="写下一个读者真的关心的问题"/></label>
+          <label>已有线索与待补资料<Textarea value={materials} maxLength={10000} onChange={event => setMaterials(event.target.value)} placeholder="原始公告链接、亲身经历、可采访的人、需要核对的数据…"/></label>
           <Button variant="primary" disabled={busy || !question.trim() || !analysis.articles.length} onClick={() => void createBrief()}>保存为选题任务 <ArrowRight size={16}/></Button>
           <small>会保存本次筛选的观察依据和素材缺口，下一步继续收集素材。</small>
         </aside>

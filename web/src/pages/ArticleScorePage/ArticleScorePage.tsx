@@ -1,3 +1,5 @@
+import { Input, Textarea } from "../../components/FormControls/FormControls"
+import Button from "../../components/Button/Button"
 /**
  * 文章评分页  /scores
  * - 列出所有已生成文章，支持录入评分数据
@@ -113,12 +115,12 @@ function ScoreCard({
         <span className="asp-score-platform">{platformLabel(s.platform)}</span>
         {lbl && <span className="asp-score-label">{lbl.text}</span>}
         <div style={{ flex: 1 }} />
-        <button className="asp-icon-btn asp-icon-btn--edit" onClick={onEdit} title="编辑">
+        <Button variant="plain" className="asp-icon-btn asp-icon-btn--edit" onClick={onEdit} title="编辑">
           <Star size={13} />
-        </button>
-        <button className="asp-icon-btn asp-icon-btn--del" onClick={onDelete} title="删除">
+        </Button>
+        <Button variant="plain" className="asp-icon-btn asp-icon-btn--del" onClick={onDelete} title="删除">
           <Trash2 size={13} />
-        </button>
+        </Button>
       </div>
       <div className="asp-score-composite">
         <span className="asp-score-num" style={{ color: compositeColor(s.composite) }}>
@@ -160,18 +162,18 @@ function InlineScoreForm({
           {platformIcon(editState.platform)} {platformLabel(editState.platform)} 数据录入
         </span>
         <div className="asp-platform-switch">
-          <button
+          <Button variant="plain"
             className={`asp-platform-btn${editState.platform === 'wechat' ? ' asp-platform-btn--active' : ''}`}
             onClick={() => onPlatformChange('wechat')}
-          >公众号</button>
-          <button
+          >公众号</Button>
+          <Button variant="plain"
             className={`asp-platform-btn${editState.platform === 'toutiao' ? ' asp-platform-btn--active' : ''}`}
             onClick={() => onPlatformChange('toutiao')}
-          >今日头条</button>
-          <button
+          >今日头条</Button>
+          <Button variant="plain"
             className={`asp-platform-btn${editState.platform === 'xiaohongshu' ? ' asp-platform-btn--active' : ''}`}
             onClick={() => onPlatformChange('xiaohongshu')}
-          >小红书</button>
+          >小红书</Button>
         </div>
       </div>
       <div className="asp-form-grid">
@@ -180,7 +182,7 @@ function InlineScoreForm({
             <label className="asp-form-label">
               {{ views: '浏览量', likes: '点赞数', shares: '转发数', comments: '评论数' }[field]}
             </label>
-            <input
+            <Input
               className="asp-input"
               type="number"
               placeholder={{ views: '如 5000', likes: '如 120', shares: '如 30', comments: '如 15' }[field]}
@@ -194,7 +196,7 @@ function InlineScoreForm({
             综合评分
             <span className="asp-form-hint">0-100，留空自动计算</span>
           </label>
-          <input
+          <Input
             className="asp-input"
             type="number"
             min={0}
@@ -206,7 +208,7 @@ function InlineScoreForm({
         </div>
         <div className="asp-form-field">
           <label className="asp-form-label">备注</label>
-          <input
+          <Input
             className="asp-input"
             type="text"
             placeholder="可选，如「爆款」"
@@ -216,10 +218,10 @@ function InlineScoreForm({
         </div>
       </div>
       <div className="asp-form-footer">
-        <button className="asp-btn-ghost" onClick={onCancel}>取消</button>
-        <button className="asp-btn-primary" onClick={onSave} disabled={isSaving}>
+        <Button variant="plain" className="asp-btn-ghost" onClick={onCancel}>取消</Button>
+        <Button variant="plain" className="asp-btn-primary" onClick={onSave} disabled={isSaving}>
           {isSaving ? '保存中...' : '保存评分'}
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -295,7 +297,7 @@ function AddArticleModal({
       <div className="asp-modal">
         <div className="asp-modal-header">
           <span className="asp-modal-title">手动添加文章评分</span>
-          <button className="asp-modal-close" onClick={onClose}><X size={16} /></button>
+          <Button variant="plain" className="asp-modal-close" onClick={onClose}><X size={16} /></Button>
         </div>
 
         <div className="asp-modal-body">
@@ -304,7 +306,7 @@ function AddArticleModal({
             <label className="asp-form-label">
               文章标题 <span style={{ color: '#dc2626' }}>*</span>
             </label>
-            <input
+            <Input
               className="asp-input"
               type="text"
               placeholder="输入文章标题"
@@ -319,7 +321,7 @@ function AddArticleModal({
               文章内容
               <span className="asp-form-hint">可选，填写后 AI 生成时可参考此文章风格</span>
             </label>
-            <textarea
+            <Textarea
               className="asp-textarea"
               placeholder="粘贴文章正文内容（可选）"
               value={form.content}
@@ -332,18 +334,18 @@ function AddArticleModal({
           <div className="asp-form-field">
             <label className="asp-form-label">发布平台</label>
             <div className="asp-platform-switch" style={{ width: 'fit-content' }}>
-              <button
+              <Button variant="plain"
                 className={`asp-platform-btn${form.platform === 'wechat' ? ' asp-platform-btn--active' : ''}`}
                 onClick={() => setField('platform', 'wechat')}
-              >公众号</button>
-              <button
+              >公众号</Button>
+              <Button variant="plain"
                 className={`asp-platform-btn${form.platform === 'toutiao' ? ' asp-platform-btn--active' : ''}`}
                 onClick={() => setField('platform', 'toutiao')}
-              >今日头条</button>
-              <button
+              >今日头条</Button>
+              <Button variant="plain"
                 className={`asp-platform-btn${form.platform === 'xiaohongshu' ? ' asp-platform-btn--active' : ''}`}
                 onClick={() => setField('platform', 'xiaohongshu')}
-              >小红书</button>
+              >小红书</Button>
             </div>
           </div>
 
@@ -355,7 +357,7 @@ function AddArticleModal({
                 <label className="asp-form-label">
                   {{ views: '浏览量', likes: '点赞数', shares: '转发数', comments: '评论数' }[field]}
                 </label>
-                <input
+                <Input
                   className="asp-input"
                   type="number"
                   placeholder={{ views: '如 5000', likes: '如 120', shares: '如 30', comments: '如 15' }[field]}
@@ -369,7 +371,7 @@ function AddArticleModal({
                 综合评分
                 <span className="asp-form-hint">0-100，留空自动计算</span>
               </label>
-              <input
+              <Input
                 className="asp-input"
                 type="number"
                 min={0}
@@ -381,7 +383,7 @@ function AddArticleModal({
             </div>
             <div className="asp-form-field">
               <label className="asp-form-label">备注</label>
-              <input
+              <Input
                 className="asp-input"
                 type="text"
                 placeholder="可选，如「爆款」"
@@ -393,10 +395,10 @@ function AddArticleModal({
         </div>
 
         <div className="asp-modal-footer">
-          <button className="asp-btn-ghost" onClick={onClose}>取消</button>
-          <button className="asp-btn-primary" onClick={handleSave} disabled={saving}>
+          <Button variant="plain" className="asp-btn-ghost" onClick={onClose}>取消</Button>
+          <Button variant="plain" className="asp-btn-primary" onClick={handleSave} disabled={saving}>
             {saving ? '保存中...' : '添加评分'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -466,9 +468,9 @@ function ArticleCard({
             )}
           </div>
         </div>
-        <button className="asp-expand-btn">
+        <Button variant="plain" className="asp-expand-btn">
           {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-        </button>
+        </Button>
       </div>
 
       {isExpanded && (
@@ -498,22 +500,22 @@ function ArticleCard({
           ) : (
             <div className="asp-add-row">
               {!wechatScore && (
-                <button className="asp-add-btn asp-add-btn--wechat" onClick={() => onStartEdit('wechat')}>
+                <Button variant="plain" className="asp-add-btn asp-add-btn--wechat" onClick={() => onStartEdit('wechat')}>
                   <Star size={13} />
                   录入公众号数据
-                </button>
+                </Button>
               )}
               {!toutiaoScore && (
-                <button className="asp-add-btn asp-add-btn--toutiao" onClick={() => onStartEdit('toutiao')}>
+                <Button variant="plain" className="asp-add-btn asp-add-btn--toutiao" onClick={() => onStartEdit('toutiao')}>
                   <Star size={13} />
                   录入今日头条数据
-                </button>
+                </Button>
               )}
               {!xiaohongshuScore && (
-                <button className="asp-add-btn asp-add-btn--xiaohongshu" onClick={() => onStartEdit('xiaohongshu')}>
+                <Button variant="plain" className="asp-add-btn asp-add-btn--xiaohongshu" onClick={() => onStartEdit('xiaohongshu')}>
                   <Star size={13} />
                   录入小红书数据
-                </button>
+                </Button>
               )}
               {wechatScore && toutiaoScore && xiaohongshuScore && (
                 <span className="asp-all-scored">
@@ -674,10 +676,10 @@ export default function ArticleScorePage() {
         title="文章评分"
         icon={<BarChart2 size={17} />}
         onBack={() => navigate('/')}
-        actions={<button className="asp-btn-add" onClick={() => setShowAddModal(true)}>
+        actions={<Button variant="plain" className="asp-btn-add" onClick={() => setShowAddModal(true)}>
           <Plus size={14} />
           手动添加文章
-        </button>}
+        </Button>}
       />
 
       <div className="asp-body">

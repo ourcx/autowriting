@@ -1,3 +1,5 @@
+import { Input, SelectField, Textarea } from "../FormControls/FormControls"
+import Button from "../Button/Button"
 import React, { useState } from 'react'
 import { toast } from '../Toast/Toast'
 import { X, Plus, Trash2, Zap } from 'lucide-react'
@@ -120,9 +122,9 @@ export const BatchCoverGenerator: React.FC<BatchCoverGeneratorProps> = ({
         <div className="batch-modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h2>✨ 生成结果</h2>
-            <button className="btn-close" onClick={onClose}>
+            <Button variant="plain" className="btn-close" onClick={onClose}>
               <X size={24} />
-            </button>
+            </Button>
           </div>
 
           <div className="results-container">
@@ -139,9 +141,9 @@ export const BatchCoverGenerator: React.FC<BatchCoverGeneratorProps> = ({
           </div>
 
           <div className="modal-footer">
-            <button className="btn btn-secondary" onClick={onClose}>
+            <Button variant="plain" className="btn btn-secondary" onClick={onClose}>
               关闭
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -153,9 +155,9 @@ export const BatchCoverGenerator: React.FC<BatchCoverGeneratorProps> = ({
       <div className="batch-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>🎨 批量生成封面</h2>
-          <button className="btn-close" onClick={onClose}>
+          <Button variant="plain" className="btn-close" onClick={onClose}>
             <X size={24} />
-          </button>
+          </Button>
         </div>
 
         <div className="modal-content">
@@ -164,7 +166,7 @@ export const BatchCoverGenerator: React.FC<BatchCoverGeneratorProps> = ({
             <label className="form-label">API 提供商</label>
             <div className="provider-options">
               <label className="radio-option">
-                <input
+                <Input
                   type="radio"
                   value="local"
                   checked={provider === 'local'}
@@ -173,7 +175,7 @@ export const BatchCoverGenerator: React.FC<BatchCoverGeneratorProps> = ({
                 <span>本地生成（演示）</span>
               </label>
               <label className="radio-option">
-                <input
+                <Input
                   type="radio"
                   value="stability"
                   checked={provider === 'stability'}
@@ -199,7 +201,7 @@ export const BatchCoverGenerator: React.FC<BatchCoverGeneratorProps> = ({
                   <div className="config-fields">
                     <div className="field-group">
                       <label>标题 *</label>
-                      <input
+                      <Input
                         type="text"
                         value={cover.title}
                         onChange={(e) => updateCover(cover.id, 'title', e.target.value)}
@@ -210,7 +212,7 @@ export const BatchCoverGenerator: React.FC<BatchCoverGeneratorProps> = ({
 
                     <div className="field-group">
                       <label>内容（可选）</label>
-                      <textarea
+                      <Textarea
                         value={cover.content}
                         onChange={(e) => updateCover(cover.id, 'content', e.target.value)}
                         placeholder="输入文章内容摘要（用于生成更准确的封面）"
@@ -222,7 +224,7 @@ export const BatchCoverGenerator: React.FC<BatchCoverGeneratorProps> = ({
                     <div className="field-row">
                       <div className="field-group">
                         <label>风格</label>
-                        <select
+                        <SelectField
                           value={cover.style}
                           onChange={(e) => updateCover(cover.id, 'style', e.target.value)}
                           className="select-field"
@@ -232,12 +234,12 @@ export const BatchCoverGenerator: React.FC<BatchCoverGeneratorProps> = ({
                               {STYLE_LABELS[style]}
                             </option>
                           ))}
-                        </select>
+                        </SelectField>
                       </div>
 
                       <div className="field-group">
                         <label>颜色</label>
-                        <select
+                        <SelectField
                           value={cover.color}
                           onChange={(e) => updateCover(cover.id, 'color', e.target.value)}
                           className="select-field"
@@ -247,29 +249,29 @@ export const BatchCoverGenerator: React.FC<BatchCoverGeneratorProps> = ({
                               {COLOR_LABELS[color]}
                             </option>
                           ))}
-                        </select>
+                        </SelectField>
                       </div>
                     </div>
                   </div>
 
                   {covers.length > 1 && (
-                    <button
+                    <Button variant="plain"
                       className="btn-remove"
                       onClick={() => removeCover(cover.id)}
                       title="删除"
                     >
                       <Trash2 size={18} />
-                    </button>
+                    </Button>
                   )}
                 </div>
               ))}
             </div>
 
             {covers.length < 10 && (
-              <button className="btn-add-cover" onClick={addCover}>
+              <Button variant="plain" className="btn-add-cover" onClick={addCover}>
                 <Plus size={18} />
                 添加更多封面
-              </button>
+              </Button>
             )}
           </div>
 
@@ -285,17 +287,17 @@ export const BatchCoverGenerator: React.FC<BatchCoverGeneratorProps> = ({
         </div>
 
         <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose} disabled={generating}>
+          <Button variant="plain" className="btn btn-secondary" onClick={onClose} disabled={generating}>
             取消
-          </button>
-          <button
+          </Button>
+          <Button variant="plain"
             className="btn btn-primary"
             onClick={handleGenerate}
             disabled={generating || covers.every(c => !c.title.trim())}
           >
             <Zap size={18} />
             {generating ? '生成中...' : '开始生成'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

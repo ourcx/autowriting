@@ -1,3 +1,5 @@
+import { Input } from "../../components/FormControls/FormControls"
+import Button from "../../components/Button/Button"
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import axios from 'axios'
@@ -164,10 +166,10 @@ export default function AdminPage() {
               <Activity size={15} />
               系统监控
             </Link>
-            <button className="admin-create-btn" onClick={openCreate}>
+            <Button variant="plain" className="admin-create-btn" onClick={openCreate}>
               <UserPlus size={15} />
               新建用户
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -224,7 +226,7 @@ export default function AdminPage() {
                     </td>
                     <td>
                       {u.articleCount > 0
-                        ? <button className="btn-link" onClick={() => openArticles(u)}>{u.articleCount} 篇</button>
+                        ? <Button variant="plain" className="btn-link" onClick={() => openArticles(u)}>{u.articleCount} 篇</Button>
                         : <span style={{ color: 'var(--color-muted-soft)' }}>—</span>}
                     </td>
                     <td style={{ fontSize: 12, color: 'var(--color-muted)' }}>
@@ -233,33 +235,33 @@ export default function AdminPage() {
                     <td>
                       <div className="admin-actions">
                         {/* 禁用/启用 */}
-                        <button
+                        <Button variant="plain"
                           className={`btn-sm ${u.disabled ? 'btn-normal' : 'btn-warn'}`}
                           disabled={u.id === me?.id}
                           onClick={() => toggleDisable(u)}
                           title={u.id === me?.id ? '不能禁用自己' : u.disabled ? '启用账号' : '禁用账号'}
                         >
                           {u.disabled ? '启用' : '禁用'}
-                        </button>
+                        </Button>
 
                         {/* 重置密码 */}
-                        <button
+                        <Button variant="plain"
                           className="btn-icon"
                           onClick={() => openReset(u)}
                           title="重置密码"
                         >
                           <RotateCcw size={13} />
-                        </button>
+                        </Button>
 
                         {/* 删除 */}
-                        <button
+                        <Button variant="plain"
                           className="btn-icon btn-icon--danger"
                           disabled={u.id === me?.id}
                           onClick={() => setModal({ type: 'delete', user: u })}
                           title={u.id === me?.id ? '不能删除自己' : '删除用户'}
                         >
                           <Trash2 size={13} />
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -281,7 +283,7 @@ export default function AdminPage() {
                 <FileText size={15} />
                 <h2>{modal.user.username} 的文章</h2>
               </div>
-              <button className="admin-modal-close" onClick={() => setModal(null)}><X size={14} /></button>
+              <Button variant="plain" className="admin-modal-close" onClick={() => setModal(null)}><X size={14} /></Button>
             </div>
             <div className="admin-modal-body">
               {modal.loading ? (
@@ -312,7 +314,7 @@ export default function AdminPage() {
                 <UserPlus size={15} />
                 <h2>新建用户</h2>
               </div>
-              <button className="admin-modal-close" onClick={() => setModal(null)}><X size={14} /></button>
+              <Button variant="plain" className="admin-modal-close" onClick={() => setModal(null)}><X size={14} /></Button>
             </div>
             <div className="admin-modal-body">
               <form className="admin-form" onSubmit={handleCreate}>
@@ -320,7 +322,7 @@ export default function AdminPage() {
 
                 <div className="admin-form-field">
                   <label>用户名</label>
-                  <input
+                  <Input
                     type="text"
                     placeholder="3-20 个字符"
                     value={newUsername}
@@ -332,7 +334,7 @@ export default function AdminPage() {
 
                 <div className="admin-form-field">
                   <label>初始密码</label>
-                  <input
+                  <Input
                     type="password"
                     placeholder="至少 6 位"
                     value={newPassword}
@@ -344,24 +346,24 @@ export default function AdminPage() {
                 <div className="admin-form-field">
                   <label>角色</label>
                   <div className="admin-role-tabs">
-                    <button
+                    <Button variant="plain"
                       type="button"
                       className={`admin-role-tab ${newRole === 'user' ? 'active' : ''}`}
                       onClick={() => setNewRole('user')}
-                    >普通用户</button>
-                    <button
+                    >普通用户</Button>
+                    <Button variant="plain"
                       type="button"
                       className={`admin-role-tab ${newRole === 'admin' ? 'active' : ''}`}
                       onClick={() => setNewRole('admin')}
-                    >管理员</button>
+                    >管理员</Button>
                   </div>
                 </div>
 
                 <div className="admin-form-actions">
-                  <button type="button" className="admin-form-cancel" onClick={() => setModal(null)}>取消</button>
-                  <button type="submit" className="admin-form-submit" disabled={createLoading}>
+                  <Button variant="plain" type="button" className="admin-form-cancel" onClick={() => setModal(null)}>取消</Button>
+                  <Button variant="plain" type="submit" className="admin-form-submit" disabled={createLoading}>
                     {createLoading ? '创建中...' : '创建用户'}
-                  </button>
+                  </Button>
                 </div>
               </form>
             </div>
@@ -378,7 +380,7 @@ export default function AdminPage() {
                 <RotateCcw size={15} />
                 <h2>重置密码 · {modal.user.username}</h2>
               </div>
-              <button className="admin-modal-close" onClick={() => setModal(null)}><X size={14} /></button>
+              <Button variant="plain" className="admin-modal-close" onClick={() => setModal(null)}><X size={14} /></Button>
             </div>
             <div className="admin-modal-body">
               <form className="admin-form" onSubmit={handleReset}>
@@ -387,7 +389,7 @@ export default function AdminPage() {
                 <div className="admin-form-field">
                   <label>新密码</label>
                   <div className="admin-pwd-row">
-                    <input
+                    <Input
                       type={showPwd ? 'text' : 'password'}
                       placeholder="至少 6 位"
                       value={resetPwd}
@@ -395,17 +397,17 @@ export default function AdminPage() {
                       required
                       autoFocus
                     />
-                    <button type="button" className="admin-pwd-toggle" onClick={() => setShowPwd(v => !v)}>
+                    <Button variant="plain" type="button" className="admin-pwd-toggle" onClick={() => setShowPwd(v => !v)}>
                       {showPwd ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
+                    </Button>
                   </div>
                 </div>
 
                 <div className="admin-form-actions">
-                  <button type="button" className="admin-form-cancel" onClick={() => setModal(null)}>取消</button>
-                  <button type="submit" className="admin-form-submit" disabled={resetLoading}>
+                  <Button variant="plain" type="button" className="admin-form-cancel" onClick={() => setModal(null)}>取消</Button>
+                  <Button variant="plain" type="submit" className="admin-form-submit" disabled={resetLoading}>
                     {resetLoading ? '重置中...' : '确认重置'}
-                  </button>
+                  </Button>
                 </div>
               </form>
             </div>
@@ -422,7 +424,7 @@ export default function AdminPage() {
                 <Trash2 size={15} />
                 <h2>删除用户</h2>
               </div>
-              <button className="admin-modal-close" onClick={() => setModal(null)}><X size={14} /></button>
+              <Button variant="plain" className="admin-modal-close" onClick={() => setModal(null)}><X size={14} /></Button>
             </div>
             <div className="admin-modal-body">
               <p className="admin-confirm-text">
@@ -430,10 +432,10 @@ export default function AdminPage() {
                 该操作不可撤销，用户数据将永久移除（服务端文章目录不受影响）。
               </p>
               <div className="admin-form-actions">
-                <button className="admin-form-cancel" onClick={() => setModal(null)}>取消</button>
-                <button className="admin-form-submit admin-form-submit--danger" onClick={handleDelete}>
+                <Button variant="plain" className="admin-form-cancel" onClick={() => setModal(null)}>取消</Button>
+                <Button variant="plain" className="admin-form-submit admin-form-submit--danger" onClick={handleDelete}>
                   确认删除
-                </button>
+                </Button>
               </div>
             </div>
           </div>

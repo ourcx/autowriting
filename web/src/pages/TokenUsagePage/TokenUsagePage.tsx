@@ -1,3 +1,4 @@
+import Button from "../../components/Button/Button"
 /**
  * Token 用量统计面板  /token-usage
  * 展示：8 指标总览、趋势、I/O 比例、模型分布、操作横向图、明细表
@@ -234,11 +235,11 @@ export default function TokenUsagePage() {
         onBack={() => navigate(-1)}
         actions={<div className="tu-days-switch">
           {[7, 30, 90].map(d => (
-            <button
+            <Button variant="plain"
               key={d}
               className={`tu-day-btn${days === d ? ' tu-day-btn--active' : ''}`}
               onClick={() => setDays(d)}
-            >{d}天</button>
+            >{d}天</Button>
           ))}
         </div>}
       />

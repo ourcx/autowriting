@@ -1,3 +1,5 @@
+import { Input } from "../../components/FormControls/FormControls"
+import Button from "../../components/Button/Button"
 import { useState, FormEvent } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { login } from '../../store/useAuth'
@@ -63,7 +65,7 @@ export default function LoginPage() {
 
             <div className="auth-field">
               <label htmlFor="username">用户名</label>
-              <input
+              <Input
                 id="username"
                 type="text"
                 autoComplete="username"
@@ -76,7 +78,7 @@ export default function LoginPage() {
 
             <div className="auth-field">
               <label htmlFor="password">密码</label>
-              <input
+              <Input
                 id="password"
                 type="password"
                 autoComplete="current-password"
@@ -87,9 +89,9 @@ export default function LoginPage() {
               />
             </div>
 
-            <button className="auth-submit" type="submit" disabled={loading}>
+            <Button variant="plain" className="auth-submit" type="submit" disabled={loading}>
               {loading ? '登录中...' : '登录'}
-            </button>
+            </Button>
           </form>
 
           <div className="auth-footer">

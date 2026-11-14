@@ -10,6 +10,8 @@ import {
   Calendar, X, BookOpen, Globe, MessageCircle,
   Upload, Sparkles, Mic,
 } from 'lucide-react'
+import Button from '../Button/Button'
+import { Checkbox, FilePicker, Input, Select, SelectField, Textarea } from "../FormControls/FormControls"
 import { toast } from '../Toast/Toast'
 import {
   deepSeekRequest,
@@ -70,11 +72,17 @@ interface Props {
 let _idCounter = 0
 function nextId() { return String(++_idCounter) }
 
+const RESEARCH_OPTIONS = [
+  { key: 'thinking', label: '深度思考' },
+  { key: 'webSearch', label: '联网搜索' },
+  { key: 'readUrl', label: '阅读链接' },
+] as const
+
 const DEEPSEEK_DOCUMENT_EXTENSIONS = '.pdf,.doc,.docx,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.gif,.bmp,.tif,.tiff'
 
 type WechatSearchSource = WechatCollectorProvider | 'yuanbao'
 
-// 元宝文章解析失败时暂留链接和摘要，等读到正文后再允许勾选。
+// 元宝文章未读到正文时，仍可选用摘要或链接，保存时标明状态。
 function needsWechatArticleText(item: CollectedItem): boolean {
   return item.type === 'wechat' && !item.provider && !item.fullFetched
 }
@@ -124,9 +132,7 @@ export default function MaterialsCollector({
   const [researchPrompt, setResearchPrompt] = useState('')
   const [researchFile, setResearchFile] = useState<File>()
   const [researchPurpose, setResearchPurpose] = useState('text_recognition')
-  const [researchThinking, setResearchThinking] = useState(true)
-  const [researchSearch, setResearchSearch] = useState(true)
-  const [researchReadUrl, setResearchReadUrl] = useState(true)
+  const [researchOptions, setResearchOptions] = useState({ thinking: true, webSearch: true, readUrl: true })
   const canUseDeepSeek = deepseekReady && deepseekConsent
   const deepSeekSearch = searchProvider === 'deepseek'
   const deepSeekFile = deepseekReady && (fileProvider ? fileProvider === 'deepseek' : deepSeekSearch)
@@ -171,8 +177,7 @@ export default function MaterialsCollector({
     setLoading(true)
     try {
       const fields = {
-        prompt, confirmedCost: true, thinking: researchThinking, webSearch: researchSearch,
-        readUrl: researchReadUrl, purpose: researchPurpose,
+        prompt, confirmedCost: true, ...researchOptions, purpose: researchPurpose,
       }
       let body: typeof fields | FormData = fields
       if (researchFile) {
@@ -392,7 +397,7 @@ export default function MaterialsCollector({
 
       const parsedCount = articles.filter(article => article.content).length
       if (!articles.length) toast.warn('已取得元宝回答，未找到公众号原文')
-      else if (parsedCount < articles.length) toast.warn(`找到 ${articles.length} 篇公众号文章，已解析 ${parsedCount} 篇正文`)
+      else if (parsedCount < articles.length) toast.success(`找到 ${articles.length} 篇公众号文章，${parsedCount} 篇有正文，其余可按线索加入`)
       else toast.success(`已解析 ${parsedCount} 篇公众号文章`)
     } catch (error: unknown) {
       if (!controller.signal.aborted) toast.error(extractErrorMessage(error, '元宝搜索失败，请稍后再试'))
@@ -442,12 +447,12 @@ export default function MaterialsCollector({
               dateTag: articleData.publishedAt ? articleData.publishedAt.slice(0, 10) : it.dateTag,
               fetching: false,
               fullFetched: true,
-              selected: !isYuanbaoArticle,
+              selected: isYuanbaoArticle ? it.selected : true,
               expanded: false,
             }
           : it
       ))
-      toast.success(isYuanbaoArticle ? '原文已解析，可勾选作为素材' : '全文读取成功')
+      toast.success(isYuanbaoArticle ? '已补齐公众号正文' : '全文读取成功')
     } catch (e: unknown) {
       setItems(prev => prev.map(it => it.id === id ? { ...it, fetching: false } : it))
       const msg = (e as Error).message
@@ -539,7 +544,7 @@ export default function MaterialsCollector({
     setItems(prev => prev.map(it => it.id === id ? { ...it, dateTag } : it))
   }
 
-  function selectAll()   { setItems(prev => prev.map(it => ({ ...it, selected: !needsWechatArticleText(it) }))) }
+  function selectAll()   { setItems(prev => prev.map(it => ({ ...it, selected: true }))) }
   function selectNone()  { setItems(prev => prev.map(it => ({ ...it, selected: false }))) }
 
   // ── 统计 ─────────────────────────────────────────────────────────────────
@@ -579,7 +584,10 @@ export default function MaterialsCollector({
           const header = it.url
             ? `### ${it.title}\n> 来源：${it.source || it.url}  \n> URL：${it.url}`
             : `### ${it.title}${it.source ? `\n> 来源：${it.source}` : ''}`
-          parts.push(`${header}\n\n${it.content}`)
+          const body = needsWechatArticleText(it)
+            ? it.content ? `> 元宝搜索摘要，原文未读\n\n${it.content}` : '> 仅保留原文链接，尚未读取正文'
+            : it.content
+          parts.push(`${header}\n\n${body}`)
         }
       }
 
@@ -590,7 +598,10 @@ export default function MaterialsCollector({
           const header = it.url
             ? `### ${it.title}\n> 来源：${it.source || it.url}  \n> URL：${it.url}`
             : `### ${it.title}${it.source ? `\n> 来源：${it.source}` : ''}`
-          parts.push(`${header}\n\n${it.content}`)
+          const body = needsWechatArticleText(it)
+            ? it.content ? `> 元宝搜索摘要，原文未读\n\n${it.content}` : '> 仅保留原文链接，尚未读取正文'
+            : it.content
+          parts.push(`${header}\n\n${body}`)
         }
       }
 
@@ -612,69 +623,49 @@ export default function MaterialsCollector({
   return (
     <div className="mc-root">
 
-      {/* ── 默认时间标签 ── */}
-      <div className="mc-date-bar">
-        <Calendar size={13} className="mc-date-icon" />
-        <span className="mc-date-label">素材时间</span>
-        <input
-          type="date"
-          className="mc-date-input"
-          value={defaultDateTag}
-          onChange={e => setDefaultDateTag(e.target.value)}
-          title="为新采集的素材设置时间标签（可选）"
-        />
-        {defaultDateTag && (
-          <button
-            className="mc-date-clear"
-            onClick={() => setDefaultDateTag('')}
-            title="清除时间"
-          >
-            <X size={11} />
-          </button>
-        )}
-        <span className="mc-date-hint">
-          {defaultDateTag ? `新素材将标注 ${formatDateTag(defaultDateTag)}` : '不填则不标注时间'}
-        </span>
-      </div>
-
-      {/* ── 模式切换 ── */}
-      <div className="mc-mode-tabs">
-        {([
-          ['search', <Search size={13} />,         '搜索采集'],
-          ['wechat', <MessageCircle size={13} />,  '公众号采集'],
-          ['url',    <Link size={13} />,            'URL 解析'],
-          ['file',   <Upload size={13} />,          '文件 / OCR'],
-          ...(deepseekReady ? [
-            ['research', <Sparkles size={13} />, 'DeepSeek 调研'],
-            ['audio', <Mic size={13} />, '语音转文字'],
-          ] : []),
-          ['paste',  <ClipboardPaste size={13} />,  '手动粘贴'],
-        ] as [typeof mode, React.ReactNode, string][]).map(([id, icon, label]) => (
-          <button
-            key={id}
-            className={`mc-mode-tab${mode === id ? ' mc-mode-tab--active' : ''}`}
-            onClick={() => { setMode(id); if (id !== 'research') setResearchFile(undefined) }}
-          >
-            {icon}
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* ── 输入区 ── */}
-      <div className="mc-input-area">
-        {deepseekReady && ((mode === 'search' && deepSeekSearch) || (mode === 'url' && deepSeekUrl)
-          || (mode === 'file' && deepSeekFile) || mode === 'research' || mode === 'audio') && (
-          <label className="mc-search-tip mc-search-tip--hint">
-            <input type="checkbox" checked={deepseekConsent} disabled={loading} onChange={event => setDeepseekConsent(event.target.checked)} />
-            同意将当前文章中主动提交的搜索词、链接、文本或文件发给 DeepSeek，并按调用计费
+      <div className="mc-toolbar">
+        <div className="mc-mode-tabs" role="group" aria-label="采集方式">
+          {([
+            ['search', <Search size={14} />, '搜索采集'],
+            ['wechat', <MessageCircle size={14} />, '公众号采集'],
+            ['url', <Link size={14} />, 'URL 解析'],
+            ['file', <Upload size={14} />, '文件 / OCR'],
+            ...(deepseekReady ? [
+              ['research', <Sparkles size={14} />, 'DeepSeek 调研'],
+              ['audio', <Mic size={14} />, '语音转文字'],
+            ] : []),
+            ['paste', <ClipboardPaste size={14} />, '手动粘贴'],
+          ] as [typeof mode, React.ReactNode, string][]).map(([id, icon, label]) => (
+            <Button key={id} className="mc-mode-tab" aria-pressed={mode === id} disabled={loading}
+              onClick={() => { setMode(id); if (id !== 'research') setResearchFile(undefined) }}>
+              {icon}{label}
+            </Button>
+          ))}
+        </div>
+        <div className="mc-date-bar">
+          <label className="mc-date-label">
+            <Calendar size={14} aria-hidden="true" />
+            素材时间
+            <Input type="date" className="mc-date-input" value={defaultDateTag}
+              onChange={e => setDefaultDateTag(e.target.value)} title="为新采集的素材设置时间标签（可选）" />
           </label>
+          {defaultDateTag && <Button className="mc-date-clear" onClick={() => setDefaultDateTag('')} aria-label="清除时间"><X size={13} /></Button>}
+          {!defaultDateTag && <span className="mc-date-hint">选填</span>}
+        </div>
+      </div>
+
+      <div className="mc-input-area">
+        {deepseekReady && mode !== 'research' && ((mode === 'search' && deepSeekSearch) || (mode === 'url' && deepSeekUrl)
+          || (mode === 'file' && deepSeekFile) || mode === 'audio') && (
+          <Checkbox className="mc-consent" checked={deepseekConsent} disabled={loading} onCheckedChange={setDeepseekConsent}>
+            同意将主动提交的内容发送给 DeepSeek，并按调用计费
+          </Checkbox>
         )}
 
         {mode === 'search' && (
           <div className="mc-search-wrap">
             <div className="mc-search-row">
-              <input
+              <Input
                 className="mc-input"
                 placeholder={
                   searchProvider === 'searxng'
@@ -690,14 +681,14 @@ export default function MaterialsCollector({
                 onKeyDown={e => { if (e.key === 'Enter' && !loading) handleSearch() }}
                 disabled={loading || !canSearch}
               />
-              <button
+              <Button variant="plain"
                 className="mc-btn mc-btn--primary"
                 onClick={handleSearch}
                 disabled={loading || !searchQuery.trim() || !canSearch}
               >
                 {loading ? <Loader2 size={14} className="mc-spin" /> : <Search size={14} />}
                 {loading ? '搜索中...' : '搜索'}
-              </button>
+              </Button>
             </div>
             {/* 搜索状态提示 */}
             {searchProvider === 'searxng' ? (
@@ -731,7 +722,7 @@ export default function MaterialsCollector({
                 ['tikhub', 'TikHub', wechatCollectorReady.tikhub ? '$0.01 / 次' : '未配置'],
                 ['dajiala', '极致了数据', wechatCollectorReady.dajiala ? '约 ¥0.5 / 次' : '未配置'],
               ] as Array<[WechatSearchSource, string, string]>).map(([provider, label, detail]) => (
-                <button
+                <Button variant="plain"
                   key={provider}
                   type="button"
                   className={`mc-provider-option${wechatProvider === provider ? ' mc-provider-option--active' : ''}`}
@@ -740,12 +731,12 @@ export default function MaterialsCollector({
                 >
                   <span>{label}</span>
                   <small>{detail}</small>
-                </button>
+                </Button>
               ))}
             </div>
 
             {!usingYuanbao && <div className="mc-wechat-filters">
-              <select
+              <SelectField
                 className="mc-select"
                 aria-label="公众号文章排序"
                 value={wechatSort}
@@ -754,8 +745,8 @@ export default function MaterialsCollector({
                 <option value="default">相关度</option>
                 <option value="latest">最新发布</option>
                 <option value="hot">热度优先</option>
-              </select>
-              <select
+              </SelectField>
+              <SelectField
                 className="mc-select"
                 aria-label="公众号文章发布时间"
                 value={wechatPublishTime}
@@ -765,11 +756,11 @@ export default function MaterialsCollector({
                 <option value="day">最近一天</option>
                 <option value="week">最近七天</option>
                 <option value="half_year">最近半年</option>
-              </select>
+              </SelectField>
             </div>}
 
             <div className="mc-search-row">
-              <input
+              <Input
                 className="mc-input"
                 placeholder="输入主题、机构或文章关键词"
                 value={wechatQuery}
@@ -782,7 +773,7 @@ export default function MaterialsCollector({
                 disabled={loading || !canSearchWechat}
                 maxLength={100}
               />
-              <button
+              <Button variant="plain"
                 type="button"
                 className="mc-btn mc-btn--primary"
                 onClick={() => void handleWechatSearch()}
@@ -790,13 +781,13 @@ export default function MaterialsCollector({
               >
                 {loading ? <Loader2 size={14} className="mc-spin" /> : <Search size={14} />}
                 {loading ? (usingYuanbao ? '搜索并解析中…' : '搜索中…') : '搜索公众号'}
-              </button>
+              </Button>
             </div>
 
             {usingYuanbao ? (
               <div className={`mc-search-tip mc-search-tip--${yuanbaoAvailable ? 'hint' : 'warn'}`}>
                 {yuanbaoAvailable ? <BookOpen size={12} /> : <AlertCircle size={12} />}
-                {yuanbaoAvailable ? '回答和解析后的公众号正文可分别勾选。' : '当前服务器未启用元宝 AI 搜索。'}
+                {yuanbaoAvailable ? '回答和公众号文章可分别勾选；未读到正文的条目会标明状态。' : '当前服务器未启用元宝 AI 搜索。'}
               </div>
             ) : (
               <div className={`mc-search-tip${canSearchWechat ? ' mc-search-tip--paid' : ' mc-search-tip--warn'}`}>
@@ -811,15 +802,12 @@ export default function MaterialsCollector({
 
         {mode === 'url' && (
           <div className="mc-search-wrap">
-            {deepseekReady && <label className="mc-search-tip">
-              链接读取服务
-              <select value={deepSeekUrl ? 'deepseek' : 'jina'} disabled={loading} onChange={event => setUrlProvider(event.target.value)}>
-                <option value="jina">Jina Reader</option>
-                <option value="deepseek">DeepSeek Fetch</option>
-              </select>
+            {deepseekReady && <label className="mc-field mc-tool-field">
+              <span>链接读取服务</span>
+              <Select label="链接读取服务" value={deepSeekUrl ? 'deepseek' : 'jina'} disabled={loading} onValueChange={setUrlProvider} options={[{ value: 'jina', label: 'Jina Reader' }, { value: 'deepseek', label: 'DeepSeek Fetch' }]} />
             </label>}
             <div className="mc-url-row">
-            <input
+            <Input
               className="mc-input mc-input--mono"
               aria-label="网页 URL"
               placeholder="粘贴网页 URL，如 https://mp.weixin.qq.com/..."
@@ -828,55 +816,49 @@ export default function MaterialsCollector({
               onKeyDown={e => { if (e.key === 'Enter' && !loading) handleFetchUrl() }}
               disabled={loading}
             />
-            <button
+            <Button variant="plain"
               className="mc-btn mc-btn--primary"
               onClick={handleFetchUrl}
               disabled={loading || !urlInput.trim() || (deepSeekUrl && !canUseDeepSeek)}
             >
               {loading ? <Loader2 size={14} className="mc-spin" /> : <Link size={14} />}
               {loading ? '解析中...' : '解析'}
-            </button>
+            </Button>
             </div>
           </div>
         )}
 
         {mode === 'file' && (
           <div className="mc-paste-area">
-            {deepseekReady && <label className="mc-search-tip">
-              文件解析服务
-              <select value={deepSeekFile ? 'deepseek' : 'zhipu'} disabled={loading} onChange={event => setFileProvider(event.target.value)}>
-                <option value="zhipu">智谱</option>
-                <option value="deepseek">DeepSeek OCR</option>
-              </select>
+            {deepseekReady && <label className="mc-field mc-tool-field">
+              <span>文件解析服务</span>
+              <Select label="文件解析服务" value={deepSeekFile ? 'deepseek' : 'zhipu'} disabled={loading} onValueChange={setFileProvider} options={[{ value: 'zhipu', label: '智谱' }, { value: 'deepseek', label: 'DeepSeek OCR' }]} />
             </label>}
-            {deepSeekFile ? <label className="mc-search-tip">
-              OCR 解析方式
-              <select value={ocrPurpose} disabled={loading} onChange={event => setOcrPurpose(event.target.value === 'rich_layout_recognition' ? 'rich_layout_recognition' : 'text_recognition')}>
-                <option value="text_recognition">提取文本</option>
-                <option value="rich_layout_recognition">图文混排</option>
-              </select>
+            {deepSeekFile ? <label className="mc-field mc-tool-field">
+              <span>OCR 解析方式</span>
+              <Select label="OCR 解析方式" value={ocrPurpose} disabled={loading} onValueChange={value => setOcrPurpose(value === 'rich_layout_recognition' ? 'rich_layout_recognition' : 'text_recognition')} options={[{ value: 'text_recognition', label: '提取文本' }, { value: 'rich_layout_recognition', label: '图文混排' }]} />
             </label> : <div className="mc-provider-toggle" aria-label="智谱文件解析类型">
-              <button
+              <Button variant="plain"
                 type="button"
                 className={`mc-provider-option${parseMode === 'document' ? ' mc-provider-option--active' : ''}`}
                 onClick={() => setParseMode('document')}
               >
                 <span>文档解析</span>
                 <small>PDF / Office / 图片 / 文本</small>
-              </button>
-              <button
+              </Button>
+              <Button variant="plain"
                 type="button"
                 className={`mc-provider-option${parseMode === 'handwriting' ? ' mc-provider-option--active' : ''}`}
                 onClick={() => setParseMode('handwriting')}
               >
                 <span>手写 OCR</span>
                 <small>PNG / JPG / JPEG</small>
-              </button>
+              </Button>
             </div>}
             <label className={`mc-btn mc-btn--primary${loading ? ' mc-btn--loading' : ''}`}>
               {loading ? <Loader2 size={14} className="mc-spin" /> : <Upload size={14} />}
               {loading ? '解析中...' : '选择文件并解析'}
-              <input
+              <Input
                 type="file"
                 hidden
                 disabled={loading || (deepSeekFile ? !canUseDeepSeek : !glmApiKey)}
@@ -900,71 +882,91 @@ export default function MaterialsCollector({
         )}
 
         {mode === 'research' && (
-          <div className="mc-paste-area">
-            <textarea className="mc-textarea" rows={4} maxLength={32000} aria-label="调研问题" placeholder="输入调研问题，也可附上链接或文件" value={researchPrompt} disabled={loading} onChange={event => setResearchPrompt(event.target.value)} />
-            <div className="mc-search-tip">
-              <label><input type="checkbox" checked={researchThinking} disabled={loading} onChange={event => setResearchThinking(event.target.checked)} />深度思考</label>
-              <label><input type="checkbox" checked={researchSearch} disabled={loading} onChange={event => setResearchSearch(event.target.checked)} />联网搜索</label>
-              <label><input type="checkbox" checked={researchReadUrl} disabled={loading} onChange={event => setResearchReadUrl(event.target.checked)} />阅读链接</label>
+          <form className="mc-research" onSubmit={event => { event.preventDefault(); void handleResearch() }}>
+            <label className="mc-field">
+              <span>调研问题</span>
+              <Textarea rows={4} maxLength={32000} placeholder="想查什么？可以粘贴相关链接"
+                value={researchPrompt} disabled={loading} onChange={event => setResearchPrompt(event.target.value)} />
+            </label>
+            <fieldset className="mc-research-options" disabled={loading}>
+              <legend>调研能力</legend>
+              <div>
+                {RESEARCH_OPTIONS.map(({ key, label }) => (
+                  <Checkbox key={key} className="mc-option" checked={researchOptions[key]}
+                    disabled={loading} onCheckedChange={checked => setResearchOptions({ ...researchOptions, [key]: checked })}>{label}</Checkbox>
+                ))}
+              </div>
+            </fieldset>
+            <div className="mc-research-attachment">
+              <div className="mc-field mc-research-file">
+                <span>参考附件 <small>选填</small></span>
+                <div className="mc-file-actions">
+                  <FilePicker disabled={loading}
+                    accept={researchPurpose === 'user_data' ? '.txt,.md,.csv,.json,.html,.xml,.xls,.xlsx' : DEEPSEEK_DOCUMENT_EXTENSIONS}
+                    onPick={setResearchFile}>{researchFile ? '更换附件' : '选择附件'}</FilePicker>
+                  {researchFile && <>
+                    <span className="mc-file-name" title={researchFile.name}>{researchFile.name}</span>
+                    <Button className="mc-date-clear" onClick={() => setResearchFile(undefined)}
+                      disabled={loading} aria-label="移除附件"><X size={14} /></Button>
+                  </>}
+                </div>
+              </div>
+              <label className="mc-field">
+                <span>附件解析方式</span>
+                <Select label="附件解析方式" value={researchPurpose} disabled={loading}
+                onValueChange={value => { setResearchPurpose(value); setResearchFile(undefined) }}
+                options={[
+                  { value: 'text_recognition', label: '提取文本' },
+                  { value: 'rich_layout_recognition', label: '图文混排' },
+                  { value: 'user_data', label: '纯文本 / 表格' },
+                ]} />
+              </label>
             </div>
-            <label className="mc-search-tip">
-              文件解析方式
-              <select value={researchPurpose} disabled={loading} onChange={event => { setResearchPurpose(event.target.value); setResearchFile(undefined) }}>
-                <option value="text_recognition">提取文本</option>
-                <option value="rich_layout_recognition">图文混排</option>
-                <option value="user_data">纯文本 / 表格</option>
-              </select>
-            </label>
-            <label className="mc-search-tip">
-              附件（可选）
-              <input key={researchPurpose} type="file" disabled={loading}
-                accept={researchPurpose === 'user_data' ? '.txt,.md,.csv,.json,.html,.xml,.xls,.xlsx' : DEEPSEEK_DOCUMENT_EXTENSIONS}
-                onChange={event => setResearchFile(event.target.files?.[0])} />
-            </label>
-            <button className="mc-btn mc-btn--primary" disabled={loading || !canUseDeepSeek || !researchPrompt.trim()} onClick={() => void handleResearch()}>
-              {loading ? '调研中…' : '开始调研'}
-            </button>
-          </div>
+            <div className="mc-research-footer">
+              <Checkbox className="mc-research-consent" checked={deepseekConsent} disabled={loading} onCheckedChange={setDeepseekConsent}>
+                同意将调研问题和附件发送给 DeepSeek，并按调用计费
+              </Checkbox>
+              <Button type="submit" variant="primary" className="mc-research-submit" disabled={loading || !canUseDeepSeek || !researchPrompt.trim()}>
+                {loading ? <Loader2 size={15} className="mc-spin" aria-hidden="true" /> : <Sparkles size={15} aria-hidden="true" />}
+                {loading ? '调研中…' : '开始调研'}
+              </Button>
+            </div>
+            {loading && <p className="mc-research-status" role="status">正在等待 DeepSeek 返回调研结果</p>}
+          </form>
         )}
 
         {mode === 'audio' && (
-          <div className="mc-paste-area">
-            <label className="mc-btn mc-btn--primary">
-              <Mic size={14} />
+          <div className="mc-audio">
+            <FilePicker accept=".wav,.ogg" disabled={loading || !canUseDeepSeek} onPick={file => void handleTranscribe(file)}>
               {loading ? '转写中…' : '选择音频并转写'}
-              <input type="file" hidden accept=".wav,.ogg" disabled={loading || !canUseDeepSeek} onChange={event => {
-                const file = event.target.files?.[0]
-                event.target.value = ''
-                void handleTranscribe(file)
-              }} />
-            </label>
-            <p className="mc-search-tip">支持 16-bit PCM WAV 或 Ogg Opus，最长 120 秒，最大 8 MiB</p>
+            </FilePicker>
+            <p className="mc-field-hint">WAV 或 Ogg Opus · 最长 120 秒 · 最大 8 MiB</p>
           </div>
         )}
 
         {mode === 'paste' && (
           <div className="mc-paste-area">
-            <input
+            <Input
               className="mc-input"
               placeholder="素材标题（选填）"
               value={pasteTitle}
               onChange={e => setPasteTitle(e.target.value)}
             />
-            <textarea
+            <Textarea
               className="mc-textarea"
               placeholder="粘贴素材内容：小红书笔记文字、微信文章摘录、数据报告内容……"
               value={pasteText}
               onChange={e => setPasteText(e.target.value)}
               rows={5}
             />
-            <button
+            <Button variant="plain"
               className="mc-btn mc-btn--primary"
               onClick={handleAddPaste}
               disabled={!pasteText.trim()}
             >
               <Plus size={14} />
               添加到列表
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -977,10 +979,10 @@ export default function MaterialsCollector({
               共 {items.length} 条，已选 {selectedCount} 条
             </span>
             <div className="mc-list-actions">
-              <button className="mc-link-btn" onClick={selectAll}>全选</button>
-              <button className="mc-link-btn" onClick={selectNone}>取消</button>
+              <Button variant="plain" className="mc-link-btn" onClick={selectAll}>全选</Button>
+              <Button variant="plain" className="mc-link-btn" onClick={selectNone}>取消</Button>
               {canBatchFetch && (
-                <button
+                <Button variant="plain"
                   className={`mc-btn mc-btn--fetch${batchFetching ? ' mc-btn--loading' : ''}`}
                   onClick={handleBatchFetchFullText}
                   disabled={batchFetching}
@@ -990,9 +992,9 @@ export default function MaterialsCollector({
                     ? <><Loader2 size={13} className="mc-spin" />读取中...</>
                     : <><BookOpen size={13} />批量读全文</>
                   }
-                </button>
+                </Button>
               )}
-              <button
+              <Button variant="plain"
                 className={`mc-btn mc-btn--save${saving ? ' mc-btn--loading' : ''}`}
                 onClick={handleSave}
                 disabled={saving || selectedCount === 0}
@@ -1001,7 +1003,7 @@ export default function MaterialsCollector({
                   ? <><Loader2 size={13} className="mc-spin" />保存中...</>
                   : <><Check size={13} />写入素材库（{selectedCount}）</>
                 }
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -1012,13 +1014,9 @@ export default function MaterialsCollector({
                 className={`mc-item${item.selected ? ' mc-item--selected' : ''} mc-item--${item.type}${item.fullFetched && (item.type === 'search' || item.type === 'wechat') ? ' mc-item--full' : ''}`}
               >
                 <div className="mc-item-header">
-                  <label className="mc-item-check">
-                    <input
-                      type="checkbox"
-                      checked={item.selected}
-                      disabled={needsWechatArticleText(item)}
-                      onChange={() => toggleSelect(item.id)}
-                    />
+                  <Checkbox className="mc-item-check" checked={item.selected}
+                    onCheckedChange={() => toggleSelect(item.id)}>
+                    <span className="mc-item-label">
                     <span className={`mc-item-type-badge mc-badge--${item.type}`}>
                       {item.type === 'url'    && <Link size={11} />}
                       {item.type === 'search' && <Search size={11} />}
@@ -1031,8 +1029,10 @@ export default function MaterialsCollector({
                     {(item.type === 'search' || item.type === 'wechat') && item.fullFetched && (
                       <span className="mc-full-badge">{item.type === 'wechat' && !item.provider ? '正文' : '全文'}</span>
                     )}
+                    {needsWechatArticleText(item) && <span className="mc-preview-badge">{item.content ? '摘要' : '链接'}</span>}
                     <span className="mc-item-title">{item.title}</span>
-                  </label>
+                    </span>
+                  </Checkbox>
                   <div className="mc-item-ops">
                     {/* 时间标签 */}
                     <div className="mc-item-date-wrap" title="设置素材时间（可选）">
@@ -1040,16 +1040,16 @@ export default function MaterialsCollector({
                         <span className="mc-item-date-tag">
                           <Calendar size={10} />
                           {formatDateTag(item.dateTag)}
-                          <button
+                          <Button variant="plain"
                             className="mc-item-date-clear"
                             onClick={() => setItemDateTag(item.id, '')}
                             title="清除时间"
                           >
                             <X size={9} />
-                          </button>
+                          </Button>
                         </span>
                       ) : (
-                        <input
+                        <Input
                           type="date"
                           className="mc-item-date-input"
                           value=""
@@ -1061,7 +1061,7 @@ export default function MaterialsCollector({
 
                     {/* 搜索结果先展示摘要，确认后再读取全文；公众号服务会产生单篇费用。 */}
                     {(item.type === 'search' || item.type === 'wechat') && !item.fullFetched && item.url && (
-                      <button
+                      <Button variant="plain"
                         className="mc-fetch-btn"
                         onClick={() => item.url && handleFetchFullText(item.id, item.url)}
                         disabled={item.fetching || (item.useDeepSeekFetch && (!canUseDeepSeek || loading || items.some(result => result.useDeepSeekFetch && result.fetching)))}
@@ -1072,7 +1072,7 @@ export default function MaterialsCollector({
                           : <BookOpen size={12} />
                         }
                         {item.fetching ? '读取中' : needsWechatArticleText(item) ? '重试解析' : item.type === 'wechat' ? '读取正文' : '读全文'}
-                      </button>
+                      </Button>
                     )}
 
                     {item.url && (
@@ -1086,20 +1086,20 @@ export default function MaterialsCollector({
                         <ExternalLink size={13} />
                       </a>
                     )}
-                    <button
+                    <Button variant="plain"
                       className="mc-icon-btn"
                       onClick={() => toggleExpand(item.id)}
                       title={item.expanded ? '收起' : '展开内容'}
                     >
                       {item.expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                    </button>
-                    <button
+                    </Button>
+                    <Button variant="plain"
                       className="mc-icon-btn mc-icon-btn--del"
                       onClick={() => removeItem(item.id)}
                       title="移除"
                     >
                       ✕
-                    </button>
+                    </Button>
                   </div>
                 </div>
 

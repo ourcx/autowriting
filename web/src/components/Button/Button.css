@@ -26,3 +26,6 @@
 .ui-button:disabled { opacity: .45; cursor: not-allowed; }
 .ui-button:focus-visible { outline: 2px solid var(--color-brand-teal); outline-offset: 3px; }
 .ui-button svg { flex-shrink: 0; }
+
+.ui-button-plain { font-family: inherit; }
+.ui-button-plain:focus-visible { outline: 2px solid var(--color-brand-teal); outline-offset: 2px; }

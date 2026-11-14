@@ -209,7 +209,7 @@
 .topic-page select:focus-visible,
 .topic-page button:focus-visible,
 .topic-page a:focus-visible,
-.topic-import summary:focus-visible {
+.topic-import .ui-collapse-trigger:focus-visible {
   outline: 2px solid var(--color-brand-ochre);
   outline-offset: 3px;
 }
@@ -264,7 +264,7 @@
   font-size: 13px;
 }
 
-.topic-import summary {
+.topic-import .ui-collapse-trigger {
   display: flex;
   width: max-content;
   align-items: center;

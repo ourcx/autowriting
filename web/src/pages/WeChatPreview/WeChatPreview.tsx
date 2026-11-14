@@ -1,3 +1,4 @@
+import Button from "../../components/Button/Button"
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { AlertTriangle, Palette, Shapes } from 'lucide-react'
@@ -76,21 +77,21 @@ export default function WeChatPreview() {
           </div>}
         onBack={returnToEditor}
         actions={<>
-          <button
+          <Button variant="plain"
             className="preview-nav-styles-btn"
             onClick={() => navigate('/styles')}
           >
             <Palette size={14} />
             管理样式
-          </button>
-          <button
+          </Button>
+          <Button variant="plain"
             className="preview-nav-styles-btn"
             onClick={() => navigate(`/canvas?articleId=${encodeURIComponent(articleId || '')}`)}
           >
             <Shapes size={14} />
             视觉画布
-          </button>
-          <button
+          </Button>
+          <Button variant="plain"
             className={`wr-platform-tab ${platformMode === 'wechat' ? 'active' : ''}`}
             onClick={() => setPlatformMode('wechat')}
           >
@@ -99,8 +100,8 @@ export default function WeChatPreview() {
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15H9v-2h2v2zm4 0h-2v-2h2v2zm1.07-7.75-.9.92C14.45 10.9 14 11.5 14 13h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H9c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z" />
             </svg>
             微信公众号
-          </button>
-          <button
+          </Button>
+          <Button variant="plain"
             className={`wr-platform-tab wr-platform-tab--toutiao ${platformMode === 'toutiao' ? 'active' : ''}`}
             onClick={() => setPlatformMode('toutiao')}
           >
@@ -108,8 +109,8 @@ export default function WeChatPreview() {
               <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
             </svg>
             今日头条
-          </button>
-          <button
+          </Button>
+          <Button variant="plain"
             className={`wr-platform-tab wr-platform-tab--xiaohongshu ${platformMode === 'xiaohongshu' ? 'active' : ''}`}
             onClick={() => setPlatformMode('xiaohongshu')}
           >
@@ -118,7 +119,7 @@ export default function WeChatPreview() {
               <path d="M8 9h8v2H8zm0 4h5v2H8z" fill="#fffaf0" />
             </svg>
             小红书长文
-          </button>
+          </Button>
         </>}
       />
 
@@ -133,12 +134,12 @@ export default function WeChatPreview() {
           <div className="preview-empty-toutiao">
             <AlertTriangle size={24} />
             <p>{loadError}</p>
-            <button onClick={returnToEditor}>返回编辑器</button>
+            <Button variant="plain" onClick={returnToEditor}>返回编辑器</Button>
           </div>
         ) : platformMode === 'toutiao' && !data.articleToutiao ? (
           <div className="preview-empty-toutiao">
             <p>今日头条版本尚未生成</p>
-            <button onClick={() => navigate(`${articleEditorUrl(articleId || '', { title: articleTitle })}?tab=toutiao`)}>返回编辑器生成</button>
+            <Button variant="plain" onClick={() => navigate(`${articleEditorUrl(articleId || '', { title: articleTitle })}?tab=toutiao`)}>返回编辑器生成</Button>
           </div>
         ) : (
           <WeChatRenderer content={activeContent} title={title} articleId={articleId} platformMode={platformMode} />

@@ -1,3 +1,4 @@
+import { Collapse, SelectField, Textarea } from "../../components/FormControls/FormControls"
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { ClipboardEvent } from "react"
 import { Copy, ExternalLink, Eye, LayoutTemplate, Send } from "lucide-react"
@@ -112,14 +113,14 @@ export default function XiumiEditor({ articleId, article, title, pushing, onPush
         <label>
           <LayoutTemplate size={15} />
           <span>默认模板</span>
-          <select aria-label="选择秀米画布默认模板" value={templateId}
+          <SelectField aria-label="选择秀米画布默认模板" value={templateId}
             disabled={importing || pushing} onChange={event => {
               setTemplateId(event.target.value)
               setView("template")
             }}>
             <option value="">不套模板</option>
             {BUILTIN_TEMPLATES.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-          </select>
+          </SelectField>
         </label>
         <Button variant="secondary" disabled={!article || importing || pushing} onClick={() => setView("template")}>
           <Eye size={14} />预览模板
@@ -155,12 +156,11 @@ export default function XiumiEditor({ articleId, article, title, pushing, onPush
       </div>
       <div className="cs-xiumi-help">
         <p>选择模板后，可用当前正文生成排版并保存，也可复制到秀米继续编辑。秀米编辑完成后，点击顶部对勾传回。</p>
-        <details>
-          <summary>登录或回传遇到问题？新窗口排版后粘贴到这里</summary>
+        <Collapse label={<>登录或回传遇到问题？新窗口排版后粘贴到这里</>}>
           <p>请通过 HTTPS 访问平台，并允许秀米登录所需的第三方 Cookie。新窗口排版完成后，点击秀米对勾复制，再粘贴到下方。</p>
-          <textarea aria-label="粘贴秀米排版" placeholder="在此粘贴秀米图文，自动保存排版与图片"
+          <Textarea aria-label="粘贴秀米排版" placeholder="在此粘贴秀米图文，自动保存排版与图片"
             readOnly disabled={importing || pushing} onPaste={pasteContent} />
-        </details>
+        </Collapse>
         <div role="status">
           {importing ? "正在转存图片并保存排版，请暂勿切换文章或离开页面…" : pendingHtml ? (
             <Button variant="secondary" disabled={pushing} onClick={() => void receiveHtml(pendingHtml)}>重试保存秀米排版</Button>

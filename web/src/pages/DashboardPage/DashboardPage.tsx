@@ -1,3 +1,4 @@
+import Button from "../../components/Button/Button"
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Settings, Palette, AlertTriangle, Database, BookOpen, LogOut, Shield, Zap, Clock, BarChart3, Image, User, Shapes, HelpCircle, Menu, X } from 'lucide-react'
@@ -47,7 +48,7 @@ export default function DashboardPage() {
           <span>Dashy</span>
         </div>}
         actions={<>
-          <button
+          <Button variant="plain"
             className="dp-mobile-nav-trigger"
             type="button"
             aria-label={mobileNavOpen ? '关闭功能导航' : '打开功能导航'}
@@ -56,69 +57,69 @@ export default function DashboardPage() {
             onClick={() => setMobileNavOpen(open => !open)}
           >
             {mobileNavOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
+          </Button>
           <nav id="dashboard-navigation" className={`dp-nav ${mobileNavOpen ? 'is-open' : ''}`} aria-label="工作台导航">
           <div className="dp-nav-group" role="group" aria-label="创作工具">
-            <button className="dp-nav-btn" onClick={() => goTo('/drafts')}>
+            <Button variant="plain" className="dp-nav-btn" onClick={() => goTo('/drafts')}>
               <BookOpen size={14} />
               微信草稿
-            </button>
-            <button className="dp-nav-btn" onClick={() => goTo('/rag')}>
+            </Button>
+            <Button variant="plain" className="dp-nav-btn" onClick={() => goTo('/rag')}>
               <Database size={14} />
               知识库
-            </button>
-            <button className="dp-nav-btn" onClick={() => goTo('/prompts')}>
+            </Button>
+            <Button variant="plain" className="dp-nav-btn" onClick={() => goTo('/prompts')}>
               <Zap size={14} />
               提示词
-            </button>
-            <button className="dp-nav-btn" onClick={() => goTo('/cron')}>
+            </Button>
+            <Button variant="plain" className="dp-nav-btn" onClick={() => goTo('/cron')}>
               <Clock size={14} />
               定时任务
-            </button>
-            <button className="dp-nav-btn" onClick={() => goTo('/insights')}>
+            </Button>
+            <Button variant="plain" className="dp-nav-btn" onClick={() => goTo('/insights')}>
               <BarChart3 size={14} />
               数据看板
-            </button>
+            </Button>
           </div>
           <div className="dp-nav-group" role="group" aria-label="设计">
-            <button className="dp-nav-btn" onClick={() => goTo('/wechat/materials')}>
+            <Button variant="plain" className="dp-nav-btn" onClick={() => goTo('/wechat/materials')}>
               <Image size={14} />
               素材库
-            </button>
-            <button className="dp-nav-btn" onClick={() => goTo('/styles')}>
+            </Button>
+            <Button variant="plain" className="dp-nav-btn" onClick={() => goTo('/styles')}>
               <Palette size={14} />
               样式
-            </button>
-            <button className="dp-nav-btn" onClick={() => goTo('/canvas')}>
+            </Button>
+            <Button variant="plain" className="dp-nav-btn" onClick={() => goTo('/canvas')}>
               <Shapes size={14} />
               画布
-            </button>
+            </Button>
           </div>
           <div className="dp-nav-group" role="group" aria-label="账户与配置" data-onboarding="setup-status">
-            <button className={`dp-nav-btn ${!apiKeyReady ? 'dp-nav-btn--warn' : ''}`} onClick={() => goTo('/settings')}>
+            <Button variant="plain" className={`dp-nav-btn ${!apiKeyReady ? 'dp-nav-btn--warn' : ''}`} onClick={() => goTo('/settings')}>
               {apiKeyReady ? <Settings size={14} /> : <AlertTriangle size={14} />}
               AI 配置
-            </button>
+            </Button>
             {isAdmin && (
-              <button className="dp-nav-btn" onClick={() => goTo('/admin')}>
+              <Button variant="plain" className="dp-nav-btn" onClick={() => goTo('/admin')}>
                 <Shield size={14} />
                 管理
-              </button>
+              </Button>
             )}
-            <button className="dp-nav-btn dp-nav-btn--account" onClick={() => goTo('/account')} title={`${user?.username || '当前用户'}的发布账号与写作资产`}>
+            <Button variant="plain" className="dp-nav-btn dp-nav-btn--account" onClick={() => goTo('/account')} title={`${user?.username || '当前用户'}的发布账号与写作资产`}>
               <User size={14} />
               <span>账号与资产</span>
               <small className={connectedPlatforms ? 'is-ready' : ''}>{connectedPlatforms}/3</small>
-            </button>
-            <button className="dp-nav-btn dp-nav-btn--icon" title="查看当前页引导" aria-label="查看当前页引导" onClick={() => setShowOnboarding(true)}>
+            </Button>
+            <Button variant="plain" className="dp-nav-btn dp-nav-btn--icon" title="查看当前页引导" aria-label="查看当前页引导" onClick={() => setShowOnboarding(true)}>
               <HelpCircle size={14} />
-            </button>
-            <button className="dp-nav-btn dp-nav-btn--icon" title="登出" aria-label="登出" onClick={() => { logout(); navigate('/login') }}>
+            </Button>
+            <Button variant="plain" className="dp-nav-btn dp-nav-btn--icon" title="登出" aria-label="登出" onClick={() => { logout(); navigate('/login') }}>
               <LogOut size={14} />
-            </button>
+            </Button>
           </div>
           </nav>
-          {mobileNavOpen && <button className="dp-nav-backdrop" type="button" aria-label="关闭功能导航" onClick={() => setMobileNavOpen(false)} />}
+          {mobileNavOpen && <Button variant="plain" className="dp-nav-backdrop" type="button" aria-label="关闭功能导航" onClick={() => setMobileNavOpen(false)} />}
         </>}
       />
 
