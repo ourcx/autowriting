@@ -131,7 +131,7 @@ for (const template of CANVAS_DESIGN_TEMPLATES) {
 }
 
 const publicTemplates = CANVAS_DESIGN_TEMPLATES.filter(template => template.id !== "design-reference")
-assert.equal(publicTemplates.length, 19, "应提供原有 7 套和新增 12 套固定模板")
+assert.equal(publicTemplates.length, 31, "应提供原有 19 套和新增 12 套可编辑主题")
 for (const template of publicTemplates) {
   assert.ok(template.designSystem.materials, `${template.id} 必须组合素材`)
   const document = finalizeCanvasDesign(
