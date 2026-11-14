@@ -131,8 +131,9 @@ export async function smokeWritingAgent(base, token) {
   const modelBodies = []
   let stopReason = 'length'
   let continuation = false
-  const draft = '# 校舍建设进展\n\n目前能确定的只有一件事：已公示设计招标。开工时间仍未知。'
-  const rewritten = '# 校舍建设进展\n\n学校公示了设计招标，开工日期尚未公布。'
+  const draft = '# 校舍建设进展\n\n目前能确定的只有一件事：5 月 10 日已公示设计招标。开工时间仍未知。'
+  const rewritten = '# 校舍建设进展\n\n学校于 5 月 10 日公示设计招标，开工日期尚未公布。'
+  const rewrites = []
   const model = createServer(async (request, response) => {
     let raw = ''
     for await (const chunk of request) raw += chunk
@@ -144,11 +145,22 @@ export async function smokeWritingAgent(base, token) {
       response.end(`data: ${JSON.stringify({ choices: [{ delta: { content }, finish_reason: stopReason }] })}\n\n`)
       return
     }
-    const content = input.messages[0].content.includes('独立中文审稿编辑')
-      ? rewritten
-      : input.messages[0].content.includes('调研 Agent')
-      ? '{"action":"finish","plan":{"angle":"公开招标进展"}}'
-      : '先讲已经公示的招标，再说明开工时间未知。'
+    const [system, user] = input.messages.map(message => message.content)
+    let content
+    if (system.includes('独立审稿 Agent')) {
+      assert.equal(user, draft)
+      content = JSON.stringify({ issues: [{ excerpt: '目前能确定的只有一件事', action: '直接写公告发布日期' }] })
+    } else if (system.includes('独立优化 Agent')) {
+      const revision = JSON.parse(user)
+      rewrites.push(revision)
+      assert.equal(revision.draft, draft)
+      assert.match(revision.notes[0], /直接写公告发布日期/)
+      content = rewrites.length === 1 ? rewritten.replace('10 日', '11 日') : rewritten
+    } else if (system.includes('调研 Agent')) {
+      content = '{"action":"finish","plan":{"angle":"公开招标进展"}}'
+    } else {
+      content = '先讲已经公示的招标，再说明开工时间未知。'
+    }
     response.writeHead(200, { 'Content-Type': 'application/json' })
     response.end(JSON.stringify({ choices: [{ message: { content }, finish_reason: 'stop' }] }))
   })
@@ -192,13 +204,15 @@ export async function smokeWritingAgent(base, token) {
     continuation = true
     stopReason = 'stop'
     assert.match(await run(), /event: done/)
-    assert.deepEqual(modelBodies.map(body => Boolean(body.stream)), [false, false, true, true, false])
-    assert.equal(modelBodies.at(-2).messages.at(-2).content, partial.content)
+    assert.deepEqual(modelBodies.map(body => Boolean(body.stream)), [false, false, true, true, false, false, false])
+    assert.equal(modelBodies.at(-4).messages.at(-2).content, partial.content)
     assert.deepEqual(modelBodies.at(-1).messages.map(({ role }) => role), ['system', 'user'])
-    assert.equal(modelBodies.at(-1).messages[1].content, draft)
+    assert.equal(rewrites.length, 2)
+    assert.match(rewrites[1].corrections[0], /须保留：10；去除新增：11/)
     const [stored] = await json(`${root}/candidates`)
     assert.equal(stored.content, rewritten)
-    assert.equal(stored.trace.find(step => step.kind === 'edit')?.status, 'done')
+    assert.equal(stored.trace.find(step => step.kind === 'review')?.status, 'changes_requested')
+    assert.deepEqual(stored.trace.filter(step => step.kind === 'verify').map(step => step.status), ['changes_requested', 'done'])
     assert.ok(!Object.hasOwn(stored, 'draftComplete'))
     assert.ok(stored.referenceArticleIds.includes(history))
     assert.deepEqual(stored.trace.filter(step => step.kind === 'write').map(step => [step.attempt, step.status]), [[1, 'failed'], [2, 'done']])

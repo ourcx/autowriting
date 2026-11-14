@@ -1,3 +1,5 @@
+import { DEEPSEEK_KEY_HEADER } from "../../shared/aiPreferences.ts"
+import { withRequestDeepSeekKey } from "../deepseekCredentials.ts"
 import { Router } from "express"
 import path from "path"
 import { chromium, type Cookie } from "playwright"
@@ -407,12 +409,12 @@ router.get("/records", (req, res) => {
 router.post("/article-metadata", async (req, res) => {
   const title = String(req.body?.title || "").trim()
   const content = normalizeText(req.body?.content, ARTICLE_CONTENT_MAX_LENGTH)
-  const aiConfig = req.body?.aiConfig ?? {}
+  const aiConfig = withRequestDeepSeekKey(req.body?.aiConfig ?? {}, req.get(DEEPSEEK_KEY_HEADER))
   if (!title || !content) return res.status(400).json({ error: "标题和正文不能为空" })
   if (isTitleOverSafetyLimit(title)) {
     return res.status(400).json({ error: `标题异常过长，最多 ${TITLE_SAFETY_MAX_LENGTH} 个字` })
   }
-  if (!hasArticleApiKey(aiConfig, req.user!.id) && aiConfig.articleProvider !== "maas") {
+  if (!hasArticleApiKey(aiConfig) && aiConfig.articleProvider !== "maas") {
     return res.status(400).json({ error: "请先在 AI 配置中填写文章模型的 API Key" })
   }
   if (aiConfig.articleProvider === "maas" && !aiConfig.maasApiKey) {
@@ -420,7 +422,7 @@ router.post("/article-metadata", async (req, res) => {
   }
 
   try {
-    const { complete } = createArticleModel(aiConfig, req.user!.id)
+    const { complete } = createArticleModel(aiConfig)
     const response = await complete({
       messages: [
         {

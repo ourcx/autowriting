@@ -1,3 +1,5 @@
+import { DEEPSEEK_KEY_HEADER } from "../../shared/aiPreferences.ts"
+import { withRequestDeepSeekKey } from "../deepseekCredentials.ts"
 /**
  * AI 样式生成路由
  * POST /api/generate-style
@@ -75,16 +77,16 @@ router.post('/generate-style', async (req, res) => {
     const { prompt, baseCSS, aiConfig: clientAiConfig } = req.body
     if (!prompt) return res.status(400).json({ error: '缺少 prompt 参数' })
 
-    const aiConfig = { ...SERVER_AI_CONFIG, ...clientAiConfig }
+    const aiConfig = withRequestDeepSeekKey({ ...SERVER_AI_CONFIG, ...clientAiConfig }, req.get(DEEPSEEK_KEY_HEADER))
 
-    if (!hasArticleApiKey(aiConfig, req.user.id) && aiConfig.articleProvider !== 'maas') {
+    if (!hasArticleApiKey(aiConfig) && aiConfig.articleProvider !== 'maas') {
       return res.status(400).json({ error: '未配置 AI API Key' })
     }
     if (aiConfig.articleProvider === 'maas' && !aiConfig.maasApiKey) {
       return res.status(400).json({ error: '未配置 MaaS API Key' })
     }
 
-    const { model, complete } = createArticleModel(aiConfig, req.user.id)
+    const { model, complete } = createArticleModel(aiConfig)
 
     // 从数据库读取样式生成提示词（支持用户自定义覆盖）
     const stylePromptData = getEffectivePrompt('prompt-style-generate')

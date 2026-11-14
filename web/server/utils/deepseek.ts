@@ -81,7 +81,7 @@ function validatePurpose(file: DeepSeekFile, purpose: DeepSeekFilePurpose): void
 export function createDeepSeekClient(config: DeepSeekConfig, transport: typeof fetch = fetch) {
   function enabled(): void {
     if (!config.enabled) throw new DeepSeekError('DeepSeek 应用能力尚未启用', 503)
-    if (!config.apiKey.trim()) throw new DeepSeekError('服务端未配置 DEEPSEEK_API_KEY', 503)
+    if (!config.apiKey.trim()) throw new DeepSeekError('请在当前浏览器的 AI 配置中填写 DeepSeek Key', 503)
   }
   async function request(endpoint: string, body: Record<string, unknown> | FormData, signal?: AbortSignal, timeoutMs = 120_000): Promise<Response> {
     enabled()

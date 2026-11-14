@@ -1,24 +1,19 @@
-import { DEEPSEEK_APP_CONFIG } from "./config.ts"
-import { getSetting, setSetting } from "./db.ts"
+import { isDeepSeekApiKey } from "../shared/aiPreferences.ts"
+import type { AIConfig } from "./types.ts"
 import type { DeepSeekConfig } from "./utils/deepseek.ts"
 
-const KEY_PREFIX = "deepseek_api_key:"
+export const LEGACY_DEEPSEEK_KEY_PREFIX = "deepseek_api_key:"
 
 export function isPrivateDeepSeekKey(key: string): boolean {
-  return key.startsWith(KEY_PREFIX)
+  return key.startsWith(LEGACY_DEEPSEEK_KEY_PREFIX)
 }
 
-export function getAccountDeepSeekKey(userId: string): string {
-  const value = getSetting(KEY_PREFIX + userId)
-  return typeof value === "string" ? value : ""
+export function resolveDeepSeekConfig(value: unknown): DeepSeekConfig {
+  const apiKey = typeof value === "string" && isDeepSeekApiKey(value) ? value : ""
+  return { enabled: Boolean(apiKey), apiKey }
 }
 
-export function setAccountDeepSeekKey(userId: string, key: string): void {
-  setSetting(KEY_PREFIX + userId, key)
-}
-
-export function resolveDeepSeekConfig(userId?: string, serverConfig: DeepSeekConfig = DEEPSEEK_APP_CONFIG): DeepSeekConfig {
-  // 账号 Key 只供当前账号使用。服务端开关只决定是否开放部署级共享 Key。
-  const accountKey = userId ? getAccountDeepSeekKey(userId) : ""
-  return accountKey ? { enabled: true, apiKey: accountKey } : serverConfig
+export function withRequestDeepSeekKey<T extends AIConfig>(config: T, value: unknown): T & AIConfig {
+  // 只认本次请求头。即使旧客户端在正文或任务设置中传了同名字段，也不会被用作凭据。
+  return { ...config, deepseekApiKey: resolveDeepSeekConfig(value).apiKey }
 }

@@ -34,6 +34,7 @@ export interface UserPublic {
 
 // AI 配置类型
 export interface AIConfig {
+  deepseekApiKey?: string // 仅当前请求使用
   articleProvider?: string
   articleApiKey?: string
   articleBaseUrl?: string

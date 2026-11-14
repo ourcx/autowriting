@@ -1,3 +1,4 @@
+import { normalizeWechatArticleUrl } from "../../../shared/wechatArticleUrl"
 /**
  * MaterialsCollector — 素材采集面板
  * 网页搜索、公众号采集、链接、文件、调研、语音和手动粘贴
@@ -136,7 +137,17 @@ export default function MaterialsCollector({
   const canUseDeepSeek = deepseekReady && deepseekConsent
   const deepSeekSearch = searchProvider === 'deepseek'
   const deepSeekFile = deepseekReady && (fileProvider ? fileProvider === 'deepseek' : deepSeekSearch)
-  const deepSeekUrl = deepseekReady && (urlProvider ? urlProvider === 'deepseek' : deepSeekSearch)
+  const wechatUrl = normalizeWechatArticleUrl(urlInput)
+  const wechatReaders = [
+    ...(wechatUrl && wechatCollectorReady.tikhub ? [{ value: 'tikhub', label: 'TikHub 公众号解析（付费）' }] : []),
+    ...(wechatUrl && wechatCollectorReady.dajiala ? [{ value: 'dajiala', label: '极致了公众号解析（付费）' }] : []),
+  ]
+  const urlReaders = [{ value: 'web', label: wechatUrl ? '公众号原文直读' : '通用网页读取' },
+    ...(deepseekReady ? [{ value: 'deepseek', label: 'DeepSeek Fetch' }] : []), ...wechatReaders]
+  const selectedUrlReader = urlReaders.some(reader => reader.value === urlProvider)
+    ? urlProvider
+    : !wechatUrl && deepSeekSearch && deepseekReady ? 'deepseek' : 'web'
+  const deepSeekUrl = selectedUrlReader === 'deepseek'
 
   // 新增素材时的默认时间（可以不填）
   const [defaultDateTag, setDefaultDateTag] = useState('')
@@ -235,7 +246,10 @@ export default function MaterialsCollector({
     }
     setLoading(true)
     try {
-      const data = deepSeekUrl ? await fetchDeepSeekMaterial(url) : await fetchMaterialUrl(url, jinaApiKey || '')
+      const sourceUrl = wechatUrl || url
+      const data = selectedUrlReader === 'tikhub' || selectedUrlReader === 'dajiala'
+        ? await fetchWechatArticle({ provider: selectedUrlReader, url: sourceUrl })
+        : deepSeekUrl ? await fetchDeepSeekMaterial(sourceUrl) : await fetchMaterialUrl(sourceUrl, jinaApiKey || '')
 
       const hostname = new URL(url).hostname
       const firstLine = data.content.split('\n').find((l: string) => l.trim()) || hostname
@@ -243,11 +257,11 @@ export default function MaterialsCollector({
 
       setItems(prev => [{
         id:          nextId(),
-        type:        'url',
+        type:        wechatUrl ? 'wechat' : 'url',
         title,
         content:     data.content,
-        url,
-        source:      hostname,
+        url:         sourceUrl,
+        source:      'source' in data && typeof data.source === 'string' ? data.source : hostname,
         selected:    true,
         expanded:    false,
         dateTag:     defaultDateTag,
@@ -256,7 +270,7 @@ export default function MaterialsCollector({
       setUrlInput('')
       toast.success('页面解析成功')
     } catch (e: unknown) {
-      toast.error('解析失败：' + (e as Error).message)
+      toast.error(extractErrorMessage(e, '页面解析失败'))
     } finally {
       setLoading(false)
     }
@@ -802,9 +816,9 @@ export default function MaterialsCollector({
 
         {mode === 'url' && (
           <div className="mc-search-wrap">
-            {deepseekReady && <label className="mc-field mc-tool-field">
+            {urlReaders.length > 1 && <label className="mc-field mc-tool-field">
               <span>链接读取服务</span>
-              <Select label="链接读取服务" value={deepSeekUrl ? 'deepseek' : 'jina'} disabled={loading} onValueChange={setUrlProvider} options={[{ value: 'jina', label: 'Jina Reader' }, { value: 'deepseek', label: 'DeepSeek Fetch' }]} />
+              <Select label="链接读取服务" value={selectedUrlReader || 'web'} disabled={loading} onValueChange={setUrlProvider} options={urlReaders} />
             </label>}
             <div className="mc-url-row">
             <Input
@@ -825,6 +839,9 @@ export default function MaterialsCollector({
               {loading ? '解析中...' : '解析'}
             </Button>
             </div>
+            {wechatUrl && <p className="mc-field-hint">
+              {wechatReaders.length ? '直读遇到微信验证时，可以切换公众号专用解析服务。' : '若微信要求验证，请打开原文后手动粘贴正文。'}
+            </p>}
           </div>
         )}
 

@@ -7,6 +7,8 @@ import bcrypt from "bcryptjs"
 import fs from "fs"
 import path from "path"
 import { DATA_DIR, LEGACY_DATA_DIR } from "./config.ts"
+import { aiPreferences } from "../shared/aiPreferences.ts"
+import { LEGACY_DEEPSEEK_KEY_PREFIX, isPrivateDeepSeekKey } from "./deepseekCredentials.ts"
 import type {
   DbUserRow, DbCoverCacheRow, DbCoverHistoryRow, DbImageRow,
   DbPublishRow, DbAnalysisRow, DbTemplateRow, DbPromptRow,
@@ -58,6 +60,7 @@ const USER_GLOBAL_MEMORY_PREFIX = `${GLOBAL_MEMORY_KEY}:`
 // WAL 模式：读写并发更好
 db.pragma("journal_mode = WAL")
 db.pragma("foreign_keys = ON")
+db.pragma("secure_delete = ON")
 
 // ── 建表 ──────────────────────────────────────────────────────────────────────
 
@@ -494,6 +497,38 @@ addMissingColumns()
 createIndexes()
 migrateIfNeeded()
 
+// 迁移旧版本写入的模型凭据，保留其他设置与任务内容。重复启动不会重写未修改的记录。
+export function migrateBrowserOnlyAIKeys(): void {
+  let changed = false
+  db.transaction(() => {
+    changed = db.prepare("DELETE FROM settings WHERE substr(key, 1, ?) = ?")
+      .run(LEGACY_DEEPSEEK_KEY_PREFIX.length, LEGACY_DEEPSEEK_KEY_PREFIX).changes > 0
+    const getPreferences = (raw: string) => {
+      try { return JSON.stringify(aiPreferences(JSON.parse(raw))) } catch { return "{}" }
+    }
+    const settings = db.prepare("SELECT value FROM settings WHERE key = 'ai-config'").get() as { value: string } | undefined
+    if (settings) {
+      const clean = getPreferences(settings.value)
+      if (clean !== settings.value) {
+        db.prepare("UPDATE settings SET value = ? WHERE key = 'ai-config'").run(clean)
+        changed = true
+      }
+    }
+    const jobs = db.prepare("SELECT id, ai_config FROM cron_jobs").all() as Array<{ id: string; ai_config: string }>
+    const updateJob = db.prepare("UPDATE cron_jobs SET ai_config = ? WHERE id = ?")
+    for (const job of jobs) {
+      const clean = getPreferences(job.ai_config)
+      if (clean !== job.ai_config) {
+        updateJob.run(clean, job.id)
+        changed = true
+      }
+    }
+  })()
+  if (changed) db.pragma("wal_checkpoint(TRUNCATE)")
+}
+
+migrateBrowserOnlyAIKeys()
+
 // ── 初始化 admin 账号 ─────────────────────────────────────────────────────────
 
 function seedAdminUser(): void {
@@ -920,7 +955,9 @@ export function getSetting(key: string): unknown {
 }
 
 export function setSetting(key: string, value: unknown): void {
-  stmts.setSetting.run(key, JSON.stringify(value), new Date().toISOString())
+  if (isPrivateDeepSeekKey(key)) throw new TypeError("DeepSeek Key 只保存在当前浏览器")
+  const safe = key === "ai-config" ? aiPreferences(value) : value
+  stmts.setSetting.run(key, JSON.stringify(safe), new Date().toISOString())
 }
 
 export function getAllSettings(): Record<string, unknown> {
@@ -1345,7 +1382,7 @@ export function createCronJob({ id, userId, name, cronExpr, enabled = true, topi
   db.prepare(`
     INSERT INTO cron_jobs (id, user_id, name, cron_expr, enabled, topic, style_prompt, cover_prompt, ai_config, wx_app_id, wx_app_secret, next_run_at, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, userId, name, cronExpr, enabled ? 1 : 0, topic || null, stylePrompt || null, coverPrompt || null, JSON.stringify(aiConfig), wxAppId || null, wxAppSecret || null, nextRunAt || null, now, now)
+  `).run(id, userId, name, cronExpr, enabled ? 1 : 0, topic || null, stylePrompt || null, coverPrompt || null, JSON.stringify(aiPreferences(aiConfig)), wxAppId || null, wxAppSecret || null, nextRunAt || null, now, now)
   return getCronJob(id)
 }
 
@@ -1370,7 +1407,7 @@ export function updateCronJob(id: string, update: {
   if (update.topic !== undefined) { fields.push("topic = ?"); vals.push(update.topic || null) }
   if (update.stylePrompt !== undefined) { fields.push("style_prompt = ?"); vals.push(update.stylePrompt || null) }
   if (update.coverPrompt !== undefined) { fields.push("cover_prompt = ?"); vals.push(update.coverPrompt || null) }
-  if (update.aiConfig !== undefined) { fields.push("ai_config = ?"); vals.push(JSON.stringify(update.aiConfig)) }
+  if (update.aiConfig !== undefined) { fields.push("ai_config = ?"); vals.push(JSON.stringify(aiPreferences(update.aiConfig))) }
   if (update.wxAppId !== undefined) { fields.push("wx_app_id = ?"); vals.push(update.wxAppId || null) }
   if (update.wxAppSecret !== undefined) { fields.push("wx_app_secret = ?"); vals.push(update.wxAppSecret || null) }
   if (update.nextRunAt !== undefined) { fields.push("next_run_at = ?"); vals.push(update.nextRunAt || null) }

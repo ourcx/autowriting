@@ -5,7 +5,7 @@ import {
   Sparkles, AlertCircle, CheckCircle2,
   ChevronDown, ChevronRight, Circle, Wand2, X,
 } from 'lucide-react'
-import { loadAIConfig } from '../../utils/aiConfig'
+import { aiRequestConfig, deepSeekKeyHeaders, loadAIConfig } from '../../utils/aiConfig'
 import { sanitizeHtml } from '../../utils/sanitizeHtml'
 import { stripEmoji } from '../../../shared/contentProduction'
 import './ContentStats.css'
@@ -565,9 +565,10 @@ export default function ContentStats({ content, title, articleId, task, onArticl
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...deepSeekKeyHeaders(),
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ article: content, aiConfig }),
+        body: JSON.stringify({ article: content, aiConfig: aiRequestConfig(aiConfig) }),
       })
 
       if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`)
@@ -650,9 +651,10 @@ export default function ContentStats({ content, title, articleId, task, onArticl
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...deepSeekKeyHeaders(),
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ article: content, task, aiConfig }),
+        body: JSON.stringify({ article: content, task, aiConfig: aiRequestConfig(aiConfig) }),
       })
 
       if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`)

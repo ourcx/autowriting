@@ -7,6 +7,7 @@
  * PUT    /api/settings/:key           设置单个配置项（body: { value }）
  */
 import { Router } from 'express'
+import { aiPreferences } from '../../shared/aiPreferences.ts'
 import { getSetting, setSetting, getAllSettings, getTokenUsageSummary } from '../db.js'
 import { authMiddleware } from '../authMiddleware.js'
 import { settingsSchemas, validateBody } from '../validation.ts'
@@ -117,7 +118,7 @@ router.put('/:key', validateBody(settingsSchemas.updateOne), (req, res) => {
     } else {
       setSetting(req.params.key, value)
     }
-    res.json({ key: req.params.key, value })
+    res.json({ key: req.params.key, value: req.params.key === "ai-config" ? aiPreferences(value) : value })
   } catch (error) {
     if (error instanceof TypeError || error instanceof RangeError) return res.status(400).json({ error: error.message })
     res.status(500).json({ error: error.message })

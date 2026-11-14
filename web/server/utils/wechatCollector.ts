@@ -1,3 +1,4 @@
+import { normalizeWechatArticleUrl } from "../../shared/wechatArticleUrl.ts"
 import { SERVER_AI_CONFIG } from "../config.ts"
 import { logger } from "../logger.ts"
 
@@ -395,13 +396,11 @@ export async function fetchWechatArticle(
   provider: WechatCollectorProvider,
   url: string,
 ): Promise<WechatCollectorArticleContent> {
-  const parsed = new URL(url)
-  if (parsed.protocol !== "https:" || parsed.hostname !== "mp.weixin.qq.com" || !parsed.pathname.startsWith("/s")) {
-    throw new Error("仅支持读取 mp.weixin.qq.com/s 开头的公众号文章")
-  }
+  const normalized = normalizeWechatArticleUrl(url)
+  if (!normalized) throw new Error("请输入有效的微信公众号文章链接")
   return provider === "tikhub"
-    ? fetchTikhubArticle(url)
-    : fetchDajialaArticle(url)
+    ? fetchTikhubArticle(normalized)
+    : fetchDajialaArticle(normalized)
 }
 
 export function getWechatCollectorReadiness() {

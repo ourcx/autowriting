@@ -1,3 +1,5 @@
+import { aiPreferences, DEEPSEEK_KEY_HEADER, isDeepSeekApiKey } from '../../shared/aiPreferences'
+
 /* ============================================================
  * aiConfig.ts — 用户 AI 配置，存储在 localStorage
  * ============================================================ */
@@ -21,6 +23,7 @@ export type CoverProvider = 'local' | 'openai' | 'openrouter' | 'gencli' | 'stab
 export interface AIConfig {
   // 服务商公共 Key（工具自己的 Key 非空时仍优先使用工具 Key）
   zhipuApiKey: string
+  deepseekApiKey: string
 
   // 文章生成
   articleProvider: ArticleProvider
@@ -86,6 +89,7 @@ export interface AIConfig {
 
 export const DEFAULT_CONFIG: AIConfig = {
   zhipuApiKey: '',
+  deepseekApiKey: '',
   articleProvider: 'openai',
   articleModel: 'gpt-4o',
   articleApiKey: '',
@@ -227,7 +231,7 @@ export async function syncAIConfigFromServer(): Promise<AIConfig | null> {
       typeof data.value === 'string'
         ? (JSON.parse(data.value) as Partial<AIConfig>)
         : (data.value as Partial<AIConfig>)
-    const merged = { ...DEFAULT_CONFIG, ...serverConfig, openrouterApiKey: loadStoredAIConfig().openrouterApiKey }
+    const merged = { ...loadStoredAIConfig(), ...aiPreferences(serverConfig) }
     // 写回 localStorage 保证后续同步读取拿到最新值
     localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
     window.dispatchEvent(new CustomEvent('ai-config-updated'))
@@ -248,7 +252,7 @@ export function saveAIConfig(config: AIConfig): void {
     window.dispatchEvent(new CustomEvent('ai-config-updated'))
   } catch { /* ignore */ }
 
-  const { openrouterApiKey: _browserOnlyKey, ...serverConfig } = persisted
+  const serverConfig = aiPreferences(persisted)
   void authFetch('/api/settings', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -256,10 +260,21 @@ export function saveAIConfig(config: AIConfig): void {
   }).catch(() => { /* 网络失败静默，localStorage 已保存 */ })
 }
 
+export function deepSeekKeyHeaders(key = loadAIConfig().deepseekApiKey): Record<string, string> {
+  const cleaned = typeof key === "string" ? key.trim() : ""
+  return isDeepSeekApiKey(cleaned) ? { [DEEPSEEK_KEY_HEADER]: cleaned } : {}
+}
+
+// 临时请求可以带其他模型参数。DeepSeek 凭据单独走请求头，避免混入可保存的配置对象。
+export function aiRequestConfig<T extends Record<string, unknown> | AIConfig>(config: T): Omit<T, 'deepseekApiKey'> {
+  const { deepseekApiKey: _key, ...payload } = config
+  return payload
+}
+
 export function getEffectiveArticleConfig(config: AIConfig) {
   switch (config.articleProvider) {
     case 'deepseek':
-      return { baseUrl: 'https://api.deepseek.com', apiKey: '', model: 'deepseek-flash', headers: {} }
+      return { baseUrl: 'https://api.deepseek.com', apiKey: config.deepseekApiKey, model: 'deepseek-flash', headers: {} }
     case 'maas':
       return {
         baseUrl: config.maasBaseUrl,

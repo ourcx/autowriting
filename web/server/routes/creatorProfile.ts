@@ -1,3 +1,4 @@
+import { DEEPSEEK_KEY_HEADER } from "../../shared/aiPreferences.ts"
 import { Router } from "express"
 import { authMiddleware } from "../authMiddleware.ts"
 import { getSetting, setSetting } from "../db.ts"
@@ -30,7 +31,7 @@ router.get("/assets", (req, res) => {
 
 router.post("/persona/analyze", async (req, res) => {
   try {
-    res.json(await analyzeCreatorPersona(req.user.id, req.body || {}))
+    res.json(await analyzeCreatorPersona(req.user.id, req.body || {}, req.get(DEEPSEEK_KEY_HEADER)))
   } catch (error: unknown) {
     logger.error("CREATOR_PROFILE", "分析账号人设失败", {
       error: error instanceof Error ? error.message : String(error),

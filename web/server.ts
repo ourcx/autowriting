@@ -3,7 +3,7 @@
  */
 import express from "express"
 import type { RequestHandler } from "express"
-import { PORT, HOST, PROJECT_ROOT, DRAFTS_DIR, CACHE_DIR, SERVER_AI_CONFIG, DEEPSEEK_APP_CONFIG, STATIC_DIR, YUANBAO_SEARCH_ENABLED } from "./server/config.ts"
+import { PORT, HOST, PROJECT_ROOT, DRAFTS_DIR, CACHE_DIR, SERVER_AI_CONFIG, STATIC_DIR, YUANBAO_SEARCH_ENABLED } from "./server/config.ts"
 import { logger } from "./server/logger.ts"
 import { performanceMonitorMiddleware } from "./server/performanceMonitor.ts"
 import articlesRouter from "./server/routes/articles.ts"
@@ -15,7 +15,6 @@ import ragRouter from "./server/routes/rag.ts"
 import templatesRouter from "./server/routes/templates.ts"
 import settingsRouter from "./server/routes/settings.ts"
 import deepseekRouter from "./server/routes/deepseek.ts"
-import { isDeepSeekReady } from "./server/utils/deepseek.ts"
 import materialsRouter from "./server/routes/materials.ts"
 import wechatRouter from "./server/routes/wechat.ts"
 import authRouter from "./server/routes/auth.ts"
@@ -155,7 +154,6 @@ app.get("/api/config/status", (_req, res) => {
   const hasMaasKey = !!(SERVER_AI_CONFIG.maasApiKey)
   const hasOpenaiKey = !!(SERVER_AI_CONFIG.articleApiKey)
   const hasZhipuKey = !!(SERVER_AI_CONFIG.zhipuApiKey)
-  const deepseekReady = isDeepSeekReady(DEEPSEEK_APP_CONFIG)
   const hasCoverKey = !!(SERVER_AI_CONFIG.coverApiKey)
   const hasStabilityKey = !!(SERVER_AI_CONFIG.stabilityApiKey)
   const hasSiliconflowKey = !!(SERVER_AI_CONFIG.siliconflowApiKey)
@@ -168,8 +166,8 @@ app.get("/api/config/status", (_req, res) => {
   }
   res.json({
     articleProvider: provider,
-    articleReady: provider === "deepseek" ? deepseekReady : hasMaasKey || hasOpenaiKey || (provider === "zhipu" && hasZhipuKey),
-    deepseekReady,
+    articleReady: provider !== "deepseek" && (hasMaasKey || hasOpenaiKey || (provider === "zhipu" && hasZhipuKey)),
+    deepseekReady: false,
     maasReady: hasMaasKey, maasEmail: hasMaasKey ? SERVER_AI_CONFIG.maasUserEmail : null,
     openaiReady: hasOpenaiKey, coverProvider: (SERVER_AI_CONFIG.coverProvider as string) || "local",
     coverReady: !!(hasCoverKey || hasStabilityKey || hasSiliconflowKey || hasDoubaoKey || SERVER_AI_CONFIG.openrouterApiKey || (SERVER_AI_CONFIG.coverProvider === "local")),

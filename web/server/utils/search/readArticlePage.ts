@@ -1,3 +1,4 @@
+import { normalizeWechatArticleUrl } from "../../../shared/wechatArticleUrl.ts"
 import { assertPublicHttpUrl } from "../networkPolicy.ts"
 import { usablePageText, webFetch } from "./webFetcher.ts"
 
@@ -31,7 +32,8 @@ interface ReadArticlePageOptions {
 export async function readArticlePage(rawUrl: string, options: ReadArticlePageOptions = {}) {
   const { signal, maxChars = 8000, sameOrigin, jinaApiKey = "" } = options
   let url: string
-  try { url = (await assertPublicHttpUrl(rawUrl)).href }
+  const wechat = normalizeWechatArticleUrl(rawUrl)
+  try { url = (await assertPublicHttpUrl(wechat || rawUrl)).href }
   catch { throw new ArticlePageReadError("链接无效或无法通过公网访问。") }
 
   const fetchWithDeepSeek = options.fetchWithDeepSeek
@@ -52,5 +54,7 @@ export async function readArticlePage(rawUrl: string, options: ReadArticlePageOp
       signal?.throwIfAborted()
     }
   }
-  throw new ArticlePageReadError("原站暂时无法读取，或页面没有可提取的正文。")
+  throw new ArticlePageReadError(wechat
+    ? "微信未返回可读正文，可能需要验证。可在浏览器打开原文，或选公众号专用解析服务重试。"
+    : "原站暂时无法读取，或页面没有可提取的正文。")
 }

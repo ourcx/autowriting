@@ -180,7 +180,15 @@ export default function FirstSetupPage() {
               </div>
 
               {isDeepSeek ? (
-                <p>使用服务端配置的 deepseek-flash。验证连接会调用一次模型并产生 Token 费用。</p>
+                <label className="fsp-wide">
+                  <span>DeepSeek 公共 API Key</span>
+                  <div className="fsp-secret">
+                    <Input type={showKey ? "text" : "password"} autoComplete="off" value={config.deepseekApiKey}
+                      onChange={event => updateConfig({ deepseekApiKey: event.target.value })} placeholder="仅保存在当前浏览器" />
+                    <Button variant="plain" aria-label={showKey ? "隐藏 DeepSeek Key" : "显示 DeepSeek Key"}
+                      onClick={() => setShowKey(value => !value)}>{showKey ? <EyeOff size={16} /> : <Eye size={16} />}</Button>
+                  </div>
+                </label>
               ) : <div className="fsp-form-grid">
                 <label>
                   <span>API 地址</span>

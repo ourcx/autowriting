@@ -1,3 +1,4 @@
+import { normalizeWechatArticleUrl } from "../../shared/wechatArticleUrl.ts"
 import { chromium, type Page } from 'playwright'
 import { z } from 'zod'
 import type { YuanbaoArticle, YuanbaoSearchResult } from '../../shared/yuanbaoSearch.ts'
@@ -43,21 +44,6 @@ const streamFrame = z.object({
     finish_reason: z.string().nullish(),
   })).optional(),
 })
-
-function normalizeArticleUrl(value: string): string | null {
-  let url: URL
-  try { url = new URL(value) } catch { return null }
-  if (!['http:', 'https:'].includes(url.protocol)) return null
-  if (url.hostname !== 'mp.weixin.qq.com' || url.username || url.password || url.port) return null
-
-  // 元宝返回短链、带文章 ID 的长链或带签名的原文链接。
-  const hasArticleId = url.searchParams.has('__biz') && url.searchParams.has('mid')
-  const hasSignature = url.searchParams.has('signature')
-  if (!/^\/s\/[\w-]+$/.test(url.pathname) && !(url.pathname === '/s' && (hasArticleId || hasSignature))) return null
-  url.protocol = 'https:'
-  url.hash = ''
-  return url.href
-}
 
 function formatPublishedOn(timestamp: number): string {
   return beijingDate.format(timestamp).replaceAll('/', '-')
@@ -113,7 +99,7 @@ export function parseYuanbaoStream(stream: string, now = Date.now()): YuanbaoSea
     for (const candidate of frame.data.search_info?.search_results ?? []) {
       const result = citation.safeParse(candidate)
       if (!result.success) continue
-      const url = normalizeArticleUrl(result.data.url)
+      const url = normalizeWechatArticleUrl(result.data.url)
       if (!url || articles.has(url)) continue
       const publishedOn = resolvePublishedOn(result.data.publish_time_ts, result.data.time, now, today)
       articles.set(url, {

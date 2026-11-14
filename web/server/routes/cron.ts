@@ -19,7 +19,10 @@ import {
   listCronLogs, listAllCronLogs,
 } from '../db.js'
 import { authMiddleware } from '../authMiddleware.js'
-import { scheduleJob, unscheduleJob, runCronJob } from '../cronEngine.js'
+import { scheduleJob, unscheduleJob, runCronJob, resolveCronAIConfig } from '../cronEngine.js'
+import { DEEPSEEK_KEY_HEADER } from '../../shared/aiPreferences.ts'
+import { withRequestDeepSeekKey } from '../deepseekCredentials.ts'
+import { hasArticleApiKey } from '../utils/providerKeys.ts'
 
 const router = Router()
 router.use(authMiddleware)
@@ -169,11 +172,17 @@ router.post('/jobs/:id/run', async (req, res) => {
     if (!job) return res.status(404).json({ error: '任务不存在' })
     if (job.userId !== req.user.id) return res.status(403).json({ error: '无权访问' })
 
+    const requestConfig = withRequestDeepSeekKey(req.body?.aiConfig ?? {}, req.get(DEEPSEEK_KEY_HEADER))
+    const config = resolveCronAIConfig(job.aiConfig, requestConfig)
+    if (!hasArticleApiKey(config)) {
+      return res.status(400).json({ error: '请在当前浏览器配置与任务相同的文章模型和 API Key，再手动执行' })
+    }
+
     // 异步执行，立即返回任务启动确认
     res.json({ success: true, message: '任务已开始执行，请稍后查看日志' })
 
     // 后台执行（不阻塞响应）
-    runCronJob(req.params.id).catch(e => {
+    runCronJob(req.params.id, requestConfig).catch(e => {
       console.error(`[Cron] 手动触发执行失败 (${req.params.id}):`, e.message)
     })
   } catch (e) {

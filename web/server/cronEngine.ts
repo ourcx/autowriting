@@ -24,6 +24,7 @@ import {
   formatMaterialsAsMarkdown,
 } from './utils/index.ts'
 import { nowDay } from './utils'
+import { hasArticleApiKey } from "./utils/providerKeys.ts"
 import type { AIConfig, MaterialsDataset } from './types.ts'
 import { stripEmoji } from '../shared/contentProduction.ts'
 import { buildWritingContext } from './writingContext.ts'
@@ -35,16 +36,28 @@ const _scheduledTasks = new Map()
 /**
  * 合并 AI 配置（优先级从低到高）：
  *   1. 服务端环境变量 SERVER_AI_CONFIG（.env）
- *   2. settings 表里的 ai-config（用户在「AI 配置」页面保存的，已持久化到 DB）
+ *   2. settings 表里的 ai-config（只保留非凭据选项）
  *   3. 任务专属 aiConfig（cron_jobs.ai_config，只覆盖任务级别差异）
  */
-function mergeAiConfig(jobAiConfig = {}) {
+export function resolveCronAIConfig(jobAiConfig = {}, requestConfig?: AIConfig): AIConfig {
   let dbConfig = {}
   try {
     const saved = getSetting('ai-config')
     if (saved && typeof saved === 'object') dbConfig = saved
   } catch { /* 读库失败时静默回退 */ }
-  return { ...SERVER_AI_CONFIG, ...dbConfig, ...jobAiConfig }
+  const config: AIConfig = { ...SERVER_AI_CONFIG, ...dbConfig, ...jobAiConfig }
+  // 定时任务没有浏览器请求。手动执行只接受和任务模型同一服务商的临时凭据。
+  if (requestConfig?.articleProvider !== config.articleProvider) return config
+  const keys = config.articleProvider === 'deepseek' ? ['deepseekApiKey']
+    : config.articleProvider === 'maas' ? ['maasApiKey', 'maasBaseUrl', 'maasUserEmail']
+    : config.articleProvider === 'zhipu' ? ['articleApiKey', 'articleBaseUrl', 'zhipuApiKey']
+    : ['articleApiKey', 'articleBaseUrl']
+  for (const key of keys) {
+    const value = requestConfig?.[key]
+    if (typeof value === 'string' && value.trim()) config[key] = value
+  }
+  if (requestConfig?.deepseekApiKey) config.deepseekApiKey = requestConfig.deepseekApiKey
+  return config
 }
 
 function formatDate(d = new Date()) {
@@ -83,7 +96,7 @@ async function collectMaterialsIfEnabled(job, topic, aiConfig) {
   try {
     // collectMaterials 通过 Provider 架构自动检测可用的搜索引擎
     // 不再需要 bingApiKey/jinaApiKey 参数，配置从环境变量和 AI 配置中获取
-    const dataset = await collectMaterials(topic, aiConfig, job.userId)
+    const dataset = await collectMaterials(topic, aiConfig)
     return dataset
   } catch (err) {
     // 素材收集失败不阻断整体流程，只记录警告
@@ -100,15 +113,7 @@ async function fetchTrending(job, aiConfig) {
     return job.topic.trim()
   }
 
-  // 校验 AI 配置（Key 必须在任务的 aiConfig 中显式配置）
-  const isMaas = aiConfig.articleProvider === 'maas'
-  if (isMaas) {
-    if (!aiConfig.maasApiKey) throw new Error('AI 未配置：请编辑此任务，在「AI 接口」区块填写 MaaS API Key')
-  } else if (aiConfig.articleProvider !== 'deepseek') {
-    if (!aiConfig.articleApiKey) throw new Error('AI 未配置：请编辑此任务，在「AI 接口」区块填写 API Key')
-  }
-
-  const { complete } = createArticleModel(aiConfig, job.userId)
+  const { complete } = createArticleModel(aiConfig)
   const today = nowDay()
 
   let resp
@@ -156,7 +161,7 @@ async function generateArticle(userId: string, topic: string, aiConfig: AIConfig
     materialsSection = `# 参考素材（从网络搜索和爬取获得）\n\n${materialsMarkdown}\n\n**重要提示**：\n- 以上素材仅供参考，请提取关键信息和数据\n- 必须用自己的语言重新组织，不要直接复制粘贴\n- 引用数据时要标注来源（如"根据某网站报道"）\n- 保持客观和真实，不要编造不存在的信息\n\n`
   }
   
-  const { complete } = createArticleModel(aiConfig, userId)
+  const { complete } = createArticleModel(aiConfig)
   const today = nowDay()
 
   const resp = await complete({
@@ -192,7 +197,7 @@ ${materialsDataset ? '- 充分利用上面提供的参考素材，但要用自�
 
 // ── 步骤 3：生成 CSS 样式 ─────────────────────────────────────────────────────
 
-async function generateStyle(stylePrompt, aiConfig, userId: string) {
+async function generateStyle(stylePrompt, aiConfig) {
   if (!stylePrompt) {
     // 返回一个简洁默认样式
     return `#wemd { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; font-size: 15px; line-height: 1.8; color: #333; padding: 0 16px; }
@@ -217,7 +222,7 @@ async function generateStyle(stylePrompt, aiConfig, userId: string) {
 #wemd tr:nth-child(even) td { background: #f5f8ff; }`
   }
 
-  const { complete } = createArticleModel(aiConfig, userId)
+  const { complete } = createArticleModel(aiConfig)
 
   const STYLE_SYSTEM = `你是一名专业的微信公众号 CSS 设计师。
 
@@ -322,11 +327,11 @@ async function pushToWechat(job, title, htmlContent) {
 
 // ── 核心：执行一次任务 ────────────────────────────────────────────────────────
 
-export async function runCronJob(jobId) {
+export async function runCronJob(jobId, requestConfig?: AIConfig) {
   const job = getCronJob(jobId)
   if (!job) throw new Error(`任务 ${jobId} 不存在`)
 
-  const aiConfig = mergeAiConfig(job.aiConfig)
+  const aiConfig = resolveCronAIConfig(job.aiConfig, requestConfig)
   const steps = []
   let logId = null
 
@@ -339,6 +344,11 @@ export async function runCronJob(jobId) {
   try {
     // 创建执行日志
     logId = createCronLog({ jobId, userId: job.userId, topic: job.topic })
+    if (!hasArticleApiKey(aiConfig)) {
+      throw new Error(aiConfig.articleProvider === 'deepseek'
+        ? 'DeepSeek Key 只在浏览器中可用，请从定时任务页面手动执行。'
+        : '后台没有可用的文章模型，请检查任务设置或从浏览器手动执行。')
+    }
 
     // ── Step 1: 热点抓取 ───────────────────────────────────────────────────
     addStep('trending', 'running', '正在抓取热点主题...')
@@ -418,11 +428,11 @@ export async function runCronJob(jobId) {
     addStep('style', 'running', '正在生成 CSS 样式...')
     let css
     try {
-      css = await generateStyle(job.stylePrompt, aiConfig, job.userId)
+      css = await generateStyle(job.stylePrompt, aiConfig)
       addStep('style', 'success', `CSS 已生成（${css.length} 字节）`)
     } catch (e) {
       addStep('style', 'warn', `样式生成失败，使用默认样式: ${e.message}`)
-      css = await generateStyle(null, aiConfig, job.userId)  // 降级为默认
+      css = await generateStyle(null, aiConfig)  // 降级为默认
     }
 
     // ── Step 4: 转换为 HTML ───────────────────────────────────────────────

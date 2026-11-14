@@ -10,7 +10,8 @@ import {
 } from 'lucide-react'
 import PageHeader from '../../components/PageHeader/PageHeader'
 import { useAIReadiness, fetchServerStatus } from '../../store/useConfigStore'
-import { loadAIConfig } from '../../utils/aiConfig'
+import { aiRequestConfig, deepSeekKeyHeaders, loadAIConfig } from '../../utils/aiConfig'
+import { aiPreferences } from '../../../shared/aiPreferences'
 import './CronPage.css'
 
 // ── 类型 ──────────────────────────────────────────────────────────────────────
@@ -178,7 +179,7 @@ export default function CronPage() {
   const [saving, setSaving] = useState(false)
   const [formErr, setFormErr] = useState<string | null>(null)
   const [showSecret, setShowSecret] = useState(false)
-  const [showAiKey, setShowAiKey] = useState(false)
+  const [runError, setRunError] = useState("")
   const [running, setRunning] = useState<string | null>(null)
 
   // ── 数据 ──────────────────────────────────────────────────────────────────
@@ -206,17 +207,8 @@ export default function CronPage() {
 
   const openCreate = () => {
     setEditing(null)
-    // 新建时从 localStorage 预填 AI 配置，用户可按需修改
-    const localAI = loadAIConfig()
-    const preAiConfig: Record<string, string> = {}
-    if (localAI.articleProvider) preAiConfig.articleProvider = localAI.articleProvider
-    if (localAI.articleApiKey) preAiConfig.articleApiKey = localAI.articleApiKey
-    if (localAI.articleBaseUrl) preAiConfig.articleBaseUrl = localAI.articleBaseUrl
-    if (localAI.articleModel) preAiConfig.articleModel = localAI.articleModel
-    if (localAI.maasApiKey) preAiConfig.maasApiKey = localAI.maasApiKey
-    if (localAI.maasBaseUrl) preAiConfig.maasBaseUrl = localAI.maasBaseUrl
-    if (localAI.maasUserEmail) preAiConfig.maasUserEmail = localAI.maasUserEmail
-    setForm({ ...emptyForm(), aiConfig: preAiConfig })
+    const { articleProvider, articleModel } = loadAIConfig()
+    setForm({ ...emptyForm(), aiConfig: { articleProvider, articleModel } })
     setFormErr(null); setShowForm(true)
   }
   const openEdit = (job: CronJob) => {
@@ -237,7 +229,7 @@ export default function CronPage() {
         name: form.name?.trim(), cronExpr: form.cronExpr?.trim(),
         topic: form.topic?.trim() || '', stylePrompt: form.stylePrompt?.trim() || '',
         coverPrompt: form.coverPrompt?.trim() || '', wxAppId: form.wxAppId?.trim() || '',
-        wxAppSecret: form.wxAppSecret?.trim() || '', aiConfig: form.aiConfig || {}
+        wxAppSecret: form.wxAppSecret?.trim() || '', aiConfig: aiPreferences(form.aiConfig)
       }
       if (editing) await axios.put(`/api/cron/jobs/${editing}`, payload)
       else await axios.post('/api/cron/jobs', payload)
@@ -258,10 +250,14 @@ export default function CronPage() {
   }
   const handleRun = async (job: CronJob) => {
     setRunning(job.id)
+    setRunError("")
     try {
-      await axios.post(`/api/cron/jobs/${job.id}/run`)
+      await axios.post(`/api/cron/jobs/${job.id}/run`, { aiConfig: aiRequestConfig(loadAIConfig()) }, { headers: deepSeekKeyHeaders() })
       setTimeout(() => { loadLogs(); loadJobLogs(job.id); setRunning(null) }, 2000)
-    } catch { setRunning(null) }
+    } catch (error) {
+      setRunError((error as { response?: { data?: { error?: string } } }).response?.data?.error || '任务未能启动')
+      setRunning(null)
+    }
   }
   const toggleExpand = async (jobId: string) => {
     if (expanded === jobId) { setExpanded(null) } else { setExpanded(jobId); await loadJobLogs(jobId) }
@@ -294,6 +290,8 @@ export default function CronPage() {
           )}
         </div>}
       />
+
+      {runError && <p className="cp-hint" role="alert">{runError}</p>}
 
       {/* ── AI 未配置 Banner ── */}
       {!articleReady && (
@@ -607,68 +605,15 @@ export default function CronPage() {
                 </div>
               </div>
 
-              {form.aiConfig?.articleProvider === 'deepseek' ? (
-                <p className="cp-hint">使用服务端 deepseek-flash。任务运行会产生模型调用费用。</p>
-              ) : (form.aiConfig?.articleProvider || 'openai') === 'maas' ? (
-                <>
-                  <div className="cp-field">
-                    <label className="cp-label">MaaS API Key <span className="cp-req">*</span></label>
-                    <div className="cp-secret-wrap">
-                      <Input
-                        className="cp-input cp-mono"
-                        type={showAiKey ? 'text' : 'password'}
-                        value={form.aiConfig?.maasApiKey || ''}
-                        onChange={e => setForm(f => ({ ...f, aiConfig: { ...(f.aiConfig || {}), maasApiKey: e.target.value } }))}
-                        placeholder="QST..."
-                      />
-                      <Button variant="plain" className="cp-eye" onClick={() => setShowAiKey(s => !s)}>
-                        {showAiKey ? <EyeOff size={13} /> : <Eye size={13} />}
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="cp-row-2">
-                    <div className="cp-field">
-                      <label className="cp-label">MaaS 用户邮箱</label>
-                      <Input className="cp-input" value={form.aiConfig?.maasUserEmail || ''} onChange={e => setForm(f => ({ ...f, aiConfig: { ...(f.aiConfig || {}), maasUserEmail: e.target.value } }))} placeholder="you@example.com" />
-                    </div>
-                    <div className="cp-field">
-                      <label className="cp-label">模型</label>
-                      <Input className="cp-input cp-mono" value={form.aiConfig?.articleModel || ''} onChange={e => setForm(f => ({ ...f, aiConfig: { ...(f.aiConfig || {}), articleModel: e.target.value } }))} placeholder="deepseek-v4-pro" />
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="cp-field">
-                    <label className="cp-label">API Key <span className="cp-req">*</span></label>
-                    <div className="cp-secret-wrap">
-                      <Input
-                        className="cp-input cp-mono"
-                        type={showAiKey ? 'text' : 'password'}
-                        value={form.aiConfig?.articleApiKey || ''}
-                        onChange={e => setForm(f => ({ ...f, aiConfig: { ...(f.aiConfig || {}), articleApiKey: e.target.value } }))}
-                        placeholder="sk-..."
-                      />
-                      <Button variant="plain" className="cp-eye" onClick={() => setShowAiKey(s => !s)}>
-                        {showAiKey ? <EyeOff size={13} /> : <Eye size={13} />}
-                      </Button>
-                    </div>
-                  </div>
-                  {(form.aiConfig?.articleProvider === 'openai-compat') && (
-                    <div className="cp-row-2">
-                      <div className="cp-field">
-                        <label className="cp-label">Base URL</label>
-                        <Input className="cp-input cp-mono" value={form.aiConfig?.articleBaseUrl || ''} onChange={e => setForm(f => ({ ...f, aiConfig: { ...(f.aiConfig || {}), articleBaseUrl: e.target.value } }))} placeholder="https://api.example.com/v1" />
-                      </div>
-                      <div className="cp-field">
-                        <label className="cp-label">模型</label>
-                        <Input className="cp-input cp-mono" value={form.aiConfig?.articleModel || ''} onChange={e => setForm(f => ({ ...f, aiConfig: { ...(f.aiConfig || {}), articleModel: e.target.value } }))} placeholder="gpt-4o" />
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-              {form.aiConfig?.articleProvider !== 'deepseek' && <p className="cp-hint">AI Key 仅存储在此任务配置中，与「AI 配置」页面独立。</p>}
+              {form.aiConfig?.articleProvider !== 'deepseek' && <div className="cp-field">
+                <label className="cp-label">模型</label>
+                <Input className="cp-input cp-mono" value={form.aiConfig?.articleModel || ''}
+                  onChange={e => setForm(f => ({ ...f, aiConfig: { ...(f.aiConfig || {}), articleModel: e.target.value } }))}
+                  placeholder="留空时使用默认模型" />
+              </div>}
+              <p className="cp-hint">{form.aiConfig?.articleProvider === 'deepseek'
+                ? 'DeepSeek 只支持从配好 Key 的浏览器手动执行。'
+                : '手动执行可使用当前浏览器的 Key。定时执行需要部署环境已有可用的模型配置。'}</p>
 
               <div className="cp-sep"><span>微信公众号</span></div>
 

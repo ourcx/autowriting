@@ -19,7 +19,8 @@ try {
   let failSave = false
   let prematureEof = false
   let generatedInput
-  let accountKeyConfigured = false
+  let settingsWrites = 0
+  let submittedResearch = false
   let collectedMaterials = ""
   page.on('pageerror', error => errors.push(error.message))
   await page.addInitScript(() => localStorage.setItem('auth_token', 'candidate-ui-fixture'))
@@ -27,7 +28,7 @@ try {
     const request = route.request()
     const pathname = new URL(request.url()).pathname
     if (pathname === '/api/auth/me') return route.fulfill({ json: { user: { id: 'fixture', username: 'fixture', role: 'admin' } } })
-    if (pathname === '/api/config/status') return route.fulfill({ json: { articleReady: true, deepseekReady: false, wechatCollectorReady: { yuanbao: true, tikhub: false, dajiala: false } } })
+    if (pathname === '/api/config/status') return route.fulfill({ json: { articleReady: true, deepseekReady: false, wechatCollectorReady: { yuanbao: true, tikhub: true, dajiala: false } } })
     if (pathname === '/api/materials/yuanbao-search') {
       assert.equal(request.postDataJSON().query, "校方公告")
       return route.fulfill({ json: { answer: '元宝回答', articles: [
@@ -39,14 +40,25 @@ try {
       collectedMaterials = request.postDataJSON().content
       return route.fulfill({ json: { success: true } })
     }
-    if (pathname === '/api/deepseek/key') {
-      const { apiKey } = request.postDataJSON()
-      assert.equal(request.method(), 'PUT')
-      assert.ok(apiKey === 'local-config-placeholder' || apiKey === '')
-      accountKeyConfigured = Boolean(apiKey)
-      return route.fulfill({ json: { accountConfigured: accountKeyConfigured, enabled: accountKeyConfigured, configured: accountKeyConfigured } })
+    assert.notEqual(pathname, '/api/deepseek/key', 'browser must never call the retired key storage endpoint')
+    if (pathname === '/api/settings' && request.method() === 'POST') {
+      settingsWrites++
+      assert.doesNotMatch(request.postData(), /local-config-placeholder|deepseekApiKey/)
+      assert.equal(request.headers()['x-deepseek-api-key'], undefined)
+      return route.fulfill({ json: { success: true } })
     }
-    if (pathname === '/api/deepseek/status') return route.fulfill({ json: { accountConfigured: accountKeyConfigured, enabled: accountKeyConfigured, configured: accountKeyConfigured } })
+    if (pathname === '/api/deepseek/chat') {
+      submittedResearch = true
+      assert.equal(request.headers()['x-deepseek-api-key'], 'local-config-placeholder')
+      assert.doesNotMatch(request.postData(), /local-config-placeholder/)
+      return route.fulfill({ json: { content: '查到校方设计招标公告。', annotations: [] } })
+    }
+    if (pathname === '/api/materials/wechat-article') {
+      const input = request.postDataJSON()
+      assert.equal(input.provider, 'tikhub')
+      assert.equal(input.url, 'https://mp.weixin.qq.com/s?__biz=Fixture%3D%3D&mid=2&idx=1&sn=fixture')
+      return route.fulfill({ json: { title: '公众号原文解析结果', content: '这段是已提取的正文。', source: '校方' } })
+    }
     if (pathname === '/api/articles/fixture/candidates') {
       if (request.method() === 'GET') return route.fulfill({ json: rows })
       const input = request.postDataJSON()
@@ -86,7 +98,18 @@ try {
         status: 'done', startedAt, finishedAt: startedAt, input: '校舍建设 官方公告', output: '返回 1 条结果',
         sources: row.researchSources,
       }
-      row.trace = [...(row.trace || []), step]
+      const revision = row.status === 'complete' ? [
+        { kind: 'write', title: '生成正文', status: 'done', output: '初稿已写完。' },
+        { kind: 'review', title: '独立审稿', status: 'changes_requested', output: '删掉重复的开场句，直接写公告内容。' },
+        { kind: 'edit', title: '优化文章表达', status: 'done', output: '收到改稿，等待复核。' },
+        { kind: 'verify', title: '核对改稿', status: 'changes_requested', output: '改稿改动了原稿的发布日期。' },
+        { kind: 'edit', title: '按复核意见返工', status: 'done', output: '已按原稿日期重改。' },
+        { kind: 'verify', title: '核对改稿', status: 'done', output: '数字、引文和链接核对通过，已采用优化稿。' },
+      ].map((stage, index) => ({ ...stage, id: `${step.attempt}-${index + 2}`, attempt: step.attempt,
+        startedAt: new Date(Date.now() + (index + 1) * 500).toISOString(),
+        finishedAt: new Date(Date.now() + (index + 2) * 500).toISOString(),
+      })) : []
+      row.trace = [...(row.trace || []), step, ...revision]
       row.message = row.status === 'complete' ? '生成完成' : '输出达到模型长度上限，可继续生成'
       active--
       // A final SSE event without a newline must still be consumed by the browser.
@@ -121,6 +144,12 @@ try {
   await page.getByRole('button', { name: '写入素材库（2）' }).click()
   assert.match(collectedMaterials, /元宝搜索摘要，原文未读/)
   assert.match(collectedMaterials, /仅保留原文链接，尚未读取正文/)
+  await page.getByRole('button', { name: 'URL 解析', exact: true }).click()
+  await page.getByRole('textbox', { name: '网页 URL' }).fill('http://mp.weixin.qq.com/s?__biz=Fixture%3D%3D&mid=2&idx=1&sn=fixture')
+  await page.getByRole('combobox', { name: '链接读取服务' }).click()
+  await page.getByRole('option', { name: 'TikHub 公众号解析（付费）' }).click()
+  await page.getByRole('button', { name: '解析', exact: true }).click()
+  await page.getByText('公众号原文解析结果', { exact: true }).waitFor()
   await page.getByRole('button', { name: '下一步：进入写作', exact: true }).click()
   assert.equal(await page.locator('.flow-step').count(), 5)
   await page.locator('.flow-step[aria-current="step"] .flow-step-label', { hasText: '写作' }).waitFor()
@@ -142,6 +171,12 @@ try {
   assert.deepEqual(generatedInput.referenceArticleIds, [])
   const tracePanel = page.getByRole('region', { name: '生成轨迹' })
   await tracePanel.waitFor()
+  await tracePanel.getByRole('button', { name: '审稿', exact: true }).click()
+  assert.equal(await tracePanel.getByText('删掉重复的开场句，直接写公告内容。').isVisible(), true)
+  await tracePanel.getByRole('button', { name: '复核', exact: true }).click()
+  await tracePanel.getByText('数字、引文和链接核对通过，已采用优化稿。', { exact: true }).waitFor()
+  await page.screenshot({ path: join(screenshots, 'candidate-revision-desktop.png') })
+  await tracePanel.getByRole('button', { name: /搜索公开网页 已完成/ }).click()
   assert.equal(await tracePanel.getByText('校舍建设 官方公告', { exact: true }).isVisible(), true)
   assert.equal(await tracePanel.getByRole('link', { name: '校方公告' }).getAttribute('href'), 'https://example.com/notice')
   await page.screenshot({ path: join(screenshots, 'candidate-trace-desktop.png') })
@@ -151,6 +186,7 @@ try {
   assert.equal(article, '# 原有正文\n\n原文不应被候选稿替换。')
   await page.getByRole('button', { name: '对比全文', exact: true }).click()
   assert.equal(await page.locator('.gc-draft').count(), 3)
+  assert.equal(await page.locator('.gc-paper h1').count(), 3, '正文和对比应渲染 Markdown 标题')
   await page.screenshot({ path: join(screenshots, 'compare-desktop.png'), fullPage: true })
   await page.getByRole('button', { name: '继续生成', exact: true }).click()
   await page.getByText('3 篇已完成', { exact: true }).waitFor()
@@ -166,14 +202,17 @@ try {
   assert.equal(article, rows[0].content)
   await page.getByRole('button', { name: '继续生成候选稿', exact: true }).click()
   await page.getByText('3 篇已完成', { exact: true }).waitFor()
+  assert.equal(await page.getByRole('group', { name: '生成平台' }).count(), 0)
   assert.equal(calls.length, 4, 'reopening must not regenerate completed candidates')
   await page.setViewportSize({ width: 390, height: 844 })
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
   await page.getByRole('button', { name: '生成轨迹', exact: true }).click()
+  await tracePanel.getByRole('button', { name: /搜索公开网页 已完成/ }).click()
   await tracePanel.getByText('校舍建设 官方公告', { exact: true }).waitFor()
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
   await page.screenshot({ path: join(screenshots, 'candidates-mobile.png'), fullPage: true })
   prematureEof = true
+  await page.getByRole('button', { name: '新建一批', exact: true }).click()
   await page.getByRole('button', { name: '生成公众号母稿', exact: true }).click()
   await page.getByRole('button', { name: '正文', exact: true }).click()
   await page.getByText('生成连接中断，已收到的内容仍保留，请重新加载或继续生成', { exact: true }).waitFor()
@@ -183,6 +222,7 @@ try {
   assert.equal(await page.getByRole('button', { name: '继续生成候选稿', exact: true }).isVisible(), true)
   assert.equal(await page.getByRole('button', { name: '下一步：审核定稿', exact: true }).isVisible(), true)
   await page.getByRole('button', { name: '继续生成候选稿', exact: true }).click()
+  await page.getByRole('button', { name: '新建一批', exact: true }).click()
   await page.getByRole('button', { name: '公众号 + 今日头条', exact: true }).click()
   const pairedCallStart = calls.length
   maxActive = 0
@@ -218,8 +258,9 @@ try {
   await deepseekKey.fill('local-config-placeholder')
   await page.getByRole('button', { name: '保存', exact: true }).click()
   await page.getByRole('status').filter({ hasText: 'DeepSeek Key 已保存' }).waitFor()
-  assert.equal(await deepseekKey.inputValue(), '')
-  assert.equal(await page.evaluate(() => JSON.stringify(localStorage).includes('local-config-placeholder')), false)
+  assert.equal(await deepseekKey.inputValue(), 'local-config-placeholder')
+  assert.equal(await page.evaluate(() => JSON.stringify(localStorage).includes('local-config-placeholder')), true)
+  assert.ok(settingsWrites > 0)
   await page.goto(`${base}/editor/fixture?tab=materials`)
   await page.getByRole('button', { name: 'DeepSeek 调研', exact: true }).click()
   const parsing = page.getByRole('combobox', { name: '附件解析方式' })
@@ -236,13 +277,17 @@ try {
   assert.ok(consentIcon && consentIcon.height === consentIcon.width, 'mobile touch styles must keep the checkbox indicator square')
   assert.equal(await page.getByRole('button', { name: '开始调研' }).isEnabled(), true)
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
+  await page.getByRole('button', { name: '开始调研' }).click()
+  await page.locator('.mc-item-title').filter({ hasText: '核对设计招标公告' }).waitFor()
+  assert.equal(submittedResearch, true)
   await page.screenshot({ path: join(screenshots, 'research-mobile.png') })
   await page.goto(`${base}/settings`)
   await settings.getByRole('button', { name: '更多', exact: true }).click()
-  const removeKey = page.getByRole('button', { name: '移除账号 Key', exact: true })
+  const removeKey = page.getByRole('button', { name: '移除浏览器 Key', exact: true })
   await removeKey.click()
-  await page.getByRole('status').filter({ hasText: '账号 Key 已移除' }).waitFor()
+  await page.getByRole('status').filter({ hasText: '浏览器 Key 已移除' }).waitFor()
   await removeKey.waitFor({ state: 'hidden' })
+  assert.equal(await page.evaluate(() => JSON.stringify(localStorage).includes('local-config-placeholder')), false)
   await page.getByRole('button', { name: '图片存储', exact: true }).click()
   await page.getByRole('heading', { name: '图床配置', exact: true }).waitFor()
   await page.setViewportSize({ width: 1440, height: 960 })

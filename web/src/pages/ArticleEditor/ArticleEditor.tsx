@@ -177,6 +177,7 @@ export default function ArticleEditor() {
     localConfig: aiConfig,
     articleReady: apiKeyReady,
     serverStatus,
+    deepseekReady,
   } = useAIReadiness()
 
   // 首次挂载时拉一次服务端状态
@@ -829,7 +830,7 @@ export default function ArticleEditor() {
                   glmApiKey={aiConfig.zhipuApiKey || aiConfig.glmApiKey || (aiConfig.articleProvider === 'deepseek' ? '' : aiConfig.articleApiKey) || ''}
                   jinaApiKey={aiConfig.jinaApiKey || ''}
                   wechatCollectorReady={serverStatus?.wechatCollectorReady}
-                  deepseekReady={serverStatus?.deepseekReady}
+                  deepseekReady={deepseekReady}
                   onSave={handleMaterialsSaved}
                 />
               </div>
@@ -955,7 +956,7 @@ export default function ArticleEditor() {
 
           {activeTab === 'analysis' && (
             <div className="editor-panel">
-              {serverStatus?.deepseekReady && data.article.trim() && (
+              {deepseekReady && data.article.trim() && (
                 <DeepSeekReadAloud key={articleId} content={data.article} />
               )}
               <ProductionGuidance article={data.article} materials={data.materials} articleToutiao={data.articleToutiao} workflow={workflow}

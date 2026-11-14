@@ -33,8 +33,8 @@ export function resolveArticleApiKey(config: AIConfig): string {
   return ""
 }
 
-export function hasArticleApiKey(config: AIConfig, userId?: string): boolean {
-  if (config.articleProvider === "deepseek") return isDeepSeekReady(resolveDeepSeekConfig(userId))
+export function hasArticleApiKey(config: AIConfig): boolean {
+  if (config.articleProvider === "deepseek") return isDeepSeekReady(resolveDeepSeekConfig(config.deepseekApiKey))
   return config.articleProvider === "maas"
     ? Boolean(clean(config.maasApiKey))
     : Boolean(resolveArticleApiKey(config))

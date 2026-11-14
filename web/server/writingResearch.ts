@@ -1,3 +1,4 @@
+import { normalizeWechatArticleUrl } from "../shared/wechatArticleUrl.ts"
 import { SERVER_AI_CONFIG } from "./config.ts"
 import { resolveDeepSeekConfig } from "./deepseekCredentials.ts"
 import type { AIConfig } from "./types.ts"
@@ -9,10 +10,10 @@ import { readArticlePage } from "./utils/search/readArticlePage.ts"
 
 export function publicSourceUrl(value: string): string {
   try {
-    const url = new URL(value)
+    const url = new URL(normalizeWechatArticleUrl(value) || value)
     if (!["https:", "http:"].includes(url.protocol) || url.username || url.password
       || (url.port && !["80", "443"].includes(url.port)) || value.length > 2048) return ""
-    const wechatArticle = url.hostname === "mp.weixin.qq.com" && url.pathname === "/s"
+    const wechatArticle = Boolean(normalizeWechatArticleUrl(value))
     if ([...url.searchParams.keys()].some(key => /^(?:access[_-]?token|token|auth|api[_-]?key|key|password|sig(?:nature)?|x-amz-.+|x-oss-.+)$/i.test(key)
       && !(wechatArticle && key === "signature"))) return ""
     url.hash = ""
@@ -25,9 +26,9 @@ export interface WritingWebResearch {
   read: (_url: string, _signal: AbortSignal) => Promise<string>
 }
 
-export function createWritingWebResearch(config: AIConfig, userId?: string): WritingWebResearch {
+export function createWritingWebResearch(config: AIConfig): WritingWebResearch {
   const provider = String(config.searchProvider || SERVER_AI_CONFIG.searchProvider || "")
-  const deepseekConfig = resolveDeepSeekConfig(userId)
+  const deepseekConfig = resolveDeepSeekConfig(config.deepseekApiKey)
   const deepseekReady = isDeepSeekReady(deepseekConfig)
   const searchApiKey = String(config.searchApiKey || SERVER_AI_CONFIG.searchApiKey || "")
   const zhipuApiKey = resolveZhipuApiKey(config)

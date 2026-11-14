@@ -75,8 +75,8 @@ export function resetSearchProvider(): void {
 /**
  * 使用 LLM 生成智能搜索计划
  */
-export async function generateSearchPlan(topic: string, aiConfig: AIConfig, userId?: string): Promise<SearchPlan> {
-  const { complete } = createArticleModel(aiConfig, userId)
+export async function generateSearchPlan(topic: string, aiConfig: AIConfig): Promise<SearchPlan> {
+  const { complete } = createArticleModel(aiConfig)
   const today = nowDay()
 
   const systemPrompt = `你是一个专业的信息检索专家，擅长设计高效的搜索策略。
@@ -425,11 +425,10 @@ export function cleanMaterials(rawData: SearchItem[], scripts: string[] = []): S
 export async function collectMaterials(
   topic: string,
   aiConfig: AIConfig,
-  userId?: string,
 ): Promise<MaterialsDataset> {
   try {
     const usesDeepSeekSearch = (aiConfig.searchProvider ?? SERVER_AI_CONFIG.searchProvider) === "deepseek"
-    const deepSeekConfig = usesDeepSeekSearch ? resolveDeepSeekConfig(userId) : undefined
+    const deepSeekConfig = usesDeepSeekSearch ? resolveDeepSeekConfig(aiConfig.deepseekApiKey) : undefined
     if (deepSeekConfig && !isDeepSeekReady(deepSeekConfig)) throw new Error("请在公共 Key 中配置 DeepSeek")
     const deepseek = deepSeekConfig ? createDeepSeekClient(deepSeekConfig) : undefined
     const provider: SearchProvider | undefined = deepseek && {
@@ -448,7 +447,7 @@ export async function collectMaterials(
     }
     // Step 1: LLM 生成搜索计划
     logger.info("SEARCH", "开始生成搜索计划", { topic })
-    const plan = await generateSearchPlan(topic, aiConfig, userId)
+    const plan = await generateSearchPlan(topic, aiConfig)
 
     // Step 2: 执行搜索（使用 Provider 架构）
     logger.info("SEARCH", "开始执行搜索", { queries: plan.search_queries })

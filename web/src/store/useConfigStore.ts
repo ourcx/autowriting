@@ -5,7 +5,6 @@
 
 import { useSyncExternalStore } from 'react'
 import { loadAIConfig, loadGenCliPairingCode, saveAIConfig, AIConfig } from '../utils/aiConfig'
-import { fetchDeepSeekStatus } from '../utils/apiHelpers'
 
 // ── 服务端配置状态（从 /api/config/status 拉取）──
 export interface ServerConfigStatus {
@@ -23,7 +22,6 @@ export interface ServerConfigStatus {
   openrouterReady: boolean
   zhipuReady: boolean
   deepseekReady: boolean
-  deepseekAccountConfigured?: boolean
   wechatCollectorReady: {
     yuanbao?: boolean
     tikhub: boolean
@@ -76,17 +74,9 @@ export async function fetchServerStatus() {
   state = { ...state, serverStatusLoading: true }
   notify()
   try {
-    const [res, deepseek] = await Promise.all([
-      fetch('/api/config/status'),
-      fetchDeepSeekStatus().catch(() => null),
-    ])
+    const res = await fetch('/api/config/status')
     if (res.ok) {
       const data: ServerConfigStatus = await res.json()
-      // 匿名状态只包含部署配置，账号 Key 的状态由鉴权接口单独返回。
-      if (deepseek) {
-        data.deepseekReady ||= Boolean(deepseek.enabled && deepseek.configured)
-        data.deepseekAccountConfigured = Boolean(deepseek.accountConfigured)
-      }
       state = { ...state, serverStatus: data, serverStatusLoading: false }
     } else {
       state = { ...state, serverStatusLoading: false }
@@ -100,7 +90,7 @@ export async function fetchServerStatus() {
 // ── 计算「是否可用」——本地配置 OR 服务端已配置任意一种 ──
 export function isArticleReady(s: ConfigState): boolean {
   const { localConfig, serverStatus } = s
-  if (localConfig.articleProvider === "deepseek") return Boolean(serverStatus?.deepseekReady)
+  if (localConfig.articleProvider === "deepseek") return Boolean(localConfig.deepseekApiKey.trim())
   // 本地有 Key
   const localReady = localConfig.articleProvider === 'maas'
     ? !!localConfig.maasApiKey
@@ -160,6 +150,7 @@ export function useAIReadiness() {
     serverStatus: s.serverStatus,
     serverStatusLoading: s.serverStatusLoading,
     articleReady: isArticleReady(s),
+    deepseekReady: Boolean(s.localConfig.deepseekApiKey.trim()),
     coverReady: isCoverReady(s),
   }
 }

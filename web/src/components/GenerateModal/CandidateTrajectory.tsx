@@ -1,6 +1,6 @@
 import Button from "../Button/Button"
 import { useState } from "react"
-import { Activity, BookOpen, CheckCircle, Circle, FileText, Globe, Loader2, Pencil, Search, SlidersHorizontal } from "lucide-react"
+import { Activity, BookOpen, CheckCircle, Circle, FileText, Globe, Loader2, Pencil, Search, SlidersHorizontal, ClipboardList, Sparkles } from "lucide-react"
 import type { CandidateTraceStep, GenerationCandidate } from "../../../shared/generationCandidate"
 import SourceList from "./SourceList"
 import "./CandidateTrajectory.css"
@@ -12,7 +12,7 @@ interface CandidateTrajectoryProps {
 
 const ICONS = {
   context: FileText, history: BookOpen, decision: SlidersHorizontal, search: Search,
-  read: Globe, find: Search, outline: FileText, write: Pencil, edit: CheckCircle,
+  read: Globe, find: Search, outline: FileText, write: Pencil, review: ClipboardList, edit: Sparkles, verify: CheckCircle,
 }
 
 const LABELS = {
@@ -21,6 +21,11 @@ const LABELS = {
   failed: "失败",
   skipped: "未执行",
   interrupted: "已中断",
+  changes_requested: "待修改",
+}
+
+function stepStatus(step: CandidateTraceStep) {
+  return step.kind === "edit" && step.status === "skipped" ? "未通过" : LABELS[step.status]
 }
 
 function duration(ms: number): string {
@@ -67,6 +72,22 @@ export default function CandidateTrajectory({ candidate, now }: CandidateTraject
       {selectedId && live && <Button onClick={() => setSelectedId("")}>跟随最新</Button>}
     </div>
     <div className="ct-overview">
+      <div className="ct-stages" aria-label="写作阶段">
+        {([
+          ["找资料", ["context", "history", "search", "read", "find", "decision"]],
+          ["写初稿", ["outline", "write"]],
+          ["审稿", ["review"]],
+          ["优化", ["edit"]],
+          ["复核", ["verify"]],
+        ] as const).map(([label, kinds]) => {
+          const last = [...steps].reverse().find(step => (kinds as readonly string[]).includes(step.kind))
+          return <Button key={label} className="ct-stage" disabled={!last} data-status={last?.status}
+            aria-pressed={Boolean(last && last.id === selected.id)} onClick={() => last && setSelectedId(last.id)}>
+            {last?.status === "done" ? <CheckCircle size={13} /> : last?.status === "running" ? <Loader2 size={13} className="gc-spin" /> : <Circle size={12} />}
+            {label}
+          </Button>
+        })}
+      </div>
       <div className="ct-time"><span>本次开始</span><span>{duration(elapsed)}</span></div>
       <div className="ct-track" aria-label="步骤耗时分布">
         {group.filter(step => showDecisions || step.kind !== "decision" || step.status === "failed" || step.id === selected.id).map(step => {
@@ -95,7 +116,7 @@ export default function CandidateTrajectory({ candidate, now }: CandidateTraject
               <Button variant="plain" aria-pressed={selected.id === step.id} onClick={() => setSelectedId(step.id)}>
                 <span className="ct-step-icon" data-status={step.status}><StepIcon size={15} aria-hidden="true" /></span>
                 <strong>{step.title}</strong>
-                <small>{LABELS[step.status]}</small>
+                <small>{stepStatus(step)}</small>
               </Button>
             </li>
           })}
@@ -104,7 +125,7 @@ export default function CandidateTrajectory({ candidate, now }: CandidateTraject
       <div className="ct-inspector" aria-label="步骤详情">
         <div className="ct-inspector-title"><span className="ct-step-icon" data-status={selected.status}><Icon size={17} /></span><h4>{selected.title}</h4></div>
         <p className="ct-meta">
-          {LABELS[selected.status]} · {new Date(selected.startedAt).toLocaleTimeString()}
+          {stepStatus(selected)} · {new Date(selected.startedAt).toLocaleTimeString()}
           {(selected.finishedAt || selected.status === "running") && <> · {duration(selectedElapsed)}</>}
         </p>
         {selected.input && <div><h5>输入</h5><p>{selected.input}</p></div>}

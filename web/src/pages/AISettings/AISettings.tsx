@@ -1,3 +1,4 @@
+import { DEEPSEEK_KEY_HEADER } from "../../../shared/aiPreferences"
 import { Input } from "../../components/FormControls/FormControls"
 import Button from "../../components/Button/Button"
 import { useState, useEffect } from 'react'
@@ -10,6 +11,7 @@ import {
 import {
   AIConfig,
   loadAIConfig,
+  deepSeekKeyHeaders,
   loadGenCliPairingCode,
   saveGenCliPairingCode,
   PROVIDER_PRESETS,
@@ -18,7 +20,7 @@ import {
 } from '../../utils/aiConfig'
 import PageHeader from '../../components/PageHeader/PageHeader'
 import { useConfigStore, setLocalConfig, fetchServerStatus } from '../../store/useConfigStore'
-import { extractErrorMessage, saveDeepSeekKey, testAIConnection, testLocalGenCli } from '../../utils/apiHelpers'
+import { extractErrorMessage, testAIConnection, testLocalGenCli } from '../../utils/apiHelpers'
 import './AISettings.css'
 
 type Section = 'overview' | 'quickstart' | 'providers' | 'article' | 'cover' | 'search' | 'advanced' | 'cdn'
@@ -54,8 +56,6 @@ export default function AISettings() {
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
   const [activeSection, setActiveSection] = useState<Section>('overview')
-  const [deepseekKey, setDeepseekKey] = useState('')
-  const [deepseekSaving, setDeepseekSaving] = useState(false)
   const [deepseekKeyResult, setDeepseekKeyResult] = useState<{ ok: boolean; msg: string } | null>(null)
   const [gencliTesting, setGencliTesting] = useState(false)
   const [gencliCode, setGencliCode] = useState(loadGenCliPairingCode)
@@ -66,28 +66,11 @@ export default function AISettings() {
     fetchServerStatus()
   }, [])
 
-  const saveAccountKey = async (key: string) => {
-    if (deepseekSaving) return false
-    setDeepseekSaving(true)
-    setDeepseekKeyResult(null)
-    try {
-      await saveDeepSeekKey(key)
-      setDeepseekKey('')
-      setShowKeys(keys => ({ ...keys, 'deepseek-common': false }))
-      await fetchServerStatus()
-      setDeepseekKeyResult({ ok: true, msg: key ? 'DeepSeek Key 已保存' : '账号 Key 已移除' })
-      return true
-    } catch (error) {
-      setDeepseekKeyResult({ ok: false, msg: extractErrorMessage(error, 'DeepSeek Key 保存失败') })
-      return false
-    } finally {
-      setDeepseekSaving(false)
-    }
-  }
-
-  const handleSave = async () => {
-    if (deepseekKey.trim() && !await saveAccountKey(deepseekKey.trim())) {
+  const handleSave = () => {
+    const deepseekApiKey = config.deepseekApiKey.trim()
+    if (deepseekApiKey && !deepSeekKeyHeaders(deepseekApiKey)[DEEPSEEK_KEY_HEADER]) {
       setActiveSection('providers')
+      setDeepseekKeyResult({ ok: false, msg: '请检查 DeepSeek Key，中间不能有空格。' })
       return
     }
     try { saveGenCliPairingCode(gencliCode) }
@@ -98,7 +81,10 @@ export default function AISettings() {
         return
       }
     }
-    setLocalConfig(config)
+    setLocalConfig({ ...config, deepseekApiKey })
+    setConfig(current => ({ ...current, deepseekApiKey }))
+    setShowKeys(keys => ({ ...keys, 'deepseek-common': false }))
+    setDeepseekKeyResult({ ok: true, msg: deepseekApiKey ? 'DeepSeek Key 已保存到当前浏览器' : '当前浏览器未配置 DeepSeek Key' })
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
   }
@@ -172,9 +158,8 @@ export default function AISettings() {
 
   // ── 配置状态（每个 key 的状态） ──────────────────────────────────────────
   const deepseekSelected = config.articleProvider === 'deepseek'
-  const deepseekReady = Boolean(serverStatus?.deepseekReady)
-  const accountDeepseekReady = Boolean(serverStatus?.deepseekAccountConfigured)
-  const localArticleReady = !deepseekSelected && (config.articleProvider === 'maas'
+  const deepseekReady = Boolean(deepSeekKeyHeaders(config.deepseekApiKey)[DEEPSEEK_KEY_HEADER])
+  const localArticleReady = deepseekSelected ? deepseekReady : (config.articleProvider === 'maas'
     ? Boolean(config.maasApiKey)
     : config.articleProvider === 'zhipu'
       ? Boolean(config.articleApiKey || config.zhipuApiKey)
@@ -205,13 +190,12 @@ export default function AISettings() {
     {
       id: 'article', icon: <Zap size={18} />, name: '文章模型',
       detail: [selectedArticlePreset?.name, config.articleModel].filter(Boolean).join(' · '),
-      status: localArticleReady ? '浏览器已配置' : deepseekSelected && accountDeepseekReady ? '账号已配置'
-        : (deepseekSelected ? deepseekReady : serverStatus?.articleReady) ? '服务端已配置' : '待配置',
+      status: localArticleReady ? '浏览器已配置' : !deepseekSelected && serverStatus?.articleReady ? '服务端已配置' : '待配置',
     },
     {
       id: 'search', icon: <Search size={18} />, name: '联网与来源核查',
       detail: searchUsesDeepSeek ? 'DeepSeek' : searchUsesZhipu ? '智谱' : searchUsesFallback ? 'Serper / SearXNG' : SEARCH_LABELS[config.searchProvider],
-      status: searchUsesDeepSeek ? accountDeepseekReady ? '账号已配置' : '服务端已配置'
+      status: searchUsesDeepSeek || (config.searchProvider === 'deepseek' && deepseekReady) ? '浏览器已配置'
         : searchUsesZhipu || searchReady ? '已配置' : searchUsesFallback ? '将尝试备用搜索' : '待配置',
     },
     {
@@ -231,7 +215,7 @@ export default function AISettings() {
         actions={(
           <div className="as-header-actions">
             <Button variant="plain" className="as-usage-btn" onClick={() => navigate('/token-usage')}>Token 用量</Button>
-            <Button variant="plain" className={`as-save-btn${saved ? ' as-save-btn--ok' : ''}`} disabled={deepseekSaving} onClick={() => void handleSave()}>
+            <Button variant="plain" className={`as-save-btn${saved ? ' as-save-btn--ok' : ''}`} onClick={handleSave}>
               {saved ? <Check size={14} /> : <Save size={14} />}
               {saved ? '已保存' : '保存'}
             </Button>
@@ -402,24 +386,29 @@ export default function AISettings() {
                 <div className="as-card-label-row">
                   <span className="as-card-section-label">DeepSeek</span>
                   <span className="as-card-tag as-card-tag--teal">
-                    {accountDeepseekReady ? '账号已配置' : deepseekReady ? '使用服务端 Key' : '待配置'}
+                    {deepseekReady ? '当前浏览器已配置' : '待配置'}
                   </span>
                 </div>
-                <p className="as-card-desc">文章生成、网页搜索和读取、OCR、语音转写和朗读共用此 Key。Key 保存在服务端，仅当前账号可用。</p>
+                <p className="as-card-desc">文章生成、网页搜索和读取、OCR、语音转写和朗读共用此 Key。Key 只保存在当前浏览器。调用时临时传给后端，后端不保存。</p>
                 <div className="as-field">
                   <label className="as-label" htmlFor="as-deepseek-key">DeepSeek 公共 API Key</label>
                   <div className="as-key-wrap">
                     <Input id="as-deepseek-key" className="as-input as-input-mono"
                       type={showKeys['deepseek-common'] ? 'text' : 'password'} autoComplete="off"
-                      value={deepseekKey} maxLength={256} disabled={deepseekSaving}
-                      onChange={e => { setDeepseekKey(e.target.value); setDeepseekKeyResult(null) }}
-                      placeholder={accountDeepseekReady ? '已保存，填写新 Key 可替换' : '填写 DeepSeek 开放平台的 API Key'} />
+                      value={config.deepseekApiKey} maxLength={256}
+                      onChange={e => { set({ deepseekApiKey: e.target.value }); setDeepseekKeyResult(null) }}
+                      placeholder="填写 DeepSeek 开放平台的 API Key" />
                     <Button variant="plain" type="button" className="as-eye-btn" aria-label={showKeys['deepseek-common'] ? '隐藏 DeepSeek Key' : '显示 DeepSeek Key'}
                       onClick={() => toggleKey('deepseek-common')}>{showKeys['deepseek-common'] ? <EyeOff size={14} /> : <Eye size={14} />}</Button>
                   </div>
                   <p className="as-hint">前往 <a href={DEEPSEEK_KEYS_URL} target="_blank" rel="noreferrer">DeepSeek 开放平台</a> 获取。填好后点击右上角「保存」。</p>
                   <div className="as-test-row">
-                    {accountDeepseekReady && <Button variant="plain" type="button" className="as-btn-test" disabled={deepseekSaving} onClick={() => void saveAccountKey('')}>移除账号 Key</Button>}
+                    {config.deepseekApiKey && <Button variant="plain" type="button" className="as-btn-test" onClick={() => {
+                      const next = { ...loadAIConfig(), deepseekApiKey: '' }
+                      setLocalConfig(next)
+                      set({ deepseekApiKey: '' })
+                      setDeepseekKeyResult({ ok: true, msg: '浏览器 Key 已移除' })
+                    }}>移除浏览器 Key</Button>}
                     {deepseekKeyResult && <span role="status" className={`as-test-msg as-test-msg--${deepseekKeyResult.ok ? 'ok' : 'err'}`}>{deepseekKeyResult.msg}</span>}
                   </div>
                 </div>
@@ -430,7 +419,7 @@ export default function AISettings() {
                   <span className="as-card-tag as-card-tag--teal">文章 · GLM-Image · 搜索 · 向量</span>
                 </div>
                 <p className="as-card-desc">
-                  智谱文章模型、GLM-Image、网页搜索和向量检索复用这个 Key。保存后同步到服务端供定时任务使用。
+                  智谱文章模型、GLM-Image、网页搜索和向量检索复用这个 Key。只保存在当前浏览器。
                 </p>
                 <div className="as-field">
                   <label className="as-label">智谱公共 API Key</label>

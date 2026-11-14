@@ -1,3 +1,5 @@
+import { DEEPSEEK_KEY_HEADER } from "../../shared/aiPreferences.ts"
+import { withRequestDeepSeekKey } from "../deepseekCredentials.ts"
 import { Router } from "express"
 import { authMiddleware } from "../authMiddleware.ts"
 import { SERVER_AI_CONFIG } from "../config.ts"
@@ -1157,8 +1159,8 @@ router.post("/generate", async (req: AuthedRequest, res) => {
   const clientAiConfig = req.body?.aiConfig && typeof req.body.aiConfig === "object"
     ? req.body.aiConfig as AIConfig
     : {}
-  const aiConfig: AIConfig = { ...SERVER_AI_CONFIG, ...clientAiConfig }
-  if (!hasArticleApiKey(aiConfig, req.user?.id) && aiConfig.articleProvider !== "maas") {
+  const aiConfig = withRequestDeepSeekKey({ ...SERVER_AI_CONFIG, ...clientAiConfig }, req.get(DEEPSEEK_KEY_HEADER))
+  if (!hasArticleApiKey(aiConfig) && aiConfig.articleProvider !== "maas") {
     res.status(400).json({ error: "请先在 AI 配置中填写文章模型的 API Key" })
     return
   }
@@ -1170,7 +1172,7 @@ router.post("/generate", async (req: AuthedRequest, res) => {
   const articleTitle = sources.find(source => source.kind === "title")?.text || "公众号长图"
 
   try {
-    const articleModel = createArticleModel(aiConfig, req.user?.id)
+    const articleModel = createArticleModel(aiConfig)
     const { model } = articleModel
     // #region debug-point BCD:before-upstream
     if (process.env.DEBUG_SERVER_URL) void fetch(process.env.DEBUG_SERVER_URL, { method: "POST", body: JSON.stringify({ sessionId: "canvas-gateway-timeout", runId: process.env.DEBUG_RUN_ID || "pre-fix", hypothesisId: "B,C,D", traceId: debugTraceId, location: "server/routes/canvas.ts:before-upstream", msg: "[DEBUG] Canvas upstream request starting", data: { elapsedMs: Date.now() - debugStartedAt, provider: aiConfig.articleProvider, model, sourceCount: sources.length, maxTokens: 8000 }, ts: Date.now() }) }).catch(() => {})
@@ -1227,8 +1229,8 @@ router.post("/generate/stream", async (req: AuthedRequest, res) => {
   const clientAiConfig = req.body?.aiConfig && typeof req.body.aiConfig === "object"
     ? req.body.aiConfig as AIConfig
     : {}
-  const aiConfig: AIConfig = { ...SERVER_AI_CONFIG, ...clientAiConfig }
-  if (!hasArticleApiKey(aiConfig, req.user?.id) && aiConfig.articleProvider !== "maas") {
+  const aiConfig = withRequestDeepSeekKey({ ...SERVER_AI_CONFIG, ...clientAiConfig }, req.get(DEEPSEEK_KEY_HEADER))
+  if (!hasArticleApiKey(aiConfig) && aiConfig.articleProvider !== "maas") {
     res.status(400).json({ error: "请先在 AI 配置中填写文章模型的 API Key" })
     return
   }
@@ -1256,7 +1258,7 @@ router.post("/generate/stream", async (req: AuthedRequest, res) => {
   // #endregion
 
   try {
-    const articleModel = createArticleModel(aiConfig, req.user?.id)
+    const articleModel = createArticleModel(aiConfig)
     const { model } = articleModel
     const generated = await generateCanvasWithRepair({
       articleModel,
@@ -1320,8 +1322,8 @@ router.post("/generate-block/stream", async (req: AuthedRequest, res) => {
   const clientAiConfig = req.body?.aiConfig && typeof req.body.aiConfig === "object"
     ? req.body.aiConfig as AIConfig
     : {}
-  const aiConfig: AIConfig = { ...SERVER_AI_CONFIG, ...clientAiConfig }
-  if (!hasArticleApiKey(aiConfig, req.user?.id) && aiConfig.articleProvider !== "maas") {
+  const aiConfig = withRequestDeepSeekKey({ ...SERVER_AI_CONFIG, ...clientAiConfig }, req.get(DEEPSEEK_KEY_HEADER))
+  if (!hasArticleApiKey(aiConfig) && aiConfig.articleProvider !== "maas") {
     res.status(400).json({ error: "请先在 AI 配置中填写文章模型的 API Key" })
     return
   }
@@ -1344,7 +1346,7 @@ router.post("/generate-block/stream", async (req: AuthedRequest, res) => {
   const heartbeat = setInterval(() => send("heartbeat", { elapsedMs: Date.now() - startedAt }), 15000)
 
   try {
-    const articleModel = createArticleModel(aiConfig, req.user?.id)
+    const articleModel = createArticleModel(aiConfig)
     const { model } = articleModel
     const generated = await generateBlockWithRepair({
       articleModel,

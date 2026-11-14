@@ -1,3 +1,4 @@
+import { withRequestDeepSeekKey } from "./deepseekCredentials.ts"
 import fs from "node:fs"
 import path from "node:path"
 import { DRAFTS_DIR, SERVER_AI_CONFIG } from "./config.ts"
@@ -153,13 +154,14 @@ function formatPublishedArticles(articles: PublishedPersonaArticle[]): string {
 export async function analyzeCreatorPersona(
   userId: string,
   input: PersonaAnalysisInput,
+  requestKey?: string,
 ): Promise<PersonaAnalysisResult> {
   const rawConfig = input.aiConfig
   if (rawConfig !== undefined && (!rawConfig || typeof rawConfig !== "object" || Array.isArray(rawConfig))) {
     throw new PersonaAgentInputError("AI 配置不正确")
   }
-  const config: AIConfig = { ...SERVER_AI_CONFIG, ...(rawConfig as Partial<AIConfig> || {}) }
-  if (!hasArticleApiKey(config, userId)) throw new PersonaAgentInputError("请先配置文章生成模型的 API Key")
+  const config = withRequestDeepSeekKey({ ...SERVER_AI_CONFIG, ...(rawConfig as Partial<AIConfig> || {}) }, requestKey)
+  if (!hasArticleApiKey(config)) throw new PersonaAgentInputError("请先配置文章生成模型的 API Key")
 
   const accountInfo = normalizeAccountInfo(input.accountInfo)
   const publishedArticles = normalizePublishedArticles(input.publishedArticles)
@@ -195,7 +197,7 @@ ${formatLocalArticles(localArticles) || "没有本地成稿"}
 6. 返回一个 JSON 对象，不要 Markdown，不要解释。必须包含这些字符串字段：
 accountName、accountInfo、personalExperiences、historicalArticles、speakingStyle、expertise、values、audienceRelationship、otherNotes。`
 
-  const { complete } = createArticleModel(config, userId)
+  const { complete } = createArticleModel(config)
   const response = await complete({
     messages: [
       {

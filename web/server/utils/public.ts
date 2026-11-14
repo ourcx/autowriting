@@ -69,17 +69,11 @@ interface ArticleCompletion {
   usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
 }
 
-/**
- * 创建文章模型
- * @param config 配置
- * @param userId 
- * @param deepseek 
- * @returns 
- */
-export function createArticleModel(config: AIConfig, userId?: string, deepseek?: ReturnType<typeof createDeepSeekClient>) {
+/** 创建本次文章请求的模型客户端。DeepSeek 只使用本次请求的凭据。 */
+export function createArticleModel(config: AIConfig, deepseek?: ReturnType<typeof createDeepSeekClient>) {
   const { url, model, headers } = buildLLMRequest(config)
   const isDeepSeek = config.articleProvider === "deepseek"
-  const deepseekClient = isDeepSeek ? deepseek ?? createDeepSeekClient(resolveDeepSeekConfig(userId)) : undefined
+  const deepseekClient = isDeepSeek ? deepseek ?? createDeepSeekClient(resolveDeepSeekConfig(config.deepseekApiKey)) : undefined
   async function complete(body: Record<string, unknown>, maxRetries = 3, timeoutMs = 90000, signal?: AbortSignal): Promise<{ data: ArticleCompletion }> {
     if (!deepseekClient) return callLLMWithRetry(url, { ...body, model }, headers, maxRetries, timeoutMs, signal)
     const { content, usage } = await deepseekClient.complete(body, signal, timeoutMs)

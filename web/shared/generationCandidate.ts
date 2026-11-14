@@ -9,7 +9,7 @@ export interface CandidateResearchSource {
   read: boolean
 }
 
-export type CandidateTraceStatus = "running" | "done" | "failed" | "skipped" | "interrupted"
+export type CandidateTraceStatus = "running" | "done" | "failed" | "skipped" | "interrupted" | "changes_requested"
 
 export interface CandidateTraceSource {
   title: string
@@ -22,7 +22,7 @@ export interface CandidateTraceStep {
   id: string
   attempt: number
   title: string
-  kind: "context" | "history" | "decision" | "search" | "read" | "find" | "outline" | "write" | "edit"
+  kind: "context" | "history" | "decision" | "search" | "read" | "find" | "outline" | "write" | "review" | "edit" | "verify"
   status: CandidateTraceStatus
   startedAt: string
   finishedAt?: string

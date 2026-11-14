@@ -3,7 +3,7 @@ import Button from "../Button/Button"
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { toast } from '../Toast/Toast'
 import { Edit2, Copy, Download, Sparkles, Check, X, RotateCcw, ImagePlus, Loader2, Zap } from 'lucide-react'
-import { loadAIConfig } from '../../utils/aiConfig'
+import { aiRequestConfig, deepSeekKeyHeaders, loadAIConfig } from '../../utils/aiConfig'
 import PromptSelector from '../PromptSelector/PromptSelector'
 import './MarkdownEditor.css'
 
@@ -302,13 +302,14 @@ export default function MarkdownEditor({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...deepSeekKeyHeaders(),
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           selected: floatMenu.selectedText,
           fullArticle: value,           // 整篇文章，供后端做上下文感知
           action,
-          aiConfig,
+          aiConfig: aiRequestConfig(aiConfig),
         }),
       })
       const data = await resp.json()

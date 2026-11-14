@@ -876,7 +876,7 @@
   }
 
   /* 跨页面弹层：手机上使用底部抽屉或近全屏工作区，操作栏预留安全区。 */
-  :is(.toast-overlay, .ps-overlay, .ttm-overlay, .gm-overlay) {
+  :is(.toast-overlay, .ps-overlay, .ttm-overlay) {
     align-items: flex-end;
     padding: 0;
   }
@@ -890,20 +890,11 @@
     border-radius: 16px 16px 0 0;
   }
 
-  .gm-modal,
-  .gc-modal {
-    width: 100%;
-    max-width: none;
-    height: 100dvh;
-    max-height: 100dvh;
-    border-radius: 0;
-  }
-
-  :is(.toast-dialog-actions, .ps-preview-actions, .ttm-actions, .gm-footer-actions) {
+  :is(.toast-dialog-actions, .ps-preview-actions, .ttm-actions) {
     padding-bottom: var(--mobile-bottom-safe);
   }
 
-  :is(.toast-dialog-actions, .ps-preview-actions, .ttm-actions, .gm-footer-actions) button {
+  :is(.toast-dialog-actions, .ps-preview-actions, .ttm-actions) button {
     min-height: var(--mobile-control);
   }
 

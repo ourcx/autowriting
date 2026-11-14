@@ -238,9 +238,3 @@ export const SERVER_AI_CONFIG = {
   tikhubApiKey: process.env.TIKHUB_API_KEY || '',
   dajialaApiKey: process.env.DAJIALA_API_KEY || '',
 }
-
-// 控制部署级共享 Key。账号 Key 另走认证接口，工具请求只发往官方地址。
-export const DEEPSEEK_APP_CONFIG = {
-  enabled: process.env.DEEPSEEK_APP_ENABLED === 'true',
-  apiKey: process.env.DEEPSEEK_API_KEY || '',
-}

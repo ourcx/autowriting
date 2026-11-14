@@ -4,7 +4,7 @@ import { parseCanvasLibraryImage, type CanvasLibraryImage } from "../../shared/c
  * ============================================================ */
 
 import axios, { AxiosError } from 'axios'
-import { AIConfig, loadGenCliPairingCode } from './aiConfig'
+import { AIConfig, aiRequestConfig, deepSeekKeyHeaders, loadGenCliPairingCode } from './aiConfig'
 import { CanvasDocument, parseCanvasDocument } from '../../shared/canvasDsl'
 import type { CanvasSource } from '../../shared/canvasArticle'
 import {
@@ -109,7 +109,7 @@ export function extractErrorMessage(err: unknown, fallback = '请求失败，请
 
 // ── 判断用户本地配置是否已填写 API Key ──
 export function isLocalApiKeyConfigured(cfg: AIConfig): boolean {
-  if (cfg.articleProvider === 'deepseek') return false
+  if (cfg.articleProvider === 'deepseek') return Boolean(Object.keys(deepSeekKeyHeaders(cfg.deepseekApiKey)).length)
   if (cfg.articleProvider === 'maas') return !!cfg.maasApiKey
   if (cfg.articleProvider === 'zhipu') return Boolean(cfg.articleApiKey || cfg.zhipuApiKey)
   return !!cfg.articleApiKey
@@ -150,8 +150,8 @@ export async function generateArticle(
   const res = await axios.post(`/api/articles/${articleId}/generate`, {
     task,
     materials,
-    aiConfig,
-  })
+    aiConfig: aiRequestConfig(aiConfig),
+  }, { headers: deepSeekKeyHeaders() })
   return res.data.article as string
 }
 
@@ -357,12 +357,12 @@ export async function saveCreatorFeedback(
 }
 
 export async function generateArticleOutline(articleId: string, task: string, aiConfig: AIConfig): Promise<string> {
-  const response = await axios.post(`/api/articles/${encodeURIComponent(articleId)}/outline`, { task, aiConfig })
+  const response = await axios.post(`/api/articles/${encodeURIComponent(articleId)}/outline`, { task, aiConfig: aiRequestConfig(aiConfig) }, { headers: deepSeekKeyHeaders() })
   return (response.data as { outline: string }).outline
 }
 
 export async function refineArticleMaterials(articleId: string, materials: string, task: string, aiConfig: AIConfig): Promise<string> {
-  const response = await axios.post(`/api/articles/${encodeURIComponent(articleId)}/refine-materials`, { materials, task, aiConfig })
+  const response = await axios.post(`/api/articles/${encodeURIComponent(articleId)}/refine-materials`, { materials, task, aiConfig: aiRequestConfig(aiConfig) }, { headers: deepSeekKeyHeaders() })
   return (response.data as { refined: string }).refined
 }
 
@@ -442,7 +442,7 @@ export async function analyzeCreatorPersona(input: {
   }
   publishedArticles: PersonaPublishedArticle[]
 }): Promise<CreatorPersonaAnalysis> {
-  const response = await axios.post<CreatorPersonaAnalysis>('/api/creator-profile/persona/analyze', input)
+  const response = await axios.post<CreatorPersonaAnalysis>('/api/creator-profile/persona/analyze', { ...input, aiConfig: aiRequestConfig(input.aiConfig) }, { headers: deepSeekKeyHeaders() })
   return {
     persona: normalizeCreatorPersona(response.data.persona),
     sources: response.data.sources,
@@ -501,8 +501,8 @@ export async function streamGenerationCandidate(
   const token = localStorage.getItem("auth_token")
   const response = await fetch(`/api/articles/${encodeURIComponent(articleId)}/candidates/${encodeURIComponent(candidateId)}/stream`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: JSON.stringify({ aiConfig }), signal,
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...deepSeekKeyHeaders() },
+    body: JSON.stringify({ aiConfig: aiRequestConfig(aiConfig) }), signal,
   })
   if (!response.ok) {
     const body = await response.json().catch(() => ({})) as { error?: string }
@@ -567,8 +567,9 @@ export async function generateCanvasDocument(
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...deepSeekKeyHeaders(),
     },
-    body: JSON.stringify({ prompt, sources, aiConfig, ...design }),
+    body: JSON.stringify({ prompt, sources, aiConfig: aiRequestConfig(aiConfig), ...design }),
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({})) as { error?: string }
@@ -621,8 +622,9 @@ export async function generateWechatBlockDocument(
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...deepSeekKeyHeaders(),
     },
-    body: JSON.stringify({ prompt, sources, aiConfig, ...design }),
+    body: JSON.stringify({ prompt, sources, aiConfig: aiRequestConfig(aiConfig), ...design }),
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({})) as { error?: string }
@@ -809,7 +811,7 @@ export async function generateXiaohongshuArticleMetadata(input: {
   content: string
   aiConfig: AIConfig
 }): Promise<{ title: string; summary: string; topics: string[] }> {
-  const response = await axios.post("/api/xiaohongshu/article-metadata", input)
+  const response = await axios.post("/api/xiaohongshu/article-metadata", { ...input, aiConfig: aiRequestConfig(input.aiConfig) }, { headers: deepSeekKeyHeaders() })
   return response.data as { title: string; summary: string; topics: string[] }
 }
 
@@ -1011,7 +1013,7 @@ export async function fetchBlob(url: string, init: RequestInit = {}): Promise<Bl
 export async function testAIConnection(cfg: AIConfig): Promise<{ ok: boolean; msg: string }> {
   if (cfg.articleProvider === "deepseek") {
     try {
-      await deepSeekRequest("chat", { confirmedCost: true, prompt: "请只回复「连接正常」。" })
+      await deepSeekRequest("chat", { confirmedCost: true, prompt: "请只回复「连接正常」。" }, undefined, cfg.deepseekApiKey)
       return { ok: true, msg: "DeepSeek 连接正常" }
     } catch (error) {
       return { ok: false, msg: extractErrorMessage(error, "DeepSeek 连接失败") }
@@ -1081,8 +1083,8 @@ export async function fetchXiumiReference(url: string): Promise<{title: string; 
 /** 样式管理统一复用登录请求；未填写本地密钥时保留服务端配置。 */
 export async function generateArticleStyle(prompt: string, baseCSS: string, aiConfig: AIConfig): Promise<string> {
   const { data } = await axios.post<{ css: string }>("/api/generate-style", {
-    prompt, baseCSS, ...(aiConfig.articleProvider === "deepseek" || isLocalApiKeyConfigured(aiConfig) ? { aiConfig } : {}),
-  }, { timeout: 300000 })
+    prompt, baseCSS, ...(isLocalApiKeyConfigured(aiConfig) ? { aiConfig: aiRequestConfig(aiConfig) } : {}),
+  }, { timeout: 300000, headers: deepSeekKeyHeaders() })
   const rawCss = typeof data.css === "string" ? data.css.trim() : ""
   const fencedCss = rawCss.match(/```(?:css)?\s*([\s\S]*?)```/i)?.[1]
   const styleCss = rawCss.match(/<style[^>]*>([\s\S]*?)<\/style>/i)?.[1]
@@ -1149,30 +1151,14 @@ export async function parseDeepSeekMaterial(file: File, purpose: "text_recogniti
   return deepSeekRequest("ocr", form)
 }
 
-export interface DeepSeekServiceStatus {
-  enabled: boolean
-  configured: boolean
-  accountConfigured: boolean
-}
-
-export async function fetchDeepSeekStatus(): Promise<DeepSeekServiceStatus> {
-  const { data } = await axios.get<DeepSeekServiceStatus>('/api/deepseek/status')
-  return data
-}
-
-export async function saveDeepSeekKey(apiKey: string): Promise<DeepSeekServiceStatus> {
-  const { data } = await axios.put<DeepSeekServiceStatus>('/api/deepseek/key', { apiKey })
-  return data
-}
-
 export function deepSeekRequest(operation: "tts", body: Record<string, unknown>, signal?: AbortSignal): Promise<Blob>
-export function deepSeekRequest<T extends object = Record<string, unknown>>(operation: DeepSeekOperation | "status", body?: Record<string, unknown> | FormData, signal?: AbortSignal): Promise<T>
-export async function deepSeekRequest(operation: DeepSeekOperation | "status", body?: Record<string, unknown> | FormData, signal?: AbortSignal): Promise<Record<string, unknown> | Blob> {
+export function deepSeekRequest<T extends object = Record<string, unknown>>(operation: DeepSeekOperation | "status", body?: Record<string, unknown> | FormData, signal?: AbortSignal, key?: string): Promise<T>
+export async function deepSeekRequest(operation: DeepSeekOperation | "status", body?: Record<string, unknown> | FormData, signal?: AbortSignal, key?: string): Promise<Record<string, unknown> | Blob> {
   const token = localStorage.getItem("auth_token")
   const multipart = body instanceof FormData
   const response = await fetch(`/api/deepseek/${operation}`, {
     method: operation === "status" ? "GET" : "POST",
-    headers: { Authorization: `Bearer ${token || ""}`, ...(multipart || !body ? {} : { "Content-Type": "application/json" }) },
+    headers: { Authorization: `Bearer ${token || ""}`, ...deepSeekKeyHeaders(key), ...(multipart || !body ? {} : { "Content-Type": "application/json" }) },
     body: body ? multipart ? body : JSON.stringify(body) : undefined,
     signal,
   })

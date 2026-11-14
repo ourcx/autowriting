@@ -1,3 +1,5 @@
+import { DEEPSEEK_KEY_HEADER } from "../../shared/aiPreferences.ts"
+import { withRequestDeepSeekKey } from "../deepseekCredentials.ts"
 /**
  * 文章路由：CRUD + AI 生成
  * GET    /api/articles
@@ -70,7 +72,7 @@ router.post('/:articleId/candidates', (req, res) => {
 })
 
 router.post('/:articleId/candidates/:candidateId/stream', async (req, res) => {
-  try { await streamCandidate(req.user.id, String(req.params.articleId), String(req.params.candidateId), req.body?.aiConfig, res) }
+  try { await streamCandidate(req.user.id, String(req.params.articleId), String(req.params.candidateId), req.body?.aiConfig, res, req.get(DEEPSEEK_KEY_HEADER)) }
   catch (error) {
     if (!res.headersSent) res.status(error instanceof CandidateError ? error.statusCode : 500).json({
       error: error instanceof CandidateError ? error.message : '候选稿生成失败',
@@ -478,9 +480,9 @@ router.post('/:articleId/generate', async (req, res) => {
       return res.status(400).json({ error: '任务和素材不能为空' })
     }
 
-    const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
+    const cfg = withRequestDeepSeekKey({ ...SERVER_AI_CONFIG, ...(aiConfig || {}) }, req.get(DEEPSEEK_KEY_HEADER))
 
-    if (!hasArticleApiKey(cfg, req.user.id) && cfg.articleProvider !== 'maas') {
+    if (!hasArticleApiKey(cfg) && cfg.articleProvider !== 'maas') {
       return res.status(400).json({ error: '未配置 API Key，请前往「AI 配置」页面设置后重试' })
     }
     if (cfg.articleProvider === 'maas' && !cfg.maasApiKey) {
@@ -515,7 +517,7 @@ ${materials}
 
 现在请直接输出完整的文章内容。使用纯 Markdown，只保留 1 个 H1，全文不得使用 emoji、表情包或装饰性表情符号：`
 
-    const { model, complete } = createArticleModel(cfg, req.user.id)
+    const { model, complete } = createArticleModel(cfg)
 
     const response = await complete({
       messages: [
@@ -623,9 +625,9 @@ router.post('/:articleId/generate/stream', async (req, res) => {
       return res.end()
     }
 
-    const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
+    const cfg = withRequestDeepSeekKey({ ...SERVER_AI_CONFIG, ...(aiConfig || {}) }, req.get(DEEPSEEK_KEY_HEADER))
 
-    if (!hasArticleApiKey(cfg, req.user.id) && cfg.articleProvider !== 'maas') {
+    if (!hasArticleApiKey(cfg) && cfg.articleProvider !== 'maas') {
       send('error', { message: '未配置 API Key，请前往「AI 配置」页面设置后重试' })
       return res.end()
     }
@@ -716,7 +718,7 @@ ${materials}
 请把母稿改写成完整的今日头条版本。可以调整标题、开头、段落节奏和表达，但不得新增母稿与素材之外的数字、人物、时间或判断。输出纯 Markdown，只有 1 个 H1，不使用 emoji 或表情包：`
 
     // ── 3. 构造请求参数（统一函数）──────────────────────────────────────────
-    const { model, stream } = createArticleModel(cfg, req.user.id)
+    const { model, stream } = createArticleModel(cfg)
 
     // ── 4. 按需生成各平台文章 ─────────────────────────────────────────────────
 
@@ -819,7 +821,7 @@ router.post('/:articleId/analyze', async (req, res) => {
       return res.end()
     }
 
-    const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
+    const cfg = withRequestDeepSeekKey({ ...SERVER_AI_CONFIG, ...(aiConfig || {}) }, req.get(DEEPSEEK_KEY_HEADER))
 
     // ── 1. RAG 检索（进度提示）──────────────────────────────────────────────
     send('progress', { step: 'rag', message: '正在检索往期相似文章...' })
@@ -929,7 +931,7 @@ uiBlocks 字段说明（必须根据实际问题选择，不要强行凑数）�
 注意：上面是完整格式示例，实际返回时 uiBlocks 只包含真正适用的块（1-5个），scores 和 issues 等字段填入真实分析值。`
 
     // ── 3. 调用 LLM（流式）──────────────────────────────────────────────────
-    const { model, stream } = createArticleModel(cfg, req.user.id)
+    const { model, stream } = createArticleModel(cfg)
     send('progress', { step: 'llm', message: 'AI 正在深度分析...' })
 
     const upstreamRes = await stream({
@@ -1068,8 +1070,8 @@ router.post('/:articleId/inline-edit', async (req, res) => {
       return res.status(400).json({ error: '选中内容太短' })
     }
 
-    const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
-    const { model, complete } = createArticleModel(cfg, req.user.id)
+    const cfg = withRequestDeepSeekKey({ ...SERVER_AI_CONFIG, ...(aiConfig || {}) }, req.get(DEEPSEEK_KEY_HEADER))
+    const { model, complete } = createArticleModel(cfg)
 
     // 全文上下文块（截断到 3000 字，避免超 token）
     const articleCtx = fullArticle
@@ -1163,8 +1165,8 @@ router.post('/:articleId/outline', async (req, res) => {
       return res.status(400).json({ error: '任务要求内容太短，请先填写任务要求' })
     }
 
-    const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
-    const { model, complete } = createArticleModel(cfg, req.user.id)
+    const cfg = withRequestDeepSeekKey({ ...SERVER_AI_CONFIG, ...(aiConfig || {}) }, req.get(DEEPSEEK_KEY_HEADER))
+    const { model, complete } = createArticleModel(cfg)
 
     // 写作规范：可选注入，没配置就跳过
     const writingGuide = getWritingGuideContent()
@@ -1224,8 +1226,8 @@ router.post('/:articleId/refine-materials', async (req, res) => {
       return res.status(400).json({ error: '素材内容太少，无法整理' })
     }
 
-    const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
-    const { model, complete } = createArticleModel(cfg, req.user.id)
+    const cfg = withRequestDeepSeekKey({ ...SERVER_AI_CONFIG, ...(aiConfig || {}) }, req.get(DEEPSEEK_KEY_HEADER))
+    const { model, complete } = createArticleModel(cfg)
 
     // 从数据库读取素材整理提示词（支持用户自定义覆盖）
     const refinePromptData = getEffectivePrompt('prompt-materials-organize')
@@ -1316,9 +1318,9 @@ router.post('/:articleId/deai/stream', async (req, res) => {
       return res.end()
     }
 
-    const cfg = { ...SERVER_AI_CONFIG, ...(aiConfig || {}) }
+    const cfg = withRequestDeepSeekKey({ ...SERVER_AI_CONFIG, ...(aiConfig || {}) }, req.get(DEEPSEEK_KEY_HEADER))
 
-    if (!hasArticleApiKey(cfg, req.user.id) && cfg.articleProvider !== 'maas') {
+    if (!hasArticleApiKey(cfg) && cfg.articleProvider !== 'maas') {
       send('error', { message: '未配置 API Key，请前往「AI 配置」页面设置后重试' })
       return res.end()
     }
@@ -1337,7 +1339,7 @@ router.post('/:articleId/deai/stream', async (req, res) => {
 
 ${article}`
 
-    const { model, stream } = createArticleModel(cfg, req.user.id)
+    const { model, stream } = createArticleModel(cfg)
 
     send('status', { step: 'deai', message: 'AI 正在去除 AI 腔调...' })
 

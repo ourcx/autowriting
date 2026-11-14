@@ -45,3 +45,13 @@
   .ct-steps { max-height: 177px; }
 }
 @media (max-width: 720px) { .ct-panel { padding: 12px; gap: 12px; } }
+
+.gc-modal .ct-panel { --color-canvas: #fff; --color-surface-soft: #f4f7f3; --color-hairline: var(--gc-line); --color-brand-teal: var(--gc-accent); }
+.ct-stages { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 13px; }
+.ct-stages .ct-stage { min-height: 27px; padding: 3px 7px; gap: 4px; line-height: 1.25; font-size: 11px; }
+.ct-stage[data-status="done"] { color: var(--gc-accent); background: var(--gc-tint); }
+.ct-stage[data-status="running"], .ct-stage[data-status="changes_requested"] { color: #775214; background: #fff2d9; border-color: #e4ce9e; }
+.ct-stage[data-status="failed"] { color: #943c2d; background: #fff1ec; border-color: #e9c6bd; }
+.ct-stage[aria-pressed="true"] { border-color: #6a9c83; }
+.ct-track button[data-status="changes_requested"] { background: #cd9b54; }
+.ct-step-icon[data-status="changes_requested"] { color: #956211; }
