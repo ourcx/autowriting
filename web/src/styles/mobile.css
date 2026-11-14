@@ -45,6 +45,25 @@
     min-height: var(--mobile-control);
   }
 
+  /* 公开首页的操作在手机端保持单列。 */
+  .ph-header {
+    padding-inline: var(--mobile-gutter);
+  }
+
+  .ph-nav {
+    gap: 8px;
+  }
+
+  .ph-hero-actions,
+  .ph-account-actions {
+    width: 100%;
+  }
+
+  .ph-hero-actions .ph-button {
+    flex: 1 1 100%;
+    min-height: 48px;
+  }
+
   /* 文章编辑与发布：流程导航可扫动，关键操作保持在底部。 */
   .editor-tabs,
   .editor-prepare-tabs,
