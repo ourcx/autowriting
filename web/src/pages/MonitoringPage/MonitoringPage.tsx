@@ -126,14 +126,13 @@ export default function MonitoringPage() {
       <PageHeader
         title="系统监控"
         icon={<Activity size={16} />}
-        subtitle="实时查看系统性能、日志和告警信息"
         onBack={() => navigate('/admin')}
       />
       <div className="monitoring-container">
         {/* 页面标题 */}
         <div className="monitoring-header">
           <h1 className="monitoring-title">系统监控</h1>
-          <p className="monitoring-subtitle">实时查看系统性能、日志和告警信息</p>
+          <p className="monitoring-subtitle">检查请求耗时、错误和服务状态。</p>
           {authFailed && (
             <div style={{
               marginTop: 12,

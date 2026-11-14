@@ -593,9 +593,8 @@ export default function ArticleEditor() {
       {!apiKeyReady && (
         <div className="editor-setup-banner">
           <AlertTriangle size={15} />
-          <span>还没配置 AI API Key，生成文章需要先</span>
+          <span>配置 AI API Key 后可以生成文章</span>
           <Button variant="plain" onClick={() => navigate('/settings')}>前往配置</Button>
-          <span>（已配置的可忽略此提示）</span>
         </div>
       )}
 
@@ -622,13 +621,16 @@ export default function ArticleEditor() {
               onKeyDown={e => { if (e.key === 'Enter') setEditingTitle(false) }}
               autoFocus
               className="title-input"
+              aria-label="文章标题"
               placeholder="输入文章标题..."
             />
           ) : (
-            <h2 onClick={() => setEditingTitle(true)}>
-              <span>{articleTitle}</span>
-              <Edit3 size={16} className="edit-icon" />
-            </h2>
+            <h1>
+              <Button variant="plain" className="editor-title-button" title="编辑文章标题" onClick={() => setEditingTitle(true)}>
+                <span>{articleTitle}</span>
+                <Edit3 size={15} className="edit-icon" />
+              </Button>
+            </h1>
           )}
         </div>}
         onBack={() => navigate('/')}
@@ -669,7 +671,8 @@ export default function ArticleEditor() {
             <HelpCircle size={16} />
           </Button>
           <Button variant="plain" className="btn btn-secondary" title={saving ? '保存中' : '保存'} aria-label={saving ? '保存中' : '保存'} onClick={() => void handleSave()} disabled={saving || loading}>
-            <Save size={20} />
+            <Save size={16} />
+            {saving ? '保存中' : '保存'}
           </Button>
         </div>}
       />
@@ -695,7 +698,6 @@ export default function ArticleEditor() {
                     {done ? <CheckCircle size={13} /> : idx + 1}
                   </span>
                   <span className="flow-step-label">{step.label}</span>
-                  {idx < MAIN_FLOW_STEPS.length - 1 && <ChevronRight size={12} className="flow-step-sep" />}
                 </Button>
               )
             })}
@@ -725,15 +727,16 @@ export default function ArticleEditor() {
           </div>
         </div>
 
-        <div className="editor-tabs" style={{ display: 'none' }}>
-          {/* 隐藏旧 tabs，保留结构兼容 */}
-        </div>
-
         <div className="editor-content">
-          <div className="editor-save-status" role="status">
-            {dirty ? "有未保存的修改 · 本标签页已保留恢复副本" : isLocalArticle ? "已保存在此浏览器" : "已保存到服务器 · 文章列表可继续编辑"}
-            <span> · 活跃编辑约 {Math.round((workflow.activeEditingMs || 0) / 60000)} 分钟 · 审核后返工 {workflow.reworkCount || 0} 次</span>
-            {workflow.selectedCandidateId && <span> · 已记录候选稿选择</span>}
+          <div className="editor-document-meta">
+            <span role="status">{dirty ? "有未保存的修改，本标签页已保留恢复副本" : isLocalArticle ? "已保存在此浏览器" : "已保存到服务器"}</span>
+            <Collapse className="editor-history-menu" label="写作记录">
+              <div className="editor-document-history">
+                <p>活跃编辑约 {Math.round((workflow.activeEditingMs || 0) / 60000)} 分钟</p>
+                <p>审核后返工 {workflow.reworkCount || 0} 次</p>
+                {workflow.selectedCandidateId && <p>已记录候选稿选择</p>}
+              </div>
+            </Collapse>
           </div>
           {recovery && <div className="editor-save-status">
             检测到上次未保存的修改。
@@ -804,10 +807,11 @@ export default function ArticleEditor() {
 
               {/* 编辑区 */}
               <Textarea
+                aria-label="写作任务要求"
                 value={data.task}
                 onChange={e => setData(prev => ({ ...prev, task: e.target.value }))}
                 placeholder={`# 写作任务要求\n\n## 基本信息\n- **文章主题**：\n- **目标字数**：1500-2000 字\n- **发布平台**：微信公众号\n\n## 结构要求\n1. 开场：直接切入痛点或场景\n2. 这是什么：解释核心概念\n3. 怎么做：分步骤说明\n4. 踩过的坑：分享真实问题\n5. 值不值得做：给出明确判断`}
-                className="editor-textarea"
+                className="editor-input-sheet"
               />
             </div>
           )}
@@ -890,7 +894,7 @@ export default function ArticleEditor() {
                   value={data.materials}
                   onChange={e => setData(prev => ({ ...prev, materials: e.target.value }))}
                   placeholder={`# 素材整理\n\n## 核心数据\n- [数据点 1]\n\n## 踩过的坑\n### 坑1：[问题描述]\n- **问题**：\n- **原因**：\n- **解决**：\n\n## 个人观点\n- [观点 1]`}
-                  className="editor-textarea"
+                  className="editor-input-sheet"
                 />
               </div>
             </div>

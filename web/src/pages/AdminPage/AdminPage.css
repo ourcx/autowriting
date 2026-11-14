@@ -5,80 +5,6 @@
   background: var(--color-canvas);
 }
 
-/* ---- Top Nav ---- */
-.admin-nav {
-  height: 64px;
-  background: var(--color-canvas);
-  border-bottom: 1px solid var(--color-hairline);
-  display: flex;
-  align-items: center;
-  padding: 0 40px;
-  gap: 16px;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.admin-nav-brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  text-decoration: none;
-}
-
-.admin-nav-logo {
-  width: 30px;
-  height: 30px;
-  background: var(--color-brand-teal);
-  border-radius: var(--rounded-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--color-brand-ochre);
-  flex-shrink: 0;
-}
-
-.admin-nav-name {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--color-ink);
-  letter-spacing: -0.2px;
-}
-
-.admin-nav-sep {
-  width: 1px;
-  height: 20px;
-  background: var(--color-hairline);
-  margin: 0 4px;
-}
-
-.admin-nav-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-muted);
-}
-
-.admin-nav-spacer { flex: 1; }
-
-.admin-nav-back {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--rounded-md);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-ink);
-  text-decoration: none;
-  background: var(--color-canvas);
-  transition: background 0.12s;
-}
-
-.admin-nav-back:hover { background: var(--color-surface-soft); }
-
 /* ---- Page content ---- */
 .admin-content {
   max-width: 1100px;
@@ -102,7 +28,7 @@
 }
 
 .admin-page-header h1 {
-  font-size: 32px;
+  font-size: var(--type-page-title);
   font-weight: 500;
   letter-spacing: -0.5px;
   color: var(--color-ink);
@@ -120,7 +46,8 @@
   align-items: center;
   gap: 7px;
   padding: 10px 20px;
-  height: 40px;
+  height: 44px;
+  text-decoration: none;
   background: var(--color-primary);
   color: var(--color-on-primary);
   border: none;
@@ -135,38 +62,41 @@
 
 .admin-create-btn:hover { background: var(--color-primary-active); }
 
-/* ---- Stat cards ---- */
+.admin-create-btn--secondary {
+  border: 1px solid var(--color-surface-strong);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+.admin-create-btn--secondary:hover { background: var(--color-surface-soft); }
+
+/* ---- Account overview ---- */
 .admin-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  margin-bottom: 40px;
+  margin-bottom: 32px;
+  border-block: 1px solid var(--color-surface-strong);
 }
 
 .admin-stat-card {
-  border-radius: var(--rounded-xl);
-  padding: 28px 28px 24px;
+  min-width: 0;
+  padding: 16px 20px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 5px;
 }
 
-.admin-stat-card.card-teal     { background: var(--color-brand-teal);    color: var(--color-on-dark); }
-.admin-stat-card.card-ochre    { background: var(--color-brand-ochre);   color: var(--color-ink); }
-.admin-stat-card.card-lavender { background: var(--color-brand-lavender);color: var(--color-ink); }
+.admin-stat-card + .admin-stat-card { border-inline-start: 1px solid var(--color-surface-strong); }
 
 .admin-stat-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
-  opacity: 0.6;
+  color: var(--color-muted);
+  font-size: 13px;
 }
 
 .admin-stat-value {
-  font-size: 44px;
+  font-size: clamp(23px, 3vw, 32px);
   font-weight: 500;
-  letter-spacing: -2px;
+  font-variant-numeric: tabular-nums;
   line-height: 1;
 }
 
@@ -175,7 +105,7 @@
   overflow-x: auto;
   border: 1px solid var(--color-hairline);
   border-radius: var(--rounded-lg);
-  background: var(--color-surface-card);
+  background: var(--color-canvas);
 }
 
 .admin-table {
@@ -184,7 +114,7 @@
   font-size: 14px;
 }
 
-.admin-table thead tr { background: var(--color-surface-strong); }
+.admin-table thead tr { background: var(--color-surface-soft); }
 
 .admin-table th {
   padding: 12px 20px;
@@ -564,13 +494,11 @@
 
 /* ---- Responsive ---- */
 @media (max-width: 768px) {
-  .admin-nav     { padding: 0 20px; }
   .admin-content { padding: 32px 20px 64px; }
 
-  .admin-stats { grid-template-columns: 1fr; }
+  .admin-stat-card { padding: 12px; }
 
   .admin-page-header { flex-direction: column; align-items: flex-start; }
-  .admin-page-header h1 { font-size: 24px; }
 
   .admin-create-btn { align-self: flex-start; }
 

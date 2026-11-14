@@ -547,9 +547,8 @@ export default function PromptsPage() {
     /* 空状态 */
     return (
       <div className="pp-empty">
-        <Zap size={32} strokeWidth={1.5} />
-        <p>选择提示词查看详情</p>
-        <span>内置提示词支持直接编辑，系统优先使用自定义版本</span>
+        <h2>选择一条提示词</h2>
+        <p>查看当前内容、编辑自定义版本或恢复历史版本。</p>
       </div>
     )
   })()
@@ -567,7 +566,7 @@ export default function PromptsPage() {
         onBack={() => navigate(-1)}
         actions={<Button variant="plain" className="pp-create-btn" onClick={handleCreateNew}>
           <Plus size={14} />
-          新建
+          新建提示词
         </Button>}
       />
 
@@ -580,7 +579,8 @@ export default function PromptsPage() {
             <Input
               type="text"
               className="pp-search"
-              placeholder="搜索提示词..."
+              placeholder="名称或说明"
+              aria-label="搜索提示词"
               value={searchText}
               onChange={e => setSearchText(e.target.value)}
             />
@@ -593,6 +593,7 @@ export default function PromptsPage() {
                 key={cat}
                 className={`pp-tab ${selectedCategory === cat ? 'pp-tab--active' : ''}`}
                 onClick={() => setSelectedCategory(cat)}
+                aria-pressed={selectedCategory === cat}
               >
                 {cat === 'all' ? '全部' : (CATEGORY_LABELS[cat] || cat)}
               </Button>
@@ -608,23 +609,23 @@ export default function PromptsPage() {
                 const hasOverride = prompt.isBuiltin && !!findOverride(prompt.id)
                 const isActive = selectedPrompt?.id === prompt.id
                 return (
-                  <div
+                  <Button
                     key={prompt.id}
+                    variant="plain"
                     className={`pp-item ${isActive ? 'pp-item--active' : ''}`}
+                    aria-pressed={isActive}
                     onClick={() => handleSelectPrompt(prompt)}
                   >
-                    <div className="pp-item-top">
+                    <span className="pp-item-top">
                       <span className="pp-item-name">{prompt.name}</span>
-                      <div className="pp-item-badges">
+                      <span className="pp-item-badges">
                         {prompt.isBuiltin && <span className="pp-badge pp-badge--builtin">内置</span>}
                         {hasOverride && <span className="pp-badge pp-badge--override">已覆盖</span>}
-                      </div>
-                    </div>
-                    <p className="pp-item-desc">{prompt.description}</p>
-                    <div className="pp-item-foot">
-                      <span className="pp-item-cat">{CATEGORY_LABELS[prompt.category] || prompt.category}</span>
-                    </div>
-                  </div>
+                      </span>
+                    </span>
+                    {prompt.description && <span className="pp-item-desc">{prompt.description}</span>}
+                    {selectedCategory === 'all' && <span className="pp-item-cat">{CATEGORY_LABELS[prompt.category] || prompt.category}</span>}
+                  </Button>
                 )
               })
             )}

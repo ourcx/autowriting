@@ -3,87 +3,37 @@
 .wd-root {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
-  background: #fffaf0;
-  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
-}
-
-/* ── Header ── */
-.wd-header {
-  height: 64px;
-  background: #fffaf0;
-  border-bottom: 1px solid #e5e5e5;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  padding: 0 24px;
-  gap: 12px;
-}
-
-.wd-back-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  height: 36px;
-  border: 1px solid #e5e5e5;
-  border-radius: 12px;
-  background: #fffaf0;
-  color: #0a0a0a;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.wd-back-btn:hover {
-  background: #faf5e8;
-  border-color: #9a9a9a;
-}
-
-.wd-header-center {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.wd-header-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #0a0a0a;
-}
-
-.wd-header-count {
-  font-size: 12px;
-  font-weight: 500;
-  color: #6a6a6a;
-  background: #f0f0f0;
-  padding: 2px 8px;
-  border-radius: 20px;
+  background: var(--color-canvas);
 }
 
 .wd-refresh-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid #e5e5e5;
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--color-hairline);
   border-radius: 12px;
-  background: #fffaf0;
+  background: var(--color-canvas);
   color: #4a4a4a;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
   flex-shrink: 0;
 }
 
+.wd-materials-btn {
+  gap: 6px;
+  padding: 0 12px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 .wd-refresh-btn:hover:not(:disabled) {
   background: #f0f7f4;
-  border-color: #a4d4c5;
-  color: #1a3a3a;
+  border-color: var(--color-brand-mint);
+  color: var(--color-brand-teal);
 }
 
 .wd-refresh-btn:disabled {
@@ -137,7 +87,7 @@
   align-items: center;
   justify-content: center;
   gap: 16px;
-  color: #6a6a6a;
+  color: var(--color-muted);
 }
 
 .wd-loading p {
@@ -148,8 +98,8 @@
 .wd-spinner {
   width: 28px;
   height: 28px;
-  border: 3px solid #e5e5e5;
-  border-top-color: #0a0a0a;
+  border: 3px solid var(--color-hairline);
+  border-top-color: var(--color-ink);
   border-radius: 50%;
   animation: wd-spin 0.7s linear infinite;
   flex-shrink: 0;
@@ -162,42 +112,47 @@
 }
 
 .wd-empty {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  color: #6a6a6a;
-  padding: 40px;
+  align-items: flex-start;
+  gap: var(--spacing-xs);
+  width: min(100%, 1120px);
+  margin: 0 auto;
+  padding: var(--spacing-xxl) var(--spacing-lg);
+  color: var(--color-muted);
 }
 
 .wd-empty-icon {
-  color: #c5c5c5;
-  margin-bottom: 4px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--rounded-md);
+  background: var(--color-surface-card);
+  color: var(--color-brand-teal);
+  margin-bottom: var(--spacing-xs);
 }
 
 .wd-empty-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #3a3a3a;
   margin: 0;
+  font-size: 24px;
+  font-weight: 500;
+  color: var(--color-ink);
 }
 
 .wd-empty-desc {
-  font-size: 13px;
-  color: #8a8a8a;
   margin: 0;
-  text-align: center;
-  max-width: 320px;
+  max-width: 38em;
+  font-size: 14px;
   line-height: 1.6;
 }
 
 .wd-goto-btn {
   margin-top: 8px;
+  min-height: 44px;
   padding: 10px 20px;
   border-radius: 12px;
-  background: #0a0a0a;
+  background: var(--color-ink);
   color: #fff;
   border: none;
   font-size: 14px;
@@ -220,26 +175,19 @@
 .wd-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  max-width: 800px;
+  max-width: 1072px;
   margin: 0 auto;
+  border-top: 1px solid var(--color-hairline);
 }
 
-/* ── 草稿卡片 ── */
+/* 标题、正文摘要和对应动作占同一行，便于逐篇核对。 */
 .wd-card {
-  display: flex;
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 16px;
-  padding: 16px;
-  background: #fff;
-  border: 1px solid #e5e5e5;
-  border-radius: 16px;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.wd-card:hover {
-  border-color: #c8c8c8;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) 0;
+  border-bottom: 1px solid var(--color-hairline);
 }
 
 /* 封面缩略图 */
@@ -249,7 +197,7 @@
   border-radius: 8px;
   overflow: hidden;
   flex-shrink: 0;
-  background: #f5f5f5;
+  background: var(--color-surface-card);
 }
 
 .wd-card-thumb img {
@@ -264,7 +212,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #c5c5c5;
+  color: var(--color-muted);
 }
 
 /* 文字区 */
@@ -277,9 +225,9 @@
 }
 
 .wd-card-title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
-  color: #0a0a0a;
+  color: var(--color-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -287,7 +235,7 @@
 
 .wd-card-digest {
   font-size: 13px;
-  color: #6a6a6a;
+  color: var(--color-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -307,69 +255,9 @@
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  color: #9a9a9a;
+  color: var(--color-muted);
 }
 
-/* 操作区 */
-.wd-card-actions {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-}
-
-/* 导入编辑按钮 — button-secondary 变体，用 lavender 品牌色 */
-.wd-card-import-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xxs);
-  padding: 12px 20px;
-  height: 44px;
-  border: 1px solid var(--color-brand-mint);
-  border-radius: var(--rounded-md);
-  background: var(--color-canvas);
-  color: var(--color-ink);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
-  white-space: nowrap;
-  line-height: 1;
-}
-
-.wd-card-import-btn:hover:not(:disabled) {
-  background: var(--color-surface-soft);
-}
-
-.wd-card-import-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-/* 预览按钮 — button-secondary */
-.wd-card-open-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xxs);
-  padding: 12px 20px;
-  height: 44px;
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--rounded-md);
-  background: var(--color-canvas);
-  color: var(--color-ink);
-  font-size: 14px;
-  font-weight: 600;
-  text-decoration: none;
-  transition: background 0.15s;
-  white-space: nowrap;
-  line-height: 1;
-}
-
-.wd-card-open-btn:hover {
-  background: var(--color-surface-soft);
-}
-
-/* ── 加载更多 ── */
 .wd-load-more {
   display: flex;
   justify-content: center;
@@ -381,7 +269,7 @@
   align-items: center;
   gap: 8px;
   padding: 10px 24px;
-  border: 1px solid #e5e5e5;
+  border: 1px solid var(--color-hairline);
   border-radius: 12px;
   background: #fff;
   color: #4a4a4a;
@@ -392,8 +280,8 @@
 }
 
 .wd-load-more-btn:hover:not(:disabled) {
-  background: #faf5e8;
-  border-color: #9a9a9a;
+  background: var(--color-surface-soft);
+  border-color: var(--color-muted-soft);
 }
 
 .wd-load-more-btn:disabled {
@@ -407,7 +295,7 @@
 .wd-tabs {
   display: flex;
   gap: 4px;
-  padding: 10px 24px;
+  padding: 10px max(24px, calc((100% - 1072px) / 2));
   background: var(--color-canvas);
   border-bottom: 1px solid var(--color-hairline);
   flex-shrink: 0;
@@ -446,7 +334,7 @@
   line-height: 1.5;
 }
 .wd-tab--active .wd-tab-count {
-  background: var(--color-brand-mint);
+  background: var(--color-surface-strong);
   color: var(--color-ink);
 }
 
@@ -474,20 +362,16 @@
 .wd-btn:hover:not(:disabled) { background: var(--color-surface-soft); }
 .wd-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
-/* 导入 — mint 边框 */
-.wd-btn--import { border-color: var(--color-brand-mint); }
-.wd-btn--import:hover:not(:disabled) { background: #f0faf6; }
-
-/* 发布 — teal 背景（primary 风格）*/
 .wd-btn--publish {
-  background: var(--color-brand-teal);
-  color: var(--color-on-dark);
-  border-color: var(--color-brand-teal);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border-color: var(--color-primary);
 }
-.wd-btn--publish:hover:not(:disabled) { background: #0f2828; border-color: #0f2828; }
 
-/* 预览 — 默认 secondary */
-.wd-btn--preview { }
+.wd-btn--publish:hover:not(:disabled) {
+  background: var(--color-primary-active);
+  border-color: var(--color-primary-active);
+}
 
 /* 删除 — error 色 */
 .wd-btn--delete {
@@ -539,7 +423,7 @@
   font-size: 13px;
   color: var(--color-muted);
   margin-bottom: 12px;
-  max-width: 800px;
+  max-width: 1072px;
   margin-left: auto;
   margin-right: auto;
   flex-wrap: wrap;
@@ -606,9 +490,7 @@
   overflow: hidden;
   border: 1px solid var(--color-hairline);
   background: var(--color-canvas);
-  transition: box-shadow 0.15s;
 }
-.wd-mat-img-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
 
 .wd-mat-img-wrap {
   position: relative;
@@ -634,7 +516,8 @@
   opacity: 0;
   transition: opacity 0.15s;
 }
-.wd-mat-img-wrap:hover .wd-mat-img-overlay { opacity: 1; }
+.wd-mat-img-wrap:hover .wd-mat-img-overlay,
+.wd-mat-img-wrap:focus-within .wd-mat-img-overlay { opacity: 1; }
 
 .wd-mat-del-btn,
 .wd-mat-open-btn {
@@ -688,7 +571,6 @@
   border: 1px solid var(--color-hairline);
   border-radius: 8px;
   background: var(--color-canvas);
-  box-shadow: 0 18px 54px rgb(10 10 10 / 18%);
 }
 
 .wd-publish-head {
@@ -914,9 +796,9 @@
 
 .wd-publish-actions .wd-publish-confirm {
   min-width: 142px;
-  border-color: var(--color-brand-teal);
-  background: var(--color-brand-teal);
-  color: var(--color-on-dark);
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
 }
 
 @media (max-width: 680px) {
@@ -955,5 +837,36 @@
   .wd-publish-setting input[type="checkbox"],
   .wd-publish-setting input[type="checkbox"]::after {
     transition: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .wd-card {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .wd-card-thumb {
+    width: 72px;
+  }
+
+  .wd-card-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
+
+@media (hover: none) {
+  .wd-mat-img-overlay {
+    inset: auto 0 0;
+    justify-content: flex-end;
+    padding: 6px;
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wd-spin,
+  .wd-spinner {
+    animation: none;
   }
 }

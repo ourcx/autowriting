@@ -1,4 +1,4 @@
-import { Input, SelectField, Textarea } from "../../components/FormControls/FormControls"
+import { Collapse, Input, SelectField, Textarea } from "../../components/FormControls/FormControls"
 import Button from "../../components/Button/Button"
 /**
  * RAG 管理页  /rag
@@ -270,13 +270,14 @@ export default function RagPage() {
 
         {/* ══ Embedding 配置 ══ */}
         <section className="rp-section">
-          <div className="rp-section-label">Embedding 配置</div>
+          <h2 className="rp-section-label">向量模型</h2>
 
           {/* Tab 切换 */}
           <div className="rp-tabs">
             <Button variant="plain"
               className={`rp-tab${configTab === 'remote' ? ' rp-tab--active' : ''}`}
               onClick={() => setConfigTab('remote')}
+              aria-pressed={configTab === 'remote'}
             >
               远端 API
               {hasKey
@@ -287,6 +288,7 @@ export default function RagPage() {
             <Button variant="plain"
               className={`rp-tab${configTab === 'local' ? ' rp-tab--active' : ''}`}
               onClick={() => setConfigTab('local')}
+              aria-pressed={configTab === 'local'}
             >
               <Cpu size={13} />
               本地模型
@@ -539,7 +541,7 @@ export default function RagPage() {
 
         {/* ══ 智谱云知识库 ══ */}
         <section className="rp-section">
-          <div className="rp-section-label">智谱云知识库</div>
+          <h2 className="rp-section-label">智谱云知识库</h2>
           <div className="rp-config-card">
             <div className="rp-field-grid">
               <div className="rp-field">
@@ -618,7 +620,7 @@ export default function RagPage() {
 
         {/* ══ 索引状态 ══ */}
         <section className="rp-section">
-          <div className="rp-section-label">索引状态</div>
+          <h2 className="rp-section-label">索引状态</h2>
 
           {/* 说明条 */}
           <div className="rp-notice">
@@ -706,7 +708,7 @@ export default function RagPage() {
 
         {/* ══ 搜索测试 ══ */}
         <section className="rp-section">
-          <div className="rp-section-label">相似度搜索测试</div>
+          <h2 className="rp-section-label">相似度搜索测试</h2>
           <div className="rp-search-row">
             <Input
               className="rp-input"
@@ -756,26 +758,22 @@ export default function RagPage() {
         </aside>
 
         {/* ══ 使用说明 ══ */}
-        <section className="rp-section rp-guide-section">
-          <div className="rp-section-label">使用说明</div>
-          <div className="rp-guide-grid">
-            <div className="rp-guide-card rp-guide-card--teal">
-              <div className="rp-guide-step">01</div>
-              <div className="rp-guide-title">配置向量模型</div>
+        <Collapse className="rp-guide-section" label="向量索引如何使用">
+          <ol className="rp-guide-list">
+            <li>
+              <strong>配置向量模型</strong>
               <p>有 API Key 走远端（质量更好）；没有 Key 在「本地模型」选一个，首次运行自动下载权重。</p>
-            </div>
-            <div className="rp-guide-card rp-guide-card--peach">
-              <div className="rp-guide-step">02</div>
-              <div className="rp-guide-title">构建索引</div>
+            </li>
+            <li>
+              <strong>构建索引</strong>
               <p>扫描服务端草稿（<code>article_raw.md</code> / <code>task.md</code> / <code>materials.md</code>），切片向量化存入 HNSWLib。</p>
-            </div>
-            <div className="rp-guide-card rp-guide-card--lavender">
-              <div className="rp-guide-step">03</div>
-              <div className="rp-guide-title">自动召回</div>
+            </li>
+            <li>
+              <strong>自动召回</strong>
               <p>生成文章时自动检索本地索引或智谱云知识库，把相关片段注入 prompt。写完新文章后按需重建本地索引。</p>
-            </div>
-          </div>
-        </section>
+            </li>
+          </ol>
+        </Collapse>
 
       </div>
     </div>

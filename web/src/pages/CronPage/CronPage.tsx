@@ -268,8 +268,6 @@ export default function CronPage() {
   const enabledCount = jobs.filter(j => j.enabled).length
   const successCount = logs.filter(l => l.status === 'success').length
 
-  const STRIPE_COLORS = ['pink', 'teal', 'lavender', 'peach', 'ochre']
-
   // ══════════════════════════════════════════════════════════════════════════
 
   return (
@@ -308,26 +306,8 @@ export default function CronPage() {
         {/* ── 空状态 ── */}
         {!loading && jobs.length === 0 && (
           <div className="cp-hero">
-            <div className="cp-hero-label">自动化流水线</div>
-            <h1 className="cp-hero-title">定时发文，全自动</h1>
-            <p className="cp-hero-sub">设定一次，每天自动抓热点、写文章、生成样式，推到微信草稿箱</p>
-
-            {/* 流程卡片 */}
-            <div className="cp-hero-steps">
-              {PIPELINE_STEPS.map((step, i) => (
-                <React.Fragment key={step.key}>
-                  <div className="cp-hero-step">
-                    <div className={`cp-hero-icon cp-hero-icon--${step.color}`}>
-                      <step.icon size={22} />
-                    </div>
-                    <div className="cp-hero-step-label">{step.label}</div>
-                  </div>
-                  {i < PIPELINE_STEPS.length - 1 && (
-                    <div className="cp-hero-arrow">→</div>
-                  )}
-                </React.Fragment>
-              ))}
-            </div>
+            <h1 className="cp-hero-title">还没有定时任务</h1>
+            <p className="cp-hero-sub">设定运行时间和选题，让工作台按计划生成文章。配置公众号后，可以把生成的内容推到微信草稿箱。</p>
 
             <Button variant="plain" className="cp-btn-primary cp-btn-lg" onClick={openCreate}>
               <Plus size={16} /> 新建第一个任务
@@ -363,8 +343,7 @@ export default function CronPage() {
 
             {/* 任务卡片 */}
             <div className="cp-job-list">
-              {jobs.map((job, idx) => {
-                const color = STRIPE_COLORS[idx % STRIPE_COLORS.length]
+              {jobs.map(job => {
                 const latestLog = (jobLogs[job.id] || [])[0] || logs.find(l => l.jobId === job.id)
                 const isExpanded = expanded === job.id
 
@@ -373,8 +352,6 @@ export default function CronPage() {
 
                     {/* 卡片头 */}
                     <div className="cp-job-head" onClick={() => toggleExpand(job.id)}>
-                      <div className={`cp-job-stripe cp-job-stripe--${color}`} />
-
                       <div className="cp-job-info">
                         <div className="cp-job-title-row">
                           <span className={`cp-dot${job.enabled ? ' cp-dot--on' : ''}`} />

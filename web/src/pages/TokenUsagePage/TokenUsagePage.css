@@ -12,51 +12,6 @@
   color: var(--color-ink);
 }
 
-/* ════════════════════════════════════════
-   Sticky Header — top-nav token (64px)
-════════════════════════════════════════ */
-.tu-header {
-  height: 64px;
-  background: var(--color-canvas);
-  border-bottom: 1px solid var(--color-hairline);
-  display: flex;
-  align-items: center;
-  padding: 0 var(--spacing-xl);
-  gap: var(--spacing-md);
-  position: sticky;
-  top: 0;
-  z-index: 20;
-}
-
-/* button-secondary */
-.tu-back-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 16px;
-  height: 40px;
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--rounded-md);
-  background: var(--color-canvas);
-  color: var(--color-ink);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s;
-  flex-shrink: 0;
-}
-.tu-back-btn:hover { background: var(--color-surface-soft); }
-
-.tu-header-center {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.tu-header-icon  { color: var(--color-brand-ochre); }
-.tu-header-title { font-size: 15px; font-weight: 600; letter-spacing: -0.2px; }
-
 /* category-tab 时段切换 */
 .tu-days-switch {
   display: flex;
@@ -81,7 +36,7 @@
   background: var(--color-canvas);
   color: var(--color-ink);
   font-weight: 600;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+
 }
 
 /* ════════════════════════════════════════
@@ -127,56 +82,53 @@
   max-width: 1100px;
   width: 100%;
   margin: 0 auto;
-  padding: var(--spacing-xl) var(--spacing-xl) var(--spacing-xxl);
+  padding: 40px clamp(16px, 4vw, 40px) var(--spacing-xxl);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
 }
 
 /* ════════════════════════════════════════
-   4 大 KPI 卡 — feature-card 规格
+   核心用量指标
 ════════════════════════════════════════ */
+.tu-heading {
+  font-size: var(--type-page-title);
+  font-weight: 500;
+  line-height: 1.2;
+}
+
 .tu-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--spacing-sm);
-}
-@media (max-width: 800px) { .tu-kpi-grid { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 480px) {
-  .tu-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .tu-kpi { min-height: 132px; padding: 20px 16px; }
-  .tu-kpi-value { font-size: 24px; }
-  .tu-kpi-value--sm { font-size: 17px; }
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-block: 1px solid var(--color-surface-strong);
 }
 
 .tu-kpi {
-  border-radius: var(--rounded-xl);  /* feature-card */
-  padding: var(--spacing-xl) var(--spacing-xl) var(--spacing-lg);
+  min-width: 0;
+  padding: 16px clamp(12px, 2vw, 24px);
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  min-height: 110px;
+  gap: 4px;
 }
 
-.tu-kpi--mint  { background: var(--color-brand-mint);  color: var(--color-ink); }
-.tu-kpi--peach { background: var(--color-brand-peach); color: var(--color-ink); }
-.tu-kpi--ochre { background: var(--color-brand-ochre); color: var(--color-ink); }
-.tu-kpi--teal  { background: var(--color-brand-teal);  color: var(--color-on-dark); }
-.tu-kpi--teal .tu-kpi-label { opacity: 0.6; }
-.tu-kpi--teal .tu-kpi-sub   { color: rgba(255,255,255,0.55); }
+.tu-kpi + .tu-kpi { border-inline-start: 1px solid var(--color-surface-strong); }
+.tu-kpi:first-child { background: var(--color-surface-soft); }
 
-/* caption-uppercase */
+@media (max-width: 720px) {
+  .tu-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tu-kpi:nth-child(3) { border-inline-start: 0; }
+  .tu-kpi:nth-child(n + 3) { border-top: 1px solid var(--color-surface-strong); }
+}
+
 .tu-kpi-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
+  color: var(--color-muted);
+  font-size: 13px;
   line-height: 1.4;
-  opacity: 0.7;
 }
 /* display-sm */
 .tu-kpi-value {
-  font-size: 28px;
+  font-size: clamp(22px, 3vw, 28px);
+  font-variant-numeric: tabular-nums;
   font-weight: 500;
   line-height: 1.1;
   letter-spacing: -0.5px;
@@ -188,7 +140,7 @@
   font-size: 12px;
   font-weight: 500;
   line-height: 1.4;
-  opacity: 0.75;
+  color: var(--color-muted);
 }
 
 /* ════════════════════════════════════════
@@ -207,7 +159,8 @@
   padding: var(--spacing-md) var(--spacing-lg);
   display: flex;
   align-items: baseline;
-  gap: var(--spacing-xs);
+  flex-wrap: wrap;
+  gap: 4px var(--spacing-xs);
 }
 
 .tu-derived-label {
@@ -534,7 +487,6 @@
    响应式补丁
 ════════════════════════════════════════ */
 @media (max-width: 640px) {
-  .tu-header { padding: 0 var(--spacing-md); gap: var(--spacing-xs); }
   .tu-body   { padding: var(--spacing-md) var(--spacing-md) var(--spacing-xl); }
   .tu-card   { padding: var(--spacing-md); }
   .tu-derived-row { grid-template-columns: 1fr 1fr; }

@@ -6,60 +6,23 @@
 
 .fsp-shell {
   display: grid;
-  grid-template-columns: 240px minmax(0, 760px);
+  grid-template-columns: 216px minmax(0, 720px);
   justify-content: center;
-  gap: 56px;
-  padding: 64px 32px 96px;
+  gap: var(--spacing-xxl);
+  padding: var(--spacing-xxl) var(--spacing-xl) var(--spacing-section);
 }
 
-.fsp-progress {
-  align-self: start;
+.fsp-root .fsp-progress {
   position: sticky;
   top: 88px;
-}
-
-.fsp-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding-bottom: 24px;
-  border-bottom: 1px solid var(--color-surface-strong);
-}
-
-.fsp-brand-mark {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--rounded-xs);
-  background: var(--color-brand-teal);
-  color: var(--color-brand-ochre);
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.fsp-brand div,
-.fsp-progress li div {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.fsp-brand strong,
-.fsp-progress li strong {
-  font-size: 13px;
-}
-
-.fsp-brand span:last-child,
-.fsp-progress li small {
-  color: var(--color-muted);
-  font-size: 12px;
+  align-self: start;
+  z-index: auto;
+  overflow: visible;
 }
 
 .fsp-progress ol {
   display: grid;
-  gap: 8px;
-  margin: 24px 0;
+  gap: var(--spacing-xs);
   padding: 0;
   list-style: none;
 }
@@ -67,14 +30,16 @@
 .fsp-progress li {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-height: 52px;
-  padding: 8px;
-  color: var(--color-muted);
+  gap: var(--spacing-sm);
+  min-height: 56px;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--rounded-md);
+  color: var(--color-body);
 }
 
 .fsp-progress li > span {
   display: grid;
+  flex: 0 0 28px;
   place-items: center;
   width: 28px;
   height: 28px;
@@ -82,16 +47,17 @@
   border-radius: 50%;
   background: var(--color-canvas);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .fsp-progress li.active {
+  background: var(--color-surface-card);
   color: var(--color-ink);
 }
 
 .fsp-progress li.active > span {
-  border-color: var(--color-brand-teal);
-  background: var(--color-brand-teal);
+  border-color: var(--color-primary);
+  background: var(--color-primary);
   color: var(--color-on-primary);
 }
 
@@ -101,14 +67,23 @@
   color: var(--color-brand-teal);
 }
 
-.fsp-progress > p {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin: 0;
+.fsp-progress li strong,
+.fsp-progress li small {
+  display: block;
+  font-size: 13px;
+}
+
+.fsp-progress li small {
   color: var(--color-muted);
   font-size: 12px;
-  line-height: 1.55;
+}
+
+.fsp-progress > p {
+  display: flex;
+  gap: var(--spacing-xs);
+  margin: var(--spacing-lg) 0 0 var(--spacing-sm);
+  color: var(--color-muted);
+  font-size: 13px;
 }
 
 .fsp-progress > p svg {
@@ -117,72 +92,48 @@
   color: var(--color-brand-teal);
 }
 
-.fsp-content {
+.fsp-content,
+.fsp-form-grid > *,
+.fsp-field {
   min-width: 0;
 }
 
 .fsp-panel {
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: var(--spacing-lg);
 }
 
-.fsp-panel > header {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  padding-bottom: 24px;
-  border-bottom: 1px solid var(--color-surface-strong);
-}
-
-.fsp-section-icon {
-  display: grid;
-  place-items: center;
-  flex: 0 0 42px;
-  width: 42px;
-  height: 42px;
-  border-radius: var(--rounded-xs);
-  background: var(--color-brand-mint);
-  color: var(--color-brand-teal);
-}
-
-.fsp-panel header p {
-  margin: 0 0 6px;
-  color: var(--color-brand-teal);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.fsp-panel header h1 {
+.fsp-panel > header h1 {
   margin: 0;
-  font-size: 28px;
-  font-weight: 600;
-  line-height: 1.25;
-  letter-spacing: 0;
+  font-size: clamp(28px, 3vw, 38px);
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -.025em;
 }
 
-.fsp-panel header div > span {
-  display: block;
-  margin-top: 8px;
-  color: var(--color-muted);
+.fsp-panel > header p {
+  margin-top: var(--spacing-xs);
+  color: var(--color-body);
   font-size: 14px;
-  line-height: 1.6;
 }
 
 .fsp-provider-options {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-xs);
 }
 
 .fsp-provider-options button {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-height: 76px;
-  padding: 14px;
+  position: relative;
+  display: grid;
+  gap: var(--spacing-xxs);
+  align-content: start;
+  min-width: 0;
+  min-height: 64px;
+  padding: var(--spacing-sm) var(--spacing-xl) var(--spacing-sm) var(--spacing-sm);
   border: 1px solid var(--color-surface-strong);
-  border-radius: var(--rounded-xs);
+  border-radius: var(--rounded-md);
   background: var(--color-canvas);
   color: var(--color-body);
   font: inherit;
@@ -191,61 +142,73 @@
 }
 
 .fsp-provider-options button:hover {
-  border-color: var(--color-brand-mint);
-  background: var(--color-surface-soft);
+  border-color: var(--color-muted-soft);
 }
 
 .fsp-provider-options button[aria-pressed="true"] {
   border-color: var(--color-brand-teal);
-  box-shadow: inset 3px 0 var(--color-brand-teal);
-  background: color-mix(in srgb, var(--color-brand-mint) 22%, var(--color-canvas));
+  background: color-mix(in srgb, var(--color-brand-lavender) 22%, var(--color-canvas));
 }
 
 .fsp-provider-options strong {
   color: var(--color-ink);
   font-size: 13px;
+  font-weight: 600;
+}
+
+.fsp-provider-options svg {
+  position: absolute;
+  top: var(--spacing-sm);
+  right: var(--spacing-sm);
+  color: var(--color-brand-teal);
 }
 
 .fsp-provider-options span {
-  color: var(--color-muted);
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: 12px;
 }
 
 .fsp-form-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 220px;
-  gap: 18px;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--spacing-md);
 }
 
-.fsp-form-grid label {
+.fsp-field,
+.fsp-form-grid > label {
   display: grid;
-  gap: 7px;
+  gap: var(--spacing-xs);
 }
 
-.fsp-form-grid label > span {
-  color: var(--color-body);
-  font-size: 12px;
+.fsp-field label,
+.fsp-form-grid label > span,
+.fsp-provider-field > p {
+  color: var(--color-ink);
+  font-size: 14px;
   font-weight: 600;
 }
 
-.fsp-form-grid input {
+.fsp-provider-field > p {
+  margin-bottom: var(--spacing-xs);
+}
+
+.fsp-form-grid input,
+.fsp-field input {
   width: 100%;
-  height: 44px;
-  box-sizing: border-box;
-  padding: 0 13px;
-  border: 1px solid var(--color-surface-strong);
-  border-radius: var(--rounded-xs);
-  outline: none;
+  min-height: 44px;
+  padding: 0 var(--spacing-md);
+  border: 1px solid color-mix(in srgb, var(--color-muted) 75%, var(--color-canvas));
+  border-radius: var(--rounded-md);
   background: var(--color-canvas);
   color: var(--color-ink);
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
 }
 
-.fsp-form-grid input:focus {
+.fsp-panel input:focus {
   border-color: var(--color-brand-teal);
-  box-shadow: 0 0 0 3px rgb(26 58 58 / 8%);
+  outline: 1px solid var(--color-brand-teal);
+  outline-offset: 0;
+  box-shadow: none;
 }
 
 .fsp-form-grid input:disabled {
@@ -262,7 +225,8 @@
 }
 
 .fsp-secret input {
-  padding-right: 46px;
+  min-height: 48px;
+  padding-right: 48px;
 }
 
 .fsp-secret button {
@@ -271,9 +235,10 @@
   right: 2px;
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border: 0;
+  border-radius: var(--rounded-sm);
   background: transparent;
   color: var(--color-muted);
   cursor: pointer;
@@ -281,23 +246,28 @@
 
 .fsp-result {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 42px;
-  padding: 0 13px;
+  align-items: flex-start;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm);
   border-left: 3px solid;
   background: var(--color-surface-soft);
-  font-size: 13px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.fsp-result svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
 }
 
 .fsp-result--ok {
   border-color: var(--color-success);
-  color: #176542;
+  color: var(--color-brand-teal);
 }
 
 .fsp-result--error {
   border-color: var(--color-error);
-  color: #9b1c1c;
+  color: color-mix(in srgb, var(--color-error) 58%, var(--color-ink));
 }
 
 .fsp-account-list {
@@ -306,111 +276,60 @@
 
 .fsp-account-row {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 14px;
-  min-height: 76px;
+  gap: var(--spacing-sm);
+  min-height: 68px;
+  padding-block: var(--spacing-sm);
   border-bottom: 1px solid var(--color-surface-strong);
 }
 
-.fsp-platform-mark {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: var(--rounded-xs);
-  color: white;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.fsp-platform-mark--wechat { background: #078a52; }
-.fsp-platform-mark--toutiao { background: #d9463e; }
-.fsp-platform-mark--xiaohongshu { background: #a61d3d; }
-
-.fsp-account-row div {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
+.fsp-account-row strong,
+.fsp-account-row div span {
+  display: block;
 }
 
 .fsp-account-row strong {
+  margin-bottom: var(--spacing-xxs);
   font-size: 14px;
 }
 
-.fsp-account-row div span {
+.fsp-account-row span {
   color: var(--color-muted);
-  font-size: 12px;
+  font-size: 13px;
   overflow-wrap: anywhere;
 }
 
-.fsp-account-row > span:last-child {
-  color: var(--color-muted);
-  font-size: 12px;
-}
-
-.fsp-account-row > span.connected {
-  color: #176542;
+.fsp-account-row .connected {
+  color: var(--color-brand-teal);
   font-weight: 600;
 }
 
 .fsp-actions {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 10px;
-  padding-top: 4px;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) 0 0;
+  border-top: 1px solid var(--color-surface-strong);
 }
 
 .fsp-actions > a {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  margin-right: auto;
-  color: var(--color-brand-teal);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.fsp-primary,
-.fsp-secondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+  gap: var(--spacing-xxs);
   min-height: 44px;
-  padding: 0 18px;
-  border-radius: var(--rounded-xs);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.fsp-primary {
-  border: 0;
-  background: var(--color-brand-teal);
-  color: var(--color-on-primary);
-}
-
-.fsp-primary:hover:not(:disabled) {
-  background: var(--color-surface-dark-elevated);
-}
-
-.fsp-primary:disabled {
-  opacity: .55;
-  cursor: wait;
-}
-
-.fsp-secondary {
-  border: 1px solid var(--color-surface-strong);
-  background: var(--color-canvas);
+  margin-right: auto;
   color: var(--color-body);
+  font-size: 14px;
+  text-underline-offset: 3px;
 }
 
-.fsp-secondary:hover {
-  background: var(--color-surface-soft);
+.fsp-actions .ui-button {
+  min-height: 44px;
+  padding-inline: var(--spacing-md);
+  font-size: 14px;
+  white-space: normal;
 }
 
 .fsp-spin {
@@ -421,19 +340,19 @@
   to { transform: rotate(360deg); }
 }
 
-.fsp-root :is(button, input, a):focus-visible {
-  outline: 2px solid var(--color-primary);
+.fsp-root :is(button, a):focus-visible {
+  outline: 2px solid var(--color-brand-teal);
   outline-offset: 3px;
 }
 
 @media (max-width: 760px) {
   .fsp-shell {
-    grid-template-columns: 1fr;
-    gap: 32px;
-    padding: 28px 16px 96px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--spacing-lg);
+    padding: var(--spacing-lg) var(--spacing-md) var(--spacing-xxl);
   }
 
-  .fsp-progress {
+  .fsp-root .fsp-progress {
     position: static;
   }
 
@@ -442,38 +361,30 @@
   }
 
   .fsp-progress > p {
-    display: none;
-  }
-
-  .fsp-provider-options {
-    grid-template-columns: 1fr;
+    margin: var(--spacing-xs) 0 0;
   }
 
   .fsp-form-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .fsp-wide {
-    grid-column: auto;
+  .fsp-actions .ui-button {
+    min-height: 48px;
   }
+}
 
-  .fsp-panel header h1 {
-    font-size: 24px;
+@media (max-width: 400px) {
+  .fsp-provider-options {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .fsp-actions {
     align-items: stretch;
-    flex-direction: column-reverse;
+    flex-direction: column;
   }
 
   .fsp-actions > a {
-    align-self: center;
-    margin: 6px 0 0;
-  }
-
-  .fsp-primary,
-  .fsp-secondary {
-    width: 100%;
+    align-self: flex-start;
   }
 }
 

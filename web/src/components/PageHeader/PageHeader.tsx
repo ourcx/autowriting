@@ -26,8 +26,8 @@ export default function PageHeader({
     <header className={`page-header ${className}`.trim()}>
       <div className="page-header__identity">
         {onBack ? (
-          <Button variant="plain" className="page-header__back" onClick={onBack}>
-            <ArrowLeft size={15} />
+          <Button variant="plain" className="page-header__back" onClick={onBack} aria-label={backLabel}>
+            <ArrowLeft size={15} aria-hidden="true" />
             <span>{backLabel}</span>
           </Button>
         ) : null}

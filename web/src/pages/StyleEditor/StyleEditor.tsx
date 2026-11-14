@@ -287,9 +287,9 @@ export default function StyleEditor() {
       <PageHeader
         title={(
           <div className="se-header-title">
-            <span className="se-header-badge">样式管理</span>
+            <span className="se-header-section">样式管理</span>
             <span className="se-header-name">{editName || '未命名'}</span>
-            {isDirty && <span className="se-dirty-dot" title="有未保存的改动" />}
+            {isDirty && <span className="se-unsaved" role="status">未保存</span>}
           </div>
         )}
         onBack={() => navigate(-1)}
@@ -382,8 +382,9 @@ export default function StyleEditor() {
           {/* 元数据 */}
           <div className="se-meta-bar">
             <div className="se-meta-field">
-              <label className="se-meta-label">模板名称</label>
+              <label className="se-meta-label" htmlFor="style-template-name">模板名称</label>
               <Input
+                id="style-template-name"
                 className="se-meta-input"
                 value={editName}
                 onChange={e => { setEditName(e.target.value); setIsDirty(true) }}
@@ -392,8 +393,9 @@ export default function StyleEditor() {
               />
             </div>
             <div className="se-meta-field">
-              <label className="se-meta-label">描述</label>
+              <label className="se-meta-label" htmlFor="style-template-description">描述</label>
               <Input
+                id="style-template-description"
                 className="se-meta-input"
                 value={editDesc}
                 onChange={e => { setEditDesc(e.target.value); setIsDirty(true) }}
@@ -402,10 +404,11 @@ export default function StyleEditor() {
               />
             </div>
             <div className="se-meta-field se-meta-field-color">
-              <label className="se-meta-label">主题色</label>
+              <label className="se-meta-label" htmlFor="style-template-color">主题色</label>
               <div className="se-color-wrap">
                 <Input
                   type="color"
+                  id="style-template-color"
                   className="se-color-picker"
                   value={editColor}
                   onChange={e => { setEditColor(e.target.value); setIsDirty(true) }}
@@ -425,11 +428,11 @@ export default function StyleEditor() {
           <div className={`se-ai-panel ${aiPanelOpen ? 'open' : ''}`}>
             <Button variant="plain"
               className="se-ai-toggle"
+              aria-expanded={aiPanelOpen}
               onClick={() => setAiPanelOpen(v => !v)}
             >
               <Wand2 size={14} />
               <span>AI 生成样式</span>
-              <span className="se-ai-toggle-badge">Beta</span>
               <span className="se-ai-toggle-chevron">
                 {aiPanelOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
               </span>
@@ -507,7 +510,7 @@ export default function StyleEditor() {
           <div className="se-css-header">
             <span className="se-css-title">CSS 编辑器</span>
             <span className="se-css-hint">
-              所有选择器以 <code>#wemd</code> 开头，覆盖 h1–h4 / p / ul / ol / blockquote / code / pre / a / table / hr / img 等全部元素
+              选择器以 <code>#wemd</code> 开头
             </span>
           </div>
 
@@ -515,6 +518,7 @@ export default function StyleEditor() {
           <Textarea
             ref={cssTextareaRef}
             className="se-css-textarea"
+            aria-label="CSS 编辑器"
             value={editCss}
             onChange={e => { setEditCss(e.target.value); setIsDirty(true) }}
             onKeyDown={handleCssKeyDown}
@@ -539,7 +543,6 @@ export default function StyleEditor() {
           <div className="se-preview-header">
             <div>
               <span className="se-preview-label">实时预览</span>
-              <span className="se-preview-sub">与公众号发布预览共用渲染结构</span>
             </div>
             <div className="se-preview-controls">
               <div className="se-segmented" aria-label="预览内容">

@@ -8,7 +8,7 @@
 
 .dp-root .page-header {
   flex: 0 0 auto;
-  min-height: 56px;
+  min-height: 64px;
   height: auto;
   padding: 10px 24px;
   gap: 20px;
@@ -67,7 +67,6 @@
     min-height: 56px;
     padding: 10px 16px;
     flex-wrap: nowrap;
-    box-shadow: 0 1px 8px rgb(10 26 26 / 8%);
   }
   .dp-root .page-header__identity { flex: 1 1 auto; }
   .dp-root .page-header__actions { flex: 0 0 auto; max-width: none; overflow: visible; }
@@ -98,7 +97,7 @@
     border: 1px solid var(--color-surface-strong);
     border-radius: var(--rounded-lg);
     background: var(--color-canvas);
-    box-shadow: 0 18px 48px rgb(10 26 26 / 20%);
+    box-shadow: 0 8px 20px rgb(10 26 26 / 10%);
   }
   .dp-nav.is-open { display: flex; }
   .dp-nav-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }

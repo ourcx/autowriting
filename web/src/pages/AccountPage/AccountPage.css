@@ -29,8 +29,8 @@
 
 .ap-heading h1 {
   margin: 0;
-  font-size: 30px;
-  font-weight: 600;
+  font-size: var(--type-page-title);
+  font-weight: 500;
   line-height: 1.2;
   letter-spacing: 0;
 }
@@ -102,7 +102,7 @@
   align-items: center;
   gap: 14px;
   width: 100%;
-  padding: 20px 0;
+  padding: 16px 0;
   border: 0;
   background: transparent;
   color: inherit;
@@ -166,7 +166,7 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 0 0 20px 52px;
   border: 1px solid var(--color-surface-strong);
-  border-radius: var(--rounded-sm);
+  border-radius: var(--rounded-md);
   background: var(--color-surface-soft);
   overflow: hidden;
 }
@@ -179,7 +179,6 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  min-height: 214px;
   padding: 20px;
 }
 

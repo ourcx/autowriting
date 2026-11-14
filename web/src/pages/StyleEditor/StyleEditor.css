@@ -6,56 +6,13 @@
 .se-root {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: var(--color-canvas);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 /* ── Header ─────────────────────────────────────────────────────── */
-.se-header {
-  height: 56px;
-  background: var(--color-surface-soft);
-  border-bottom: 1px solid var(--color-hairline);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 20px;
-  flex-shrink: 0;
-  gap: 16px;
-}
-
-.se-header-left {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-}
-
-.se-back-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--color-hairline);
-  border-radius: 8px;
-  background: var(--color-canvas);
-  color: var(--color-body);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
-  transition: background 0.12s, border-color 0.12s, color 0.12s;
-}
-
-.se-back-btn:hover {
-  background: #f0f7f4;
-  border-color: #a4d4c5;
-  color: #1a3a3a;
-}
-
 .se-header-title {
   display: flex;
   align-items: center;
@@ -63,17 +20,11 @@
   min-width: 0;
 }
 
-.se-header-badge {
-  font-size: 10px;
-  font-weight: 700;
-  color: #2d6a4f;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  background: rgba(45, 106, 79, 0.1);
-  border: 1px solid rgba(45, 106, 79, 0.2);
-  padding: 3px 9px;
-  border-radius: 9999px;
+.se-header-section {
   flex-shrink: 0;
+  color: var(--color-muted);
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .se-header-name {
@@ -86,19 +37,14 @@
   white-space: nowrap;
 }
 
-/* 未保存标记 — 绿色呼吸 */
-.se-dirty-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #2d6a4f;
+.se-unsaved {
   flex-shrink: 0;
-  animation: pulse-dot 1.8s ease-in-out infinite;
-}
-
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50%       { opacity: 0.4; transform: scale(0.75); }
+  padding: 2px 6px;
+  border-radius: var(--rounded-xs);
+  background: var(--color-surface-card);
+  color: var(--color-body);
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .se-header-actions {
@@ -145,7 +91,7 @@
   max-width: 360px;
   flex-shrink: 0;
   background: var(--color-surface-soft);
-  border-right: 1px solid var(--color-hairline);
+  border-right: 1px solid var(--color-surface-strong);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -171,11 +117,9 @@
   display: block;
   margin: 0;
   padding: 16px 6px 8px;
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--color-muted);
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink);
 }
 
 .se-new-btn {
@@ -221,18 +165,17 @@
   background: transparent;
   cursor: pointer;
   text-align: left;
-  transition: background 0.12s, border-color 0.12s, transform 0.1s;
+  transition: background 0.12s, border-color 0.12s;
   margin-bottom: 2px;
 }
 
 .se-tmpl-item:hover {
   background: var(--color-surface-card);
-  transform: translateX(2px);
 }
 
 .se-tmpl-item.active {
-  background: #e8f4f0;
-  border-color: #a4d4c5;
+  background: var(--color-surface-card);
+  border-color: var(--color-surface-strong);
 }
 
 .se-tmpl-dot {
@@ -240,7 +183,7 @@
   height: 12px;
   border-radius: 50%;
   flex-shrink: 0;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  border: 1px solid var(--color-surface-strong);
 }
 
 .se-tmpl-info {
@@ -313,11 +256,9 @@
 }
 
 .se-meta-label {
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--color-muted);
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink);
 }
 
 .se-meta-input {
@@ -388,8 +329,8 @@
 
 .se-ai-panel {
   flex-shrink: 0;
-  border-bottom: 2px solid #a4d4c5;
-  background: #eef7f2;
+  border-bottom: 1px solid var(--color-surface-strong);
+  background: color-mix(in srgb, var(--color-brand-lavender) 16%, var(--color-canvas));
 }
 
 .se-ai-toggle {
@@ -407,17 +348,7 @@
   text-align: left;
   transition: background 0.15s;
 }
-.se-ai-toggle:hover { background: #ddf0e8; }
-
-.se-ai-toggle-badge {
-  font-size: 10px;
-  font-weight: 600;
-  background: #2d6a4f;
-  color: #fff;
-  padding: 1px 6px;
-  border-radius: 20px;
-  letter-spacing: 0.5px;
-}
+.se-ai-toggle:hover { background: color-mix(in srgb, var(--color-brand-lavender) 24%, var(--color-canvas)); }
 
 .se-ai-toggle-chevron {
   margin-left: auto;
@@ -433,8 +364,8 @@
   gap: 10px;
   max-height: 480px;
   overflow-y: auto;
-  background: #f8fcf9;
-  border-top: 1px solid #c8e6d8;
+  background: var(--color-canvas);
+  border-top: 1px solid var(--color-surface-strong);
 }
 
 .se-ai-desc {
@@ -472,7 +403,7 @@
 .se-ai-input {
   width: 100%;
   padding: 10px 12px;
-  border: 1.5px solid #c8e6d8;
+  border: 1px solid var(--color-surface-strong);
   border-radius: 8px;
   background: #fff;
   font-size: 13px;
@@ -500,8 +431,8 @@
   align-items: center;
   gap: 6px;
   padding: 8px 18px;
-  background: #1a3a3a;
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
   border: none;
   border-radius: 8px;
   font-size: 13px;
@@ -509,7 +440,7 @@
   cursor: pointer;
   transition: background 0.15s;
 }
-.se-ai-btn-generate:hover:not(:disabled) { background: #2d6a4f; }
+.se-ai-btn-generate:hover:not(:disabled) { background: var(--color-primary-active); }
 .se-ai-btn-generate:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .se-ai-btn-apply {
@@ -539,7 +470,7 @@
 
 /* 预览代码块 */
 .se-ai-preview-wrap {
-  border: 1.5px solid #c8e6d8;
+  border: 1px solid var(--color-surface-strong);
   border-radius: 8px;
   overflow: hidden;
   background: #fff;
@@ -580,11 +511,9 @@
 }
 
 .se-css-title {
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--color-muted);
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink);
 }
 
 .se-css-hint {
@@ -602,7 +531,7 @@
   border-radius: 4px;
 }
 
-/* CSS Textarea — 浅绿调 */
+/* CSS 编辑区与预览纸面分别滚动。 */
 .se-css-textarea {
   flex: 1;
   width: 100%;
@@ -610,8 +539,8 @@
   font-family: 'Menlo', 'Monaco', 'Courier New', Consolas, monospace;
   font-size: 12.5px;
   line-height: 1.75;
-  color: #2a3a2a;
-  background: #f8fdf8;
+  color: var(--color-ink);
+  background: white;
   border: none;
   resize: none;
   outline: none;
@@ -621,12 +550,13 @@
 }
 
 .se-css-textarea:focus {
-  background: #f2fbf5;
+  outline: 1px solid var(--color-ink);
+  outline-offset: -1px;
 }
 
 .se-css-textarea[readonly] {
-  color: var(--color-muted-soft);
-  background: var(--color-surface-soft);
+  color: var(--color-muted);
+  background: var(--color-canvas);
   cursor: not-allowed;
 }
 
@@ -662,19 +592,9 @@
 }
 
 .se-preview-label {
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--color-muted);
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
-}
-
-.se-preview-sub {
-  font-size: 11px;
-  color: var(--color-muted-soft);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink);
 }
 
 .se-preview-controls,
@@ -714,8 +634,8 @@
 }
 
 .se-segmented button.active {
-  background: var(--color-brand-teal);
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
 }
 
 .se-preview-scroll {
@@ -737,10 +657,7 @@
   border-radius: 4px;
   border: 1px solid var(--color-hairline);
   overflow: hidden;
-  box-shadow:
-    0 2px 8px rgba(0,0,0,0.06),
-    0 8px 24px rgba(0,0,0,0.08);
-  animation: card-slide-in 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+
 }
 
 .se-preview-card--mobile {
@@ -749,11 +666,6 @@
 
 .se-preview-card--wide {
   max-width: 640px;
-}
-
-@keyframes card-slide-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
 }
 
 #wemd {
@@ -773,12 +685,22 @@
     overflow-y: auto;
   }
 
-  .se-sidebar {
+  .se-root .se-sidebar {
     width: 100% !important;
     max-width: none;
-    height: 240px;
+    height: auto;
+    max-height: 250px;
+    padding-bottom: 8px;
     border-right: 0;
     border-bottom: 1px solid var(--color-hairline);
+  }
+
+  .se-root .se-sidebar-section {
+    padding-block: 0;
+  }
+
+  .se-meta-field-color .se-color-wrap {
+    justify-content: flex-start;
   }
 
   .se-resizer {
@@ -816,4 +738,8 @@
   .se-preview-scroll {
     padding: 18px 12px 48px;
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .se-ai-spin { animation: none; }
 }

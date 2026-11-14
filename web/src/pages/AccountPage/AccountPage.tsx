@@ -450,7 +450,6 @@ export default function AccountPage() {
     <main className="ap-root">
       <PageHeader
         title="账号与资产"
-        subtitle="先连接常用发布平台，其他配置按需展开"
         backLabel={fromSetup ? "返回首次设置" : "返回工作台"}
         onBack={() => navigate(fromSetup ? "/setup" : "/")}
         actions={<div className="ap-header-note"><ShieldCheck size={14} /> 凭据仅保存在当前浏览器</div>}
@@ -461,7 +460,7 @@ export default function AccountPage() {
           <div>
             <h1>{activeTab === "connections" ? "平台连接" : "写作资产"}</h1>
             <p>{activeTab === "connections"
-              ? "通常先连接微信公众号即可。头条和小红书可以在需要发布时再配置。"
+              ? "连接发布平台后，即可把文章写入对应平台的草稿箱。"
               : "文风、背景、反馈与历史表现各司其职，生成时按固定顺序读取。"}</p>
           </div>
           {activeTab === "connections" && <div className="ap-summary"><strong>{connectedPlatformCount}/3</strong><span>平台已连接</span></div>}

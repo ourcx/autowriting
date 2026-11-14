@@ -13,8 +13,6 @@
   gap: 20px;
   border-bottom: 1px solid var(--color-hairline);
   background: var(--color-canvas);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
 }
 
 .page-header__identity,
@@ -88,9 +86,9 @@
 }
 
 .page-header__back:hover {
-  border-color: var(--color-brand-mint);
-  background: #f0f7f4;
-  color: var(--color-brand-teal);
+  border-color: var(--color-muted-soft);
+  background: var(--color-surface-soft);
+  color: var(--color-ink);
 }
 
 .page-header__actions {
@@ -122,7 +120,9 @@
   }
 
   .page-header__actions {
-    max-width: 65%;
+    max-width: 58%;
+    padding: 3px;
+    margin-inline-end: -3px;
     overflow-x: auto;
     scrollbar-width: none;
   }

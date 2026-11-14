@@ -166,6 +166,7 @@ export default function TokenUsagePage() {
 
   /* ── 派生数据 ── */
   const totals = data?.totals
+  const hasUsage = Boolean(totals?.call_count)
 
   // 操作类型合并（同 op 不同 model）
   const opMerged = (data?.byOperation ?? []).reduce<Record<string, ByOperation>>((acc, row) => {
@@ -238,6 +239,7 @@ export default function TokenUsagePage() {
             <Button variant="plain"
               key={d}
               className={`tu-day-btn${days === d ? ' tu-day-btn--active' : ''}`}
+              aria-pressed={days === d}
               onClick={() => setDays(d)}
             >{d}天</Button>
           ))}
@@ -253,36 +255,43 @@ export default function TokenUsagePage() {
       )}
 
       {/* ══ 空态 ══ */}
-      {!loading && !data && (
+      {!loading && data && !hasUsage && (
         <div className="tu-empty">
-          <BarChart3 size={40} strokeWidth={1.5} />
-          <p className="tu-empty-title">暂无用量数据</p>
+          <BarChart3 size={24} strokeWidth={1.5} aria-hidden="true" />
+          <h1 className="tu-empty-title">该时段暂无用量</h1>
           <p className="tu-empty-sub">生成文章、分析内容后，这里会显示消耗统计</p>
         </div>
       )}
 
+      {!loading && !data && (
+        <div className="tu-empty" role="status">
+          <h1 className="tu-empty-title">暂时无法读取用量</h1>
+          <p className="tu-empty-sub">请稍后刷新页面重试。</p>
+        </div>
+      )}
+
       {/* ══ 主体内容 ══ */}
-      {!loading && data && (
+      {!loading && data && hasUsage && (
         <main className="tu-body">
 
-          {/* ── 4 大指标卡 ── */}
+          <h1 className="tu-heading">用量概览</h1>
           <div className="tu-kpi-grid">
-            <div className="tu-kpi tu-kpi--mint">
+            <div className="tu-kpi">
               <div className="tu-kpi-label">总消耗</div>
               <div className="tu-kpi-value">{fmtNum(totals?.total_tokens ?? 0)}</div>
               <div className="tu-kpi-sub">tokens · {days} 天</div>
             </div>
-            <div className="tu-kpi tu-kpi--peach">
+            <div className="tu-kpi">
               <div className="tu-kpi-label">调用次数</div>
               <div className="tu-kpi-value">{totals?.call_count ?? 0}</div>
               <div className="tu-kpi-sub">次 AI 调用</div>
             </div>
-            <div className="tu-kpi tu-kpi--ochre">
+            <div className="tu-kpi">
               <div className="tu-kpi-label">活跃天数</div>
               <div className="tu-kpi-value">{totals?.active_days ?? 0}</div>
               <div className="tu-kpi-sub">天 / 共 {days} 天</div>
             </div>
-            <div className="tu-kpi tu-kpi--teal">
+            <div className="tu-kpi">
               <div className="tu-kpi-label">估算费用</div>
               <div className="tu-kpi-value tu-kpi-value--sm">
                 {costTotal < 0.01 ? '< $0.01' : `$${costTotal.toFixed(2)}`}

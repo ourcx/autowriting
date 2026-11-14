@@ -388,9 +388,9 @@ export default function WeChatDrafts() {
       <div className="wd-root">
         <PageHeader title="公众号管理" onBack={() => navigate(-1)} />
         <div className="wd-empty">
-          <div className="wd-empty-icon"><Link2 size={36} /></div>
-          <p className="wd-empty-title">尚未绑定公众号</p>
-          <p className="wd-empty-desc">前往「用户页」绑定公众号后，即可查看草稿箱和已发布文章</p>
+          <div className="wd-empty-icon" aria-hidden="true"><Link2 size={20} /></div>
+          <h2 className="wd-empty-title">绑定公众号</h2>
+          <p className="wd-empty-desc">绑定后可查看微信草稿、已发布文章和永久素材。</p>
           <Button variant="plain" className="wd-goto-btn" onClick={() => navigate('/account')}>前往绑定</Button>
         </div>
       </div>
@@ -424,8 +424,8 @@ export default function WeChatDrafts() {
         >
           <RefreshCw size={14} className={(draftLoading || pubLoading || matLoading) ? 'wd-spin' : ''} />
         </Button>
-        <Button variant="plain" className="wd-refresh-btn" title="素材管理" onClick={() => navigate('/wechat/materials')}>
-          <Image size={14} />
+        <Button variant="plain" className="wd-refresh-btn wd-materials-btn" onClick={() => navigate('/wechat/materials')}>
+          <Image size={14} /> 素材管理
         </Button>
         </>}
       />
@@ -436,6 +436,7 @@ export default function WeChatDrafts() {
           <Button variant="plain"
             key={t.id}
             className={`wd-tab${tab === t.id ? ' wd-tab--active' : ''}`}
+            aria-pressed={tab === t.id}
             onClick={() => setTab(t.id)}
           >
             <t.icon size={14} />

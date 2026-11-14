@@ -1,7 +1,7 @@
 import { Collapse, Input, SelectField, Textarea } from "../../components/FormControls/FormControls"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { ArrowRight, BarChart3, Bookmark, BookOpen, ChevronDown, Clock3, ExternalLink, FileText, Info, Link2, RefreshCw, Search, Share2, Sparkles, Upload, Users, X } from "lucide-react"
+import { ArrowRight, BarChart3, BookOpen, ChevronDown, Clock3, ExternalLink, Info, Link2, RefreshCw, Search, Sparkles, Upload, X } from "lucide-react"
 import {
   Bar,
   BarChart,
@@ -205,28 +205,25 @@ export default function TopicInsights() {
   return <main className="topic-page">
     <PageHeader
       title="账号观察"
-      subtitle="用文章表现辅助选题与素材整理"
       icon={<BarChart3 size={16}/>}
       backLabel="返回工作台"
       onBack={() => navigate("/")}
       actions={<a className="topic-header-action" href="https://mp.weixin.qq.com" target="_blank" rel="noreferrer">微信后台<ExternalLink size={14}/></a>}
     />
     <div className="topic-content">
-    <header className="topic-header">
-      <div className="topic-title-block"><p className="topic-eyebrow">从读者反馈，回到你的观察</p><h1>下一篇，值得写什么</h1><p>看看哪些问题持续有人读，把你的线索和判断接着写下去。</p></div>
-    </header>
     <section className="topic-sync" aria-label="微信数据同步">
       <div className={`topic-sync-state topic-sync-state--${state.status}`}><span />
         <strong>{state.status === "collecting" ? "正在同步" : state.status === "failed" ? "同步中断" : state.lastSuccessAt ? `上次同步 ${new Date(state.lastSuccessAt).toLocaleString()}` : "尚未同步"}</strong>
         <small>{state.message || (cookieBound ? "Cookie JSON 已保存在当前浏览器" : "尚未绑定数据 Cookie")}</small>
       </div>
       <div className="topic-sync-controls">
-        {!cookieBound && <Button className="topic-bind-button" onClick={() => navigate("/account")}>绑定数据 Cookie</Button>}
-        <label className="topic-switch"><Input type="checkbox" checked={config.enabled} disabled={!cookieBound} onChange={event => updateConfig({ ...config, enabled: event.target.checked })}/><span />页面内定时刷新</label>
-        <label className="topic-interval"><Clock3 size={14}/><SelectField aria-label="自动刷新间隔" value={config.intervalHours} disabled={!cookieBound || !config.enabled} onChange={event => updateConfig({ ...config, intervalHours: Number(event.target.value) })}>
-          <option value={6}>每 6 小时</option><option value={12}>每 12 小时</option><option value={24}>每天</option><option value={72}>每 3 天</option>
-        </SelectField></label>
-        <Button className="topic-sync-button" disabled={!cookieBound || busy} onClick={() => void collect()}><RefreshCw size={16} className={busy ? "topic-spin" : ""}/>{busy ? "同步中" : "立即同步"}</Button>
+        {cookieBound ? <>
+          <label className="topic-switch"><Input type="checkbox" checked={config.enabled} onChange={event => updateConfig({ ...config, enabled: event.target.checked })}/><span />页面内定时刷新</label>
+          <label className="topic-interval"><Clock3 size={14}/><SelectField aria-label="自动刷新间隔" value={config.intervalHours} disabled={!config.enabled} onChange={event => updateConfig({ ...config, intervalHours: Number(event.target.value) })}>
+            <option value={6}>每 6 小时</option><option value={12}>每 12 小时</option><option value={24}>每天</option><option value={72}>每 3 天</option>
+          </SelectField></label>
+          <Button variant="primary" disabled={busy} onClick={() => void collect()}><RefreshCw size={16} className={busy ? "topic-spin" : ""}/>{busy ? "同步中" : "立即同步"}</Button>
+        </> : <Button variant="primary" onClick={() => navigate("/account")}>绑定数据 Cookie</Button>}
       </div>
     </section>
     {error && <div role="alert" className="topic-error"><span>{error}</span><Button onClick={() => void load()}>重新加载</Button></div>}
@@ -248,15 +245,15 @@ export default function TopicInsights() {
       </div>
       <section className="topic-dashboard" aria-labelledby="topic-dashboard-title">
         <div className="topic-section-heading">
-          <div><p className="topic-section-kicker">账号看板</p><h2 id="topic-dashboard-title">账号每日表现</h2><p>数据来自微信内容分析“数据概览”，和文章列表在同一次同步中更新。</p></div>
+          <div><h2 id="topic-dashboard-title">账号每日表现</h2><p>数据来自微信内容分析“数据概览”，和文章列表在同一次同步中更新。</p></div>
           <span className="topic-data-window">{dailyMetrics.length ? `${dailyMetrics.length} 天` : "待同步"}</span>
         </div>
         {latestDaily ? <>
           <div className="topic-dashboard-kpis">
-            <div className="topic-dashboard-kpi topic-dashboard-kpi--mint"><Users size={20}/><strong>{latestDaily.readers.toLocaleString()}</strong><span>最近一天阅读人数</span><small>{latestDaily.date}</small></div>
-            <div className="topic-dashboard-kpi topic-dashboard-kpi--peach"><Share2 size={20}/><strong>{dailyTotals.sharers.toLocaleString()}</strong><span>每日分享人数合计</span><small>{dailyMetrics.length} 天日数据相加</small></div>
-            <div className="topic-dashboard-kpi topic-dashboard-kpi--lavender"><Bookmark size={20}/><strong>{dailyTotals.collectors.toLocaleString()}</strong><span>每日收藏人数合计</span><small>{dailyMetrics.length} 天日数据相加</small></div>
-            <div className="topic-dashboard-kpi topic-dashboard-kpi--ochre"><FileText size={20}/><strong>{dailyTotals.publishedArticles.toLocaleString()}</strong><span>期间发表篇数</span><small>{snapshot.period.start} 至 {snapshot.period.end}</small></div>
+            <div className="topic-dashboard-kpi"><strong>{latestDaily.readers.toLocaleString()}</strong><span>最近一天阅读人数</span><small>{latestDaily.date}</small></div>
+            <div className="topic-dashboard-kpi"><strong>{dailyTotals.sharers.toLocaleString()}</strong><span>每日分享人数合计</span><small>{dailyMetrics.length} 天日数据相加</small></div>
+            <div className="topic-dashboard-kpi"><strong>{dailyTotals.collectors.toLocaleString()}</strong><span>每日收藏人数合计</span><small>{dailyMetrics.length} 天日数据相加</small></div>
+            <div className="topic-dashboard-kpi"><strong>{dailyTotals.publishedArticles.toLocaleString()}</strong><span>期间发表篇数</span><small>{snapshot.period.start} 至 {snapshot.period.end}</small></div>
           </div>
           <div className="topic-chart-grid">
             <section className="topic-chart-panel" aria-label="账号每日趋势图">
@@ -297,7 +294,7 @@ export default function TopicInsights() {
       </section>
       <section className="topic-article-overview" aria-labelledby="topic-articles-title">
         <div className="topic-section-heading">
-          <div><p className="topic-section-kicker">文章表现</p><h2 id="topic-articles-title">回到具体文章找线索</h2></div>
+          <div><h2 id="topic-articles-title">文章表现</h2></div>
         </div>
         <div className="topic-article-facts">
           <div><BookOpen size={18}/><strong>{snapshot.articles.length}</strong><span>{snapshot.collection.complete ? "篇完整列表" : "篇已采集"}</span></div>
@@ -308,7 +305,7 @@ export default function TopicInsights() {
       </section>
       <section className="topic-workspace">
         <div className="topic-evidence">
-          <div className="topic-evidence-heading"><div><p className="topic-section-kicker">文章筛选</p><h2>从历史文章里找线索</h2></div><span>筛选结果</span></div>
+          <div className="topic-evidence-heading"><h2>历史文章</h2></div>
           <label className="topic-search"><Search size={18}/><Input value={keyword} onChange={event => setKeyword(event.target.value)} placeholder="按主题筛选，例如：保研、校园跑" aria-label="主题关键词"/></label>
           <p className="topic-note">{analysis.articles.length} 篇匹配 · 期间阅读人数中位数 {analysis.medianReaders?.toLocaleString() ?? "—"} · {analysis.olderArticles} 篇在统计窗口前发布</p>
           <div className="topic-table-wrap"><table><thead><tr><th>文章 / 关联工作台稿件</th><th>相对位置</th><th>发布日期</th><th>期间阅读人数</th></tr></thead><tbody>
@@ -380,14 +377,14 @@ export default function TopicInsights() {
           {!analysis.articles.length && <p>没有匹配的标题，换一个关键词试试。</p>}
           <p className="topic-note">{analysis.observation} 下一次对比应固定发布后的观察时长，并记录账号体量和流量来源。</p>
         </div>
-        <aside className="topic-brief"><div className="topic-brief-heading"><Sparkles size={20}/><span>选题任务</span></div><h2>把问题带回素材</h2><p>你掌握的事实、现场观察和采访，决定这篇文章是否值得写。</p>
+        <aside className="topic-brief"><h2>选题任务</h2>
           <label>我想回答的问题<Input value={question} maxLength={200} onChange={event => setQuestion(event.target.value)} placeholder="写下一个读者真的关心的问题"/></label>
           <label>已有线索与待补资料<Textarea value={materials} maxLength={10000} onChange={event => setMaterials(event.target.value)} placeholder="原始公告链接、亲身经历、可采访的人、需要核对的数据…"/></label>
           <Button variant="primary" disabled={busy || !question.trim() || !analysis.articles.length} onClick={() => void createBrief()}>保存为选题任务 <ArrowRight size={16}/></Button>
           <small>会保存本次筛选的观察依据和素材缺口，下一步继续收集素材。</small>
         </aside>
       </section>
-    </> : <div className="topic-empty"><h2>先同步一次微信数据</h2><p>数据到位后，可以筛选主题、关联已写文章，并把新的问题保存为任务。“降低 30%”仍是目标，不会作为已有结果展示。</p></div>}
+    </> : <div className="topic-empty"><h2>暂无文章数据</h2><p>同步微信数据或导入离线快照，即可按主题筛选文章并整理选题。</p></div>}
     </div>
   </main>
 }

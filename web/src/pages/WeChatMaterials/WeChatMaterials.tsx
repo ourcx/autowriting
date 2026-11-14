@@ -524,9 +524,9 @@ export default function WeChatMaterials() {
       <div className="wm-root">
         <PageHeader title="公众号素材" onBack={() => navigate(-1)} />
         <div className="wm-empty">
-          <div className="wm-empty-icon"><FileImage size={36} /></div>
-          <p className="wm-empty-title">尚未绑定公众号</p>
-          <p className="wm-empty-desc">先去「用户页」绑定公众号，再回来上传正文图片和管理永久素材。</p>
+          <div className="wm-empty-icon" aria-hidden="true"><FileImage size={20} /></div>
+          <h2 className="wm-empty-title">绑定公众号</h2>
+          <p className="wm-empty-desc">绑定后可上传正文图片，并查看公众号里的永久素材。</p>
           <Button variant="plain" className="wm-primary-btn" onClick={() => navigate('/account')}>前往绑定</Button>
         </div>
       </div>
@@ -546,7 +546,6 @@ export default function WeChatMaterials() {
     <div className="wm-root">
       <PageHeader
         title="公众号素材"
-        subtitle="上传正文图片，管理封面、音频、视频与图文素材"
         onBack={() => navigate(-1)}
         actions={
           <>
@@ -562,29 +561,11 @@ export default function WeChatMaterials() {
       />
 
       <main className="wm-main">
-        <section className="wm-page-intro">
-          <div>
-            <div className="wm-kicker">WECHAT ASSETS</div>
-            <h1>素材管理</h1>
-            <p>正文图片上传后可直接复制微信地址；封面和音视频上传后可获取永久 media_id。</p>
-          </div>
-          <div className="wm-page-count">
-            <span>{typeMeta[materialType].label}</span>
-            <strong>{items.length}<small> / {total || 0}</small></strong>
-          </div>
-        </section>
-
-        <div className="wm-section-heading">
-          <div>
-            <h2>上传素材</h2>
-            <p>根据使用场景选择上传入口，避免正文图片与永久素材混用。</p>
-          </div>
-        </div>
+        <div className="wm-section-heading"><h2>上传素材</h2></div>
         <section className="wm-tool-grid">
-          <article className="wm-panel wm-panel--feature wm-panel--teal">
-            <div className="wm-panel-kicker">正文图片</div>
-            <h2>上传正文图片</h2>
-            <p>转换为微信可访问地址，适用于文章内插图。</p>
+          <article className="wm-panel wm-panel--feature">
+            <h3>正文图片</h3>
+            <p>用于文章内插图。上传后可以复制微信图片地址。</p>
             <div className="wm-upload-stack">
               <MaterialDropzone
                 accept="image/*"
@@ -633,10 +614,9 @@ export default function WeChatMaterials() {
             ) : null}
           </article>
 
-          <article className="wm-panel wm-panel--feature wm-panel--cream">
-            <div className="wm-panel-kicker">永久素材</div>
-            <h2>上传永久素材</h2>
-            <p>用于封面、缩略图、音频与视频，上传后获取 media_id。</p>
+          <article className="wm-panel wm-panel--feature">
+            <h3>永久素材</h3>
+            <p>用于封面、缩略图、音频和视频。上传后可以复制 media_id。</p>
             <div className="wm-upload-stack">
               <label className="wm-field">
                 <span>素材类型</span>
@@ -683,7 +663,6 @@ export default function WeChatMaterials() {
                 </div>
               ) : null}
               <div className="wm-upload-footer">
-                <span>上传成功后可在素材库中查看并复制 media_id</span>
                 <Button variant="plain" className="wm-primary-btn" disabled={uploading || !uploadFile} onClick={handleUploadMaterial}>
                   {uploading ? <Loader2 size={14} className="wm-spin" /> : <Upload size={14} />}
                   {uploading ? '上传中...' : '上传永久素材'}
@@ -700,12 +679,7 @@ export default function WeChatMaterials() {
           </div>
         ) : null}
 
-        <div className="wm-section-heading">
-          <div>
-            <h2>素材库</h2>
-            <p>查找素材并复制 media_id 或 URL，也可以查看详情和删除。</p>
-          </div>
-        </div>
+        <div className="wm-section-heading"><h2>素材库</h2></div>
         <section className="wm-board">
           <div className="wm-board-toolbar">
             <div className="wm-type-tabs">
@@ -715,6 +689,7 @@ export default function WeChatMaterials() {
                   <Button variant="plain"
                     key={type}
                     className={`wm-type-tab ${materialType === type ? 'is-active' : ''}`}
+                    aria-pressed={materialType === type}
                     onClick={() => setMaterialType(type)}
                   >
                     <Icon size={14} />
@@ -728,7 +703,8 @@ export default function WeChatMaterials() {
               <Input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="按标题、文件名、media_id 搜索"
+                placeholder="标题、文件名或 media_id"
+                aria-label="搜索素材"
               />
             </label>
             <div className="wm-toolbar-meta">
@@ -743,7 +719,7 @@ export default function WeChatMaterials() {
                   <div className="wm-section-title">已选素材</div>
                   <div className="wm-section-desc">{selectedMaterialName || detail.media_id}</div>
                 </div>
-                <Button variant="plain" className="wm-icon-btn" onClick={() => { setDetail(null); setDetailError(null); revokeDetailFileUrl() }}>
+                <Button variant="plain" className="wm-icon-btn" aria-label="关闭素材详情" onClick={() => { setDetail(null); setDetailError(null); revokeDetailFileUrl() }}>
                   <X size={14} />
                 </Button>
               </div>

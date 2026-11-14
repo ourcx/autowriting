@@ -10,7 +10,6 @@ import {
   Eye,
   EyeOff,
   KeyRound,
-  Link2,
   Loader2,
   ShieldCheck,
 } from "lucide-react"
@@ -126,69 +125,59 @@ export default function FirstSetupPage() {
 
   return (
     <main className="fsp-root">
-      <PageHeader
-        title="首次设置"
-        subtitle="先让文章生成可用，发布账号可以稍后补"
-      />
+      <PageHeader title="首次设置" />
 
       <div className="fsp-shell">
         <aside className="fsp-progress" aria-label="设置进度">
-          <div className="fsp-brand">
-            <span className="fsp-brand-mark">D</span>
-            <div>
-              <strong>开始创作前</strong>
-              <span>大约 2 分钟</span>
-            </div>
-          </div>
           <ol>
-            <li className={step === "ai" ? "active" : "complete"}>
-              <span>{step === "accounts" ? <Check size={15} /> : "1"}</span>
-              <div><strong>连接 AI 服务</strong><small>必需，现场验证</small></div>
+            <li className={step === "ai" ? "active" : "complete"} aria-current={step === "ai" ? "step" : undefined}>
+              <span aria-hidden="true">{step === "accounts" ? <Check size={15} /> : "1"}</span>
+              <div><strong>连接 AI 服务</strong><small>{step === "accounts" ? "已连接" : "必需"}</small></div>
             </li>
-            <li className={step === "accounts" ? "active" : ""}>
-              <span>2</span>
-              <div><strong>连接发布账号</strong><small>可跳过，发布前再补</small></div>
+            <li className={step === "accounts" ? "active" : ""} aria-current={step === "accounts" ? "step" : undefined}>
+              <span aria-hidden="true">2</span>
+              <div><strong>连接发布账号</strong><small>可跳过</small></div>
             </li>
           </ol>
-          <p><ShieldCheck size={15} /> API Key 与平台 Cookie 不会写进文章内容。</p>
+          <p><ShieldCheck size={15} aria-hidden="true" /> API Key 与平台 Cookie 不会写进文章内容。</p>
         </aside>
 
         <section className="fsp-content">
           {step === "ai" ? (
             <div className="fsp-panel">
               <header>
-                <span className="fsp-section-icon"><KeyRound size={20} /></span>
-                <div>
-                  <p>必需设置</p>
-                  <h1>连接文章生成服务</h1>
-                  <span>填写后会立即发起一次最小请求，确认当前配置真的可用。</span>
-                </div>
+                <h1>连接文章生成服务</h1>
+                <p>选择服务商并填写 API Key。保存时会发送一次测试请求。</p>
               </header>
 
-              <div className="fsp-provider-options" role="group" aria-label="AI 服务商">
-                {PROVIDER_PRESETS.map(provider => (
-                  <Button variant="plain"
-                    key={provider.id}
-                    type="button"
-                    aria-pressed={config.articleProvider === provider.id}
-                    onClick={() => selectProvider(provider.id)}
-                  >
-                    <strong>{provider.name}</strong>
-                    <span>{provider.desc}</span>
-                  </Button>
-                ))}
+              <div className="fsp-provider-field">
+                <p id="fsp-provider-label">AI 服务商</p>
+                <div className="fsp-provider-options" role="group" aria-labelledby="fsp-provider-label">
+                  {PROVIDER_PRESETS.map(provider => (
+                    <Button variant="plain"
+                      key={provider.id}
+                      type="button"
+                      aria-pressed={config.articleProvider === provider.id}
+                      onClick={() => selectProvider(provider.id)}
+                    >
+                      <strong>{provider.name}</strong>
+                      {config.articleProvider === provider.id && <Check size={15} aria-hidden="true" />}
+                      <span>{provider.desc}</span>
+                    </Button>
+                  ))}
+                </div>
               </div>
 
               {isDeepSeek ? (
-                <label className="fsp-wide">
-                  <span>DeepSeek 公共 API Key</span>
+                <div className="fsp-field">
+                  <label htmlFor="fsp-deepseek-key">DeepSeek 公共 API Key</label>
                   <div className="fsp-secret">
-                    <Input type={showKey ? "text" : "password"} autoComplete="off" value={config.deepseekApiKey}
+                    <Input id="fsp-deepseek-key" type={showKey ? "text" : "password"} autoComplete="off" value={config.deepseekApiKey}
                       onChange={event => updateConfig({ deepseekApiKey: event.target.value })} placeholder="仅保存在当前浏览器" />
                     <Button variant="plain" aria-label={showKey ? "隐藏 DeepSeek Key" : "显示 DeepSeek Key"}
                       onClick={() => setShowKey(value => !value)}>{showKey ? <EyeOff size={16} /> : <Eye size={16} />}</Button>
                   </div>
-                </label>
+                </div>
               ) : <div className="fsp-form-grid">
                 <label>
                   <span>API 地址</span>
@@ -222,10 +211,11 @@ export default function FirstSetupPage() {
                     />
                   </label>
                 )}
-                <label className="fsp-wide">
-                  <span>API Key</span>
+                <div className="fsp-wide fsp-field">
+                  <label htmlFor="fsp-api-key">API Key</label>
                   <div className="fsp-secret">
                     <Input
+                      id="fsp-api-key"
                       type={showKey ? "text" : "password"}
                       value={isMaas ? config.maasApiKey : config.articleApiKey}
                       onChange={event => updateConfig(isMaas
@@ -234,11 +224,11 @@ export default function FirstSetupPage() {
                       placeholder="填写服务商提供的 API Key"
                       autoComplete="new-password"
                     />
-                    <Button variant="plain" type="button" onClick={() => setShowKey(value => !value)} title={showKey ? "隐藏 API Key" : "显示 API Key"}>
+                    <Button variant="plain" type="button" onClick={() => setShowKey(value => !value)} aria-label={showKey ? "隐藏 API Key" : "显示 API Key"}>
                       {showKey ? <EyeOff size={17} /> : <Eye size={17} />}
                     </Button>
                   </div>
-                </label>
+                </div>
               </div>}
 
               {testResult && (
@@ -252,8 +242,8 @@ export default function FirstSetupPage() {
                 <a href={selectedPreset?.url} target="_blank" rel="noreferrer">
                   获取服务商 Key <ExternalLink size={14} />
                 </a>
-                <Button variant="plain" className="fsp-primary" onClick={() => void verifyAI()} disabled={testing}>
-                  {testing ? <Loader2 className="fsp-spin" size={17} /> : <CheckCircle2 size={17} />}
+                <Button variant="primary" onClick={() => void verifyAI()} disabled={testing}>
+                  {testing && <Loader2 className="fsp-spin" size={17} aria-hidden="true" />}
                   {testing ? "正在测试连接" : "保存并测试连接"}
                 </Button>
               </footer>
@@ -261,42 +251,35 @@ export default function FirstSetupPage() {
           ) : (
             <div className="fsp-panel">
               <header>
-                <span className="fsp-section-icon"><Link2 size={20} /></span>
-                <div>
-                  <p>可稍后完成</p>
-                  <h1>连接你准备使用的平台</h1>
-                  <span>不必一次填完。生成文章不受影响，真正发布前再连接也可以。</span>
-                </div>
+                <h1>连接发布账号</h1>
+                <p>你可以先写文章，发布前再连接要用的平台。</p>
               </header>
 
               <div className="fsp-account-list">
                 <div className="fsp-account-row">
-                  <span className="fsp-platform-mark fsp-platform-mark--wechat">微</span>
                   <div>
                     <strong>微信公众号</strong>
                     <span>草稿写入：{accountState.wechatPublish ? "已连接" : "未连接"} · 后台自动化：{accountState.wechatAnalytics ? "已连接" : "未连接"}</span>
                   </div>
                   <span className={accountState.wechatPublish || accountState.wechatAnalytics ? "connected" : ""}>
-                    {accountState.wechatPublish || accountState.wechatAnalytics ? "已连接" : "可选"}
+                    {accountState.wechatPublish || accountState.wechatAnalytics ? "已连接" : "未连接"}
                   </span>
                 </div>
                 <div className="fsp-account-row">
-                  <span className="fsp-platform-mark fsp-platform-mark--toutiao">头</span>
                   <div><strong>今日头条</strong><span>文章发布与账号数据</span></div>
-                  <span className={accountState.toutiao ? "connected" : ""}>{accountState.toutiao ? "已连接" : "可选"}</span>
+                  <span className={accountState.toutiao ? "connected" : ""}>{accountState.toutiao ? "已连接" : "未连接"}</span>
                 </div>
                 <div className="fsp-account-row">
-                  <span className="fsp-platform-mark fsp-platform-mark--xiaohongshu">红</span>
                   <div><strong>小红书</strong><span>图文笔记发布</span></div>
-                  <span className={accountState.xiaohongshu ? "connected" : ""}>{accountState.xiaohongshu ? "已连接" : "可选"}</span>
+                  <span className={accountState.xiaohongshu ? "connected" : ""}>{accountState.xiaohongshu ? "已连接" : "未连接"}</span>
                 </div>
               </div>
 
               <footer className="fsp-actions">
-                <Button variant="plain" className="fsp-secondary" onClick={() => navigate("/account?from=setup")}>
+                <Button onClick={() => navigate("/account?from=setup")}>
                   现在连接账号
                 </Button>
-                <Button variant="plain" className="fsp-primary" onClick={() => void createFirstArticle()} disabled={creating}>
+                <Button variant="primary" onClick={() => void createFirstArticle()} disabled={creating}>
                   {creating ? <Loader2 className="fsp-spin" size={17} /> : <ArrowRight size={17} />}
                   {creating ? "正在创建" : connectedCount ? "创建第一篇文章" : "暂不连接，创建第一篇文章"}
                 </Button>

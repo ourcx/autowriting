@@ -145,11 +145,7 @@ export default function AdminPage() {
   return (
     <div className="admin-root">
       <PageHeader
-        title={<Link to="/" className="admin-nav-brand">
-          <div className="admin-nav-logo">D</div>
-          <span className="admin-nav-name">Dashy</span>
-        </Link>}
-        subtitle="用户管理"
+        title="管理后台"
         backLabel="返回工作台"
         onBack={() => navigate('/')}
       />
@@ -159,10 +155,10 @@ export default function AdminPage() {
         <div className="admin-page-header">
           <div>
             <h1>用户管理</h1>
-            <p>管理账号、查看创作数据、控制账号状态</p>
+            <p>查看用户的文章数量、角色和账号状态。</p>
           </div>
           <div className="admin-header-actions">
-            <Link to="/monitoring" className="admin-create-btn">
+            <Link to="/monitoring" className="admin-create-btn admin-create-btn--secondary">
               <Activity size={15} />
               系统监控
             </Link>
@@ -176,15 +172,15 @@ export default function AdminPage() {
         {/* Stat cards */}
         {!loading && !error && (
           <div className="admin-stats">
-            <div className="admin-stat-card card-teal">
+            <div className="admin-stat-card">
               <span className="admin-stat-label">总用户数</span>
               <span className="admin-stat-value">{totalUsers}</span>
             </div>
-            <div className="admin-stat-card card-ochre">
+            <div className="admin-stat-card">
               <span className="admin-stat-label">总文章数</span>
               <span className="admin-stat-value">{totalArticles}</span>
             </div>
-            <div className="admin-stat-card card-lavender">
+            <div className="admin-stat-card">
               <span className="admin-stat-label">活跃账号</span>
               <span className="admin-stat-value">{activeUsers}</span>
             </div>

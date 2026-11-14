@@ -1,7 +1,7 @@
-import { Input } from "../../components/FormControls/FormControls"
+import { Collapse, Input } from "../../components/FormControls/FormControls"
 import Button from "../../components/Button/Button"
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Calendar, FileText, Trash2, ArrowRight, RefreshCw, Zap, Server, HardDrive, AlertTriangle, Upload, Search, MessageCircle, Newspaper, BookOpen, X, LayoutList, Rows } from 'lucide-react'
+import { Calendar, FileText, Trash2, ArrowRight, RefreshCw, Server, HardDrive, AlertTriangle, Upload, Search, MessageCircle, Newspaper, BookOpen, X, LayoutList, Rows } from 'lucide-react'
 import { fetchArticleList, fetchArticleWorkflowMetrics, deleteArticle, type WorkflowMetrics } from '../../utils/apiHelpers'
 import { showConfirm, toast } from '../../components/Toast/Toast'
 import './Dashboard.css'
@@ -329,7 +329,7 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
             <section className="dash-status-section" key={item.id} aria-labelledby={`dash-status-${item.id}`}>
               <header>
                 <div>
-                  <h4 id={`dash-status-${item.id}`}>{item.label}</h4>
+                  <h3 id={`dash-status-${item.id}`}>{item.label}</h3>
                   <span>{group.length} 篇</span>
                 </div>
                 {group.length > STATUS_PREVIEW_SIZE && (
@@ -352,57 +352,17 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
     <div className="dash-root">
       {/* ── 左栏：创建 + 统计 ─────────────────────────── */}
       <aside className="dash-sidebar">
-        {/* 统计数字 */}
-        <div className="dash-stats">
-          <div className="dash-stat">
-            <span className="dash-stat-num">{loadError ? '—' : stats.total}</span>
-            <span className="dash-stat-label">篇文章</span>
-          </div>
-          <div className="dash-stat-divider" />
-          <div className="dash-stat">
-            <span className="dash-stat-num dash-stat-num--green">{stats.generated}</span>
-            <span className="dash-stat-label">已生成</span>
-          </div>
-          <div className="dash-stat-divider" />
-          <div className="dash-stat">
-            <span className="dash-stat-num">{stats.draft}</span>
-            <span className="dash-stat-label">草稿</span>
-          </div>
-          <div className="dash-stat-divider" />
-          <div className="dash-stat" title={`创建到首次推送，含搁置时间；${workflowMetrics.sampleSize} 篇。降低 30% 是目标，尚未验证。`}>
-            <span className="dash-stat-num">
-              {workflowMetrics.medianMinutes === null ? '—' : workflowMetrics.medianMinutes < 60
-                ? workflowMetrics.medianMinutes
-                : (workflowMetrics.medianMinutes / 60).toFixed(1)}
-            </span>
-            <span className="dash-stat-label">
-              {workflowMetrics.medianMinutes === null ? '暂无耗时样本' : workflowMetrics.medianMinutes < 60 ? '分钟 / 首次草稿中位数' : '小时 / 首次草稿中位数'}
-            </span>
-          </div>
-          <div className="dash-stat-divider" />
-          <div className="dash-stat" title={`仅含开始计时后的 ${workflowMetrics.activeSampleSize} 篇完成稿；页面可见、有焦点且近 30 秒有操作才计时，属于估算。`}>
-            <span className="dash-stat-num">{workflowMetrics.medianActiveMinutes ?? "—"}</span>
-            <span className="dash-stat-label">活跃编辑分钟 / 中位数</span>
-          </div>
-          <div className="dash-stat">
-            <span className="dash-stat-num">{workflowMetrics.reworkCount}</span>
-            <span className="dash-stat-label">完成稿审核后返工次数</span>
-          </div>
-        </div>
-
         {/* 创建卡片 */}
         <div className="dash-create-card">
           <div className="dash-create-header">
-            <div className="dash-create-icon">
-              <Plus size={18} />
-            </div>
             <h2>新建文章</h2>
           </div>
 
           {/* 存储位置选择 */}
-          <div className="dash-storage-toggle">
+          <div className="dash-storage-toggle" role="group" aria-label="文章存储位置">
             <Button variant="plain"
               className={`dash-storage-btn ${storageMode === 'server' ? 'active' : ''}`}
+              aria-pressed={storageMode === 'server'}
               onClick={() => setStorageMode('server')}
             >
               <Server size={12} />
@@ -410,6 +370,7 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
             </Button>
             <Button variant="plain"
               className={`dash-storage-btn ${storageMode === 'local' ? 'active' : ''}`}
+              aria-pressed={storageMode === 'local'}
               onClick={() => setStorageMode('local')}
             >
               <HardDrive size={12} />
@@ -461,7 +422,6 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
               </>
             ) : (
               <>
-                <Zap size={16} />
                 开始写作
                 <ArrowRight size={15} className="dash-arrow" />
               </>
@@ -470,13 +430,46 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
 
           {storageMode === 'local' && <p className="dash-create-hint">数据仅存此浏览器，清除缓存后会丢失。</p>}
         </div>
+        <Collapse className="dash-metrics" label="写作统计">
+          <div className="dash-stats">
+            <div className="dash-stat">
+              <span className="dash-stat-num">{loadError ? '—' : stats.total}</span>
+              <span className="dash-stat-label">篇文章</span>
+            </div>
+            <div className="dash-stat">
+              <span className="dash-stat-num dash-stat-num--green">{stats.generated}</span>
+              <span className="dash-stat-label">已生成</span>
+            </div>
+            <div className="dash-stat">
+              <span className="dash-stat-num">{stats.draft}</span>
+              <span className="dash-stat-label">草稿</span>
+            </div>
+            <div className="dash-stat" title={`创建到首次推送，含搁置时间；${workflowMetrics.sampleSize} 篇。降低 30% 是目标，尚未验证。`}>
+              <span className="dash-stat-num">
+                {workflowMetrics.medianMinutes === null ? '—' : workflowMetrics.medianMinutes < 60
+                  ? workflowMetrics.medianMinutes
+                  : (workflowMetrics.medianMinutes / 60).toFixed(1)}
+              </span>
+              <span className="dash-stat-label">
+                {workflowMetrics.medianMinutes === null ? '暂无耗时样本' : workflowMetrics.medianMinutes < 60 ? '分钟 / 首次草稿中位数' : '小时 / 首次草稿中位数'}
+              </span>
+            </div>
+            <div className="dash-stat" title={`仅含开始计时后的 ${workflowMetrics.activeSampleSize} 篇完成稿；页面可见、有焦点且近 30 秒有操作才计时，属于估算。`}>
+              <span className="dash-stat-num">{workflowMetrics.medianActiveMinutes ?? "—"}</span>
+              <span className="dash-stat-label">活跃编辑分钟 / 中位数</span>
+            </div>
+            <div className="dash-stat">
+              <span className="dash-stat-num">{workflowMetrics.reworkCount}</span>
+              <span className="dash-stat-label">完成稿审核后返工次数</span>
+            </div>
+          </div>
+        </Collapse>
       </aside>
 
       {/* ── 右栏：文章列表 ───────────────────────────── */}
       <main className="dash-main">
         <div className="dash-workspace-heading">
           <h1>创作工作台</h1>
-          <Button variant="plain" className="dash-text-btn" onClick={() => titleRef.current?.focus()}><Plus size={16} />新建文章</Button>
         </div>
         {!loading && !loadError && resumeArticle && (
           <section className="dash-resume" aria-label="继续创作">
@@ -509,7 +502,7 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
         )}
 
         <div className="dash-list-header">
-          <h3>文章列表</h3>
+          <h2>文章列表</h2>
           <div className="dash-view-switch" role="group" aria-label="文章列表视图">
             <Button variant="plain" aria-pressed={viewMode === 'status'} onClick={() => setViewMode('status')} title="按状态分类">
               <Rows size={14} />按状态

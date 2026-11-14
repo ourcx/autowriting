@@ -29,8 +29,8 @@
       }
       h1 {
         margin: 16px 0 12px;
-        font-size: 56px;
-        font-weight: 600;
+        font-size: clamp(36px, 7vw, 56px);
+        font-weight: 500;
         line-height: 1.05;
         letter-spacing: 0;
       }
@@ -45,17 +45,16 @@
         display: inline-flex;
         align-items: center;
         padding: 0 20px;
-        border-radius: 8px;
+        border-radius: 12px;
         background: #0a0a0a;
         color: #ffffff;
         font-size: 14px;
         font-weight: 600;
         text-decoration: none;
       }
-      @media (max-width: 640px) {
-        h1 {
-          font-size: 40px;
-        }
+      a:focus-visible {
+        outline: 2px solid #1a3a3a;
+        outline-offset: 3px;
       }
     </style>
   </head>
@@ -63,7 +62,7 @@
     <main>
       <strong>404</strong>
       <h1>这个页面不存在</h1>
-      <p>地址可能已经失效，也可能从未存在。返回 Dashy 首页继续使用微信公众号、今日头条内容创作工作台。</p>
+      <p>地址可能已变更，请从首页继续。</p>
       <a href="/">返回首页</a>
     </main>
   </body>

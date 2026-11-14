@@ -1,7 +1,7 @@
 .cs-root {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: var(--color-canvas);
   color: var(--color-ink);
@@ -57,9 +57,9 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 3px;
   padding: 3px;
-  border: 1px solid var(--color-hairline);
+  border: 1px solid var(--color-surface-strong);
   border-radius: var(--rounded-md);
-  background: var(--color-canvas);
+  background: var(--color-surface-card);
 }
 
 .cs-mode-switch button {
@@ -81,8 +81,8 @@
 }
 
 .cs-mode-switch button.active {
-  background: var(--color-brand-teal);
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
 }
 
 .cs-toolbar textarea {
@@ -103,7 +103,8 @@
 
 .cs-article-select {
   display: flex;
-  flex: 0 0 250px;
+  flex: 0 1 300px;
+  min-height: 44px;
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -258,11 +259,9 @@
 
 .cs-panel-title,
 .cs-property-heading {
-  color: var(--color-muted);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0;
-  text-transform: uppercase;
+  color: var(--color-ink);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .cs-add-grid {
@@ -320,8 +319,8 @@
 }
 
 .cs-layer-list button.active {
-  border-color: var(--color-brand-mint);
-  background: #eaf5f1;
+  border-color: var(--color-surface-strong);
+  background: var(--color-surface-card);
   color: var(--color-ink);
 }
 
@@ -365,10 +364,11 @@
   min-width: 0;
   overflow: auto;
   padding: 18px 28px 48px;
-  background-color: #e9e4d8;
+  /* 网格帮助对齐自由画板的元素，颜色只作用在画板外部。 */
+  background-color: var(--color-surface-card);
   background-image:
-    linear-gradient(#d8d1c3 1px, transparent 1px),
-    linear-gradient(90deg, #d8d1c3 1px, transparent 1px);
+    linear-gradient(var(--color-surface-strong) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-surface-strong) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
@@ -431,7 +431,7 @@
   width: min(100%, 660px);
   margin: 0 auto;
   overflow: hidden;
-  box-shadow: 0 14px 36px rgba(10, 10, 10, 0.16);
+  border: 1px solid var(--color-surface-strong);
 }
 
 .cs-inspector-tabs {
@@ -580,8 +580,8 @@
   border: 1px solid var(--color-hairline);
   border-radius: var(--rounded-sm);
   outline: none;
-  background: #151515;
-  color: #d8eadf;
+  background: var(--color-canvas);
+  color: var(--color-ink);
   font: 11px/1.6 Menlo, Monaco, Consolas, monospace;
 }
 
@@ -638,13 +638,20 @@
 }
 
 @media (max-width: 720px) {
-  .cs-root .ui-button {
-    width: 44px;
-    min-height: 44px;
-    padding: 0;
-    gap: 0;
-    font-size: 0;
+  .cs-root > .page-header {
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 64px;
+    padding-block: 10px;
+    gap: 8px;
   }
+
+  .cs-root > .page-header .page-header__identity { flex-basis: 100%; }
+  .cs-root > .page-header .page-header__actions { width: 100%; max-width: none; padding: 2px; scrollbar-width: thin; }
+  .cs-root > .page-header .ui-button,
+  .cs-edit-actions > .ui-button,
+  .cs-mode-switch > button { min-height: 44px; }
 
   .cs-tools {
     gap: 8px;
@@ -705,7 +712,6 @@
   font: inherit;
   font-size: 12px;
 }
-.cs-edit-hint,
 .cs-reading-caption {
   color: var(--color-muted);
   font-size: 12px;
@@ -760,18 +766,18 @@
 .cs-template-thumb > div { width: 375px; transform: scale(0.235); transform-origin: top left; pointer-events: none; }
 .cs-reading { flex: 1; min-height: 0; overflow: auto; padding: 24px; background: var(--color-surface-strong); }
 .cs-reading-caption { margin-bottom: 16px; text-align: center; }
-.cs-reading-paper { max-width: 100%; margin: 0 auto; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.08); }
+.cs-reading-paper { max-width: 100%; margin: 0 auto; outline: 1px solid var(--color-surface-strong); }
 .cs-reading .wbe-rendered-block,
 .cs-reading .wbe-section-item { cursor: default; }
 .cs-reading .wbe-rendered-block::after,
 .cs-reading .wbe-section-item::after { display: none; }
-.cs-empty { display: flex; flex: 1; align-items: center; justify-content: center; flex-direction: column; gap: 16px; color: var(--color-muted); }
-.cs-empty h2 { color: var(--color-ink); font-size: 22px; margin: 0; }
+.cs-empty { display: flex; flex: 1; align-items: center; justify-content: center; flex-direction: column; gap: 12px; min-height: 240px; padding: 24px; color: var(--color-muted); text-align: center; }
+.cs-empty h2 { color: var(--color-ink); font-size: 24px; font-weight: 500; margin: 0; }
 .cs-empty p { margin: 0; font-size: 14px; }
 .cs-root .wbe-stage-meta { flex-wrap: wrap; gap: 6px; }
-.cs-root .wbe-paper { box-shadow: 0 6px 28px rgba(0, 0, 0, 0.08); }
+.cs-root .wbe-paper { box-shadow: 0 0 0 1px var(--color-surface-strong); }
 @media (max-width: 1100px) {
-  .cs-template-intro, .cs-edit-hint { display: none; }
+  .cs-template-intro { display: none; }
   .cs-template-card small { display: none; }
   .cs-root .wbe-workspace { grid-template-columns: 170px minmax(280px, 1fr) 230px; }
   .cs-root .wbe-stage { padding: 16px 12px; }
@@ -812,7 +818,7 @@
 .cs-tools { display: flex; align-items: center; gap: 20px; position: relative; flex: 0 0 auto; padding: 0 20px; border-bottom: 1px solid var(--color-hairline); }
 .cs-tools-menu { border: 0; }
 .cs-tools-menu > .ui-collapse-trigger { padding: 8px 0; cursor: pointer; font-size: 12px; color: var(--color-body); }
-.cs-tools-popover { position: absolute; top: 100%; left: 12px; right: 12px; max-width: 1000px; z-index: 30; max-height: min(480px, 65vh); overflow: auto; padding: 12px; background: var(--color-canvas); border: 1px solid var(--color-hairline); border-radius: 8px; box-shadow: 0 8px 24px #0002; }
+.cs-tools-popover { position: absolute; top: 100%; left: 12px; right: 12px; max-width: 1000px; z-index: 30; max-height: min(480px, 65vh); overflow: auto; padding: 12px; background: var(--color-canvas); border: 1px solid var(--color-hairline); border-radius: 8px; box-shadow: 0 8px 20px rgb(10 26 26 / 8%); }
 .cs-tools .cs-material-shelf { margin: 0 0 8px; padding: 10px; }
 .cs-toolbar { padding: 8px 16px; }
 .cs-toolbar textarea { min-height: 38px; height: 38px; }

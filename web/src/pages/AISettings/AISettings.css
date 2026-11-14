@@ -10,14 +10,13 @@
   height: 100vh;
   overflow: hidden;
   background: var(--color-canvas, #fffaf0);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .as-save-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 36px;
+  height: 44px;
   padding: 0 18px;
   border: none;
   border-radius: 12px;
@@ -26,15 +25,11 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.12s, transform 0.1s;
+  transition: background 0.12s;
 }
 
 .as-save-btn:hover {
   background: var(--color-primary-active, #1f1f1f);
-}
-
-.as-save-btn:active {
-  transform: translateY(1px);
 }
 
 .as-save-btn--ok {
@@ -71,7 +66,7 @@
 }
 
 .as-content {
-  padding: 28px 24px 56px;
+  padding: 32px 24px 56px;
 }
 
 .as-tabs button, .as-subtabs button, .as-usage-btn, .as-text-button {
@@ -123,13 +118,19 @@
 }
 
 .as-overview-heading { justify-content: space-between; }
-.as-overview-heading .as-panel-title { margin: 0; }
+.as-overview-heading .as-panel-title { margin: 0; font-size: var(--type-page-title); font-weight: 500; }
 .as-text-button { color: var(--color-brand-teal); padding: 6px 0; }
 
+.as-overview-heading .as-text-button {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: var(--rounded-md);
+  background: var(--color-surface-card);
+  color: var(--color-ink);
+}
+
 .as-service-list {
-  border: 1px solid var(--color-hairline);
-  border-radius: 12px;
-  overflow: hidden;
+  border-block: 1px solid var(--color-surface-strong);
 }
 
 .as-service-row {
@@ -140,7 +141,7 @@
   gap: 14px;
   padding: 16px;
   border: 0;
-  background: var(--color-surface-soft);
+  background: var(--color-canvas);
   color: var(--color-ink);
   font: inherit;
   text-align: left;
@@ -935,6 +936,11 @@
   .as-save-btn { min-height: 40px; padding: 0 12px; }
   .as-service-row { gap: 8px; padding: 14px 10px; }
   .as-service-icon { width: 28px; }
+
+  .as-overview-heading {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
 
   .as-panel {
     min-width: 0;

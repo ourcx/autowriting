@@ -605,10 +605,9 @@ export default function CanvasStudio() {
     <div className="cs-root">
       <PageHeader
         title="公众号编辑器"
-        icon={mode === "svg" ? <Shapes size={16} /> : <PanelLeft size={16} />}
         subtitle={articleId
           ? `${articleData.title || "当前文章"} · ${sources.filter(source => source.kind !== "image").length} 个内容块 · ${sources.filter(source => source.kind === "image").length} 张图片`
-          : "选择文章，使用秀米排版"}
+          : undefined}
         onBack={() => navigate("/")}
         actions={(
           <>
@@ -641,7 +640,7 @@ export default function CanvasStudio() {
                   <Download size={14} />
                   SVG 源文件
                 </Button>
-                <Button variant="primary" onClick={downloadPng}>
+                <Button variant="secondary" onClick={downloadPng}>
                   <Image size={14} />
                   下载公众号长图
                 </Button>
@@ -661,15 +660,15 @@ export default function CanvasStudio() {
 
       <div className="cs-toolbar">
         <div className="cs-mode-switch" role="group" aria-label="排版模式">
-          <Button variant="plain" className={mode === "xiumi" ? "active" : ""} onClick={() => setMode("xiumi")}>
+          <Button variant="plain" className={mode === "xiumi" ? "active" : ""} aria-pressed={mode === "xiumi"} onClick={() => setMode("xiumi")}>
             <LayoutTemplate size={15} />
             秀米排版
           </Button>
-          <Button variant="plain" className={mode === "blocks" ? "active" : ""} onClick={() => setMode("blocks")}>
+          <Button variant="plain" className={mode === "blocks" ? "active" : ""} aria-pressed={mode === "blocks"} onClick={() => setMode("blocks")}>
             <PanelLeft size={15} />
             旧版排版
           </Button>
-          <Button variant="plain" className={mode === "svg" ? "active" : ""} onClick={() => setMode("svg")}>
+          <Button variant="plain" className={mode === "svg" ? "active" : ""} aria-pressed={mode === "svg"} onClick={() => setMode("svg")}>
             <Shapes size={15} />
             自由画板
           </Button>
@@ -736,7 +735,7 @@ export default function CanvasStudio() {
 
       {mode === "xiumi" ? (
         articleLoading || (articleId && loadedArticleId !== articleId) ? <div className="cs-empty">正在加载文章…</div>
-          : !articleId ? <div className="cs-empty"><FileText size={32} /><p>选择一篇文章，开始秀米排版。</p></div>
+          : !articleId ? <div className="cs-empty"><h2>选择文章开始排版</h2><p>在上方选择一篇已有文章，打开秀米编辑器。</p></div>
           : <XiumiEditor key={articleId} articleId={articleId} article={articleData.article} title={articleData.title} pushing={pushing}
             onPush={async html => {
               setPushing(true)
@@ -761,7 +760,6 @@ export default function CanvasStudio() {
               }}><LayoutTemplate size={14} />应用模板</Button>
               <Button variant="secondary" title="撤销" aria-label="撤销" disabled={!canUndo || articleLoading} onClick={undo}><Undo2 size={15} /></Button>
               <Button variant="secondary" title="重做" aria-label="重做" disabled={!canRedo || articleLoading} onClick={redo}><Redo2 size={15} /></Button>
-              <span className="cs-edit-hint">打开「主题与模板」选择风格，点击应用后可继续编辑</span>
             </div>
             <div className="cs-edit-actions">
               <Smartphone size={15} />
@@ -774,7 +772,7 @@ export default function CanvasStudio() {
             </div>
           </div>
           {articleLoading ? <div className="cs-empty">正在加载文章…</div> : !sources.length ? (
-            <div className="cs-empty"><FileText size={32} /><h2>让内容，成为一篇好看的文章</h2><p>选择一篇已有文章，或先使用 AI 完成正文，再来设计排版。</p><Button variant="secondary" onClick={() => navigate("/")}>去写文章</Button></div>
+            <div className="cs-empty"><h2>选择一篇有正文的文章</h2><Button variant="secondary" onClick={() => navigate("/")}>返回工作台</Button></div>
           ) : reading ? (
             <section className="cs-reading">
               <div className="cs-reading-caption">阅读预览 · {previewWidth}px · 样式已自动保存在本机</div>

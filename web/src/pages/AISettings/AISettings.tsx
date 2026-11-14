@@ -233,7 +233,7 @@ export default function AISettings() {
           {activeSection === 'overview' && (
             <section className="as-panel">
               <div className="as-overview-heading">
-                <h2 className="as-panel-title">创作服务</h2>
+                <h1 className="as-panel-title">创作服务</h1>
                 <Button variant="plain" className="as-text-button" onClick={() => setActiveSection('quickstart')}><Sparkles size={15} /> 快速配置</Button>
               </div>
               <div className="as-service-list">
@@ -246,7 +246,6 @@ export default function AISettings() {
                   </Button>
                 ))}
               </div>
-              <p className="as-hint">文章 Agent 会用联网服务搜索资料和核查来源。浏览器里的封面 Key 在对应服务设置中管理。</p>
             </section>
           )}
 
