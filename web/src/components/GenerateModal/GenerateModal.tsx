@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { AlertCircle, CheckCircle, Copy, ExternalLink, FileText, RefreshCw, Square, X, Zap } from "lucide-react"
+import { Activity, AlertCircle, CheckCircle, Copy, ExternalLink, FileText, RefreshCw, Square, X, Zap } from "lucide-react"
 import {
   createGenerationCandidates, extractErrorMessage, fetchGenerationCandidates,
   streamGenerationCandidate,
 } from "../../utils/apiHelpers"
 import type { CandidatePlatform, CandidateTarget, GenerationCandidate } from "../../../shared/generationCandidate"
+import CandidateTrajectory from "./CandidateTrajectory"
 import "./GenerateModal.css"
 
 interface Props {
@@ -25,7 +26,8 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
   const [count, setCount] = useState(1)
   const [rows, setRows] = useState<GenerationCandidate[]>([])
   const [activeId, setActiveId] = useState("")
-  const [comparing, setComparing] = useState(false)
+  const [view, setView] = useState<"draft" | "trace" | "compare">("draft")
+  const comparing = view === "compare"
   const [creating, setCreating] = useState(false)
   const [applying, setApplying] = useState(false)
   const [error, setError] = useState("")
@@ -96,11 +98,25 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
           setRows(previous => previous.map(row => row.id === candidate.id
             ? { ...row, content: row.content + event.text, firstChunkAt: row.firstChunkAt || new Date().toISOString(), message: "正在写作" } : row))
         }
+        if (event.step && mounted.current) {
+          const step = event.step
+          setRows(previous => previous.map(row => {
+            if (row.id !== candidate.id) return row
+            const trace = row.trace || []
+            return { ...row, trace: trace.some(item => item.id === step.id)
+              ? trace.map(item => item.id === step.id ? step : item) : [...trace.slice(-39), step] }
+          }))
+        }
         if (event.event === "status" && event.message) update(candidate.id, { message: event.message })
         if (event.event === "error") update(candidate.id, { status: "interrupted", message: event.message || "生成中断" })
       })
     } catch (cause) {
-      update(candidate.id, { status: "interrupted", finishedAt: new Date().toISOString(), message: controller.signal.aborted ? "已停止，可继续生成" : extractErrorMessage(cause) })
+      const finishedAt = new Date().toISOString()
+      const message = controller.signal.aborted ? "已停止，可继续生成" : extractErrorMessage(cause)
+      if (mounted.current) setRows(previous => previous.map(row => row.id === candidate.id ? {
+        ...row, status: "interrupted", finishedAt, message,
+        trace: row.trace?.map(step => step.status === "running" ? { ...step, status: "interrupted" } : step),
+      } : row))
     } finally { controllers.current.delete(candidate.id) }
     return completed
   }
@@ -118,6 +134,7 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
       if (stopped.current || !mounted.current) return
       setRows(previous => [...created, ...previous])
       setActiveId(created[0].id)
+      setView("trace")
       await Promise.all(created.map(candidate => run(candidate)))
     } catch (cause) { if (mounted.current) setError(extractErrorMessage(cause)) }
     finally {
@@ -180,13 +197,15 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
           {busy ? "生成中" : platform === "both" ? "生成双平台版本" : `生成${platform === "wechat" ? "公众号母稿" : "今日头条版本"}`}
         </button>
       </div>
-      <p className="gc-cost">自动查找历史文章和表达样本，按需搜索网页、核对来源，再拟提纲和成文。会发起多次模型请求，联网搜索和读取网页可能另行计费。</p>
+      <p className="gc-cost">先查历史文章和公开网页，再核对原文、拟提纲、写正文。模型请求和联网工具可能分别计费。</p>
       {error && <div className="gc-error" role="alert"><AlertCircle size={16} />{error}</div>}
       <div className="gc-toolbar">
         <span>{busy ? "候选稿生成中" : loading ? "正在读取候选稿" : "候选稿"}</span>
         <div>
           <button className="gm-btn-secondary" disabled={busy || loading} onClick={() => void reload()} title="刷新候选稿"><RefreshCw size={14} /></button>
-          <button className="gm-btn-secondary" aria-pressed={comparing} onClick={() => setComparing(value => !value)}>对比全文</button>
+          <button className="gm-btn-secondary" aria-pressed={view === "draft"} onClick={() => setView("draft")}>正文</button>
+          <button className="gm-btn-secondary" aria-pressed={view === "trace"} onClick={() => setView("trace")}><Activity size={14} />生成轨迹</button>
+          <button className="gm-btn-secondary" aria-pressed={comparing} onClick={() => setView(comparing ? "draft" : "compare")}>对比全文</button>
           {busy && <button className="gm-btn-secondary" onClick={stop}><Square size={12} />停止生成</button>}
         </div>
       </div>
@@ -199,7 +218,17 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
           </button>)}
         </nav>
         <div className="gc-drafts">
-          {(comparing ? rows.filter(row => row.batchId === active?.batchId) : active ? [active] : []).map(row => <article className="gc-draft" key={row.id}>
+          {view === "trace" && active && <div className="gc-trace-draft">
+            <CandidateTrajectory key={active.id} candidate={active} now={now} />
+            {active.status !== "generating" && <div className="gc-trace-actions">
+              {active.status === "complete" ? <button className="gm-btn-primary" onClick={() => setView("draft")}>
+                <FileText size={14} />查看正文
+              </button> : <button className="gm-btn-secondary" disabled={busy || applying} onClick={() => { stopped.current = false; void run(active) }}>
+                <RefreshCw size={14} />{active.content ? "继续生成" : "重试生成"}
+              </button>}
+            </div>}
+          </div>}
+          {view !== "trace" && (comparing ? rows.filter(row => row.batchId === active?.batchId) : active ? [active] : []).map(row => <article className="gc-draft" key={row.id}>
             <header><strong>{row.label}</strong><span>{STATUS[row.status]}</span>
               <button className="gm-icon-btn" title="复制正文" aria-label={`复制${row.label}`} disabled={!row.content} onClick={() => void copy(row.content)}><Copy size={15} /></button>
             </header>

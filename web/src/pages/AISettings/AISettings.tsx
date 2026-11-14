@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react'
-// @ts-ignore
 import { useNavigate } from 'react-router-dom'
 import {
   Save, Check, Eye, EyeOff, AlertCircle, CheckCircle2,
-  Zap, Image, Search, ChevronRight, ShieldAlert,
-  ExternalLink, Layers, Sparkles, ArrowRight,
+  Zap, Image, Search, ChevronRight,
+  ExternalLink, Sparkles, ArrowRight,
 } from 'lucide-react'
 import {
   AIConfig,
@@ -18,17 +17,25 @@ import { useConfigStore, setLocalConfig, fetchServerStatus } from '../../store/u
 import { testAIConnection } from '../../utils/apiHelpers'
 import './AISettings.css'
 
-type Section = 'quickstart' | 'providers' | 'article' | 'cover' | 'search' | 'advanced' | 'cdn'
+type Section = 'overview' | 'quickstart' | 'providers' | 'article' | 'cover' | 'search' | 'advanced' | 'cdn'
 
-const NAV_ITEMS: { id: Section; icon: React.ReactNode; label: string; sub: string }[] = [
-  { id: 'quickstart', icon: <Sparkles size={16} />, label: '快速开始', sub: '一个 Key 先跑起来' },
-  { id: 'providers', icon: <ShieldAlert size={16} />, label: '公共 Key', sub: '按服务商统一复用' },
-  { id: 'article', icon: <Zap size={16} />, label: '文章生成', sub: '大语言模型 API' },
-  { id: 'cover', icon: <Image size={16} />, label: '封面生成', sub: '图片生成 API' },
-  { id: 'search', icon: <Search size={16} />, label: '素材搜索', sub: '搜索引擎 API' },
-  { id: 'advanced', icon: <Layers size={16} />, label: '智谱高级服务', sub: '知识库与模型管理' },
-  { id: 'cdn', icon: <Image size={16} />, label: '图床配置', sub: 'Imgur 图片 CDN' },
-]
+const WORKFLOW_TABS = [
+  { id: 'overview', label: '概览' },
+  { id: 'article', label: '文章' },
+  { id: 'search', label: '联网' },
+  { id: 'cover', label: '封面' },
+  { id: 'providers', label: '更多' },
+] as const
+
+const MORE_TABS = [
+  { id: 'providers', label: '公共 Key' },
+  { id: 'advanced', label: '智谱与知识库' },
+  { id: 'cdn', label: '图片存储' },
+] as const
+
+const SEARCH_LABELS: Record<AIConfig['searchProvider'], string> = {
+  deepseek: 'DeepSeek', zhipu: '智谱', searxng: 'SearXNG', serper: 'Serper', bing: 'Bing',
+}
 
 export default function AISettings() {
   const navigate = useNavigate()
@@ -40,7 +47,7 @@ export default function AISettings() {
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({})
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
-  const [activeSection, setActiveSection] = useState<Section>('quickstart')
+  const [activeSection, setActiveSection] = useState<Section>('overview')
 
   useEffect(() => {
     setConfig(loadAIConfig())
@@ -121,152 +128,98 @@ export default function AISettings() {
     || (config.coverProvider === 'doubao' && Boolean(config.doubaoApiKey && config.doubaoModel))
     || (['siliconflow', 'z-image', 'qwen-edit'].includes(config.coverProvider) && Boolean(config.siliconflowApiKey))
     || (['openai', 'stability'].includes(config.coverProvider) && Boolean(config.coverApiKey))
-  const localSearchKey = config.searchProvider === 'searxng'
-    || (config.searchProvider === 'zhipu' ? !!(config.searchApiKey || config.zhipuApiKey || config.glmApiKey || config.articleApiKey) : config.searchProvider !== 'deepseek' && !!config.searchApiKey)
-  const localCdn = (config.cdnProvider === 'imgur' && !!config.imgurClientId)
-    || (config.cdnProvider === 'github' && !!config.githubToken && !!config.githubRepo)
+  const sharedZhipuReady = Boolean(config.zhipuApiKey || serverStatus?.zhipuReady)
+  const searchKeyReady = Boolean(config.searchApiKey)
+  const searchUsesFallback = config.searchProvider === 'serper' && !searchKeyReady
+  const searchUsesDeepSeek = searchUsesFallback && deepseekReady
+  const searchUsesZhipu = searchUsesFallback && !searchUsesDeepSeek && (sharedZhipuReady || config.glmApiKey || (config.articleProvider === 'zhipu' && config.articleApiKey))
+  const searchReady = config.searchProvider === 'searxng'
+    || (config.searchProvider === 'deepseek' && deepseekReady)
+    || (config.searchProvider === 'serper' && searchKeyReady)
+    || (config.searchProvider === 'zhipu' && Boolean(searchKeyReady || sharedZhipuReady || config.glmApiKey || (config.articleProvider === 'zhipu' && config.articleApiKey)))
   const recommendedApplied = config.articleProvider === 'zhipu'
     && config.coverProvider === 'zhipu'
     && config.searchProvider === 'zhipu'
-  const recommendedReady = recommendedApplied && Boolean(config.zhipuApiKey || serverStatus?.zhipuReady)
-
-  const STATUS_CARDS = [
+  const recommendedReady = recommendedApplied && sharedZhipuReady
+  const coverName = COVER_PROVIDER_PRESETS.find(p => p.id === config.coverProvider)?.name
+  const more = MORE_TABS.some(tab => tab.id === activeSection)
+  const tabId = more ? 'providers' : activeSection === 'quickstart' ? 'overview' : activeSection
+  const services = [
     {
-      label: '文章生成',
-      local: localArticleReady,
-      server: deepseekSelected ? deepseekReady : !!serverStatus?.articleReady,
-      serverNote: '服务端',
-      color: 'teal',
-      section: 'article' as Section,
+      id: 'article', icon: <Zap size={18} />, name: '文章模型',
+      detail: [selectedArticlePreset?.name, config.articleModel].filter(Boolean).join(' · '),
+      status: localArticleReady ? '浏览器已配置' : (deepseekSelected ? deepseekReady : serverStatus?.articleReady) ? '服务端已配置' : '待配置',
     },
     {
-      label: '封面生成',
-      local: localCoverReady,
-      server: config.coverProvider === 'openrouter' ? false : !!serverStatus?.coverReady,
-      serverNote: '服务端',
-      color: 'lavender',
-      section: 'cover' as Section,
+      id: 'search', icon: <Search size={18} />, name: '联网与来源核查',
+      detail: searchUsesDeepSeek ? 'DeepSeek' : searchUsesZhipu ? '智谱' : searchUsesFallback ? 'Serper / SearXNG' : SEARCH_LABELS[config.searchProvider],
+      status: searchUsesDeepSeek ? '服务端已配置' : searchUsesZhipu || searchReady ? '已配置' : searchUsesFallback ? '将尝试备用搜索' : '待配置',
     },
     {
-      label: '素材搜索',
-      local: localSearchKey,
-      server: config.searchProvider === 'deepseek' && deepseekReady,
-      serverNote: '服务端',
-      color: 'mint',
-      section: 'search' as Section,
+      id: 'cover', icon: <Image size={18} />, name: '封面生成',
+      detail: coverName,
+      status: config.coverProvider === 'local' ? '本地生成' : localCoverReady ? '浏览器已配置'
+        : config.coverProvider === serverStatus?.coverProvider && serverStatus.coverReady ? '服务端已配置' : '待配置',
     },
-    {
-      label: '图床',
-      local: localCdn,
-      server: false,
-      serverNote: '',
-      color: 'lavender',
-      section: 'cdn' as Section,
-    },
-  ]
+  ] as const
 
   return (
     <div className="as-root">
       <PageHeader
         title="AI 配置"
-        subtitle="先用推荐方案开始，需要时再调整"
         onBack={() => navigate(-1)}
         actions={(
-          <button className={`as-save-btn${saved ? ' as-save-btn--ok' : ''}`} onClick={handleSave}>
-            {saved ? <Check size={14} /> : <Save size={14} />}
-            {saved ? '已保存' : '保存'}
-          </button>
+          <div className="as-header-actions">
+            <button className="as-usage-btn" onClick={() => navigate('/token-usage')}>Token 用量</button>
+            <button className={`as-save-btn${saved ? ' as-save-btn--ok' : ''}`} onClick={handleSave}>
+              {saved ? <Check size={14} /> : <Save size={14} />}
+              {saved ? '已保存' : '保存'}
+            </button>
+          </div>
         )}
       />
 
-      {/* ── 安全提示 Banner ── */}
-      <div className="as-security-banner">
-        <ShieldAlert size={14} className="as-security-banner-icon" />
-        <span>
-          OpenRouter Key 仅保存在<strong>当前浏览器</strong>，GPT Image 2 由浏览器直接请求 OpenRouter。其他服务商配置会同步到服务端供定时任务使用。
-        </span>
-      </div>
-
       <div className="as-layout">
-
-        {/* ── 左侧导航 ── */}
-        <aside className="as-sidebar">
-
-          {/* 配置状态总览 */}
-          <div className="as-status-block">
-            <div className="as-status-label">配置状态</div>
-            <div className="as-status-grid">
-              {STATUS_CARDS.map(card => {
-                const ok = card.local || card.server
-                const source = card.local ? '本地' : card.server ? card.serverNote : null
-                return (
-                  <button
-                    key={card.label}
-                    className={`as-status-card as-status-card--${card.color}${ok ? ' as-status-card--ok' : ''}`}
-                    onClick={() => setActiveSection(card.section)}
-                    title={`前往配置 ${card.label}`}
-                  >
-                    <div className="as-status-card-top">
-                      {ok
-                        ? <CheckCircle2 size={13} className="as-sc-icon as-sc-icon--ok" />
-                        : <AlertCircle size={13} className="as-sc-icon as-sc-icon--off" />
-                      }
-                      <span className="as-status-card-name">{card.label}</span>
-                    </div>
-                    <div className="as-status-card-src">
-                      {ok ? source : '未配置'}
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-            <p className="as-status-legend">
-              <span className="as-legend-dot as-legend-dot--local" />本地 = 浏览器存储
-              <span className="as-legend-dot as-legend-dot--server" style={{ marginLeft: 8 }} />服务端 = .env
-            </p>
-          </div>
-
-          {/* 功能导航 */}
-          <nav className="as-nav">
-            {NAV_ITEMS.map(item => (
-              <button
-                key={item.id}
-                className={`as-nav-item${activeSection === item.id ? ' as-nav-item--active' : ''}`}
-                onClick={() => setActiveSection(item.id)}
-              >
-                <span className="as-nav-icon">{item.icon}</span>
-                <span className="as-nav-text">
-                  <span className="as-nav-label">{item.label}</span>
-                  <span className="as-nav-sub">{item.sub}</span>
-                </span>
-                <ChevronRight size={14} className="as-nav-arrow" />
-              </button>
-            ))}
-
-            {/* Token 用量统计入口 */}
-            <button
-              className="as-nav-item"
-              onClick={() => navigate('/token-usage')}
-            >
-              <span className="as-nav-icon">⚡</span>
-              <span className="as-nav-text">
-                <span className="as-nav-label">Token 用量</span>
-                <span className="as-nav-sub">消耗统计与费用估算</span>
-              </span>
-              <ChevronRight size={14} className="as-nav-arrow" />
-            </button>
-          </nav>
-        </aside>
-
-        {/* ── 右侧内容 ── */}
+        <nav className="as-tabs" aria-label="AI 配置分类">
+          {WORKFLOW_TABS.map(tab => (
+            <button type="button" key={tab.id} aria-pressed={tabId === tab.id} onClick={() => setActiveSection(tab.id)}>{tab.label}</button>
+          ))}
+        </nav>
         <main className="as-content">
+          {activeSection === 'overview' && (
+            <section className="as-panel">
+              <div className="as-overview-heading">
+                <h2 className="as-panel-title">创作服务</h2>
+                <button className="as-text-button" onClick={() => setActiveSection('quickstart')}><Sparkles size={15} /> 快速配置</button>
+              </div>
+              <div className="as-service-list">
+                {services.map(service => (
+                  <button type="button" className="as-service-row" key={service.id} onClick={() => setActiveSection(service.id)}>
+                    <span className="as-service-icon">{service.icon}</span>
+                    <span className="as-service-copy"><strong>{service.name}</strong><span>{service.detail}</span></span>
+                    <span className="as-service-status" data-ready={service.status !== '待配置'}>{service.status}</span>
+                    <ChevronRight size={16} aria-hidden="true" />
+                  </button>
+                ))}
+              </div>
+              <p className="as-hint">文章 Agent 会用联网服务搜索资料和核查来源。浏览器里的封面 Key 在对应服务设置中管理。</p>
+            </section>
+          )}
+
+          {more && (
+            <nav className="as-subtabs" aria-label="更多 AI 设置">
+              {MORE_TABS.map(tab => (
+                <button type="button" key={tab.id} aria-pressed={activeSection === tab.id} onClick={() => setActiveSection(tab.id)}>{tab.label}</button>
+              ))}
+            </nav>
+          )}
 
           {/* ════ 快速开始 ════ */}
           {activeSection === 'quickstart' && (
             <div className="as-panel">
               <div className="as-panel-header">
-                <h2 className="as-panel-title">先配置一套能用的</h2>
-                <p className="as-panel-desc">不需要把所有服务都配完。推荐方案只填一个 Key，就能写文章、生成封面和搜索素材。</p>
+                <button className="as-text-button" onClick={() => setActiveSection('overview')}>返回概览</button>
+                <h2 className="as-panel-title">快速配置</h2>
               </div>
 
               <div className="as-card as-quick-card">
@@ -392,7 +345,7 @@ export default function AISettings() {
                   <span className="as-card-tag as-card-tag--teal">文章 · GLM-Image · 搜索 · 向量</span>
                 </div>
                 <p className="as-card-desc">
-                  这里填写一次，智谱文章模型、GLM-Image、Web Search 和 Embedding 默认复用。其他服务商的工具不会读取这个 Key。
+                  智谱文章模型、GLM-Image、网页搜索和向量检索复用这个 Key。保存后同步到服务端供定时任务使用。
                 </p>
                 <div className="as-field">
                   <label className="as-label">智谱公共 API Key</label>
@@ -457,14 +410,6 @@ export default function AISettings() {
                     </a>
                   ))}
                 </div>
-              </div>
-              <div className="as-card as-card--hint">
-                <div className="as-card-section-label">为什么 Batch 不替代当前生成按钮</div>
-                <ul className="as-memory-tips">
-                  <li>当前文章、封面和改写流程需要即时返回，继续使用实时 API。</li>
-                  <li>智谱 Batch 只适合无需立即查看结果的海量任务，并通过 JSONL 文件异步提交。</li>
-                  <li>模型部署、微调和评测涉及算力、训练数据及费用，不由应用自动创建或取消。</li>
-                </ul>
               </div>
             </div>
           )}
@@ -826,8 +771,8 @@ export default function AISettings() {
           {activeSection === 'search' && (
             <div className="as-panel">
               <div className="as-panel-header">
-                <h2 className="as-panel-title">素材搜索</h2>
-                <p className="as-panel-desc">配置后可在素材采集面板按关键词搜索网页，搜索结果可一键读取全文</p>
+                <h2 className="as-panel-title">联网与来源核查</h2>
+                <p className="as-panel-desc">文章 Agent 和素材采集共用搜索服务。生成时会尝试搜索选题，再打开来源核查日期和正文。</p>
               </div>
 
               <div className="as-card">

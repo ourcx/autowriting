@@ -516,7 +516,7 @@ export async function streamGenerationCandidate(
     const event = block.match(/^event:\s*(.+)$/m)?.[1]?.trim()
     const data = block.split("\n").filter(line => line.startsWith("data:")).map(line => line.slice(5).trim()).join("\n")
     if (!event || !data) return
-    if (!["candidate", "chunk", "status", "done", "error"].includes(event)) return
+    if (!["candidate", "chunk", "status", "trace", "done", "error"].includes(event)) return
     const payload = JSON.parse(data) as Omit<CandidateEvent, "event">
     onEvent({ ...payload, event: event as CandidateEvent["event"] })
     if (event === "done" || event === "error") terminal = true

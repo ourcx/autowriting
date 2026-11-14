@@ -49,6 +49,14 @@ export function readCandidate(userId: string, articleId: string, id: string): St
   return JSON.parse(fs.readFileSync(target, "utf8")) as StoredCandidate
 }
 
+export function interruptCandidateTrace(candidate: GenerationCandidate, finishedAt?: string): void {
+  for (const step of candidate.trace || []) {
+    if (step.status !== "running") continue
+    step.status = "interrupted"
+    step.finishedAt = finishedAt
+  }
+}
+
 export function listCandidates(userId: string, articleId: string): GenerationCandidate[] {
   const dir = directory(userId, articleId)
   if (!fs.existsSync(dir)) return []
@@ -59,6 +67,8 @@ export function listCandidates(userId: string, articleId: string): GenerationCan
       stored.status = "interrupted"
       stored.message = "上次生成已中断，可以继续生成"
       stored.finishedAt = stored.updatedAt
+      // 进程退出的准确时刻不可知，保留开始时间，不把上次保存时间当作耗时。
+      interruptCandidateTrace(stored)
       saveCandidate(userId, articleId, stored)
     }
     return publicCandidate(stored)

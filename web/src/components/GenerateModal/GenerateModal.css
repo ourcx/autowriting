@@ -938,3 +938,14 @@
 .gc-evidence summary {
   cursor: pointer;
 }
+
+.gc-toolbar > div { flex-wrap: wrap; justify-content: flex-end; }
+.gc-toolbar button[aria-pressed="true"] { background: var(--color-surface-strong); color: var(--color-brand-teal); border-color: var(--color-brand-teal); }
+.gc-trace-draft { flex: 1; min-width: 0; }
+.gc-trace-actions { padding: 0 20px 18px; }
+@media (max-width: 540px) {
+  .gc-toolbar { align-items: flex-start; gap: 5px; }
+  .gc-toolbar > span { display: none; }
+  .gc-toolbar > div { justify-content: flex-start; gap: 4px; }
+  .gc-toolbar button { padding-inline: 7px; }
+}

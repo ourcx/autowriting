@@ -9,6 +9,28 @@ export interface CandidateResearchSource {
   read: boolean
 }
 
+export type CandidateTraceStatus = "running" | "done" | "failed" | "skipped" | "interrupted"
+
+export interface CandidateTraceSource {
+  title: string
+  url?: string
+  articleId?: string
+  publishedAt?: string
+}
+
+export interface CandidateTraceStep {
+  id: string
+  attempt: number
+  title: string
+  kind: "context" | "history" | "decision" | "search" | "read" | "find" | "outline" | "write"
+  status: CandidateTraceStatus
+  startedAt: string
+  finishedAt?: string
+  input?: string
+  output?: string
+  sources?: CandidateTraceSource[]
+}
+
 export interface GenerationCandidate {
   id: string
   batchId: string
@@ -26,6 +48,7 @@ export interface GenerationCandidate {
   pairId?: string
   referenceArticleIds?: string[]
   researchSources?: CandidateResearchSource[]
+  trace?: CandidateTraceStep[]
 }
 
 export interface CandidateInput {
@@ -42,8 +65,9 @@ export interface CandidateInput {
 }
 
 export interface CandidateEvent {
-  event: "candidate" | "chunk" | "status" | "done" | "error"
+  event: "candidate" | "chunk" | "status" | "trace" | "done" | "error"
   candidate?: GenerationCandidate
+  step?: CandidateTraceStep
   text?: string
   message?: string
 }

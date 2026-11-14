@@ -59,10 +59,17 @@ try {
       row.status = id === 'candidate-1' && firstTry ? 'interrupted' : 'complete'
       row.referenceArticleIds = ['20260901-campus', '20260820-career']
       row.researchSources = [{ title: '校方公告', url: 'https://example.com/notice', read: true }]
+      const startedAt = new Date().toISOString()
+      const step = {
+        id: firstTry ? '1-1' : '2-1', attempt: firstTry ? 1 : 2, kind: 'search', title: '搜索公开网页',
+        status: 'done', startedAt, finishedAt: startedAt, input: '校舍建设 官方公告', output: '返回 1 条结果',
+        sources: row.researchSources,
+      }
+      row.trace = [...(row.trace || []), step]
       row.message = row.status === 'complete' ? '生成完成' : '输出达到模型长度上限，可继续生成'
       active--
       // A final SSE event without a newline must still be consumed by the browser.
-      return route.fulfill({ contentType: 'text/event-stream', body: `event: ${row.status === 'complete' ? 'done' : 'error'}\ndata: ${JSON.stringify({ candidate: row, message: row.message })}` })
+      return route.fulfill({ contentType: 'text/event-stream', body: `event: trace\ndata: ${JSON.stringify({ step })}\n\nevent: ${row.status === 'complete' ? 'done' : 'error'}\ndata: ${JSON.stringify({ candidate: row, message: row.message })}` })
     }
     if (pathname === '/api/articles/fixture') {
       if (request.method() === 'POST') {
@@ -93,7 +100,7 @@ try {
   await page.getByRole('button', { name: '继续生成候选稿', exact: true }).click()
   await page.getByRole('dialog', { name: '生成候选稿' }).waitFor()
   assert.equal(await page.getByRole('button', { name: '公众号 + 今日头条', exact: true }).isVisible(), true)
-  await page.getByText(/自动查找历史文章和表达样本/).waitFor()
+  await page.getByText(/先查历史文章和公开网页/).waitFor()
   assert.equal(await page.getByRole('button', { name: '检索往期文章' }).count(), 0)
   await page.getByRole('group', { name: '候选数量' }).getByRole('button', { name: '3', exact: true }).click()
   await page.getByRole('button', { name: '生成公众号母稿', exact: true }).click()
@@ -102,6 +109,11 @@ try {
   assert.equal(calls.length, 3)
   assert.equal(generatedInput.writingAgent, true)
   assert.deepEqual(generatedInput.referenceArticleIds, [])
+  const tracePanel = page.getByRole('region', { name: '生成轨迹' })
+  await tracePanel.waitFor()
+  assert.equal(await tracePanel.getByText('校舍建设 官方公告', { exact: true }).isVisible(), true)
+  assert.equal(await tracePanel.getByRole('link', { name: '校方公告' }).getAttribute('href'), 'https://example.com/notice')
+  await page.getByRole('button', { name: '正文', exact: true }).click()
   await page.getByText('本次参考了 2 篇历史文章，读了 1 个网页', { exact: true }).click()
   await page.getByRole('link', { name: '校方公告' }).waitFor()
   assert.equal(article, '# 原有正文\n\n原文不应被候选稿替换。')
@@ -125,9 +137,13 @@ try {
   assert.equal(calls.length, 4, 'reopening must not regenerate completed candidates')
   await page.setViewportSize({ width: 390, height: 844 })
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
+  await page.getByRole('button', { name: '生成轨迹', exact: true }).click()
+  await tracePanel.getByText('校舍建设 官方公告', { exact: true }).waitFor()
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
   await page.screenshot({ path: join(screenshots, 'candidates-mobile.png'), fullPage: true })
   prematureEof = true
   await page.getByRole('button', { name: '生成公众号母稿', exact: true }).click()
+  await page.getByRole('button', { name: '正文', exact: true }).click()
   await page.getByText('生成连接中断，已收到的内容仍保留，请重新加载或继续生成', { exact: true }).waitFor()
   await page.getByText('这是断线前已收到的正文', { exact: true }).waitFor()
   assert.equal(await page.getByRole('button', { name: '选用此稿', exact: true }).isDisabled(), true)
@@ -142,6 +158,7 @@ try {
   await page.getByText('2 篇已完成', { exact: true }).waitFor()
   assert.deepEqual(calls.slice(pairedCallStart), ['pair-0-wechat', 'pair-0-toutiao'])
   assert.equal(maxActive, 2, '公众号与头条候选稿应同时生成')
+  await page.getByRole('button', { name: '正文', exact: true }).click()
   await page.getByRole('button', { name: '选用这一组', exact: true }).first().click()
   await page.getByRole('dialog').waitFor({ state: 'hidden' })
   assert.match(article, /方案 1 · 公众号标题/)
@@ -152,6 +169,22 @@ try {
   }
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
   await page.screenshot({ path: join(screenshots, 'editor-flow-mobile.png'), fullPage: true })
+  await page.goto(`${base}/settings`)
+  const settings = page.getByRole('navigation', { name: 'AI 配置分类' })
+  await settings.getByRole('button', { name: '概览', exact: true }).waitFor()
+  assert.equal(await page.locator('.as-service-row').count(), 3)
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
+  await page.getByRole('button', { name: '快速配置', exact: true }).click()
+  await page.getByRole('heading', { name: '快速配置', exact: true }).waitFor()
+  await settings.getByRole('button', { name: '联网', exact: true }).click()
+  await page.getByRole('heading', { name: '联网与来源核查', exact: true }).waitFor()
+  await settings.getByRole('button', { name: '更多', exact: true }).click()
+  await page.getByRole('button', { name: '图片存储', exact: true }).click()
+  await page.getByRole('heading', { name: '图床配置', exact: true }).waitFor()
+  await page.setViewportSize({ width: 1440, height: 960 })
+  await settings.getByRole('button', { name: '概览', exact: true }).click()
+  await page.getByRole('button', { name: /^文章模型/ }).click()
+  await page.getByRole('heading', { name: '文章生成', exact: true }).waitFor()
   assert.deepEqual(errors, [])
   console.log('Candidate concurrency, automatic research references, compare, recovery, apply failure, reopen and mobile passed.')
 } finally { await browser.close(); await rm(screenshots, { recursive: true, force: true }) }

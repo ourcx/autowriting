@@ -3,7 +3,8 @@ import type { Response } from "express"
 import { SERVER_AI_CONFIG } from "../config.ts"
 import { getEffectivePrompt, recordTokenUsage } from "../db.ts"
 import { stripEmoji } from "../../shared/contentProduction.ts"
-import { acquireCandidate, CandidateError, publicCandidate, readCandidate, saveCandidate } from "../generationCandidates.ts"
+import { acquireCandidate, CandidateError, interruptCandidateTrace, publicCandidate, readCandidate, saveCandidate } from "../generationCandidates.ts"
+import type { CandidateTraceStep } from "../../shared/generationCandidate.ts"
 import { createArticleModel } from "./public.ts"
 import { consumeOpenAiContentStream } from "./openAiStream.ts"
 import { startSseHeartbeat } from "../sseHeartbeat.ts"
@@ -11,7 +12,7 @@ import { logger } from "../logger.ts"
 import type { AIConfig } from "../types.ts"
 import { buildWritingContext } from "../writingContext.ts"
 import { hasArticleApiKey } from "./providerKeys.ts"
-import { prepareArticleWriting } from "../articleWritingAgent.ts"
+import { prepareArticleWriting, type StartWritingStep } from "../articleWritingAgent.ts"
 import { buildCandidateSearchQuery, findWritingExamples } from "../rag.ts"
 import { createWritingWebResearch } from "../writingResearch.ts"
 import { nowDay } from "./date.ts"
@@ -37,6 +38,26 @@ export async function streamCandidate(userId: string, articleId: string, id: str
     saveCandidate(userId, articleId, candidate)
     lastSaved = Date.now()
   }
+  const priorTrace = candidate.trace || []
+  const attempt = (priorTrace[priorTrace.length - 1]?.attempt || 0) + 1
+  let sequence = 0
+  const startStep: StartWritingStep = (kind, title, input) => {
+    const step: CandidateTraceStep = {
+      id: `${attempt}-${++sequence}`, attempt, kind, title,
+      status: "running", startedAt: new Date().toISOString(), input: input?.slice(0, 240),
+    }
+    candidate.trace = [...(candidate.trace || []).slice(-39), step]
+    checkpoint()
+    send("trace", { step })
+    return ({ status = "done", output, sources }) => {
+      step.status = status
+      step.finishedAt = new Date().toISOString()
+      step.output = output?.slice(0, 1800)
+      step.sources = sources?.slice(0, 5)
+      checkpoint()
+      send("trace", { step })
+    }
+  }
   try {
     response.setHeader("Content-Type", "text/event-stream; charset=utf-8")
     response.setHeader("Cache-Control", "no-cache")
@@ -46,6 +67,7 @@ export async function streamCandidate(userId: string, articleId: string, id: str
     startSseHeartbeat(response)
     candidate.status = "generating"
     delete candidate.finishedAt
+    interruptCandidateTrace(candidate)
     candidate.message = candidate.content ? "继续生成" : "等待模型输出"
     checkpoint()
     send("candidate", { candidate: publicCandidate(candidate) })
@@ -78,14 +100,25 @@ export async function streamCandidate(userId: string, articleId: string, id: str
     if (input.writingAgent && !writingContext) {
       progress("正在检索作者的历史文章和表达样本")
       const query = buildCandidateSearchQuery(input.task, input.materials)
-      const [examples, context] = await Promise.all([
-        findWritingExamples(userId, articleId, query, config, controller.signal).catch(() => []),
+      const historyStep = startStep("history", "检索作者自己的旧文")
+      const [exampleResult, context] = await Promise.all([
+        findWritingExamples(userId, articleId, query, config, controller.signal)
+          .then(rows => ({ rows, failed: false }))
+          .catch(() => ({ rows: [], failed: true })),
         buildWritingContext(userId, { includeWritingGuide: input.platform === "wechat", compactForAgent: true }),
       ])
+      controller.signal.throwIfAborted()
+      const { rows: examples, failed } = exampleResult
+      historyStep({
+        status: failed ? "failed" : "done",
+        output: failed ? "历史文章检索失败，保留已有写作约定。"
+          : examples.length ? `找到 ${examples.length} 篇可参考表达的文章。` : "没有搜到可用的旧文。",
+        sources: examples.map(row => ({ title: row.title, articleId: row.id })),
+      })
       const web = createWritingWebResearch(config)
       const prepared = await prepareArticleWriting({
         task: input.task, materials: input.materials, sourceArticle: hasSourceArticle ? sourceArticle : "",
-        platform: candidate.platform, examples, writingContext: context, web, progress, signal: controller.signal,
+        platform: candidate.platform, examples, writingContext: context, web, progress, startStep, signal: controller.signal,
         async complete(system, user, signal) {
           const { data } = await completeModel({
             messages: [{ role: "system", content: system }, { role: "user", content: user }],
@@ -106,6 +139,8 @@ export async function streamCandidate(userId: string, articleId: string, id: str
       candidate.researchSources = prepared.sources
       checkpoint()
       send("candidate", { candidate: publicCandidate(candidate) })
+    } else if (input.writingAgent) {
+      startStep("context", "复用本篇调研和提纲")({ output: "沿用上次已保存的素材、已读来源和提纲。" })
     }
     if (!input.writingAgent) {
       const existingContext = await buildWritingContext(userId, {
@@ -136,6 +171,7 @@ ${input.writingAgent ? "涉及新增事实时就近引用已读网页的真实 U
       ] : []),
     ]
     if (input.writingAgent) progress("正在按作者语气写正文")
+    const finishWriting = startStep("write", initialLength ? "继续写正文" : "生成正文", model)
     const upstream = await stream({ messages, temperature: 0.85, max_tokens: 8192 }, {
       timeout: isDeepSeek ? 300000 : 120000, signal: controller.signal,
     })
@@ -148,6 +184,8 @@ ${input.writingAgent ? "涉及新增事实时就近引用已读网页的真实 U
       if (cleanText) send("chunk", { text: cleanText })
     }, { requireCompletion: true })
     candidate.content = stripEmoji(candidate.content)
+    controller.signal.throwIfAborted()
+    finishWriting({ output: `本次生成 ${candidate.content.length - initialLength} 字正文。` })
     candidate.status = "complete"
     candidate.message = "生成完成"
     candidate.finishedAt = new Date().toISOString()
@@ -159,6 +197,12 @@ ${input.writingAgent ? "涉及新增事实时就近引用已读网页的真实 U
     candidate.message = controller.signal.aborted ? "生成已停止，已保留内容，可继续生成"
       : axios.isAxiosError(error) ? `模型请求失败${error.response?.status ? `（HTTP ${error.response.status}）` : "或连接超时"}，已保留内容`
         : error instanceof Error ? error.message : "生成失败，已保留内容"
+    for (const step of candidate.trace || []) {
+      if (step.status !== "running") continue
+      step.status = controller.signal.aborted ? "interrupted" : "failed"
+      step.finishedAt = candidate.finishedAt
+      step.output = "这一步没有完成。"
+    }
     try { checkpoint() } catch {
       candidate.message += "；候选稿保存失败，请先复制正文"
     }

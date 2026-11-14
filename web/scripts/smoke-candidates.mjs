@@ -175,6 +175,7 @@ export async function smokeWritingAgent(base, token) {
     assert.match(interrupted, /正在整理可引用证据和写作提纲/)
     assert.match(interrupted, /正在按作者语气写正文/)
     assert.match(interrupted, /event: error/)
+    assert.match(interrupted, /event: trace/)
     assert.deepEqual(modelBodies.map(body => Boolean(body.stream)), [false, false, true])
     const context = modelBodies.at(-1).messages.at(-1).content
     assert.match(context, /先看公告，再去找执行单位/)
@@ -182,6 +183,8 @@ export async function smokeWritingAgent(base, token) {
     assert.match(context, /短例子（虚构/)
     const [partial] = await json(`${root}/candidates`)
     assert.equal(partial.status, 'interrupted')
+    assert.equal(partial.trace.find(step => step.kind === 'search')?.status, 'skipped')
+    assert.equal(partial.trace.at(-1).status, 'failed')
     continuation = true
     stopReason = 'stop'
     assert.match(await run(), /event: done/)
@@ -190,6 +193,9 @@ export async function smokeWritingAgent(base, token) {
     const [stored] = await json(`${root}/candidates`)
     assert.match(stored.content, /开工时间仍未知/)
     assert.ok(stored.referenceArticleIds.includes(history))
+    assert.deepEqual(stored.trace.filter(step => step.kind === 'write').map(step => [step.attempt, step.status]), [[1, 'failed'], [2, 'done']])
+    assert.equal(stored.trace.filter(step => step.kind === 'history').length, 1)
+    assert.equal(stored.trace.find(step => step.kind === 'history').sources[0].articleId, history)
     assert.ok(!Object.hasOwn(stored, 'writingBrief'))
     assert.equal((await json(root)).article, original)
     const saved = await json(root, { article: stored.content, selectedCandidateId: stored.id })
