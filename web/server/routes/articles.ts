@@ -358,6 +358,7 @@ router.post('/:articleId', (req, res) => {
     if (selected !== undefined) {
       if (typeof selected !== 'string') throw new CandidateError('候选稿标识不正确')
       const candidate = readCandidate(uid, articleId, selected)
+      if (candidate.status !== 'complete') throw new CandidateError('候选稿尚未完成，无法采用', 409)
       if (candidate.platform !== 'wechat' || candidate.content !== article || !candidate.content.trim()) throw new CandidateError('正文与所选候选稿不一致')
     }
 

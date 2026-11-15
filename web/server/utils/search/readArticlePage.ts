@@ -1,6 +1,7 @@
 import { normalizeWechatArticleUrl } from "../../../shared/wechatArticleUrl.ts"
 import { assertPublicHttpUrl } from "../networkPolicy.ts"
 import { usablePageText, webFetch } from "./webFetcher.ts"
+import { readWechatArticleWithBrowser } from "./wechatArticleBrowser.ts"
 
 export class ArticlePageReadError extends Error {}
 
@@ -35,20 +36,32 @@ export async function readArticlePage(rawUrl: string, options: ReadArticlePageOp
   const wechat = normalizeWechatArticleUrl(rawUrl)
   try { url = (await assertPublicHttpUrl(wechat || rawUrl)).href }
   catch { throw new ArticlePageReadError("链接无效或无法通过公网访问。") }
+  if (new URL(url).hostname === "mp.weixin.qq.com" && !wechat) {
+    throw new ArticlePageReadError("请提供已公开的公众号文章链接。")
+  }
 
   const fetchWithDeepSeek = options.fetchWithDeepSeek
+  const webfetch = {
+    method: "webfetch", timeout: 6000,
+    read: (deadline: AbortSignal) => webFetch(url, { maxChars, sameOrigin: Boolean(wechat || sameOrigin), signal: deadline, textOnly: true }),
+  }
+  // 公号原文在匿名 Chromium 中渲染，避免把第三方返回的摘要当正文。
   const attempts = [
-    { method: "webfetch", read: (deadline: AbortSignal) => webFetch(url, { maxChars, sameOrigin, signal: deadline, textOnly: true }) },
-    ...(fetchWithDeepSeek ? [{ method: "deepseek", read: (deadline: AbortSignal) => fetchWithDeepSeek(url, deadline) }] : []),
-    { method: "jina", read: (deadline: AbortSignal) => fetchJinaText(url, jinaApiKey, deadline) },
+    webfetch,
+    ...(wechat
+      ? [{ method: "wechat-browser", timeout: 10000, read: (deadline: AbortSignal) => readWechatArticleWithBrowser(url, deadline) }]
+      : sameOrigin ? [] : [
+        ...(fetchWithDeepSeek ? [{ method: "deepseek", timeout: 8000, read: (deadline: AbortSignal) => fetchWithDeepSeek(url, deadline) }] : []),
+        { method: "jina", timeout: 8000, read: (deadline: AbortSignal) => fetchJinaText(url, jinaApiKey, deadline) },
+      ]),
   ]
-  // 严格同源的抓取仅交给能逐次检查跳转地址的内置读取器。
-  for (const { method, read } of sameOrigin ? attempts.slice(0, 1) : attempts) {
+  for (const { method, timeout, read } of attempts) {
     signal?.throwIfAborted()
-    const timeout = AbortSignal.timeout(method === "webfetch" ? 6000 : 8000)
-    const deadline = signal ? AbortSignal.any([signal, timeout]) : timeout
+    const attemptTimeout = AbortSignal.timeout(timeout)
+    const deadline = signal ? AbortSignal.any([signal, attemptTimeout]) : attemptTimeout
     try {
       const content = await read(deadline)
+      deadline.throwIfAborted()
       if (usablePageText(content)) return { content: content.trim().slice(0, maxChars), method }
     } catch {
       signal?.throwIfAborted()

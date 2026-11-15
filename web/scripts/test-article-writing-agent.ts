@@ -11,7 +11,7 @@ process.env.LOG_DIR = join(directory, "logs")
 const { readArticlePage } = await import("../server/utils/search/readArticlePage.ts")
 const { preservesDraftAnchors } = await import("../server/writingAgentPolicy.ts")
 const { prepareArticleWriting, WritingAgentModelError } = await import("../server/articleWritingAgent.ts")
-const { reviseArticleDraft } = await import("../server/writingRevision.ts")
+const { checkArticleFacts, reviseArticleDraft } = await import("../server/writingRevision.ts")
 const { findWritingExamples } = await import("../server/rag.ts")
 const { db, setSetting } = await import("../server/db.ts")
 const { buildWritingContext } = await import("../server/writingContext.ts")
@@ -126,6 +126,41 @@ try {
     assert.match(fallback.content, /^\[校方公告\]/)
   } finally { globalThis.fetch = realFetch }
 
+  // Chromium 执行原站脚本后才出现正文，验证读取链路会回退到真实浏览器。
+  const wechatUrl = "https://mp.weixin.qq.com/s/browser-fixture"
+  const scriptUrl = "https://mp.weixin.qq.com/fixture.js"
+  const requests: string[] = []
+  try {
+    globalThis.fetch = async input => {
+      const url = String(input)
+      requests.push(url)
+      if (url === scriptUrl) {
+        return new Response('document.querySelector("#js_content").innerText = "这是浏览器执行原站脚本后显示的公众号正文。"', {
+          headers: { "Content-Type": "application/javascript; charset=utf-8" },
+        })
+      }
+      assert.equal(url, wechatUrl)
+      return new Response('<body><div id="js_content"></div><script src="/fixture.js"></script><script src="https://1.1.1.1/unrelated.js"></script></body>', {
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      })
+    }
+    const browserPage = await readArticlePage(wechatUrl, { sameOrigin: true, signal: AbortSignal.timeout(12000) })
+    assert.equal(browserPage.method, "wechat-browser")
+    assert.match(browserPage.content, /执行原站脚本后显示/)
+    assert.deepEqual(requests, [wechatUrl, wechatUrl, scriptUrl])
+    const privatePage = "https://mp.weixin.qq.com/cgi-bin/home"
+    await assert.rejects(readArticlePage(privatePage), /已公开的公众号文章/)
+    assert.ok(!requests.includes(privatePage))
+    globalThis.fetch = async () => {
+      const page = new Response('<body><main>环境异常，请先完成验证</main></body>', {
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      })
+      Object.defineProperty(page, "url", { value: "https://mp.weixin.qq.com/mp/wappoc_appmsgcaptcha" })
+      return page
+    }
+    await assert.rejects(readArticlePage(wechatUrl), /微信未返回可读正文/)
+  } finally { globalThis.fetch = realFetch }
+
   const originalDraft = "# 招标进展\n\n能确定的只有一件事：公告于 5 月 10 日发布。原文「设计招标」见[公告](https://example.com/a)。"
   const rewrite = "# 招标进展\n\n公告于 5 月 10 日发布，原文「设计招标」见[公告](https://example.com/a)。"
   assert.equal(preservesDraftAnchors(originalDraft, rewrite), true)
@@ -174,6 +209,31 @@ try {
   assert.equal(checked.sources.length, 2)
   assert.match(compared[0], /正式版 1\.0[\s\S]*正式版 2\.0/)
   assert.match(checked.prompt, /正式版以发布日志为准/)
+  const retryReads: string[] = []
+  const retrySteps = [
+    '{"action":"search_web","query":"历届联赛冠军"}',
+    '{"action":"read_source","id":"W1"}',
+    '{"action":"read_source","id":"W2"}',
+    '{"action":"read_source","id":"W3"}',
+    '{"action":"finish","plan":{},"followup_query":"联赛 官方历届冠军"}',
+    '{"action":"finish","plan":{}}',
+  ]
+  const retried = await prepareArticleWriting({
+    ...base, materials: "素材提到 S13，需要核查。", task: "核对历届联赛冠军",
+    complete: async (_messages, phase) => phase === "outline" ? "引用联赛历届冠军表。" : retrySteps.shift() || '{"action":"finish","plan":{}}',
+    web: {
+      search: async query => (query.includes("官方") ? ["official"] : ["a", "b", "c"]).map(path => ({
+        url: `https://example.com/${path}`, title: path, snippet: "仅供预览", source: "搜索",
+      })),
+      read: async url => {
+        retryReads.push(url)
+        return url.endsWith("/official") ? "联赛历届冠军表：S11 EDG，S13 T1。" : ""
+      },
+    },
+  })
+  assert.equal(retryReads.length, 4)
+  assert.equal(retried.sources[0]?.url, "https://example.com/official")
+  assert.match(retried.prompt, /S11 EDG，S13 T1/)
   const failedTrace: { kind: string; status?: string }[] = []
   const failedWeb = await prepareArticleWriting({
     ...base,
@@ -250,6 +310,19 @@ try {
     assert.equal(revisionSteps[0].status, outcome)
     if (outcome === "failed") assert.match(revisionSteps[0].output || "", /审稿回复不是有效 JSON/)
   }
+  const factDraft = "# 夺冠\n\nLPL 上一次捧杯是 S13。"
+  const factTrace: string[] = []
+  const finding = await checkArticleFacts({
+    draft: factDraft, writingContext: "提纲：素材中的 S13 与相隔五年冲突，原文未读。",
+    signal: AbortSignal.timeout(1000), model: "fixture", progress: () => {},
+    startStep: () => ({ status }) => factTrace.push(status || "done"),
+    complete: async (_system, input) => {
+      assert.match(JSON.parse(input).research, /S13 与相隔五年冲突/)
+      return '{"issues":[{"excerpt":"LPL 上一次捧杯是 S13。","reason":"赛季与年份冲突，缺少赛事记录"}]}'
+    },
+  })
+  assert.match(finding, /待核实/)
+  assert.deepEqual(factTrace, ["changes_requested"])
   const abort = new AbortController()
   abort.abort()
   await assert.rejects(() => prepareArticleWriting({ ...base, signal: abort.signal, complete: async () => { throw new Error("不应调用模型") } }), { name: "AbortError" })

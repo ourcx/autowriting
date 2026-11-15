@@ -377,10 +377,11 @@ export default function MaterialsCollector({
     try {
       const { answer, articles } = await searchYuanbaoMaterials(query, controller.signal)
       if (controller.signal.aborted) return
-      const answerItem: CollectedItem = {
-        id: nextId(), type: 'paste', title: '元宝 AI 回答', source: '元宝',
+      const parsedCount = articles.filter(article => article.content).length
+      const answerItem: CollectedItem | null = answer && (!parsedCount || parsedCount < articles.length) ? {
+        id: nextId(), type: 'paste', title: '元宝综合回答（供参考）', source: '元宝',
         content: answer, selected: false, expanded: false, dateTag: defaultDateTag,
-      }
+      } : null
       const articleItems = articles.map((article): CollectedItem => ({
         id: nextId(),
         type: 'wechat',
@@ -403,16 +404,14 @@ export default function MaterialsCollector({
         })
         const answerExists = prev.some(item => item.source === '元宝' && item.content === answer)
         return [
-          ...(answerExists ? [] : [answerItem]),
           ...articleItems.filter(item => !existingUrls.has(item.url)),
+          ...(answerItem && !answerExists ? [answerItem] : []),
           ...refreshed,
         ]
       })
 
-      const parsedCount = articles.filter(article => article.content).length
-      if (!articles.length) toast.warn('已取得元宝回答，未找到公众号原文')
-      else if (parsedCount < articles.length) toast.success(`找到 ${articles.length} 篇公众号文章，${parsedCount} 篇有正文，其余可按线索加入`)
-      else toast.success(`已解析 ${parsedCount} 篇公众号文章`)
+      if (!parsedCount) toast.warn(answerItem ? '未读到公众号原文，可先参考元宝回答' : '未读到公众号原文，可尝试逐条读取')
+      else toast.success(`读到 ${parsedCount} 篇公众号原文`)
     } catch (error: unknown) {
       if (!controller.signal.aborted) toast.error(extractErrorMessage(error, '元宝搜索失败，请稍后再试'))
     } finally {
@@ -585,6 +584,11 @@ export default function MaterialsCollector({
 
       // 生成最终素材文本
       const parts: string[] = []
+      const materialText = (item: CollectedItem) => {
+        if (item.source === '元宝' && item.type === 'paste') return `> 元宝综合回答，仅供参考\n\n${item.content}`
+        if (!needsWechatArticleText(item)) return item.content
+        return item.content ? `> 元宝搜索摘要，原文未读\n\n${item.content}` : '> 仅保留原文链接，尚未读取正文'
+      }
 
       // 先输出有时间标签的（按日期升序）
       const dateKeys = [...groups.keys()]
@@ -598,10 +602,7 @@ export default function MaterialsCollector({
           const header = it.url
             ? `### ${it.title}\n> 来源：${it.source || it.url}  \n> URL：${it.url}`
             : `### ${it.title}${it.source ? `\n> 来源：${it.source}` : ''}`
-          const body = needsWechatArticleText(it)
-            ? it.content ? `> 元宝搜索摘要，原文未读\n\n${it.content}` : '> 仅保留原文链接，尚未读取正文'
-            : it.content
-          parts.push(`${header}\n\n${body}`)
+          parts.push(`${header}\n\n${materialText(it)}`)
         }
       }
 
@@ -612,10 +613,7 @@ export default function MaterialsCollector({
           const header = it.url
             ? `### ${it.title}\n> 来源：${it.source || it.url}  \n> URL：${it.url}`
             : `### ${it.title}${it.source ? `\n> 来源：${it.source}` : ''}`
-          const body = needsWechatArticleText(it)
-            ? it.content ? `> 元宝搜索摘要，原文未读\n\n${it.content}` : '> 仅保留原文链接，尚未读取正文'
-            : it.content
-          parts.push(`${header}\n\n${body}`)
+          parts.push(`${header}\n\n${materialText(it)}`)
         }
       }
 
@@ -794,14 +792,14 @@ export default function MaterialsCollector({
                 disabled={loading || !wechatQuery.trim() || !canSearchWechat}
               >
                 {loading ? <Loader2 size={14} className="mc-spin" /> : <Search size={14} />}
-                {loading ? (usingYuanbao ? '搜索并解析中…' : '搜索中…') : '搜索公众号'}
+                {loading ? (usingYuanbao ? '搜索并读取原文…' : '搜索中…') : '搜索公众号'}
               </Button>
             </div>
 
             {usingYuanbao ? (
               <div className={`mc-search-tip mc-search-tip--${yuanbaoAvailable ? 'hint' : 'warn'}`}>
                 {yuanbaoAvailable ? <BookOpen size={12} /> : <AlertCircle size={12} />}
-                {yuanbaoAvailable ? '回答和公众号文章可分别勾选；未读到正文的条目会标明状态。' : '当前服务器未启用元宝 AI 搜索。'}
+                {yuanbaoAvailable ? '优先读取公众号原文，原文未读到时可参考元宝回答。' : '当前服务器未启用元宝 AI 搜索。'}
               </div>
             ) : (
               <div className={`mc-search-tip${canSearchWechat ? ' mc-search-tip--paid' : ' mc-search-tip--warn'}`}>
@@ -1088,7 +1086,7 @@ export default function MaterialsCollector({
                           ? <Loader2 size={12} className="mc-spin" />
                           : <BookOpen size={12} />
                         }
-                        {item.fetching ? '读取中' : needsWechatArticleText(item) ? '重试解析' : item.type === 'wechat' ? '读取正文' : '读全文'}
+                        {item.fetching ? '读取中' : needsWechatArticleText(item) ? '读原文' : item.type === 'wechat' ? '读取正文' : '读全文'}
                       </Button>
                     )}
 

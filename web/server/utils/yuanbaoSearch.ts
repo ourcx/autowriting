@@ -114,7 +114,7 @@ export function parseYuanbaoStream(stream: string, now = Date.now()): YuanbaoSea
   }
 
   const text = answer.join('').trim()
-  if (!finished || !text) throw new YuanbaoSearchError('元宝未返回完整回答，请重试')
+  if (!finished || (!text && !articles.size)) throw new YuanbaoSearchError('元宝未返回完整回答，请重试')
   const dayStart = Date.parse(`${today}T00:00:00+08:00`)
   // 元宝未提供阅读量等互动数据，同一时段保留它给出的排序。
   const ranked = [...articles.values()]
@@ -264,15 +264,16 @@ export async function searchYuanbao(query: string, clientSignal: AbortSignal): P
 
   try {
     const result = await readSearchPage(query, searchSignal)
-    for (let index = 0; index < result.articles.length; index += ARTICLE_CONCURRENCY) {
+    // 原文优先。总时限内没读到的保留出处和摘要，不把模型回答写成正文。
+    for (let index = 0; index < result.articles.length && !searchSignal.aborted; index += ARTICLE_CONCURRENCY) {
       clientSignal.throwIfAborted()
       const batch = result.articles.slice(index, index + ARTICLE_CONCURRENCY)
       await Promise.all(batch.map(async article => {
-        const signal = AbortSignal.any([clientSignal, AbortSignal.timeout(6500)])
-        try { article.content = (await readArticlePage(article.url, { signal, sameOrigin: true })).content }
+        try { article.content = (await readArticlePage(article.url, { signal: searchSignal, sameOrigin: true })).content }
         catch { clientSignal.throwIfAborted() }
       }))
     }
+    clientSignal.throwIfAborted()
     return result
   } catch (error) {
     if (searchSignal.aborted && !clientSignal.aborted) throw new YuanbaoSearchError('元宝搜索超时，请稍后再试', 504)

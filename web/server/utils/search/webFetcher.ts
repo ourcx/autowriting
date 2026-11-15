@@ -321,8 +321,9 @@ export async function webFetch(url: string, options: FetchOptions = {}): Promise
     // 流式读取，最多 5MB
     const contentType = resp.headers.get("content-type") || ""
     const isHtml = contentType.includes("text/html") || contentType.includes("application/xhtml")
+    const wechatArticle = new URL(resp.url || url).hostname === "mp.weixin.qq.com"
 
-    if (options.textOnly && !isHtml && !/^(text\/|application\/(?:json|xml))/i.test(contentType)) {
+    if (!isHtml && (wechatArticle || (options.textOnly && !/^(text\/|application\/(?:json|xml))/i.test(contentType)))) {
       await resp.body?.cancel()
       return ""
     }
@@ -350,7 +351,6 @@ export async function webFetch(url: string, options: FetchOptions = {}): Promise
     // 4. HTML 正文提取
     const cleaned = cleanNoiseTags(html)
     // 微信正文有稳定的容器 ID。验证页、已删除页和导航不能当作文章。
-    const wechatArticle = new URL(resp.url || url).hostname === "mp.weixin.qq.com"
     const container = wechatArticle ? articleContainer(cleaned, "js_content") : findMainContainer(cleaned)
     const markdown = htmlToMarkdown(container)
 

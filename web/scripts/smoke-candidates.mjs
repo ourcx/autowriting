@@ -131,6 +131,7 @@ export async function smokeWritingAgent(base, token) {
   const modelBodies = []
   let stopReason = 'length'
   let continuation = false
+  let hasFactConflict = false
   const draft = '# 校舍建设进展\n\n目前能确定的只有一件事：5 月 10 日已公示设计招标。开工时间仍未知。'
   const rewritten = '# 校舍建设进展\n\n学校于 5 月 10 日公示设计招标，开工日期尚未公布。'
   const rewrites = []
@@ -141,13 +142,16 @@ export async function smokeWritingAgent(base, token) {
     modelBodies.push(input)
     if (input.stream) {
       response.writeHead(200, { 'Content-Type': 'text/event-stream' })
-      const content = continuation ? '开工时间仍未知。' : draft.replace('开工时间仍未知。', '')
+      const content = continuation ? '开工时间仍未知。' : stopReason === 'stop' ? draft : draft.replace('开工时间仍未知。', '')
       response.end(`data: ${JSON.stringify({ choices: [{ delta: { content }, finish_reason: stopReason }] })}\n\n`)
       return
     }
     const [system, user] = input.messages.map(message => message.content)
     let content
-    if (system.includes('独立审稿 Agent')) {
+    if (system.includes('事实核查编辑')) {
+      assert.match(JSON.parse(user).draft, /学校于 5 月 10 日公示设计招标/)
+      content = JSON.stringify({ issues: hasFactConflict ? [{ excerpt: '5 月 10 日', reason: '两个公告日期互相冲突' }] : [] })
+    } else if (system.includes('独立审稿 Agent')) {
       assert.equal(user, draft)
       content = JSON.stringify({ issues: [{ excerpt: '目前能确定的只有一件事', action: '直接写公告发布日期' }] })
     } else if (system.includes('独立优化 Agent')) {
@@ -189,7 +193,7 @@ export async function smokeWritingAgent(base, token) {
       articleProvider: 'openai', articleBaseUrl: `http://127.0.0.1:${model.address().port}/v1`,
       articleApiKey: 'smoke-article-agent', articleModel: 'fixture', searchProvider: 'deepseek',
     }
-    const run = async () => (await fetch(`${root}/candidates/${candidate.id}/stream`, {
+    const run = async (id = candidate.id) => (await fetch(`${root}/candidates/${id}/stream`, {
       method: 'POST', headers, body: JSON.stringify({ aiConfig }),
     })).text()
     const interrupted = await run()
@@ -211,16 +215,16 @@ export async function smokeWritingAgent(base, token) {
     continuation = true
     stopReason = 'stop'
     assert.match(await run(), /event: done/)
-    assert.deepEqual(modelBodies.map(body => Boolean(body.stream)), [false, false, true, true, false, false, false])
+    assert.deepEqual(modelBodies.map(body => Boolean(body.stream)), [false, false, true, true, false, false, false, false])
     assert.ok(modelBodies.every(body => !Object.hasOwn(body, 'max_tokens')))
-    assert.equal(modelBodies.at(-4).messages.at(-2).content, partial.content)
+    assert.equal(modelBodies.at(-5).messages.at(-2).content, partial.content)
     assert.deepEqual(modelBodies.at(-1).messages.map(({ role }) => role), ['system', 'user'])
     assert.equal(rewrites.length, 2)
     assert.match(rewrites[1].corrections[0], /须保留：10；去除新增：11/)
     const [stored] = await json(`${root}/candidates`)
     assert.equal(stored.content, rewritten)
     assert.equal(stored.trace.find(step => step.kind === 'review')?.status, 'changes_requested')
-    assert.deepEqual(stored.trace.filter(step => step.kind === 'verify').map(step => step.status), ['changes_requested', 'done'])
+    assert.deepEqual(stored.trace.filter(step => step.kind === 'verify').map(step => step.status), ['changes_requested', 'done', 'done'])
     assert.ok(!Object.hasOwn(stored, 'draftComplete'))
     assert.ok(stored.referenceArticleIds.includes(history))
     assert.deepEqual(stored.trace.filter(step => step.kind === 'write').map(step => [step.attempt, step.status]), [[1, 'failed'], [2, 'done']])
@@ -230,6 +234,21 @@ export async function smokeWritingAgent(base, token) {
     assert.equal((await json(root)).article, original)
     const saved = await json(root, { article: stored.content, selectedCandidateId: stored.id })
     assert.ok(saved.workflow.generationContext.referenceArticleIds.includes(history))
+
+    continuation = false
+    hasFactConflict = true
+    const [pending] = await json(`${root}/candidates`, {
+      task: '校舍建设', materials: '现有公告只写了设计招标', platform: 'wechat', count: 1, writingAgent: true,
+    })
+    assert.match(await run(pending.id), /event: error/)
+    const blocked = (await json(`${root}/candidates`)).find(row => row.id === pending.id)
+    assert.equal(blocked.status, 'interrupted')
+    assert.equal(blocked.content, rewritten)
+    assert.match(blocked.trace.at(-1).output, /两个公告日期互相冲突/)
+    const cannotSelect = await fetch(root, {
+      headers, method: 'POST', body: JSON.stringify({ article: blocked.content, selectedCandidateId: blocked.id }),
+    })
+    assert.equal(cannotSelect.status, 409)
   } finally {
     model.closeAllConnections()
     await new Promise(resolve => model.close(resolve))

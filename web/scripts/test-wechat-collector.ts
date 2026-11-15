@@ -75,6 +75,7 @@ assert.deepEqual(yuanbao.articles.map(item => [item.url, item.title]), [
   ["https://mp.weixin.qq.com/s?src=11&signature=sample", "带签名的文章"],
 ])
 assert.throws(() => parseYuanbaoStream(stream([citations, answerPart])), /未返回完整回答/)
+assert.deepEqual(parseYuanbaoStream(stream([citations, { choices: [{ finish_reason: "stop" }] }])), { answer: "", articles: yuanbao.articles })
 assert.throws(() => parseYuanbaoStream(stream([{ data_type: "anti_crawl", data: { status: "reject" } }])), /未接受/)
 
 const now = Date.parse("2026-11-12T12:00:00+08:00")
