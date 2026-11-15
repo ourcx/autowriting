@@ -1,5 +1,6 @@
 import { z } from "zod"
 import type { CandidateResearchSource, CandidateTraceStep } from "../shared/generationCandidate.ts"
+import { normalizeWechatArticleUrl } from "../shared/wechatArticleUrl.ts"
 import { WRITING_AGENT_STYLE } from "./writingAgentPolicy.ts"
 import type { WritingWebResearch } from "./writingResearch.ts"
 import { publicSourceUrl } from "./writingResearch.ts"
@@ -173,6 +174,9 @@ export async function prepareArticleWriting(options: WritingAgentOptions) {
   const foundTerms = new Set<string>()
   const searchWeb = web?.search
   const readWeb = web?.read
+  const findWechatOriginals = web?.findWechatOriginals
+  let lastPublicQuery = ""
+  let attemptedWechatRecovery = false
   let lastSearchResults: Evidence[] = []
   let recoverySources = new Set<string>()
   const timeSensitive = TIME_SENSITIVE.test(`${task}\n${options.materials.slice(0, 6000)}\n${sourceArticle.slice(0, 6000)}`)
@@ -182,6 +186,7 @@ export async function prepareArticleWriting(options: WritingAgentOptions) {
 
   async function search(query: string) {
     if (!searchWeb) return
+    lastPublicQuery = query
     queries.add(query.toLowerCase())
     const finish = trace("search", "搜索公开网页", query)
     progress("正在搜索公开资料")
@@ -232,7 +237,7 @@ export async function prepareArticleWriting(options: WritingAgentOptions) {
   }
 
   function mayRead(source: Evidence) {
-    return readWeb && !opened.has(source.id) && (opened.size < MAX_READS || (
+    return readWeb && !source.read && !opened.has(source.id) && (opened.size < MAX_READS || (
       opened.size === MAX_READS && recoverySources.has(source.id) && !evidence.some(item => item.read)
     ))
   }
@@ -241,6 +246,55 @@ export async function prepareArticleWriting(options: WritingAgentOptions) {
     const results = lastSearchResults.length ? lastSearchResults : evidence
     if (results.some(source => source.read)) return undefined
     return results.find(mayRead) || (!evidence.some(source => source.read) ? evidence.find(mayRead) : undefined)
+  }
+
+  function recordRead(source: Evidence, content: string, finish: ReturnType<StartWritingStep>) {
+    source.text = content.slice(0, 24_000)
+    source.read = true
+    observe(`${source.id}「${source.title}」已读到 ${source.text.length} 字正文。`)
+    finish({ output: `读到 ${source.text.length} 字正文。\n\n${source.text.slice(0, 500)}`, sources: [sourceInfo(source)] })
+  }
+
+  async function recoverWechatOriginals() {
+    if (!findWechatOriginals || !lastPublicQuery || attemptedWechatRecovery) return
+    if (evidence.some(item => item.read && normalizeWechatArticleUrl(item.url))) return
+    attemptedWechatRecovery = true
+    const finish = trace("search", "补查公众号原文", lastPublicQuery)
+    progress("原链接未读到正文，正在补查同主题的公众号原文")
+    try {
+      const articles = await findWechatOriginals(lastPublicQuery, AbortSignal.any([signal, AbortSignal.timeout(60_000)]))
+      signal.throwIfAborted()
+      searchSucceeded = true
+      const recovered: Evidence[] = []
+      for (const article of articles) {
+        const url = normalizeWechatArticleUrl(article.url)
+        const content = article.content.trim()
+        if (!url || !content) continue
+        let item = evidence.find(source => source.url === url)
+        if (item?.read) continue
+        if (!item) {
+          item = { id: `W${evidence.length + 1}`, url, title: article.title, text: "", read: false, publishedAt: article.publishedOn }
+          evidence.push(item)
+        } else {
+          item.title = article.title
+          item.publishedAt ||= article.publishedOn
+        }
+        const readStep = trace("read", "读取公众号原文", item.title)
+        recordRead(item, content, readStep)
+        recovered.push(item)
+        if (recovered.length >= 2) break
+      }
+      if (recovered.length) {
+        finish({ output: `已补到 ${recovered.length} 篇可引用的公众号正文。`, sources: recovered.map(sourceInfo) })
+      } else {
+        observe("补查也未取得公众号正文。")
+        finish({ status: "failed", output: "补查也未取得公众号正文。" })
+      }
+    } catch {
+      signal.throwIfAborted()
+      observe("公众号补查请求失败或超时。")
+      finish({ status: "failed", output: "公众号补查请求失败或超时。" })
+    }
   }
 
   async function read(source: Evidence) {
@@ -252,16 +306,14 @@ export async function prepareArticleWriting(options: WritingAgentOptions) {
       const content = await readWeb(source.url, AbortSignal.any([signal, AbortSignal.timeout(25_000)]))
       signal.throwIfAborted()
       if (!content.trim()) throw new Error("空网页")
-      source.text = content.slice(0, 24_000)
-      source.read = true
-      observe(`${source.id}「${source.title}」已读到 ${source.text.length} 字正文。`)
-      finish({ output: `读到 ${source.text.length} 字正文。\n\n${source.text.slice(0, 500)}`, sources: [sourceInfo(source)] })
+      recordRead(source, content, finish)
     } catch (error) {
       signal.throwIfAborted()
       failedReads.add(source.id)
       const reason = error instanceof ArticlePageReadError ? error.message : "未能读取网页正文。"
       observe(`${source.id}「${source.title}」读取失败：${reason} 仅保留为线索，别重复打开。`)
       finish({ status: "failed", output: reason, sources: [sourceInfo(source)] })
+      if (normalizeWechatArticleUrl(source.url)) await recoverWechatOriginals()
     }
   }
 

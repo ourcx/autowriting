@@ -234,6 +234,42 @@ try {
   assert.equal(retryReads.length, 4)
   assert.equal(retried.sources[0]?.url, "https://example.com/official")
   assert.match(retried.prompt, /S11 EDG，S13 T1/)
+  const wechatRecoveryTrace: { title: string; status?: string }[] = []
+  const blockedWechat = "https://mp.weixin.qq.com/s/blocked"
+  const recoveredWechat = "https://mp.weixin.qq.com/s/readable"
+  let recoveryCalls = 0
+  const recoveredBrief = await prepareArticleWriting({
+    ...base,
+    materials: "",
+    startStep: (_kind, title) => ({ status }) => wechatRecoveryTrace.push({ title, status }),
+    complete: async (messages, phase) => {
+      if (phase === "outline") return "按读到的比赛报道写比分。"
+      return messages.some(message => message.role === "assistant")
+        ? '{"action":"finish","plan":{}}'
+        : '{"action":"search_web","query":"BLG GEN 总决赛"}'
+    },
+    web: {
+      search: async () => [{ url: blockedWechat, title: "原链接", snippet: "未经核实的搜索摘要", source: "搜索" }],
+      read: async () => { throw new Error("原链接读不到") },
+      findWechatOriginals: async query => {
+        assert.equal(query, "BLG GEN 总决赛")
+        recoveryCalls++
+        return [
+          { url: blockedWechat, title: "仅有链接", content: "" },
+          { url: recoveredWechat, title: "可读的比赛报道", content: "BLG 以 3 比 1 赢得决赛。", publishedOn: "2026-11-15" },
+        ]
+      },
+    },
+  })
+  assert.equal(recoveryCalls, 1)
+  assert.deepEqual(recoveredBrief.sources.map(source => source.url), [recoveredWechat])
+  assert.match(recoveredBrief.prompt, /已读网页正文\nBLG 以 3 比 1 赢得决赛/)
+  assert.doesNotMatch(recoveredBrief.prompt, /未经核实的搜索摘要/)
+  assert.deepEqual(wechatRecoveryTrace.filter(step => ["读取网页正文", "读取公众号原文", "补查公众号原文"].includes(step.title)), [
+    { title: "读取网页正文", status: "failed" },
+    { title: "读取公众号原文", status: undefined },
+    { title: "补查公众号原文", status: undefined },
+  ])
   const failedTrace: { kind: string; status?: string }[] = []
   const failedWeb = await prepareArticleWriting({
     ...base,

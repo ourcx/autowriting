@@ -1,5 +1,6 @@
 import { normalizeWechatArticleUrl } from "../shared/wechatArticleUrl.ts"
-import { SERVER_AI_CONFIG } from "./config.ts"
+import type { YuanbaoArticle } from "../shared/yuanbaoSearch.ts"
+import { SERVER_AI_CONFIG, YUANBAO_SEARCH_ENABLED } from "./config.ts"
 import { resolveDeepSeekConfig } from "./deepseekCredentials.ts"
 import type { AIConfig } from "./types.ts"
 import { createDeepSeekClient, isDeepSeekReady } from "./utils/deepseek.ts"
@@ -7,6 +8,7 @@ import { resolveZhipuApiKey } from "./utils/providerKeys.ts"
 import { createSearchProvider } from "./utils/search/providers/index.ts"
 import type { SearchResult } from "./utils/search/types.ts"
 import { readArticlePage } from "./utils/search/readArticlePage.ts"
+import { searchYuanbao } from "./utils/yuanbaoSearch.ts"
 
 export function publicSourceUrl(value: string): string {
   try {
@@ -23,6 +25,7 @@ export function publicSourceUrl(value: string): string {
 
 export interface WritingWebResearch {
   search?: (_query: string, _signal: AbortSignal) => Promise<SearchResult[]>
+  findWechatOriginals?: (_query: string, _signal: AbortSignal) => Promise<Pick<YuanbaoArticle, "url" | "title" | "content" | "publishedOn">[]>
   read: (_url: string, _signal: AbortSignal) => Promise<string>
 }
 
@@ -38,8 +41,20 @@ export function createWritingWebResearch(config: AIConfig): WritingWebResearch {
     signal, maxChars: 24_000, jinaApiKey: String(config.jinaApiKey || SERVER_AI_CONFIG.jinaApiKey || ""),
     fetchWithDeepSeek: deepseek ? async (page, deadline) => (await deepseek.fetchUrl(page, deadline)).content : undefined,
   })).content
+  const research: WritingWebResearch = {
+    read,
+    ...(YUANBAO_SEARCH_ENABLED && {
+      async findWechatOriginals(query, signal) {
+        const { articles } = await searchYuanbao(query, signal)
+        // 元宝只提供入口。只有读取器从公众号原址抓回的正文可以用于写作。
+        return articles.flatMap(({ url, title, content, publishedOn }) =>
+          content ? [{ url, title, content, publishedOn }] : [])
+      },
+    }),
+  }
   if (deepseek) {
     return {
+      ...research,
       async search(query, signal) {
         const rows = await deepseek.search(query, 5, signal)
         return rows.map(row => ({
@@ -47,7 +62,6 @@ export function createWritingWebResearch(config: AIConfig): WritingWebResearch {
           source: row.siteName, datePublished: row.datePublished,
         }))
       },
-      read,
     }
   }
   const configuredSearxng = String(config.searxngUrl || SERVER_AI_CONFIG.searxngUrl || "")
@@ -62,7 +76,7 @@ export function createWritingWebResearch(config: AIConfig): WritingWebResearch {
     ? createSearchProvider({ searchProvider: zhipuApiKey ? "zhipu" : "searxng", glmApiKey: zhipuApiKey, searxngUrl: configuredSearxng }) : null)
 
   return {
+    ...research,
     ...(searchProvider && { search: (query: string, signal: AbortSignal) => searchProvider.search(query, 5, signal) }),
-    read,
   }
 }
