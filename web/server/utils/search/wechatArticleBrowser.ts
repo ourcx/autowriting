@@ -14,7 +14,8 @@ export async function readWechatArticleWithBrowser(rawUrl: string, signal: Abort
   signal.throwIfAborted()
   activeReaders++
   try {
-    const browser = await chromium.launch({ headless: true, chromiumSandbox: true, timeout: 5000 })
+    // 生产机冷启动曾超过 5 秒，为沙箱初始化留足时间。
+    const browser = await chromium.launch({ headless: true, chromiumSandbox: true, timeout: 15_000 })
     const close = () => { void browser.close().catch(() => {}) }
     signal.addEventListener("abort", close, { once: true })
     try {

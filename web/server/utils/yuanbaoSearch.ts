@@ -227,7 +227,7 @@ export async function readYuanbaoStream(page: Page, url: string, signal: AbortSi
 }
 
 async function readSearchPage(query: string, signal: AbortSignal): Promise<YuanbaoSearchResult> {
-  const browser = await chromium.launch({ headless: true, chromiumSandbox: true, timeout: 10000 })
+  const browser = await chromium.launch({ headless: true, chromiumSandbox: true, timeout: 20_000 })
   const closeBrowser = () => { void browser.close().catch(() => undefined) }
   signal.addEventListener('abort', closeBrowser, { once: true })
 

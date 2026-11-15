@@ -49,7 +49,7 @@ export async function readArticlePage(rawUrl: string, options: ReadArticlePageOp
   const attempts = [
     webfetch,
     ...(wechat
-      ? [{ method: "wechat-browser", timeout: 10000, read: (deadline: AbortSignal) => readWechatArticleWithBrowser(url, deadline) }]
+      ? [{ method: "wechat-browser", timeout: 18_000, read: (deadline: AbortSignal) => readWechatArticleWithBrowser(url, deadline) }]
       : sameOrigin ? [] : [
         ...(fetchWithDeepSeek ? [{ method: "deepseek", timeout: 8000, read: (deadline: AbortSignal) => fetchWithDeepSeek(url, deadline) }] : []),
         { method: "jina", timeout: 8000, read: (deadline: AbortSignal) => fetchJinaText(url, jinaApiKey, deadline) },
