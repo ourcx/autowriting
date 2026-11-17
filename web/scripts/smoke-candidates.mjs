@@ -254,3 +254,71 @@ export async function smokeWritingAgent(base, token) {
     await new Promise(resolve => model.close(resolve))
   }
 }
+
+export async function smokeBrowserModel(base, token) {
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+  const root = `${base}/api/articles/20261117-browser-model-${Date.now()}/candidates`
+  const endpoint = `${base}/api/browser-model`
+  const input = { task: '通过浏览器生成', materials: '回归测试素材', platform: 'wechat', count: 2 }
+  const aiConfig = { articleProvider: 'openai-compat', articleBaseUrl: 'https://api.openai.com/v1', articleApiKey: 'fixture-key', articleModel: 'gpt-6.1-sol' }
+  assert.equal((await fetch(`${endpoint}/open`, { method: 'POST' })).status, 401)
+  const created = await fetch(root, { method: 'POST', headers, body: JSON.stringify(input) })
+  assert.equal(created.status, 201)
+  const rows = await created.json()
+
+  for (const [i, row] of rows.entries()) {
+    const controller = new AbortController()
+    const pipe = await fetch(`${endpoint}/open`, { method: 'POST', headers, signal: controller.signal })
+    assert.equal(pipe.status, 200)
+    const lines = pipe.body.pipeThrough(new TextDecoderStream()).getReader()
+    let buffer = ''
+    async function jobEvent() {
+      for (;;) {
+        const end = buffer.indexOf('\n\n')
+        if (end >= 0) {
+          const event = buffer.slice(0, end)
+          buffer = buffer.slice(end + 2)
+          if (event.startsWith('data: ')) return JSON.parse(event.slice(6))
+          continue
+        }
+        const { done, value } = await lines.read()
+        assert.equal(done, false, 'browser job channel closed early')
+        buffer += value
+      }
+    }
+    try {
+      const { sessionId } = await jobEvent()
+      const generation = await fetch(`${root}/${row.id}/stream`, {
+        method: 'POST', headers: { ...headers, 'X-Dashy-Browser-Model': sessionId }, body: JSON.stringify({ aiConfig }),
+      })
+      assert.equal(generation.status, 200)
+      const job = await jobEvent()
+      assert.equal(job.url, 'https://api.openai.com/v1/chat/completions')
+      assert.equal(job.body.model, 'gpt-6.1-sol')
+      assert.ok(!Object.hasOwn(job.body, 'temperature'))
+      assert.equal(job.body.stream, true)
+      assert.ok(!JSON.stringify(job).includes('fixture-key'))
+      const frameUrl = `${endpoint}/${sessionId}/${job.id}`
+      const send = async frame => {
+        const res = await fetch(frameUrl, { method: 'POST', headers, body: JSON.stringify(frame) })
+        assert.equal(res.status, 204)
+      }
+      assert.equal((await fetch(frameUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 401)
+      await send({ type: 'status', status: 200 })
+      await send({ type: 'chunk', chunk: `data: ${JSON.stringify({ choices: [{ delta: { content: '# 浏览器写稿\n\n已保存的正文。' }, ...(i ? {} : { finish_reason: 'stop' }) }] })}\n\n` })
+      if (i === 0) {
+        await send({ type: 'end' })
+        assert.match(await generation.text(), /event: done/)
+      } else {
+        controller.abort()
+        assert.match(await generation.text(), /event: error/)
+      }
+      const stored = (await (await fetch(root, { headers })).json()).find(candidate => candidate.id === row.id)
+      assert.equal(stored.status, i === 0 ? 'complete' : 'interrupted')
+      assert.match(stored.content, /已保存的正文/)
+    } finally {
+      controller.abort()
+      await lines.cancel().catch(() => {})
+    }
+  }
+}

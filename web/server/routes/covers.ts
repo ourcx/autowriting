@@ -1,3 +1,5 @@
+import { browserModelJson, inBrowserModelSession } from "../browserModel.ts"
+import { isStabilityCoverEndpoint } from "../../shared/browserModel.ts"
 /**
  * 封面路由：单张生成、批量生成、历史管理、缓存统计
  * POST   /api/generate-cover
@@ -169,13 +171,16 @@ router.post('/generate-cover', async (req, res) => {
 
     // ── Stability AI ─────────────────────────────────────────────────────────
     if (provider === 'stability') {
-      const response = await axios.post(
-        `${SERVER_AI_CONFIG.stabilityBaseUrl}/text-to-image/v1/engines/${process.env.STABILITY_ENGINE || 'stable-diffusion-3-large'}/text-to-image`,
-        { text_prompts: [{ text: finalPrompt, weight: 1 }], cfg_scale: 7, height: 640, width: 1216, samples: 1, steps: 30 },
-        { headers: { Authorization: `Bearer ${coverApiKey}`, 'Content-Type': 'application/json', Accept: 'application/json' } },
-      )
-      if (!response.data.artifacts?.length) throw new Error('Stability AI 未返回图片')
-      const imageUrl    = `data:image/png;base64,${response.data.artifacts[0].base64}`
+      const url = `${SERVER_AI_CONFIG.stabilityBaseUrl}/text-to-image/v1/engines/${process.env.STABILITY_ENGINE || 'stable-diffusion-3-large'}/text-to-image`
+      const body = { text_prompts: [{ text: finalPrompt, weight: 1 }], cfg_scale: 7, height: 640, width: 1216, samples: 1, steps: 30 }
+      type StabilityImage = { artifacts?: Array<{ base64: string }> }
+      const data = inBrowserModelSession() && isStabilityCoverEndpoint(url)
+        ? await browserModelJson<StabilityImage>(url, body, 180000)
+        : (await axios.post<StabilityImage>(url, body, {
+          headers: { Authorization: `Bearer ${coverApiKey}`, 'Content-Type': 'application/json', Accept: 'application/json' },
+        })).data
+      if (!data.artifacts?.length) throw new Error('Stability AI 未返回图片')
+      const imageUrl = `data:image/png;base64,${data.artifacts[0].base64}`
       cacheImage(cacheKey, imageUrl, { title, style, color, provider: 'stability' })
       const historyItem = addToHistory(title, style, color, provider, imageUrl, cacheKey)
       // 自动添加到图片库

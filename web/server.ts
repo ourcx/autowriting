@@ -6,6 +6,7 @@ import type { RequestHandler } from "express"
 import { PORT, HOST, PROJECT_ROOT, DRAFTS_DIR, CACHE_DIR, SERVER_AI_CONFIG, STATIC_DIR, YUANBAO_SEARCH_ENABLED } from "./server/config.ts"
 import { logger } from "./server/logger.ts"
 import { performanceMonitorMiddleware } from "./server/performanceMonitor.ts"
+import browserModelRouter from "./server/routes/browserModel.ts"
 import articlesRouter from "./server/routes/articles.ts"
 import coversRouter from "./server/routes/covers.ts"
 import imagesRouter from "./server/routes/images.ts"
@@ -124,6 +125,7 @@ app.use(performanceMonitorMiddleware)
 
 app.use("/api/auth/login", loginRateLimiter)
 app.use("/api/auth", authRouter)
+app.use("/api/browser-model", browserModelRouter)
 app.use("/api/agent", agentRouter)
 app.use("/api/canvas", canvasRouter)
 app.use("/api/creator-profile", creatorProfileRouter)

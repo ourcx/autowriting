@@ -6,6 +6,8 @@
  * 距离越小越相似，不能再按 L2 距离平方换算，否则会把相似度严重抬高。
  */
 import fs from "fs"
+import { browserModelEndpoint } from "../shared/browserModel.ts"
+import { browserModelJson, inBrowserModelSession } from "./browserModel.ts"
 import path from "path"
 import crypto from "node:crypto"
 import { HNSWLib } from "@langchain/community/vectorstores/hnswlib"
@@ -111,6 +113,8 @@ export function normalizeEmbeddingBaseUrl(baseURL: string): string {
   return baseURL.trim().replace(/\/+$/, "").replace(/\/embeddings$/i, "")
 }
 
+type EmbeddingResponse = { data?: Array<{ embedding: number[] }> }
+
 class RawEmbeddings extends Embeddings {
   apiKey: string
   baseURL: string
@@ -189,6 +193,16 @@ class RawEmbeddings extends Embeddings {
     if (this.dimensions) body.dimensions = this.dimensions
     if (this.instruction) body.instruction = this.instruction
 
+    const url = inBrowserModelSession() ? browserModelEndpoint(this.baseURL, "/embeddings") : undefined
+    const data = url
+      ? await browserModelJson<EmbeddingResponse>(url, body, 20_000)
+      : await this._requestEmbedding(body)
+    const vec = data?.data?.[0]?.embedding
+    if (!Array.isArray(vec)) throw new Error("Embedding API 返回格式异常：" + JSON.stringify(data))
+    return vec
+  }
+
+  private async _requestEmbedding(body: Record<string, unknown>): Promise<EmbeddingResponse> {
     const resp = await fetch(`${this.baseURL}/embeddings`, {
       method: "POST",
       headers: {
@@ -204,10 +218,7 @@ class RawEmbeddings extends Embeddings {
       throw new Error(`${resp.status} [${resp.statusText}] ${err}`)
     }
 
-    const data = await resp.json() as { data?: Array<{ embedding: number[] }> }
-    const vec = data?.data?.[0]?.embedding
-    if (!Array.isArray(vec)) throw new Error("Embedding API 返回格式异常：" + JSON.stringify(data))
-    return vec
+    return await resp.json() as EmbeddingResponse
   }
 }
 

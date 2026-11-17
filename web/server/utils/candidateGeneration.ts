@@ -1,5 +1,6 @@
 import { withRequestDeepSeekKey } from "../deepseekCredentials.ts"
 import axios from "axios"
+import { BrowserModelError } from "../browserModel.ts"
 import type { Response } from "express"
 import { SERVER_AI_CONFIG } from "../config.ts"
 import { getEffectivePrompt, recordTokenUsage } from "../db.ts"
@@ -117,7 +118,7 @@ export async function streamCandidate(userId: string, articleId: string, id: str
       } catch (error) {
         controller.signal.throwIfAborted()
         // 只向轨迹透露安全的错误类别，不保存上游请求、响应体或密钥。
-        if (error instanceof DeepSeekError) throw new WritingAgentModelError(error.message)
+        if (error instanceof DeepSeekError || error instanceof BrowserModelError) throw new WritingAgentModelError(error.message)
         if (axios.isAxiosError(error)) {
           if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT") throw new WritingAgentModelError("模型请求超时。")
           const status = error.response?.status
@@ -243,7 +244,7 @@ ${input.writingAgent ? "涉及新增事实时就近引用已读网页的真实 U
       if (step.status !== "running") continue
       step.status = controller.signal.aborted ? "interrupted" : "failed"
       step.finishedAt = candidate.finishedAt
-      step.output = !controller.signal.aborted && (error instanceof DeepSeekError || error instanceof OpenAiOutputLengthError)
+      step.output = !controller.signal.aborted && (error instanceof DeepSeekError || error instanceof OpenAiOutputLengthError || error instanceof BrowserModelError)
         ? error.message : "这一步没有完成。"
     }
     try { checkpoint() } catch {

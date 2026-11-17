@@ -1,3 +1,4 @@
+import { searchRagWithModel } from "../../utils/apiHelpers"
 import { Collapse, Input, SelectField, Textarea } from "../../components/FormControls/FormControls"
 import Button from "../../components/Button/Button"
 /**
@@ -235,13 +236,7 @@ export default function RagPage() {
     setSearching(true)
     setResults(null)
     try {
-      const res  = await fetch('/api/rag/search', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body:    JSON.stringify({ query: query.trim(), topK: 6, aiConfig: embAiConfig }),
-      })
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
+      const data = await searchRagWithModel<{ results: RagDoc[] }>({ query: query.trim(), topK: 6, aiConfig: embAiConfig })
       setResults(data.results)
     } catch (e: unknown) {
       toast.error('搜索失败：' + (e as Error).message)

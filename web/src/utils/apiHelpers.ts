@@ -4,6 +4,7 @@ import { parseCanvasLibraryImage, type CanvasLibraryImage } from "../../shared/c
  * ============================================================ */
 
 import axios, { AxiosError } from 'axios'
+import { browserArticleModel, browserCoverModel, browserEmbeddingModel, withBrowserModel } from './browserModel'
 import { AIConfig, aiRequestConfig, deepSeekKeyHeaders, loadGenCliPairingCode } from './aiConfig'
 import { CanvasDocument, parseCanvasDocument } from '../../shared/canvasDsl'
 import type { CanvasSource } from '../../shared/canvasArticle'
@@ -140,6 +141,11 @@ export async function saveArticle(articleId: string, data: {
   return response.data as { workflow?: ArticleWorkflow }
 }
 
+function postArticleModel<T = unknown>(url: string, data: object, config: AIConfig, timeout?: number) {
+  return withBrowserModel(browserArticleModel({ ...config }), undefined, headers =>
+    axios.post<T>(url, data, { timeout, headers: { ...deepSeekKeyHeaders(), ...headers } }))
+}
+
 // ── 生成文章 ──
 export async function generateArticle(
   articleId: string,
@@ -147,12 +153,12 @@ export async function generateArticle(
   materials: string,
   aiConfig: AIConfig,
 ): Promise<string> {
-  const res = await axios.post(`/api/articles/${articleId}/generate`, {
+  const res = await postArticleModel<{ article: string }>(`/api/articles/${articleId}/generate`, {
     task,
     materials,
     aiConfig: aiRequestConfig(aiConfig),
-  }, { headers: deepSeekKeyHeaders() })
-  return res.data.article as string
+  }, aiConfig)
+  return res.data.article
 }
 
 // ── 获取单篇文章 ──
@@ -357,13 +363,13 @@ export async function saveCreatorFeedback(
 }
 
 export async function generateArticleOutline(articleId: string, task: string, aiConfig: AIConfig): Promise<string> {
-  const response = await axios.post(`/api/articles/${encodeURIComponent(articleId)}/outline`, { task, aiConfig: aiRequestConfig(aiConfig) }, { headers: deepSeekKeyHeaders() })
-  return (response.data as { outline: string }).outline
+  const response = await postArticleModel<{ outline: string }>(`/api/articles/${encodeURIComponent(articleId)}/outline`, { task, aiConfig: aiRequestConfig(aiConfig) }, aiConfig)
+  return response.data.outline
 }
 
 export async function refineArticleMaterials(articleId: string, materials: string, task: string, aiConfig: AIConfig): Promise<string> {
-  const response = await axios.post(`/api/articles/${encodeURIComponent(articleId)}/refine-materials`, { materials, task, aiConfig: aiRequestConfig(aiConfig) }, { headers: deepSeekKeyHeaders() })
-  return (response.data as { refined: string }).refined
+  const response = await postArticleModel<{ refined: string }>(`/api/articles/${encodeURIComponent(articleId)}/refine-materials`, { materials, task, aiConfig: aiRequestConfig(aiConfig) }, aiConfig)
+  return response.data.refined
 }
 
 export async function confirmWechatDraft(articleId: string, input: { mediaId?: string; confirmedAbsent?: boolean }, headers: Record<string, string>): Promise<ArticleWorkflow> {
@@ -442,7 +448,7 @@ export async function analyzeCreatorPersona(input: {
   }
   publishedArticles: PersonaPublishedArticle[]
 }): Promise<CreatorPersonaAnalysis> {
-  const response = await axios.post<CreatorPersonaAnalysis>('/api/creator-profile/persona/analyze', { ...input, aiConfig: aiRequestConfig(input.aiConfig) }, { headers: deepSeekKeyHeaders() })
+  const response = await postArticleModel<CreatorPersonaAnalysis>('/api/creator-profile/persona/analyze', { ...input, aiConfig: aiRequestConfig(input.aiConfig) }, input.aiConfig)
   return {
     persona: normalizeCreatorPersona(response.data.persona),
     sources: response.data.sources,
@@ -494,59 +500,74 @@ export async function createGenerationCandidates(articleId: string, input: Candi
   return (await axios.post<GenerationCandidate[]>(`/api/articles/${encodeURIComponent(articleId)}/candidates`, input)).data
 }
 
+export function withArticleModelStream<T>(
+  path: string, input: object, config: AIConfig, consume: (response: Response) => Promise<T>,
+): Promise<T> {
+  return withBrowserModel(browserArticleModel({ ...config }), undefined, async headers => {
+    const token = localStorage.getItem("auth_token")
+    return consume(await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...deepSeekKeyHeaders(), ...headers },
+      body: JSON.stringify({ ...input, aiConfig: aiRequestConfig(config) }),
+    }))
+  })
+}
+
 export async function streamGenerationCandidate(
   articleId: string, candidateId: string, aiConfig: Record<string, unknown>,
   signal: AbortSignal, onEvent: (event: CandidateEvent) => void,
 ): Promise<void> {
-  const token = localStorage.getItem("auth_token")
-  const response = await fetch(`/api/articles/${encodeURIComponent(articleId)}/candidates/${encodeURIComponent(candidateId)}/stream`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...deepSeekKeyHeaders() },
-    body: JSON.stringify({ aiConfig: aiRequestConfig(aiConfig) }), signal,
-  })
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({})) as { error?: string }
-    throw new Error(body.error || `HTTP ${response.status}`)
-  }
-  if (!response.body) throw new Error("浏览器不支持流式响应")
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ""
-  let terminal = false
-  const consume = (block: string) => {
-    const event = block.match(/^event:\s*(.+)$/m)?.[1]?.trim()
-    const data = block.split("\n").filter(line => line.startsWith("data:")).map(line => line.slice(5).trim()).join("\n")
-    if (!event || !data) return
-    if (!["candidate", "chunk", "status", "trace", "done", "error"].includes(event)) return
-    const payload = JSON.parse(data) as Omit<CandidateEvent, "event">
-    onEvent({ ...payload, event: event as CandidateEvent["event"] })
-    if (event === "done" || event === "error") terminal = true
-  }
-  try {
-    while (!terminal) {
-      let timer: ReturnType<typeof setTimeout> | undefined
-      const timeout = new Promise<never>((_, reject) => {
-        timer = setTimeout(() => { void reader.cancel(); reject(new Error("连接长时间没有响应，请重新加载候选稿")) }, 45000)
-      })
-      const { done, value } = await Promise.race([reader.read(), timeout]).finally(() => clearTimeout(timer))
-      buffer += decoder.decode(value, { stream: !done })
-      buffer = buffer.replace(/\r\n/g, "\n")
-      let boundary = buffer.indexOf("\n\n")
-      while (boundary >= 0) {
-        consume(buffer.slice(0, boundary))
-        buffer = buffer.slice(boundary + 2)
-        boundary = buffer.indexOf("\n\n")
-      }
-      if (done) {
-        if (buffer.trim()) consume(buffer)
-        break
-      }
+  return withBrowserModel(browserArticleModel(aiConfig), signal, async relayHeaders => {
+    const token = localStorage.getItem("auth_token")
+    const response = await fetch(`/api/articles/${encodeURIComponent(articleId)}/candidates/${encodeURIComponent(candidateId)}/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...deepSeekKeyHeaders(), ...relayHeaders },
+      body: JSON.stringify({ aiConfig: aiRequestConfig(aiConfig) }), signal,
+    })
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({})) as { error?: string }
+      throw new Error(body.error || `HTTP ${response.status}`)
     }
-    if (!terminal) throw new Error("生成连接中断，已收到的内容仍保留，请重新加载或继续生成")
-  } finally {
-    await reader.cancel().catch(() => {})
-    reader.releaseLock()
-  }
+    if (!response.body) throw new Error("浏览器不支持流式响应")
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ""
+    let terminal = false
+    const consume = (block: string) => {
+      const event = block.match(/^event:\s*(.+)$/m)?.[1]?.trim()
+      const data = block.split("\n").filter(line => line.startsWith("data:")).map(line => line.slice(5).trim()).join("\n")
+      if (!event || !data) return
+      if (!["candidate", "chunk", "status", "trace", "done", "error"].includes(event)) return
+      const payload = JSON.parse(data) as Omit<CandidateEvent, "event">
+      onEvent({ ...payload, event: event as CandidateEvent["event"] })
+      if (event === "done" || event === "error") terminal = true
+    }
+    try {
+      while (!terminal) {
+        let timer: ReturnType<typeof setTimeout> | undefined
+        const timeout = new Promise<never>((_, reject) => {
+          timer = setTimeout(() => { void reader.cancel(); reject(new Error("连接长时间没有响应，请重新加载候选稿")) }, 45000)
+        })
+        const { done, value } = await Promise.race([reader.read(), timeout]).finally(() => clearTimeout(timer))
+        buffer += decoder.decode(value, { stream: !done })
+        buffer = buffer.replace(/\r\n/g, "\n")
+        let boundary = buffer.indexOf("\n\n")
+        while (boundary >= 0) {
+          consume(buffer.slice(0, boundary))
+          buffer = buffer.slice(boundary + 2)
+          boundary = buffer.indexOf("\n\n")
+        }
+        if (done) {
+          if (buffer.trim()) consume(buffer)
+          break
+        }
+      }
+      if (!terminal) throw new Error("生成连接中断，已收到的内容仍保留，请重新加载或继续生成")
+    } finally {
+      await reader.cancel().catch(() => {})
+      reader.releaseLock()
+    }
+  })
 }
 
 export async function saveCreatorWritingProfile(profile: CreatorWritingProfile): Promise<CreatorWritingProfile> {
@@ -561,52 +582,54 @@ export async function generateCanvasDocument(
   onProgress?: (message: string) => void,
   design?: CanvasDesignInput,
 ): Promise<CanvasDocument> {
-  const token = localStorage.getItem('auth_token')
-  const response = await fetch('/api/canvas/generate/stream', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...deepSeekKeyHeaders(),
-    },
-    body: JSON.stringify({ prompt, sources, aiConfig: aiRequestConfig(aiConfig), ...design }),
-  })
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({})) as { error?: string }
-    throw new Error(error.error || `HTTP ${response.status}`)
-  }
-  if (!response.body) throw new Error('浏览器不支持流式响应')
-
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-  let result: CanvasDocument | null = null
-
-  const consumeBlock = (block: string) => {
-    const event = block.match(/^event:\s*(.+)$/m)?.[1]?.trim()
-    const dataText = block.match(/^data:\s*(.+)$/m)?.[1]?.trim()
-    if (!event || !dataText) return
-    const data = JSON.parse(dataText) as { message?: string; document?: unknown }
-    if (event === 'progress' && data.message) onProgress?.(data.message)
-    if (event === 'heartbeat') onProgress?.('AI 正在编排画布...')
-    if (event === 'error') throw new Error(data.message || 'AI 画布生成失败')
-    if (event === 'result') result = parseCanvasDocument(data.document)
-  }
-
-  while (true) {
-    const { done, value } = await reader.read()
-    buffer += decoder.decode(value, { stream: !done })
-    let boundary = buffer.indexOf('\n\n')
-    while (boundary >= 0) {
-      consumeBlock(buffer.slice(0, boundary))
-      buffer = buffer.slice(boundary + 2)
-      boundary = buffer.indexOf('\n\n')
+  return withBrowserModel(browserArticleModel({ ...aiConfig }), undefined, async relayHeaders => {
+    const token = localStorage.getItem('auth_token')
+    const response = await fetch('/api/canvas/generate/stream', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...deepSeekKeyHeaders(), ...relayHeaders,
+      },
+      body: JSON.stringify({ prompt, sources, aiConfig: aiRequestConfig(aiConfig), ...design }),
+    })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({})) as { error?: string }
+      throw new Error(error.error || `HTTP ${response.status}`)
     }
-    if (done) break
-  }
-  if (buffer.trim()) consumeBlock(buffer)
-  if (!result) throw new Error('画布生成结束，但没有收到有效结果')
-  return result
+    if (!response.body) throw new Error('浏览器不支持流式响应')
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let result: CanvasDocument | null = null
+
+    const consumeBlock = (block: string) => {
+      const event = block.match(/^event:\s*(.+)$/m)?.[1]?.trim()
+      const dataText = block.match(/^data:\s*(.+)$/m)?.[1]?.trim()
+      if (!event || !dataText) return
+      const data = JSON.parse(dataText) as { message?: string; document?: unknown }
+      if (event === 'progress' && data.message) onProgress?.(data.message)
+      if (event === 'heartbeat') onProgress?.('AI 正在编排画布...')
+      if (event === 'error') throw new Error(data.message || 'AI 画布生成失败')
+      if (event === 'result') result = parseCanvasDocument(data.document)
+    }
+
+    while (true) {
+      const { done, value } = await reader.read()
+      buffer += decoder.decode(value, { stream: !done })
+      let boundary = buffer.indexOf('\n\n')
+      while (boundary >= 0) {
+        consumeBlock(buffer.slice(0, boundary))
+        buffer = buffer.slice(boundary + 2)
+        boundary = buffer.indexOf('\n\n')
+      }
+      if (done) break
+    }
+    if (buffer.trim()) consumeBlock(buffer)
+    if (!result) throw new Error('画布生成结束，但没有收到有效结果')
+    return result
+  })
 }
 
 export async function generateWechatBlockDocument(
@@ -616,52 +639,54 @@ export async function generateWechatBlockDocument(
   onProgress?: (message: string) => void,
   design?: CanvasDesignInput,
 ): Promise<WechatBlockDocument> {
-  const token = localStorage.getItem('auth_token')
-  const response = await fetch('/api/canvas/generate-block/stream', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...deepSeekKeyHeaders(),
-    },
-    body: JSON.stringify({ prompt, sources, aiConfig: aiRequestConfig(aiConfig), ...design }),
-  })
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({})) as { error?: string }
-    throw new Error(error.error || `HTTP ${response.status}`)
-  }
-  if (!response.body) throw new Error('浏览器不支持流式响应')
-
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-  let result: WechatBlockDocument | null = null
-
-  const consumeBlock = (block: string) => {
-    const event = block.match(/^event:\s*(.+)$/m)?.[1]?.trim()
-    const dataText = block.match(/^data:\s*(.+)$/m)?.[1]?.trim()
-    if (!event || !dataText) return
-    const data = JSON.parse(dataText) as { message?: string; document?: unknown }
-    if (event === 'progress' && data.message) onProgress?.(data.message)
-    if (event === 'heartbeat') onProgress?.('AI 正在编排 HTML 内容块...')
-    if (event === 'error') throw new Error(data.message || 'AI 块排版生成失败')
-    if (event === 'result') result = parseWechatBlockDocument(data.document)
-  }
-
-  while (true) {
-    const { done, value } = await reader.read()
-    buffer += decoder.decode(value, { stream: !done })
-    let boundary = buffer.indexOf('\n\n')
-    while (boundary >= 0) {
-      consumeBlock(buffer.slice(0, boundary))
-      buffer = buffer.slice(boundary + 2)
-      boundary = buffer.indexOf('\n\n')
+  return withBrowserModel(browserArticleModel({ ...aiConfig }), undefined, async relayHeaders => {
+    const token = localStorage.getItem('auth_token')
+    const response = await fetch('/api/canvas/generate-block/stream', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...deepSeekKeyHeaders(), ...relayHeaders,
+      },
+      body: JSON.stringify({ prompt, sources, aiConfig: aiRequestConfig(aiConfig), ...design }),
+    })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({})) as { error?: string }
+      throw new Error(error.error || `HTTP ${response.status}`)
     }
-    if (done) break
-  }
-  if (buffer.trim()) consumeBlock(buffer)
-  if (!result) throw new Error('块排版生成结束，但没有收到有效结果')
-  return result
+    if (!response.body) throw new Error('浏览器不支持流式响应')
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let result: WechatBlockDocument | null = null
+
+    const consumeBlock = (block: string) => {
+      const event = block.match(/^event:\s*(.+)$/m)?.[1]?.trim()
+      const dataText = block.match(/^data:\s*(.+)$/m)?.[1]?.trim()
+      if (!event || !dataText) return
+      const data = JSON.parse(dataText) as { message?: string; document?: unknown }
+      if (event === 'progress' && data.message) onProgress?.(data.message)
+      if (event === 'heartbeat') onProgress?.('AI 正在编排 HTML 内容块...')
+      if (event === 'error') throw new Error(data.message || 'AI 块排版生成失败')
+      if (event === 'result') result = parseWechatBlockDocument(data.document)
+    }
+
+    while (true) {
+      const { done, value } = await reader.read()
+      buffer += decoder.decode(value, { stream: !done })
+      let boundary = buffer.indexOf('\n\n')
+      while (boundary >= 0) {
+        consumeBlock(buffer.slice(0, boundary))
+        buffer = buffer.slice(boundary + 2)
+        boundary = buffer.indexOf('\n\n')
+      }
+      if (done) break
+    }
+    if (buffer.trim()) consumeBlock(buffer)
+    if (!result) throw new Error('块排版生成结束，但没有收到有效结果')
+    return result
+  })
 }
 
 export async function fetchUploadedArticleImages(articleId: string): Promise<Array<{ src: string; alt: string }>> {
@@ -811,8 +836,8 @@ export async function generateXiaohongshuArticleMetadata(input: {
   content: string
   aiConfig: AIConfig
 }): Promise<{ title: string; summary: string; topics: string[] }> {
-  const response = await axios.post("/api/xiaohongshu/article-metadata", { ...input, aiConfig: aiRequestConfig(input.aiConfig) }, { headers: deepSeekKeyHeaders() })
-  return response.data as { title: string; summary: string; topics: string[] }
+  const response = await postArticleModel<{ title: string; summary: string; topics: string[] }>("/api/xiaohongshu/article-metadata", { ...input, aiConfig: aiRequestConfig(input.aiConfig) }, input.aiConfig)
+  return response.data
 }
 
 export async function fetchXiaohongshuPublishRecords(): Promise<XiaohongshuPublishRecord[]> {
@@ -858,7 +883,9 @@ export async function generateCoverImage(input: Record<string, unknown>): Promis
   warning?: string
 }> {
   try {
-    const response = await axios.post("/api/generate-cover", input, { timeout: 190000 })
+    const config = input.aiConfig as Record<string, unknown> | undefined
+    const response = await withBrowserModel(browserCoverModel(input.provider, config || {}), undefined, headers =>
+      axios.post("/api/generate-cover", input, { timeout: 190000, headers }))
     return response.data as { imageUrl: string; warning?: string }
   } catch (error) {
     throw normalizeApiError(error)
@@ -1009,6 +1036,11 @@ export async function fetchBlob(url: string, init: RequestInit = {}): Promise<Bl
   }
 }
 
+export async function searchRagWithModel<T>(input: { query: string; topK: number; aiConfig: Record<string, unknown> }): Promise<T> {
+  return withBrowserModel(browserEmbeddingModel(input.aiConfig), undefined, async headers =>
+    (await axios.post<T>("/api/rag/search", input, { headers })).data)
+}
+
 // ── 连通性测试 ──
 export async function testAIConnection(cfg: AIConfig): Promise<{ ok: boolean; msg: string }> {
   if (cfg.articleProvider === "deepseek") {
@@ -1081,9 +1113,9 @@ export async function fetchXiumiReference(url: string): Promise<{title: string; 
 
 /** 样式管理统一复用登录请求；未填写本地密钥时保留服务端配置。 */
 export async function generateArticleStyle(prompt: string, baseCSS: string, aiConfig: AIConfig): Promise<string> {
-  const { data } = await axios.post<{ css: string }>("/api/generate-style", {
+  const { data } = await postArticleModel<{ css: string }>("/api/generate-style", {
     prompt, baseCSS, ...(isLocalApiKeyConfigured(aiConfig) ? { aiConfig: aiRequestConfig(aiConfig) } : {}),
-  }, { timeout: 300000, headers: deepSeekKeyHeaders() })
+  }, aiConfig, 300000)
   const rawCss = typeof data.css === "string" ? data.css.trim() : ""
   const fencedCss = rawCss.match(/```(?:css)?\s*([\s\S]*?)```/i)?.[1]
   const styleCss = rawCss.match(/<style[^>]*>([\s\S]*?)<\/style>/i)?.[1]

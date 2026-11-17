@@ -5,7 +5,8 @@ import {
   Sparkles, AlertCircle, CheckCircle2,
   ChevronDown, ChevronRight, Circle, Wand2, X,
 } from 'lucide-react'
-import { aiRequestConfig, deepSeekKeyHeaders, loadAIConfig } from '../../utils/aiConfig'
+import { withArticleModelStream } from '../../utils/apiHelpers'
+import { loadAIConfig } from '../../utils/aiConfig'
 import { sanitizeHtml } from '../../utils/sanitizeHtml'
 import { stripEmoji } from '../../../shared/contentProduction'
 import './ContentStats.css'
@@ -559,55 +560,45 @@ export default function ContentStats({ content, title, articleId, task, onArticl
     deaiFullText.current = ''
 
     try {
-      const aiConfig = loadAIConfig()
-      const token = localStorage.getItem('auth_token')
-      const resp = await fetch(`/api/articles/${articleId}/deai/stream`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...deepSeekKeyHeaders(),
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ article: content, aiConfig: aiRequestConfig(aiConfig) }),
-      })
+      await withArticleModelStream(`/api/articles/${articleId}/deai/stream`, { article: content }, loadAIConfig(), async resp => {
+        if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`)
 
-      if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`)
+        const reader  = resp.body.getReader()
+        const decoder = new TextDecoder('utf-8')
+        let   lineBuf = ''
+        let   curEvent = ''
 
-      const reader  = resp.body.getReader()
-      const decoder = new TextDecoder('utf-8')
-      let   lineBuf = ''
-      let   curEvent = ''
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+          lineBuf += decoder.decode(value, { stream: true })
+          const lines = lineBuf.split('\n')
+          lineBuf = lines.pop() ?? ''
 
-        lineBuf += decoder.decode(value, { stream: true })
-        const lines = lineBuf.split('\n')
-        lineBuf = lines.pop() ?? ''
-
-        for (const line of lines) {
-          const trimmed = line.trim()
-          if (!trimmed) { curEvent = ''; continue }
-          if (trimmed.startsWith('event:')) { curEvent = trimmed.slice(6).trim(); continue }
-          if (trimmed.startsWith('data:')) {
-            try {
-              const payload = JSON.parse(trimmed.slice(5).trim()) as Record<string, unknown>
-              const evt = curEvent || (payload.text !== undefined ? 'chunk' : payload.article !== undefined ? 'done' : payload.message !== undefined ? 'error' : '')
-              if (evt === 'chunk') {
-                const t = payload.text as string
-                deaiFullText.current += t
-                setDeaiResult(deaiFullText.current)
-                setTimeout(scrollDeaiToBottom, 0)
-              } else if (evt === 'done') {
-                // done 时 fullText 已完整
-              } else if (evt === 'error') {
-                setDeaiError(payload.message as string)
-              }
-            } catch { /* ignore */ }
+          for (const line of lines) {
+            const trimmed = line.trim()
+            if (!trimmed) { curEvent = ''; continue }
+            if (trimmed.startsWith('event:')) { curEvent = trimmed.slice(6).trim(); continue }
+            if (trimmed.startsWith('data:')) {
+              try {
+                const payload = JSON.parse(trimmed.slice(5).trim()) as Record<string, unknown>
+                const evt = curEvent || (payload.text !== undefined ? 'chunk' : payload.article !== undefined ? 'done' : payload.message !== undefined ? 'error' : '')
+                if (evt === 'chunk') {
+                  const t = payload.text as string
+                  deaiFullText.current += t
+                  setDeaiResult(deaiFullText.current)
+                  setTimeout(scrollDeaiToBottom, 0)
+                } else if (evt === 'done') {
+                  // done 时 fullText 已完整
+                } else if (evt === 'error') {
+                  setDeaiError(payload.message as string)
+                }
+              } catch { /* ignore */ }
+            }
           }
         }
-      }
+      })
     } catch (e: unknown) {
       setDeaiError(e instanceof Error ? e.message : '未知错误')
     } finally {
@@ -645,72 +636,62 @@ export default function ContentStats({ content, title, articleId, task, onArticl
     setAnalyzeProgress('')
 
     try {
-      const aiConfig = loadAIConfig()
-      const token = localStorage.getItem('auth_token')
-      const resp = await fetch(`/api/articles/${articleId}/analyze`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...deepSeekKeyHeaders(),
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ article: content, task, aiConfig: aiRequestConfig(aiConfig) }),
-      })
+      await withArticleModelStream(`/api/articles/${articleId}/analyze`, { article: content, task }, loadAIConfig(), async resp => {
+        if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`)
 
-      if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`)
+        const reader  = resp.body.getReader()
+        const decoder = new TextDecoder('utf-8')
+        let   lineBuf  = ''
+        let   curEvent = ''
+        let   accumulated = ''
 
-      const reader  = resp.body.getReader()
-      const decoder = new TextDecoder('utf-8')
-      let   lineBuf  = ''
-      let   curEvent = ''
-      let   accumulated = ''
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+          lineBuf += decoder.decode(value, { stream: true })
+          const lines = lineBuf.split('\n')
+          lineBuf = lines.pop() ?? ''
 
-        lineBuf += decoder.decode(value, { stream: true })
-        const lines = lineBuf.split('\n')
-        lineBuf = lines.pop() ?? ''
+          for (const line of lines) {
+            const trimmed = line.trim()
+            if (!trimmed) { curEvent = ''; continue }
+            if (trimmed.startsWith('event:')) { curEvent = trimmed.slice(6).trim(); continue }
+            if (!trimmed.startsWith('data:')) continue
 
-        for (const line of lines) {
-          const trimmed = line.trim()
-          if (!trimmed) { curEvent = ''; continue }
-          if (trimmed.startsWith('event:')) { curEvent = trimmed.slice(6).trim(); continue }
-          if (!trimmed.startsWith('data:')) continue
+            try {
+              const payload = JSON.parse(trimmed.slice(5).trim()) as Record<string, unknown>
+              const evt = curEvent
 
-          try {
-            const payload = JSON.parse(trimmed.slice(5).trim()) as Record<string, unknown>
-            const evt = curEvent
-
-            if (evt === 'progress') {
-              setAnalyzeProgress(payload.message as string)
-            } else if (evt === 'chunk') {
-              accumulated += payload.text as string
-            } else if (evt === 'partial-result') {
-              // 增量更新：流式渲染已解析的部分
-              setResult(prev => ({
-                scores: { overall: 0, style: 0, structure: 0, actionability: 0, originality: 0 },
-                wordCount: 0, readingMinutes: 0, strengths: [], issues: [],
-                styleMatch: { score: 0, note: '' }, topSuggestion: '', ragCount: 0,
-                ...prev,
-                ...(payload as unknown as Partial<AnalysisResult>),
-              }))
-            } else if (evt === 'result') {
-              setResult(payload as unknown as AnalysisResult)
-              setAnalyzeProgress('')
-              setSaved(true)
-              onReviewCompleted?.()
-              setTimeout(() => setSaved(false), 3000)
-            } else if (evt === 'error') {
-              throw new Error(payload.message as string)
+              if (evt === 'progress') {
+                setAnalyzeProgress(payload.message as string)
+              } else if (evt === 'chunk') {
+                accumulated += payload.text as string
+              } else if (evt === 'partial-result') {
+                // 增量更新：流式渲染已解析的部分
+                setResult(prev => ({
+                  scores: { overall: 0, style: 0, structure: 0, actionability: 0, originality: 0 },
+                  wordCount: 0, readingMinutes: 0, strengths: [], issues: [],
+                  styleMatch: { score: 0, note: '' }, topSuggestion: '', ragCount: 0,
+                  ...prev,
+                  ...(payload as unknown as Partial<AnalysisResult>),
+                }))
+              } else if (evt === 'result') {
+                setResult(payload as unknown as AnalysisResult)
+                setAnalyzeProgress('')
+                setSaved(true)
+                onReviewCompleted?.()
+                setTimeout(() => setSaved(false), 3000)
+              } else if (evt === 'error') {
+                throw new Error(payload.message as string)
+              }
+            } catch (parseErr) {
+              // 只有 event:error 时才抛出
+              if (curEvent === 'error') throw parseErr
             }
-          } catch (parseErr) {
-            // 只有 event:error 时才抛出
-            if (curEvent === 'error') throw parseErr
           }
         }
-      }
+      })
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '未知错误')
     } finally {

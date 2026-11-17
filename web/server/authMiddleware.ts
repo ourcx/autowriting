@@ -11,6 +11,7 @@ import { AGENT_API_KEY, AGENT_USERNAME } from "./config.ts"
 import { findUserById, findUserByUsername } from "./db.ts"
 import { logger } from "./logger.ts"
 import { JWT_SECRET } from "./routes/auth.ts"
+import { bindBrowserModelSession } from "./browserModel.ts"
 import type { AuthedRequest } from "./types.ts"
 
 const AGENT_ROUTE_ALLOWLIST = [
@@ -95,7 +96,7 @@ export function authMiddleware(req: AuthedRequest, res: Response, next: NextFunc
     }
     req.authType = "jwt"
     req.user = { id: user.id, username: user.username, role: user.role as "admin" | "user" }
-    next()
+    bindBrowserModelSession(req, res, next)
   } catch {
     res.status(401).json({ error: "Token 无效或已过期，请重新登录" })
   }
