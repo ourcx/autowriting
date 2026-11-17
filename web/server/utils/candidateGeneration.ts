@@ -226,8 +226,8 @@ ${input.writingAgent ? "涉及新增事实时就近引用已读网页的真实 U
       const revision = await reviseArticleDraft({ ...revisionOptions, draft: candidate.content })
       approved = revision.approved
       candidate.content = revision.content
-      const factIssue = await checkArticleFacts({ ...revisionOptions, draft: candidate.content, writingContext })
-      if (factIssue) throw new WritingAgentModelError(factIssue)
+      // 成稿事实核查的结果留在轨迹里，作者可以直接选用已写完的候选稿。
+      await checkArticleFacts({ ...revisionOptions, draft: candidate.content, writingContext })
     }
     candidate.status = "complete"
     candidate.message = approved ? "生成完成" : "已保留初稿，优化稿未通过复核"

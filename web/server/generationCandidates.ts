@@ -48,7 +48,15 @@ export function saveCandidate(userId: string, articleId: string, candidate: Stor
 export function readCandidate(userId: string, articleId: string, id: string): StoredCandidate {
   const target = filename(userId, articleId, id)
   if (!fs.existsSync(target)) throw new CandidateError("候选稿不存在", 404)
-  return JSON.parse(fs.readFileSync(target, "utf8")) as StoredCandidate
+  const candidate = JSON.parse(fs.readFileSync(target, "utf8")) as StoredCandidate
+  // 旧版把事实核查结果写成中断。只恢复已写完且因这两种核查结果被拦下的稿件。
+  if (candidate.status === "interrupted" && candidate.draftComplete && candidate.content.trim()
+    && (candidate.message === "成稿仍有待核实的事实，已保留草稿。请查看核查记录，补充来源后重新生成。"
+      || candidate.message === "事实核查未完成，已保留草稿，可继续核查。")) {
+    candidate.status = "complete"
+    candidate.message = "生成完成"
+  }
+  return candidate
 }
 
 export function interruptCandidateTrace(candidate: GenerationCandidate, finishedAt?: string): void {

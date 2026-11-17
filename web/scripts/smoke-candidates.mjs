@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
+import { readFile, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { createServer } from 'node:http'
 
 export async function smokeCandidates(base, token) {
@@ -123,7 +126,7 @@ export async function smokeCandidates(base, token) {
 }
 
 
-export async function smokeWritingAgent(base, token) {
+export async function smokeWritingAgent(base, token, dataDir, userId) {
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
   const id = `20261114-writing-agent-${Date.now()}`
   const history = `20261113-history-${Date.now()}`
@@ -240,15 +243,25 @@ export async function smokeWritingAgent(base, token) {
     const [pending] = await json(`${root}/candidates`, {
       task: '校舍建设', materials: '现有公告只写了设计招标', platform: 'wechat', count: 1, writingAgent: true,
     })
-    assert.match(await run(pending.id), /event: error/)
-    const blocked = (await json(`${root}/candidates`)).find(row => row.id === pending.id)
-    assert.equal(blocked.status, 'interrupted')
-    assert.equal(blocked.content, rewritten)
-    assert.match(blocked.trace.at(-1).output, /两个公告日期互相冲突/)
-    const cannotSelect = await fetch(root, {
-      headers, method: 'POST', body: JSON.stringify({ article: blocked.content, selectedCandidateId: blocked.id }),
-    })
-    assert.equal(cannotSelect.status, 409)
+    assert.match(await run(pending.id), /event: done/)
+    const withFactNotes = (await json(`${root}/candidates`)).find(row => row.id === pending.id)
+    assert.equal(withFactNotes.status, 'complete')
+    assert.equal(withFactNotes.content, rewritten)
+    assert.match(withFactNotes.trace.at(-1).output, /两个公告日期互相冲突/)
+    assert.ok((await json(root, { article: withFactNotes.content, selectedCandidateId: withFactNotes.id })).workflow)
+
+    // 用本次 smoke 的隔离数据模拟上线前已落盘的候选稿。
+    const sha256 = value => createHash('sha256').update(value).digest('hex')
+    const file = join(dataDir, 'generation-candidates', sha256(userId), sha256(id), `${pending.id}.json`)
+    const legacy = JSON.parse(await readFile(file, 'utf8'))
+    assert.equal(legacy.draftComplete, true)
+    legacy.status = 'interrupted'
+    legacy.message = '成稿仍有待核实的事实，已保留草稿。请查看核查记录，补充来源后重新生成。'
+    await writeFile(file, JSON.stringify(legacy))
+    const restored = (await json(`${root}/candidates`)).find(row => row.id === pending.id)
+    assert.equal(restored.status, 'complete')
+    assert.equal(restored.content, rewritten)
+    assert.ok((await json(root, { article: restored.content, selectedCandidateId: restored.id })).workflow)
   } finally {
     model.closeAllConnections()
     await new Promise(resolve => model.close(resolve))

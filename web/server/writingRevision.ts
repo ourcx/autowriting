@@ -39,15 +39,13 @@ export async function checkArticleFacts({ draft, writingContext, signal, model, 
     if (result.issues.some(issue => !draft.includes(issue.excerpt))) throw new Error("核查引用无法定位")
     if (result.issues.length) {
       finish({ status: "changes_requested", output: result.issues.map(({ excerpt, reason }) => `「${excerpt}」\n${reason}`).join("\n\n") })
-      return "成稿仍有待核实的事实，已保留草稿。请查看核查记录，补充来源后重新生成。"
+      return
     }
     finish({ output: "本轮未发现与已读证据冲突或仍待核对的确定性说法。" })
-    return ""
   } catch (error) {
     signal.throwIfAborted()
     const reason = error instanceof WritingAgentModelError ? error.message : "核查结果无法解析或定位到原句。"
     finish({ status: "failed", output: reason })
-    return "事实核查未完成，已保留草稿，可继续核查。"
   }
 }
 

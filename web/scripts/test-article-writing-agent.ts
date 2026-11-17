@@ -347,18 +347,17 @@ try {
     if (outcome === "failed") assert.match(revisionSteps[0].output || "", /审稿回复不是有效 JSON/)
   }
   const factDraft = "# 夺冠\n\nLPL 上一次捧杯是 S13。"
-  const factTrace: string[] = []
-  const finding = await checkArticleFacts({
+  const factTrace: { status?: string; output?: string }[] = []
+  await checkArticleFacts({
     draft: factDraft, writingContext: "提纲：素材中的 S13 与相隔五年冲突，原文未读。",
     signal: AbortSignal.timeout(1000), model: "fixture", progress: () => {},
-    startStep: () => ({ status }) => factTrace.push(status || "done"),
+    startStep: () => ({ status, output }) => factTrace.push({ status, output }),
     complete: async (_system, input) => {
       assert.match(JSON.parse(input).research, /S13 与相隔五年冲突/)
       return '{"issues":[{"excerpt":"LPL 上一次捧杯是 S13。","reason":"赛季与年份冲突，缺少赛事记录"}]}'
     },
   })
-  assert.match(finding, /待核实/)
-  assert.deepEqual(factTrace, ["changes_requested"])
+  assert.deepEqual(factTrace, [{ status: "changes_requested", output: "「LPL 上一次捧杯是 S13。」\n赛季与年份冲突，缺少赛事记录" }])
   const abort = new AbortController()
   abort.abort()
   await assert.rejects(() => prepareArticleWriting({ ...base, signal: abort.signal, complete: async () => { throw new Error("不应调用模型") } }), { name: "AbortError" })

@@ -1147,7 +1147,7 @@ cases.push({
 
 cases.push({
   name: '文章 Agent 先检索、拟提纲，再生成候选稿并记录参考',
-  run: () => smokeWritingAgent(BASE, token),
+  run: () => smokeWritingAgent(BASE, token, join(SMOKE_DATA_ROOT, 'data'), smokeUserId),
 })
 cases.push({
   name: '浏览器代发候选稿模型请求并在断开时保存正文',
