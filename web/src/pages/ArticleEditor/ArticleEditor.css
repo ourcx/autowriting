@@ -224,6 +224,16 @@
   overflow: hidden;
 }
 
+.materials-task { flex-shrink: 0; padding: 16px; border-bottom: 1px solid var(--color-hairline); }
+.materials-task .materials-header-top { margin-bottom: 10px; gap: 12px; }
+.materials-task label { margin-right: auto; color: var(--color-ink); font-size: 14px; font-weight: 600; }
+.materials-task button { color: var(--color-brand-teal); font-size: 12px; }
+.materials-task textarea { width: 100%; min-height: 88px; resize: vertical; }
+
+.editor-tool-nav { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 8px var(--spacing-lg); border-top: 1px solid var(--color-hairline); }
+.editor-tool-nav button { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 0; color: var(--color-muted); font-size: 12px; }
+.editor-tool-nav button[aria-pressed="true"] { color: var(--color-brand-teal); font-weight: 600; }
+
 .materials-panel-header {
   display: flex !important;
   flex-direction: column !important;
@@ -1237,6 +1247,7 @@
 .editor-content { min-height: 0; padding-top: 12px; }
 .editor-document-meta {
   display: flex;
+  flex-wrap: wrap;
   flex: 0 0 auto;
   align-items: baseline;
   justify-content: space-between;

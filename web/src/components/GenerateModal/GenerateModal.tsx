@@ -42,9 +42,8 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
   const [terminalTools, setTerminalTools] = useState(true)
   const [rows, setRows] = useState<GenerationCandidate[]>([])
   const [activeId, setActiveId] = useState("")
-  const [view, setView] = useState<"draft" | "trace" | "compare">("draft")
+  const [view, setView] = useState<"setup" | "draft" | "trace" | "compare">("draft")
   const comparing = view === "compare"
-  const [setupOpen, setSetupOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [applying, setApplying] = useState(false)
   const [error, setError] = useState("")
@@ -67,7 +66,7 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
       const candidates = await fetchGenerationCandidates(articleId)
       if (!mounted.current) return
       setRows(candidates)
-      if (!candidates.length) setSetupOpen(true)
+      if (!candidates.length) setView("setup")
       setActiveId(previous => candidates.some(row => row.id === previous) ? previous : candidates[0]?.id || "")
     } catch (cause) {
       if (mounted.current) setError(extractErrorMessage(cause))
@@ -153,8 +152,7 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
       if (stopped.current || !mounted.current) return
       setRows(previous => [...created, ...previous])
       setActiveId(created[0].id)
-      setView("trace")
-      setSetupOpen(false)
+      setView("draft")
       await Promise.all(created.map(candidate => run(candidate)))
     } catch (cause) { if (mounted.current) setError(extractErrorMessage(cause)) }
     finally {
@@ -201,13 +199,36 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
           <div><h2>生成候选稿</h2><p>写作工作台 <span aria-hidden="true">/</span> <span className="gc-completed">{completeCount} 篇已完成</span></p></div>
         </div>
         <div className="gc-header-actions">
-          {busy
-            ? <Button className="gc-stop" onClick={stop}><Square size={12} />停止生成</Button>
-            : <Button variant="primary" className="gc-new" aria-expanded={setupOpen} onClick={() => setSetupOpen(open => !open)}><Settings2 size={15} />{setupOpen ? "收起设置" : "新建一批"}</Button>}
+          {busy && <Button className="gc-stop" onClick={stop}><Square size={12} />停止生成</Button>}
           <Button className="gc-icon" onClick={close} title="关闭并保留候选稿" aria-label="关闭生成窗口"><X size={18} /></Button>
         </div>
       </header>
-      {!busy && setupOpen && <div className="gc-settings">
+      {error && <div className="gc-alert" role="alert"><AlertCircle size={16} />{error}</div>}
+      <div className="gc-workspace">
+        <nav className="gc-list" aria-label="候选稿列表">
+          <div className="gc-list-head"><span>候选稿 <small>{rows.length}</small></span>
+            <Button className="gc-icon gc-refresh" disabled={loading || busy} onClick={() => void reload()} aria-label="刷新候选稿" title="刷新候选稿"><RefreshCw size={13} /></Button>
+          </div>
+          {rows.map(row => <Button variant="plain" key={row.id} className="gc-row" aria-current={row.id === activeId ? "true" : undefined} onClick={() => { setActiveId(row.id); setView("draft") }}>
+            <span className="gc-row-kicker">{row.label}</span>
+            <strong>{row.content.match(/^#\s+(.+)$/m)?.[1] || (row.platform === "wechat" ? "公众号稿" : "今日头条稿")}</strong>
+            <span className="gc-row-meta"><i data-status={row.status} />{STATUS[row.status]}<span aria-hidden="true">·</span>{row.content.length} 字</span>
+          </Button>)}
+        </nav>
+        <main className="gc-main">
+          <div className="gc-main-head">
+            <div className="gc-view-switch" role="group" aria-label="候选稿视图">
+              <Button variant="plain" className="gc-view" aria-pressed={view === "setup"} onClick={() => setView("setup")}><Settings2 size={15} />生成设置</Button>
+              <Button variant="plain" className="gc-view" aria-pressed={view === "draft"} onClick={() => setView("draft")}><FileText size={15} />正文</Button>
+              <Button variant="plain" className="gc-view" aria-pressed={view === "trace"} onClick={() => setView("trace")}><Activity size={15} />生成轨迹</Button>
+              <Button variant="plain" className="gc-view" aria-pressed={comparing} onClick={() => setView("compare")}><Layers size={15} />对比全文</Button>
+            </div>
+            {busy && <span className="gc-live" role="status"><Loader2 size={14} className="gc-spin" />生成中</span>}
+          </div>
+          <div className={`gc-drafts${comparing ? " gc-drafts--compare" : ""}`}>
+      {view === "setup" && <div className="gc-settings">
+        <h3>本次生成设置</h3>
+        <p>选好平台、形式和配图方式后开始生成，候选稿会保留在左侧。</p>
         <div className="gc-settings-controls">
           <fieldset className="gc-choice">
             <legend>生成平台</legend>
@@ -233,11 +254,7 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
               {[1, 2, 3].map(value => <Button variant="plain" key={value} aria-pressed={count === value} onClick={() => setCount(value)}>{value}</Button>)}
             </div>
           </fieldset>
-          <Button variant="primary" className="gc-generate-button" disabled={loading || applying} onClick={() => void start()}>
-            <Zap size={14} />{platform === "both" ? "生成双平台版本" : `生成${platform === "wechat" ? "公众号母稿" : "今日头条版本"}`}
-          </Button>
         </div>
-        <Collapse className="gc-advanced-settings" label={`配图与工具设置 · ${imageMode === "none" ? "不配图" : `${imageCount} 张图`}`}>
         <div className="gc-media-settings">
           <fieldset className="gc-choice">
             <legend>正文配图</legend>
@@ -258,35 +275,12 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
             <Checkbox checked={terminalTools} onCheckedChange={setTerminalTools}>终端整理资料</Checkbox>
           </div>
         </div>
-        <p>{imageMode === "generate" ? "本次已允许调用官方 GPT Image，生成的示意图会明确标注，可能单独计费。" : "优先原始照片、官方图和真实截图。找不到合适图片时会提示缺图，不会自动生成。"}</p>
+        <p>{imageMode === "none" ? "本次只生成正文。" : imageMode === "generate" ? "本次已允许调用官方 GPT Image，生成的示意图会明确标注，可能单独计费。" : "优先原始照片、官方图和真实截图。找不到合适图片时会提示缺图，不会自动生成。"}</p>
         {writingMode === "image_story" && <p>默认目标 6 张图，要求模型至少配 2 张；正文以 300–600 字为目标。缺图不会中断正文生成。</p>}
         <p>先查历史文章和公开网页，再写作、审稿和优化。浏览器验证码处理需要当前模型支持看图。</p>
-        </Collapse>
       </div>}
-      {error && <div className="gc-alert" role="alert"><AlertCircle size={16} />{error}</div>}
-      <div className="gc-workspace">
-        <nav className="gc-list" aria-label="候选稿列表">
-          <div className="gc-list-head"><span>候选稿 <small>{rows.length}</small></span>
-            <Button className="gc-icon gc-refresh" disabled={loading || busy} onClick={() => void reload()} aria-label="刷新候选稿" title="刷新候选稿"><RefreshCw size={13} /></Button>
-          </div>
-          {rows.map(row => <Button variant="plain" key={row.id} className="gc-row" aria-current={row.id === activeId ? "true" : undefined} onClick={() => setActiveId(row.id)}>
-            <span className="gc-row-kicker">{row.label}</span>
-            <strong>{row.content.match(/^#\s+(.+)$/m)?.[1] || (row.platform === "wechat" ? "公众号稿" : "今日头条稿")}</strong>
-            <span className="gc-row-meta"><i data-status={row.status} />{STATUS[row.status]}<span aria-hidden="true">·</span>{row.content.length} 字</span>
-          </Button>)}
-        </nav>
-        <main className="gc-main">
-          <div className="gc-main-head">
-            <div className="gc-view-switch" role="group" aria-label="候选稿视图">
-              <Button variant="plain" className="gc-view" aria-pressed={view === "draft"} onClick={() => setView("draft")}><FileText size={15} />正文</Button>
-              <Button variant="plain" className="gc-view" aria-pressed={view === "trace"} onClick={() => setView("trace")}><Activity size={15} />生成轨迹</Button>
-              <Button variant="plain" className="gc-view" aria-pressed={comparing} onClick={() => setView(comparing ? "draft" : "compare")}><Layers size={15} />对比全文</Button>
-            </div>
-            {busy && <span className="gc-live" role="status"><Loader2 size={14} className="gc-spin" />生成中</span>}
-          </div>
-          <div className={`gc-drafts${comparing ? " gc-drafts--compare" : ""}`}>
             {view === "trace" && active && <CandidateTrajectory key={active.id} candidate={active} now={now} />}
-            {view !== "trace" && shown.map(row => <article className="gc-draft" key={row.id}>
+            {(view === "draft" || comparing) && shown.map(row => <article className="gc-draft" key={row.id}>
               <div className="gc-reading">
                 <header className="gc-reading-head"><span>{row.label} <span className="gc-reading-state">{STATUS[row.status]}</span></span>
                   <Button className="gc-icon" title="复制正文" aria-label={`复制${row.label}`} disabled={!row.content} onClick={() => void copy(row.content)}><Copy size={15} /></Button>
@@ -310,9 +304,15 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
                 </Button>
               </footer>}
             </article>)}
-            {!active && <div className="gc-empty"><FileText size={30} /><strong>{loading ? "读取中" : "还没有候选稿"}</strong><span>生成后可在这里阅读、比较和查看执行轨迹。</span></div>}
+            {view !== "setup" && !active && <div className="gc-empty"><FileText size={30} /><strong>{loading ? "读取中" : "还没有候选稿"}</strong><span>生成后可在这里阅读、比较和查看执行轨迹。</span></div>}
           </div>
-          {!comparing && active && <footer className="gc-dock">
+          {view === "setup" && <footer className="gc-dock">
+            <span className="gc-dock-note">{busy ? "当前候选稿正在生成，可先调整下一批设置" : "新候选稿会保留已有正文"}</span>
+            <Button variant="primary" disabled={busy || loading || applying} onClick={() => void start()}>
+              <Zap size={14} />{platform === "both" ? "生成双平台版本" : `生成${platform === "wechat" ? "公众号母稿" : "今日头条版本"}`}
+            </Button>
+          </footer>}
+          {view !== "setup" && !comparing && active && <footer className="gc-dock">
             <span className="gc-dock-note">{active.status === "complete" ? active.message : active.label}</span>
             {(active.status === "interrupted" || active.status === "queued") &&
               <Button disabled={busy || applying} onClick={() => { stopped.current = false; void run(active) }}>

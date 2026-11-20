@@ -6,7 +6,7 @@ export type PublishPlatform = "wechat" | "toutiao" | "xiaohongshu"
 
 const EDITOR_TABS: EditorTab[] = ["task", "materials", "article", "analysis", "publish", "toutiao", "xiaohongshu", "cover", "library"]
 const STAGE_TABS: Record<ArticleWorkflowStage, EditorTab> = {
-  brief: "task",
+  brief: "materials",
   materials: "materials",
   drafting: "article",
   review: "analysis",

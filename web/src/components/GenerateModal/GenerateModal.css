@@ -43,8 +43,9 @@
 .gc-modal .ui-button.ui-button--primary { background: var(--color-primary); color: var(--color-on-primary); border-color: var(--color-primary); }
 .gc-modal .ui-button.ui-button--primary:hover:not(:disabled) { background: var(--color-primary-active); color: var(--color-on-primary); border-color: var(--color-primary-active); }
 .gc-modal .gc-icon { display: inline-grid; place-items: center; width: 33px; min-height: 33px; padding: 0; background: transparent; border-color: transparent; }
-.gc-settings { padding: 18px 24px 12px; max-height: 42dvh; overflow: auto; flex-shrink: 0; background: var(--color-surface-soft); border-bottom: 1px solid var(--gc-line); }
-.gc-settings-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 16px 24px; }
+.gc-settings { max-width: 840px; margin: 0 auto; padding: 28px 32px; }
+.gc-settings h3 { margin: 0; font-size: 18px; }
+.gc-settings-controls { display: grid; gap: 24px; margin-top: 28px; }
 .gc-choice { min-width: 0; margin: 0; padding: 0; border: 0; }
 .gc-choice legend { padding: 0 0 8px; color: var(--gc-muted); font-size: 12px; font-weight: 650; }
 .gc-segmented { display: flex; gap: 2px; padding: 3px; border-radius: 8px; background: var(--color-surface-card); }
@@ -54,11 +55,8 @@
 }
 .gc-segmented button[aria-pressed="true"] { color: var(--gc-accent); border-color: var(--gc-line); background: var(--color-canvas); font-weight: 650; }
 .gc-count-options button { min-width: 30px; }
-.gc-generate-button { margin-left: auto; }
-.gc-advanced-settings { margin-top: 12px; }
-.gc-advanced-settings > .ui-collapse-trigger { min-height: 36px; padding: 0; gap: 12px; color: var(--gc-muted); font-size: 12px; }
-.gc-advanced-settings > .ui-collapse-content { padding: 16px 0 8px; border-top: 1px solid var(--gc-line); }
-.gc-media-settings { display: flex; flex-wrap: wrap; align-items: end; gap: 16px 24px; }
+.gc-media-settings { display: flex; flex-wrap: wrap; align-items: end; gap: 24px; margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--gc-line); }
+.gc-media-settings .gc-tool-options { flex-basis: 100%; }
 .gc-tool-options { display: flex; flex-wrap: wrap; gap: 12px 20px; padding-bottom: 4px; }
 .gc-media-settings .ui-checkbox { min-height: 36px; }
 .gc-settings p { margin: 12px 0 0; max-width: 760px; color: var(--gc-muted); font-size: 12px; line-height: 1.7; }
@@ -151,7 +149,10 @@
   .gc-row { flex: 0 0 140px; margin-bottom: 0; padding: 6px; gap: 3px; }
   .gc-row strong { -webkit-line-clamp: 1; }
   .gc-main-head { padding-inline: 4px; }
-  .gc-view { padding-inline: 6px; gap: 3px; }
+  .gc-view-switch { gap: 0; min-width: 0; }
+  .gc-view { padding-inline: 6px; gap: 3px; font-size: 11px; }
+  .gc-view > svg { display: none; }
+  .gc-main-head { flex-wrap: wrap; gap: 0; }
   .gc-draft { padding-inline: 7px; }
   .gc-reading { margin-block: 16px; padding: 8px 16px 24px; }
   .gc-paper { font-size: 15px; line-height: 1.9; }

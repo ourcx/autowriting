@@ -1,4 +1,4 @@
-import { Collapse, Input, Textarea } from "../../components/FormControls/FormControls"
+import { Input, Textarea } from "../../components/FormControls/FormControls"
 import Button from "../../components/Button/Button"
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { toast } from '../../components/Toast/Toast'
@@ -64,20 +64,16 @@ const PUBLISH_PLATFORMS = [
 ] as const
 
 const MAIN_FLOW_STEPS = [
-  { id: 'task', label: '任务' },
-  { id: 'materials', label: '素材' },
-  { id: 'draft', label: '写作' },
-  { id: 'review', label: '审核' },
-  { id: 'publish', label: '发布' },
+  { id: 'materials', label: '准备素材' },
+  { id: 'draft', label: '写作选稿' },
+  { id: 'publish', label: '排版发布' },
 ] as const
 
 type MainFlowStep = typeof MAIN_FLOW_STEPS[number]['id']
 
 const FLOW_TAB: Record<MainFlowStep, TabId> = {
-  task: 'task',
   materials: 'materials',
   draft: 'article',
-  review: 'analysis',
   publish: 'publish',
 }
 
@@ -348,7 +344,7 @@ export default function ArticleEditor() {
   const handleGenerate = useCallback(() => {
     if (!data.task.trim()) {
       setGenerateError('请先填写写作任务，再生成候选稿。')
-      setActiveTab('task')
+      setActiveTab('materials')
       return
     }
     if (!apiKeyReady) {
@@ -470,7 +466,6 @@ export default function ArticleEditor() {
   }, [articleId, articleSlug, loadError, loading, location.pathname, location.search, navigate, urlTitle])
 
   const bodyChanged = data.article !== savedArticle
-  const reviewDone = Boolean(workflow.lastReviewedAt) && !bodyChanged
   const publishDone = Boolean(workflow.wechatDraftAt) && !bodyChanged
   const generationPlatform: CandidatePlatform = activeTab === 'toutiao'
     || (activeTab === 'publish' && publishPlatform === 'toutiao')
@@ -478,17 +473,11 @@ export default function ArticleEditor() {
     : activeTab === 'article'
       ? 'wechat'
       : defaultGenerationPlatform
-  const activeFlowStep: MainFlowStep | null = activeTab === 'task'
-    ? 'task'
-    : activeTab === 'materials'
-      ? 'materials'
-    : activeTab === 'article'
-      ? 'draft'
-      : activeTab === 'analysis'
-        ? 'review'
-        : activeTab === 'publish' || activeTab === 'toutiao' || activeTab === 'xiaohongshu'
-          ? 'publish'
-          : null
+  const activeFlowStep: MainFlowStep = activeTab === 'task' || activeTab === 'materials'
+    ? 'materials'
+    : activeTab === 'publish'
+      ? 'publish'
+      : 'draft'
   const publishAccountConnected = publishPlatform === 'wechat'
     ? Boolean(loadWechatCredentials())
     : publishPlatform === 'toutiao'
@@ -496,10 +485,8 @@ export default function ArticleEditor() {
       : hasXiaohongshuCookies()
 
   const flowStepDone = (step: MainFlowStep) => {
-    if (step === 'task') return Boolean(data.task.trim())
-    if (step === 'materials') return Boolean(data.materials.trim())
+    if (step === 'materials') return Boolean(data.task.trim())
     if (step === 'draft') return Boolean(data.article.trim())
-    if (step === 'review') return reviewDone
     return publishDone
   }
 
@@ -512,22 +499,24 @@ export default function ArticleEditor() {
   }
 
   const nextActionLabel = activeTab === 'task'
-    ? '下一步：填写素材'
+    ? '返回素材准备'
     : activeTab === 'materials'
-      ? '下一步：进入写作'
+      ? data.article.trim() ? '继续编辑正文' : '生成候选稿'
       : activeTab === 'article'
-        ? '下一步：审核定稿'
+        ? '下一步：排版发布'
         : activeTab === 'analysis'
           ? '下一步：选择平台发布'
           : activeTab === 'toutiao'
             ? data.articleToutiao.trim() ? '下一步：发布今日头条' : '生成今日头条版本'
             : activeTab === 'xiaohongshu'
               ? '下一步：发布小红书'
-              : ''
+              : activeTab === 'cover' || activeTab === 'library'
+                ? '返回正文'
+                : ''
   const nextActionDisabled = activeTab === 'task'
-    ? !data.task.trim()
+    ? false
     : activeTab === 'materials'
-      ? !data.task.trim()
+      ? !data.article.trim() && (!data.task.trim() || !apiKeyReady)
       : activeTab === 'article'
         ? !data.article.trim()
         : activeTab === 'analysis' || activeTab === 'xiaohongshu'
@@ -537,8 +526,7 @@ export default function ArticleEditor() {
               ? false
               : !data.task.trim() || !apiKeyReady
             : false
-  const showGenerateAction = activeTab === 'materials'
-    || activeTab === 'article'
+  const showGenerateAction = activeTab === 'article'
     || activeTab === 'analysis'
     || activeTab === 'toutiao'
   const generationReady = Boolean(data.task.trim() && apiKeyReady)
@@ -553,14 +541,18 @@ export default function ArticleEditor() {
 
   function handleNextAction() {
     if (activeTab === 'task') setActiveTab('materials')
-    else if (activeTab === 'materials') setActiveTab('article')
-    else if (activeTab === 'article') setActiveTab('analysis')
+    else if (activeTab === 'materials') {
+      if (data.article.trim()) setActiveTab('article')
+      else handleGenerate()
+    }
+    else if (activeTab === 'article') void handlePreview()
     else if (activeTab === 'analysis') void handlePreview()
     else if (activeTab === 'toutiao') {
       if (data.articleToutiao.trim()) void handlePreview('toutiao')
       else handleGenerate()
     }
     else if (activeTab === 'xiaohongshu') void handlePreview('xiaohongshu')
+    else if (activeTab === 'cover' || activeTab === 'library') setActiveTab('article')
   }
 
   const publishContent = publishPlatform === 'toutiao' ? data.articleToutiao : data.article
@@ -702,41 +694,23 @@ export default function ArticleEditor() {
               )
             })}
 
-            <div className="editor-secondary-nav">
-              <Collapse className="editor-menu" closeOnAction label={<><Newspaper size={15} />平台版本</>}>
-                <div className="editor-menu-popover">
-                  <Button variant="plain" data-ui-close className={activeTab === 'toutiao' ? 'active' : ''} onClick={() => setActiveTab('toutiao')}>
-                    <Newspaper size={15} /><span><strong>今日头条版本</strong><small>{data.articleToutiao.trim() ? '正文已就绪' : '待生成'}</small></span>
-                  </Button>
-                  <Button variant="plain" data-ui-close className={activeTab === 'xiaohongshu' ? 'active' : ''} onClick={() => setActiveTab('xiaohongshu')}>
-                    <BookOpen size={15} /><span><strong>小红书版本</strong><small>复用母稿并设置标题</small></span>
-                  </Button>
-                </div>
-              </Collapse>
-              <Collapse className="editor-menu" closeOnAction label={<><Image size={15} />辅助工具</>}>
-                <div className="editor-menu-popover editor-menu-popover--right">
-                  <Button variant="plain" data-ui-close className={activeTab === 'cover' ? 'active' : ''} onClick={() => setActiveTab('cover')}>
-                    <Image size={15} /><span><strong>封面</strong><small>{hasCover ? '已有封面' : '生成或上传封面'}</small></span>
-                  </Button>
-                  <Button variant="plain" data-ui-close className={activeTab === 'library' ? 'active' : ''} onClick={() => setActiveTab('library')}>
-                    <LayoutList size={15} /><span><strong>图片库</strong><small>管理图片、选择封面</small></span>
-                  </Button>
-                </div>
-              </Collapse>
-            </div>
           </div>
+          {activeFlowStep !== 'materials' && <nav className="editor-tool-nav" aria-label="写作工具">
+            {([
+              ['article', '正文', Edit3],
+              ['analysis', '审稿', CheckCircle],
+              ['cover', '封面', Image],
+              ['library', '图片库', LayoutList],
+              ['toutiao', '头条版本', Newspaper],
+              ['xiaohongshu', '小红书版本', BookOpen],
+            ] as const).map(([tab, label, Icon]) => <Button variant="plain" key={tab} aria-pressed={activeTab === tab} onClick={() => setActiveTab(tab)}><Icon size={14} />{label}</Button>)}
+          </nav>}
         </div>
 
         <div className="editor-content">
           <div className="editor-document-meta">
             <span role="status">{dirty ? "有未保存的修改，本标签页已保留恢复副本" : isLocalArticle ? "已保存在此浏览器" : "已保存到服务器"}</span>
-            <Collapse className="editor-history-menu" label="写作记录">
-              <div className="editor-document-history">
-                <p>活跃编辑约 {Math.round((workflow.activeEditingMs || 0) / 60000)} 分钟</p>
-                <p>审核后返工 {workflow.reworkCount || 0} 次</p>
-                {workflow.selectedCandidateId && <p>已记录候选稿选择</p>}
-              </div>
-            </Collapse>
+            <span>活跃编辑约 {Math.round((workflow.activeEditingMs || 0) / 60000)} 分钟 · 返工 {workflow.reworkCount || 0} 次{workflow.selectedCandidateId ? ' · 已选稿' : ''}</span>
           </div>
           {recovery && <div className="editor-save-status">
             检测到上次未保存的修改。
@@ -841,6 +815,16 @@ export default function ArticleEditor() {
 
               {/* 右侧：素材库编辑器 */}
               <div className="materials-editor-pane">
+                <div className="materials-task">
+                  <div className="materials-header-top">
+                    <label htmlFor="writing-task">写作要求</label>
+                    <Button variant="plain" onClick={() => setActiveTab('task')}>任务模板</Button>
+                    <Button variant="plain" onClick={handleGenerateOutline} disabled={generatingOutline || !data.task}>
+                      {generatingOutline ? '生成中…' : '生成大纲'}
+                    </Button>
+                  </div>
+                  <Textarea id="writing-task" value={data.task} onChange={e => setData(prev => ({ ...prev, task: e.target.value }))} placeholder="写什么、写给谁、希望读者看完得到什么？" rows={3} />
+                </div>
                 <div className="panel-header materials-panel-header">
                   <div className="materials-header-top">
                     <h3>素材库</h3>
@@ -855,7 +839,7 @@ export default function ArticleEditor() {
                         : <><Sparkles size={12} />AI 整理+去重</>}
                     </Button>
                   </div>
-                  <p>materials.md — 可直接编辑，也可从左侧采集后写入</p>
+                  <p>可直接粘贴资料，也可从左侧采集后写入</p>
                 </div>
 
                 {/* 大纲待确认卡片 */}
