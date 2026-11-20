@@ -484,12 +484,6 @@ export default function ArticleEditor() {
       ? hasToutiaoCookies()
       : hasXiaohongshuCookies()
 
-  const flowStepDone = (step: MainFlowStep) => {
-    if (step === 'materials') return Boolean(data.task.trim())
-    if (step === 'draft') return Boolean(data.article.trim())
-    return publishDone
-  }
-
   const openFlowStep = (step: MainFlowStep) => {
     if (step === 'publish') {
       void handlePreview()
@@ -676,18 +670,17 @@ export default function ArticleEditor() {
         <div className="editor-flow-wrap" data-onboarding="editor-workflow">
           <div className="editor-flow-bar">
             {MAIN_FLOW_STEPS.map((step, idx) => {
-              const done = flowStepDone(step.id)
               const isActive = activeFlowStep === step.id
               return (
                 <Button variant="plain"
                   key={step.id}
-                  className={`flow-step ${isActive ? 'flow-step--active' : ''} ${done ? 'flow-step--done' : ''}`}
+                  className={`flow-step ${isActive ? 'flow-step--active' : ''}`}
                   aria-current={isActive ? 'step' : undefined}
                   onClick={() => openFlowStep(step.id)}
                   disabled={step.id === 'publish' && (!data.article.trim() || saving)}
                 >
                   <span className="flow-step-num">
-                    {done ? <CheckCircle size={13} /> : idx + 1}
+                    {idx + 1}
                   </span>
                   <span className="flow-step-label">{step.label}</span>
                 </Button>
@@ -695,14 +688,13 @@ export default function ArticleEditor() {
             })}
 
           </div>
-          {activeFlowStep !== 'materials' && <nav className="editor-tool-nav" aria-label="写作工具">
+          {activeFlowStep === 'draft' && <nav className="editor-tool-nav" aria-label="写作工具">
+            <span className="editor-tool-label">写作工具</span>
             {([
               ['article', '正文', Edit3],
               ['analysis', '审稿', CheckCircle],
               ['cover', '封面', Image],
               ['library', '图片库', LayoutList],
-              ['toutiao', '头条版本', Newspaper],
-              ['xiaohongshu', '小红书版本', BookOpen],
             ] as const).map(([tab, label, Icon]) => <Button variant="plain" key={tab} aria-pressed={activeTab === tab} onClick={() => setActiveTab(tab)}><Icon size={14} />{label}</Button>)}
           </nav>}
         </div>
@@ -968,6 +960,9 @@ export default function ArticleEditor() {
                   {publishDone && <p><CheckCircle size={13} /> 已推送微信草稿</p>}
                 </div>
                 <div className={`publish-account-status ${publishAccountConnected ? 'is-ready' : ''}`} data-onboarding="publish-account-status">
+                  <Button variant="plain" onClick={() => setActiveTab(publishPlatform === 'wechat' ? 'article' : publishPlatform)}>
+                    <Edit3 size={15} />编辑正文
+                  </Button>
                   {publishAccountConnected ? <Link2 size={15} /> : <Link2Off size={15} />}
                   <span>{publishAccountConnected ? '账号已连接' : '账号未连接'}</span>
                   <Button variant="plain" onClick={() => navigate('/account')}>{publishAccountConnected ? '管理' : '去连接'}</Button>
