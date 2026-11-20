@@ -169,7 +169,7 @@ export default function XiumiEditor({ articleId, article, title, pushing, onPush
             <Copy size={14} />复制已保存排版
           </Button>
           <Button variant="primary" disabled={!html || importing || pushing || !!pendingHtml} onClick={() => void onPush(html)}>
-            <Send size={14} />{pushing ? "保存中..." : "保存到微信草稿"}
+            <Send size={14} />{pushing ? "保存中..." : "保存草稿并去发布"}
           </Button>
         </div>
       </footer>

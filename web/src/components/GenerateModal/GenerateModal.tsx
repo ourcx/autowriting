@@ -42,7 +42,7 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
   const [terminalTools, setTerminalTools] = useState(true)
   const [rows, setRows] = useState<GenerationCandidate[]>([])
   const [activeId, setActiveId] = useState("")
-  const [view, setView] = useState<"setup" | "draft" | "trace" | "compare">("draft")
+  const [view, setView] = useState<"setup" | "draft" | "trace" | "compare">("setup")
   const comparing = view === "compare"
   const [creating, setCreating] = useState(false)
   const [applying, setApplying] = useState(false)

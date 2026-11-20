@@ -542,6 +542,7 @@ export default function CanvasStudio() {
         },
       })
     }
+    navigate("/drafts")
     return true
   }
 

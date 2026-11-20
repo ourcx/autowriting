@@ -625,7 +625,12 @@
   white-space: nowrap;
 }
 
-.task-tmpl-chip-btn:hover {
+.task-tmpl-chip-btn[aria-pressed="true"] {
+  background: var(--color-brand-teal);
+  color: var(--color-on-primary);
+}
+
+.task-tmpl-chip-btn:hover:not([aria-pressed="true"]) {
   color: var(--color-ink);
 }
 

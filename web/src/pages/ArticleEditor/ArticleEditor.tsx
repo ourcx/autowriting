@@ -65,15 +65,19 @@ const PUBLISH_PLATFORMS = [
 
 const MAIN_FLOW_STEPS = [
   { id: 'materials', label: '准备素材' },
-  { id: 'draft', label: '写作选稿' },
-  { id: 'publish', label: '排版发布' },
+  { id: 'target', label: '填目标' },
+  { id: 'cover', label: '封面' },
+  { id: 'layout', label: '排版' },
+  { id: 'publish', label: '发布' },
 ] as const
 
 type MainFlowStep = typeof MAIN_FLOW_STEPS[number]['id']
 
 const FLOW_TAB: Record<MainFlowStep, TabId> = {
   materials: 'materials',
-  draft: 'article',
+  target: 'task',
+  cover: 'cover',
+  layout: 'publish',
   publish: 'publish',
 }
 
@@ -346,7 +350,7 @@ export default function ArticleEditor() {
   const handleGenerate = useCallback(() => {
     if (!data.task.trim()) {
       setGenerateError('请先填写写作任务，再生成候选稿。')
-      setActiveTab('materials')
+      setActiveTab('task')
       return
     }
     if (!apiKeyReady) {
@@ -469,14 +473,16 @@ export default function ArticleEditor() {
   const generationPlatform: CandidatePlatform = activeTab === 'toutiao'
     || (activeTab === 'publish' && publishPlatform === 'toutiao')
     ? 'toutiao'
-    : activeTab === 'article'
+    : activeTab === 'article' || activeTab === 'task' || activeTab === 'materials'
       ? 'wechat'
       : defaultGenerationPlatform
-  const activeFlowStep: MainFlowStep = activeTab === 'task' || activeTab === 'materials'
+  const activeFlowStep: MainFlowStep = activeTab === 'materials'
     ? 'materials'
-    : activeTab === 'publish' || activeTab === 'cover' || activeTab === 'library'
-      ? 'publish'
-      : 'draft'
+    : activeTab === 'cover' || activeTab === 'library'
+      ? 'cover'
+      : activeTab === 'publish'
+        ? 'layout'
+        : 'target'
   const publishAccountConnected = publishPlatform === 'wechat'
     ? Boolean(loadWechatCredentials())
     : publishPlatform === 'toutiao'
@@ -485,47 +491,44 @@ export default function ArticleEditor() {
 
   const openFlowStep = (step: MainFlowStep) => {
     if (step === 'publish') {
+      void handleSave().then(saved => { if (saved) navigate('/drafts') })
+      return
+    }
+    if (step === 'layout') {
       void handlePreview()
       return
     }
     setActiveTab(FLOW_TAB[step])
   }
 
-  const nextActionLabel = activeTab === 'task'
-    ? '返回素材准备'
-    : activeTab === 'materials'
-      ? data.article.trim() ? '继续编辑正文' : '生成候选稿'
-      : activeTab === 'article'
-        ? data.article.trim() ? '下一步：排版与封面' : '生成候选稿'
-        : activeTab === 'analysis'
-          ? '下一步：选择平台发布'
-          : activeTab === 'toutiao'
-            ? data.articleToutiao.trim() ? '下一步：发布今日头条' : '生成今日头条版本'
-            : activeTab === 'xiaohongshu'
-              ? '下一步：发布小红书'
-              : activeTab === 'cover' || activeTab === 'library'
-                ? data.article.trim() ? '返回排版页' : '返回正文'
-                : ''
-  const nextActionDisabled = activeTab === 'task'
+  const nextActionLabel = activeTab === 'materials'
+    ? '下一步：填目标'
+    : activeTab === 'task' || activeTab === 'article' || activeTab === 'analysis'
+      ? data.article.trim() ? '下一步：封面' : '生成正文'
+      : activeTab === 'toutiao'
+        ? data.articleToutiao.trim() ? '下一步：发布今日头条' : '生成今日头条版本'
+        : activeTab === 'xiaohongshu'
+          ? '下一步：发布小红书'
+          : activeTab === 'cover' || activeTab === 'library'
+            ? '下一步：排版'
+            : ''
+  const nextActionDisabled = activeTab === 'materials'
     ? false
-    : activeTab === 'materials'
+    : activeTab === 'task' || activeTab === 'article' || activeTab === 'analysis'
       ? !data.article.trim() && (!data.task.trim() || !apiKeyReady)
-      : activeTab === 'article'
-        ? !data.article.trim() && (!data.task.trim() || !apiKeyReady)
-        : activeTab === 'analysis' || activeTab === 'xiaohongshu'
-          ? !data.article.trim()
-          : activeTab === 'toutiao'
-            ? data.articleToutiao.trim()
-              ? false
-              : !data.task.trim() || !apiKeyReady
-            : false
-  const showGenerateAction = (activeTab === 'article' && Boolean(data.article.trim()))
-    || activeTab === 'analysis'
+      : activeTab === 'cover' || activeTab === 'library' || activeTab === 'xiaohongshu'
+        ? !data.article.trim()
+        : activeTab === 'toutiao'
+          ? data.articleToutiao.trim()
+            ? false
+            : !data.task.trim() || !apiKeyReady
+          : false
+  const showGenerateAction = ((activeTab === 'task' || activeTab === 'article' || activeTab === 'analysis') && Boolean(data.article.trim()))
     || activeTab === 'toutiao'
   const generationReady = Boolean(data.task.trim() && apiKeyReady)
   const generationActionLabel = generationPlatform === 'toutiao'
     ? data.articleToutiao.trim() ? '继续生成头条候选稿' : '生成头条候选稿'
-    : data.article.trim() ? '查看 / 生成候选稿' : '生成候选稿'
+    : data.article.trim() ? '重新生成正文' : '生成正文'
   const generationActionTitle = !data.task.trim()
     ? '请先填写写作任务'
     : !apiKeyReady
@@ -533,16 +536,11 @@ export default function ArticleEditor() {
       : generationActionLabel
 
   function handleNextAction() {
-    if (activeTab === 'task') setActiveTab('materials')
-    else if (activeTab === 'materials') {
-      if (data.article.trim()) setActiveTab('article')
+    if (activeTab === 'materials') setActiveTab('task')
+    else if (activeTab === 'task' || activeTab === 'article' || activeTab === 'analysis') {
+      if (data.article.trim()) setActiveTab('cover')
       else handleGenerate()
     }
-    else if (activeTab === 'article') {
-      if (data.article.trim()) void handlePreview()
-      else handleGenerate()
-    }
-    else if (activeTab === 'analysis') void handlePreview()
     else if (activeTab === 'toutiao') {
       if (data.articleToutiao.trim()) void handlePreview('toutiao')
       else handleGenerate()
@@ -682,7 +680,7 @@ export default function ArticleEditor() {
                   className={`flow-step ${isActive ? 'flow-step--active' : ''}`}
                   aria-current={isActive ? 'step' : undefined}
                   onClick={() => openFlowStep(step.id)}
-                  disabled={step.id === 'publish' && (!data.article.trim() || saving)}
+                  disabled={saving || (step.id === 'layout' && !data.article.trim())}
                 >
                   <span className="flow-step-num">
                     {idx + 1}
@@ -696,11 +694,15 @@ export default function ArticleEditor() {
               {saving ? '保存中…' : dirty ? '未保存' : '已保存'}
             </span>
           </div>
-          {(activeFlowStep === 'draft' || activeTab === 'cover' || activeTab === 'library') && <nav className="editor-tool-nav" aria-label="写作工具">
-            <span className="editor-tool-label">写作工具</span>
+          {activeFlowStep === 'target' && <nav className="editor-tool-nav" aria-label="目标与正文">
             {([
+              ['task', '目标模板', Zap],
               ['article', '正文', Edit3],
               ['analysis', '审稿', CheckCircle],
+            ] as const).map(([tab, label, Icon]) => <Button variant="plain" key={tab} aria-pressed={activeTab === tab} onClick={() => setActiveTab(tab)}><Icon size={14} />{label}</Button>)}
+          </nav>}
+          {activeFlowStep === 'cover' && <nav className="editor-tool-nav" aria-label="封面工具">
+            {([
               ['cover', '封面', Image],
               ['library', '图片库', LayoutList],
             ] as const).map(([tab, label, Icon]) => <Button variant="plain" key={tab} aria-pressed={activeTab === tab} onClick={() => setActiveTab(tab)}><Icon size={14} />{label}</Button>)}
@@ -726,6 +728,8 @@ export default function ArticleEditor() {
                     >
                       <Button variant="plain"
                         className="task-tmpl-chip-btn"
+                        aria-pressed={data.task === t.content}
+                        data-tooltip={t.desc}
                         onClick={() => setData(prev => ({ ...prev, task: t.content }))}
                       >
                         {t.name}
@@ -773,35 +777,23 @@ export default function ArticleEditor() {
                     ? <><span className="task-outline-spin" />生成中...</>
                     : <><LayoutList size={13} />生成大纲</>}
                 </Button>
+                <Button variant="plain" className="task-tmpl-outline-btn" onClick={() => setActiveTab('article')} disabled={!data.article.trim()}>
+                  <Edit3 size={13} />编辑正文
+                </Button>
               </div>
 
               {/* 编辑区 */}
               <Textarea
-                aria-label="写作任务要求"
+                aria-label="写作目标"
                 value={data.task}
                 onChange={e => setData(prev => ({ ...prev, task: e.target.value }))}
-                placeholder={`# 写作任务要求\n\n## 基本信息\n- **文章主题**：\n- **目标字数**：1500-2000 字\n- **发布平台**：微信公众号\n\n## 结构要求\n1. 开场：直接切入痛点或场景\n2. 这是什么：解释核心概念\n3. 怎么做：分步骤说明\n4. 踩过的坑：分享真实问题\n5. 值不值得做：给出明确判断`}
+                placeholder="选择上方模板后修改，或直接填写主题、目标读者、核心结论和篇幅要求"
                 className="editor-input-sheet"
               />
             </div>
           )}
 
           {activeTab === 'materials' && <div className="editor-panel editor-panel--prepare">
-                <div className="materials-task">
-                  <div className="materials-header-top">
-                    <label htmlFor="writing-task">写作任务</label>
-                    <div className="task-quick-options" role="group" aria-label="快捷选择任务模板">
-                      {taskTemplates.map(template => <Button variant="plain" key={template.id}
-                        aria-pressed={data.task === template.content} data-tooltip={template.desc}
-                        onClick={() => setData(prev => ({ ...prev, task: template.content }))}>{template.name}</Button>)}
-                    </div>
-                    <Button variant="plain" onClick={() => setActiveTab('task')} data-tooltip="管理、新建和编辑任务模板">管理模板</Button>
-                    <Button variant="plain" onClick={handleGenerateOutline} disabled={generatingOutline || !data.task} data-tooltip="根据当前写作任务生成大纲，确认后追加到素材">
-                      {generatingOutline ? '生成中…' : '生成大纲'}
-                    </Button>
-                  </div>
-                  <Textarea id="writing-task" value={data.task} onChange={e => setData(prev => ({ ...prev, task: e.target.value }))} placeholder="选择模板后直接修改，或填写本篇写作要求" rows={2} />
-                </div>
             <div className="editor-panel editor-panel--materials">
               {/* 左侧：素材采集 */}
               <div className="materials-collector-pane">
@@ -992,7 +984,7 @@ export default function ArticleEditor() {
                   title={publishTitle}
                   articleId={articleId}
                   platformMode={publishPlatform}
-                  onDraftPushed={() => { if (!isLocalArticle) void fetchArticle(articleId).then(result => setWorkflow(normalizeArticleWorkflow(result.workflow, result))) }}
+                  onDraftPushed={() => navigate('/drafts')}
                 /> : <div className="publish-empty">
                   <BookOpen size={28} />
                   <h3>{publishPlatform === 'toutiao' ? '今日头条版本尚未生成' : '尚未添加正文'}</h3>

@@ -386,7 +386,7 @@ export default function WeChatDrafts() {
   if (bound === false) {
     return (
       <div className="wd-root">
-        <PageHeader title="公众号管理" onBack={() => navigate(-1)} />
+        <PageHeader title="发布到公众号" onBack={() => navigate(-1)} />
         <div className="wd-empty">
           <div className="wd-empty-icon" aria-hidden="true"><Link2 size={20} /></div>
           <h2 className="wd-empty-title">绑定公众号</h2>
@@ -408,7 +408,7 @@ export default function WeChatDrafts() {
     <div className="wd-root">
 
       <PageHeader
-        title="公众号管理"
+        title={tab === 'drafts' ? '发布到公众号' : '公众号管理'}
         subtitle="核对微信草稿后发布；已发布文章与永久素材也在这里管理"
         onBack={() => navigate(-1)}
         actions={<>

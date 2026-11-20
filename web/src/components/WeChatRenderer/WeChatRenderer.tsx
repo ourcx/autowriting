@@ -981,9 +981,9 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                 title="保存当前排版和封面到公众号草稿箱"
               >
                 {pushing ? <Loader2 size={15} className="wr-spin" /> : pushDone ? <Check size={15} /> : <Send size={15} />}
-                {pushing ? '保存中...' : pushDone ? '已保存微信草稿' : receipt?.status === "unknown" || receipt?.status === "sending" ? "待核对推送结果" : '保存到微信草稿'}
+                {pushing ? '保存中...' : pushDone ? '已保存微信草稿' : receipt?.status === "unknown" || receipt?.status === "sending" ? "待核对推送结果" : '保存草稿并去发布'}
               </Button>
-              {(pushDone || receipt?.status === "succeeded") && <a className="wr-drafts-link" href="/drafts">前往草稿箱<ExternalLink size={13} /></a>}
+              {(pushDone || receipt?.status === "succeeded") && <a className="wr-drafts-link" href="/drafts">前往发布<ExternalLink size={13} /></a>}
             </div>
           </footer>
         </>
