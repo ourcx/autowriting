@@ -1,4 +1,4 @@
-import { Collapse, SelectField, Textarea } from "../../components/FormControls/FormControls"
+import { SelectField, Textarea } from "../../components/FormControls/FormControls"
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { ClipboardEvent } from "react"
 import { Copy, ExternalLink, Eye, LayoutTemplate, Send } from "lucide-react"
@@ -146,21 +146,15 @@ export default function XiumiEditor({ articleId, article, title, pushing, onPush
             onClick={() => setView(view === "editor" && html ? "saved" : "editor")}>
             <Eye size={14} />{view === "editor" ? "查看已保存排版" : "返回秀米编辑"}
           </Button>}
-          <Button variant="secondary" disabled={!html || importing || pushing || !!pendingHtml} onClick={() => void copyContent(html)}>
-            <Copy size={14} />复制已保存排版
-          </Button>
-          <Button variant="primary" disabled={!html || importing || pushing || !!pendingHtml} onClick={() => void onPush(html)}>
-            <Send size={14} />{pushing ? "推送中..." : "推送已保存排版"}
-          </Button>
         </div>
       </div>
       <div className="cs-xiumi-help">
         <p>选择模板后，可用当前正文生成排版并保存，也可复制到秀米继续编辑。秀米编辑完成后，点击顶部对勾传回。</p>
-        <Collapse label={<>登录或回传遇到问题？新窗口排版后粘贴到这里</>}>
-          <p>请通过 HTTPS 访问平台，并允许秀米登录所需的第三方 Cookie。新窗口排版完成后，点击秀米对勾复制，再粘贴到下方。</p>
+        <div>
+          <p>在新窗口编辑时，点秀米对勾复制排版，再粘贴到这里保存。</p>
           <Textarea aria-label="粘贴秀米排版" placeholder="在此粘贴秀米图文，自动保存排版与图片"
             readOnly disabled={importing || pushing} onPaste={pasteContent} />
-        </Collapse>
+        </div>
         <div role="status">
           {importing ? "正在转存图片并保存排版，请暂勿切换文章或离开页面…" : pendingHtml ? (
             <Button variant="secondary" disabled={pushing} onClick={() => void receiveHtml(pendingHtml)}>重试保存秀米排版</Button>
@@ -178,6 +172,17 @@ export default function XiumiEditor({ articleId, article, title, pushing, onPush
         <iframe className="cs-xiumi-frame cs-xiumi-preview" title="已保存的秀米排版" sandbox=""
           srcDoc={`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{max-width:677px;margin:24px auto;padding:0 16px;overflow-wrap:break-word}img{max-width:100%}</style></head><body>${html}</body></html>`} />
       )}
+      <footer className="cs-edit-bar">
+        <span>{html ? "当前推送内容：已保存的秀米排版" : "完成排版并传回后，即可保存微信草稿"}</span>
+        <div className="cs-edit-actions">
+          <Button variant="secondary" disabled={!html || importing || pushing || !!pendingHtml} onClick={() => void copyContent(html)}>
+            <Copy size={14} />复制已保存排版
+          </Button>
+          <Button variant="primary" disabled={!html || importing || pushing || !!pendingHtml} onClick={() => void onPush(html)}>
+            <Send size={14} />{pushing ? "保存中..." : "保存到微信草稿"}
+          </Button>
+        </div>
+      </footer>
     </section>
   )
 }

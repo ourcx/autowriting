@@ -229,6 +229,10 @@
 .materials-task label { margin-right: auto; color: var(--color-ink); font-size: 14px; font-weight: 600; }
 .materials-task button { color: var(--color-brand-teal); font-size: 12px; }
 .materials-task textarea { width: 100%; min-height: 88px; resize: vertical; }
+.editor-panel--prepare { overflow: hidden; }
+.editor-panel--prepare > .materials-task { padding: 0 0 16px; }
+.editor-panel--prepare > .editor-panel--materials { flex: 1; min-height: 0; height: auto; }
+.materials-task button { border: 0; background: transparent; padding: 4px 0; cursor: pointer; }
 
 .editor-tool-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 20px; padding: 6px var(--spacing-lg); border-top: 1px solid var(--color-hairline); }
 .editor-tool-label { color: var(--color-muted-soft); font-size: 11px; }
@@ -1036,7 +1040,12 @@
   justify-content: space-between;
   gap: 16px;
   flex: 0 0 auto;
+  flex-wrap: wrap;
 }
+.publish-workbench-head > div:first-child { margin-right: auto; }
+.publish-edit-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 24px; flex-shrink: 0; }
+.publish-edit-tools button { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 0; border: 0; background: transparent; color: var(--color-brand-teal); font: inherit; font-size: 12px; cursor: pointer; }
+.publish-layout-note { margin: 0; color: var(--color-muted); font-size: 12px; }
 
 .publish-workbench-head h3 {
   margin: 0 0 4px;

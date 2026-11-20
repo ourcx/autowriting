@@ -470,6 +470,7 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
       <main className="dash-main">
         <div className="dash-workspace-heading">
           <h1>创作工作台</h1>
+          <p>写作要求与素材 → 选稿与编辑 → 排版与封面 → 微信草稿</p>
         </div>
         {!loading && !loadError && resumeArticle && (
           <section className="dash-resume" aria-label="继续创作">
@@ -478,7 +479,7 @@ export default function Dashboard({ onCreateArticle, onEditArticle, onPublishArt
               ? onPublishArticle(resumeArticle.id, resumeArticle.title, 'wechat')
               : onEditArticle?.(resumeArticle.id, resumeArticle.title)}
             >
-              {resumeArticle.status === 'ready' ? '发布到微信' : '继续处理'}
+              {resumeArticle.status === 'ready' ? '排版与微信草稿' : '继续写作'}
               <ArrowRight size={16} />
             </Button>
           </section>

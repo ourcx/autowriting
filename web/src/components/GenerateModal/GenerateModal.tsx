@@ -300,7 +300,7 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
               {comparing && <footer className="gc-dock">
                 {(row.status === "interrupted" || row.status === "queued") && <Button disabled={busy || applying} onClick={() => { stopped.current = false; void run(row) }}><RefreshCw size={14} />{row.content ? "继续生成" : "重试生成"}</Button>}
                 <Button variant="primary" disabled={row.status !== "complete" || applying || !pairReady(row)} onClick={() => void apply(row)}>
-                  {row.pairId ? "选用这一组" : "选用此稿"}
+                  {row.pairId ? "选用并编辑这一组" : "选用并编辑"}
                 </Button>
               </footer>}
             </article>)}
@@ -320,7 +320,7 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
               </Button>}
             {view === "trace" && active.status === "complete" ? <Button onClick={() => setView("draft")}><FileText size={14} />查看正文</Button> :
               <Button variant="primary" disabled={active.status !== "complete" || applying || !pairReady(active)} onClick={() => void apply(active)}>
-                <CheckCircle size={14} />{applying ? "保存中" : active.pairId ? "选用这一组" : "选用此稿"}
+                <CheckCircle size={14} />{applying ? "保存中" : active.pairId ? "选用并编辑这一组" : "选用并编辑"}
               </Button>}
           </footer>}
         </main>

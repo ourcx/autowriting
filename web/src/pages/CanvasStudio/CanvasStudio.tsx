@@ -3,6 +3,7 @@ import Button from "../../components/Button/Button"
 import CanvasMaterialShelf from "./CanvasMaterialShelf"
 import CanvasSectionPresetShelf from "./CanvasSectionPresetShelf"
 import XiumiEditor from "./XiumiEditor"
+import { articleEditorUrl } from "../../utils/articleNavigation"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import {
@@ -527,6 +528,8 @@ export default function CanvasStudio() {
       content: html,
       digest: articleTitle,
       thumbMediaId,
+      articleId: articleId.startsWith("local:") ? undefined : articleId,
+      sourceArticle: articleData.article,
     }, headers)
     if (result.failed_images?.length) {
       toast.warn(`草稿已推送，但有 ${result.failed_images.length} 张图片未能转存`, { duration: 5000 })
@@ -604,13 +607,16 @@ export default function CanvasStudio() {
   return (
     <div className="cs-root">
       <PageHeader
-        title="公众号编辑器"
+        title="秀米与画布排版"
         subtitle={articleId
           ? `${articleData.title || "当前文章"} · ${sources.filter(source => source.kind !== "image").length} 个内容块 · ${sources.filter(source => source.kind === "image").length} 张图片`
           : undefined}
-        onBack={() => navigate("/")}
+        onBack={() => navigate(articleId ? articleEditorUrl(articleId, { title: articleData.title, platform: "wechat" }) : "/")}
         actions={(
           <>
+            {articleId && <Button variant="secondary" onClick={() => navigate(`${articleEditorUrl(articleId, { title: articleData.title })}?tab=cover`)}>
+              <Image size={14} />生成 / 上传封面
+            </Button>}
             <Button variant="secondary" onClick={() => navigate("/styles")}>
               <LayoutTemplate size={14} />
               Markdown 样式

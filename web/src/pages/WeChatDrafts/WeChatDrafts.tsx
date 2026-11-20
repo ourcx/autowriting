@@ -409,7 +409,7 @@ export default function WeChatDrafts() {
 
       <PageHeader
         title="公众号管理"
-        subtitle="草稿、已发布文章与永久素材"
+        subtitle="核对微信草稿后发布；已发布文章与永久素材也在这里管理"
         onBack={() => navigate(-1)}
         actions={<>
         <Button variant="plain"
@@ -466,7 +466,7 @@ export default function WeChatDrafts() {
             <div className="wd-empty">
               <div className="wd-empty-icon"><FileText size={36} /></div>
               <p className="wd-empty-title">草稿箱是空的</p>
-              <p className="wd-empty-desc">在文章预览页点击「推送草稿」，内容会出现在这里</p>
+              <p className="wd-empty-desc">在文章排版页点击「保存到微信草稿」，再刷新这里查看</p>
             </div>
           )}
           {drafts.length > 0 && (

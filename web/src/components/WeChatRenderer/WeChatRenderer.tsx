@@ -278,7 +278,6 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
     setReceipt(result.workflow?.draftReceipt)
   }, [articleId])
   useEffect(() => { void refreshReceipt().catch(() => {}) }, [refreshReceipt])
-  useEffect(() => { setPushDone(false) }, [content, title])
 
   // 今日头条：Cookie 配置弹窗 + 自动推送状态
   const [showTtCookieModal, setShowTtCookieModal] = useState(false)
@@ -329,6 +328,8 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
       setSelectedCoverImage(null)
     }
   }, [articleId])
+  // 修改正文、排版或封面后，可以保存新版本；旧回执仍作为历史记录展示。
+  useEffect(() => { setPushDone(false) }, [content, title, templateId, editedCss, fontSize, selectedCoverImage?.imageUrl])
 
   // 拖拽分栏宽度
   const [sidebarWidth, setSidebarWidth] = useState(260)
@@ -814,8 +815,12 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
       {/* ── 公众号模式 ── */}
       {platformMode === 'wechat' && (
         <>
-          {receipt && <div className="editor-save-status" role="status">
-            {receipt.status === "succeeded" ? <>最近一次推送成功 · {new Date(receipt.at).toLocaleString()} · 回执 {receipt.mediaId} · 仅进入草稿箱，尚未群发</>
+          {receipt && <div className="wr-receipt" role="status">
+            {receipt.status === "succeeded" ? <>
+              <Check size={14} /><span>最近一次已保存到微信草稿箱 · {new Date(receipt.at).toLocaleString()}</span>
+              <a href="/drafts">查看微信草稿</a>
+              <details><summary>回执详情</summary><code>{receipt.mediaId}</code></details>
+            </>
               : receipt.status === "failed" ? "上次推送未成功，可以重试。" : <>
                 上次请求的结果尚未确认。请先打开<a href="/drafts" target="_blank" rel="noreferrer">微信草稿箱</a>核对。
                 <Input aria-label="草稿 media_id" value={confirmationId} onChange={event => setConfirmationId(event.target.value)} placeholder="已找到草稿的 media_id" />
@@ -837,46 +842,6 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
                 </Button>
               </div>
               <span className="wr-stat">{charCount.toLocaleString()} 字</span>
-            </div>
-            <div className="wr-toolbar-right">
-              {copied ? (
-                <span className="wr-copy-hint wr-copy-hint-success">
-                  已复制富文本，打开公众号编辑器 → 直接 Ctrl+V 粘贴
-                </span>
-              ) : (
-                <span className="wr-copy-hint">
-                  点击复制 → 粘贴到公众号编辑器，样式自动带入
-                </span>
-              )}
-              <Button variant="plain" className={`wr-copy-btn ${copied ? 'success' : ''}`} onClick={handleCopy}>
-                {copied ? <Check size={15} /> : <Copy size={15} />}
-                {copied ? '已复制！' : '复制内容'}
-              </Button>
-
-              {/* 选择封面图片按钮 */}
-              <Button variant="plain"
-                className={`wr-cover-btn ${selectedCoverImage ? 'selected' : ''}`}
-                onClick={() => setShowImageLibrary(!showImageLibrary)}
-                title="从图片库选择推文封面"
-              >
-                <ImageIcon size={15} />
-                {selectedCoverImage ? '已选封面' : '选择封面'}
-              </Button>
-
-              <Button variant="plain"
-                className={`wr-push-btn ${pushDone ? 'success' : ''}`}
-                onClick={handlePushDraft}
-                disabled={pushing || pushDone || receipt?.status === "unknown" || receipt?.status === "sending"}
-                title="将文章以 HTML 格式推送到公众号草稿箱"
-              >
-                {pushing
-                  ? <Loader2 size={15} className="wr-spin" />
-                  : pushDone
-                    ? <Check size={15} />
-                    : <Send size={15} />
-                }
-                {pushing ? '推送中...' : pushDone ? '已推送！' : receipt?.status === "unknown" || receipt?.status === "sending" ? "待核对推送结果" : '推送草稿'}
-              </Button>
             </div>
           </div>
 
@@ -994,6 +959,33 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
               </div>
             </div>
           </div>
+          <footer className="wr-publish-dock">
+            <span className="wr-publish-note">先保存微信草稿，最终发布在草稿箱中操作</span>
+            <div className="wr-toolbar-right">
+              <Button variant="plain" className={`wr-copy-btn ${copied ? 'success' : ''}`} onClick={handleCopy}>
+                {copied ? <Check size={15} /> : <Copy size={15} />}
+                {copied ? '已复制' : '复制排版'}
+              </Button>
+              <Button variant="plain"
+                className={`wr-cover-btn ${selectedCoverImage ? 'selected' : ''}`}
+                onClick={() => setShowImageLibrary(!showImageLibrary)}
+                title="从图片库选择或更换封面"
+              >
+                {selectedCoverImage ? <img className="wr-cover-thumb" src={selectedCoverImage.imageUrl} alt="当前封面" /> : <ImageIcon size={15} />}
+                {selectedCoverImage ? '更换封面' : '选择封面'}
+              </Button>
+              <Button variant="plain"
+                className={`wr-push-btn ${pushDone ? 'success' : ''}`}
+                onClick={handlePushDraft}
+                disabled={pushing || pushDone || receipt?.status === "unknown" || receipt?.status === "sending"}
+                title="保存当前排版和封面到公众号草稿箱"
+              >
+                {pushing ? <Loader2 size={15} className="wr-spin" /> : pushDone ? <Check size={15} /> : <Send size={15} />}
+                {pushing ? '保存中...' : pushDone ? '已保存微信草稿' : receipt?.status === "unknown" || receipt?.status === "sending" ? "待核对推送结果" : '保存到微信草稿'}
+              </Button>
+              {(pushDone || receipt?.status === "succeeded") && <a className="wr-drafts-link" href="/drafts">前往草稿箱<ExternalLink size={13} /></a>}
+            </div>
+          </footer>
         </>
       )}
 
