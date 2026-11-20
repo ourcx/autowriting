@@ -188,8 +188,6 @@ export default forwardRef<InlineMarkdownInputHandle, InlineMarkdownInputProps>(f
     editor.scrollTo(scroll.left, scroll.top)
   }, [props.value])
   useEffect(() => { refreshImages.current() }, [props.showImages])
-  useEffect(() => { instance.current?.codemirror.setOption("placeholder", props.placeholder) }, [props.placeholder])
-
   return <div ref={wrapper} className={`inline-markdown-input${props.showImages ? " inline-markdown-input--visual" : " inline-markdown-input--source"}`}>
     <Textarea ref={textarea} aria-label="文章正文" defaultValue={props.value} />
   </div>
