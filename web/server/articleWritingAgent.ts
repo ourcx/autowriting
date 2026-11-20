@@ -365,7 +365,9 @@ export async function prepareArticleWriting(options: WritingAgentOptions) {
         try {
           const page = await tools.open(source.url)
           const readSource = recordBrowserPage(page)
-          browserStep({ output: `浏览器读到 ${page.text.length} 字和 ${page.images.length} 张候选图片。`, sources: [sourceInfo(readSource)] })
+          browserStep({ status: usablePageText(page.text) ? "done" : "failed",
+            output: usablePageText(page.text) ? `浏览器读到 ${page.text.length} 字和 ${page.images.length} 张候选图片。`
+              : "浏览器未取得可读正文，当前页面不作为已读来源。", sources: [sourceInfo(readSource)] })
           if (usablePageText(page.text)) {
             recordRead(source, page.text, finish)
             return
@@ -545,7 +547,9 @@ ${options.imageCount ? `本篇希望配 ${options.imageCount} 张真实图片。
             : step.action === "browser_click" ? await tools.click(step.id)
               : step.action === "browser_scroll" ? await tools.scroll(step.direction) : await tools.snapshot()
           const source = recordBrowserPage(page)
-          toolStep({ output: `读到 ${page.text.length} 字，提取 ${page.images.length} 张候选图片。\n${browserState.slice(0, 1200)}`, sources: [sourceInfo(source)] })
+          toolStep({ status: usablePageText(page.text) ? "done" : "failed",
+            output: usablePageText(page.text) ? `读到 ${page.text.length} 字，提取 ${page.images.length} 张候选图片。\n${browserState.slice(0, 1200)}`
+              : "浏览器未取得可读正文，当前页面不作为已读来源。", sources: [sourceInfo(source)] })
         }
       } catch (error) {
         signal.throwIfAborted()

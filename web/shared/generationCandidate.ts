@@ -10,6 +10,7 @@ export interface ArticleImage {
   alt: string
   source: "web" | "generated"
   sourceUrl?: string
+  originalUrl?: string
   placement: string
 }
 

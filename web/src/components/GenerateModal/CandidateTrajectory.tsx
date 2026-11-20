@@ -77,7 +77,7 @@ export default function CandidateTrajectory({ candidate, now }: CandidateTraject
         {([
           ["找资料", ["context", "history", "search", "read", "find", "decision", "browser", "terminal"]],
           ["配图", ["image"]],
-          ["写初稿", ["outline", "write"]],
+          ["写初稿", ["write"]],
           ["审稿", ["review"]],
           ["优化", ["edit"]],
           ["复核", ["verify"]],

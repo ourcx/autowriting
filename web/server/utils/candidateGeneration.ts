@@ -218,14 +218,25 @@ ${input.materials}
 ${hasSourceArticle ? `# 公众号事实与观点母稿\n${sourceArticle}` : ""}`
     }
     const imageMode = input.imageMode === "generate" ? "generate" : input.imageMode ? (input.imageMode === "none" ? "none" : "web") : "none"
-    if (imageMode !== "none" && !candidate.imagesPrepared && !candidate.content) {
-      // 先落盘，恢复生成时只复用已取得的图片，不自动重复可能计费的图片请求。
+    const missingImages = (input.imageCount || 3) - (candidate.images?.length || 0)
+    if (imageMode !== "none" && missingImages > 0) {
+      // 用户重试时重新采集缺少的真实图；已经尝试过的计费生成不再重复。
+      const collectionMode = candidate.imagesPrepared ? "web" : imageMode
+      const imageSources = [...(candidate.researchSources || [])]
+      for (const step of [...(candidate.trace || [])].reverse()) {
+        if (!["search", "read", "browser"].includes(step.kind)) continue
+        for (const source of step.sources || []) {
+          if (source.url && !imageSources.some(existing => existing.url === source.url)) {
+            imageSources.push({ title: source.title, url: source.url, read: false })
+          }
+        }
+      }
       candidate.imagesPrepared = true
       candidate.imageMessage = "配图正在处理；恢复生成时会沿用已保存的图片。"
       checkpoint()
       candidate.imageMessage = await prepareArticleImages({
-        articleId, task: input.task, writingContext, mode: imageMode, count: input.imageCount || 3,
-        sources: candidate.researchSources || [], tools, config, signal: controller.signal,
+        articleId, task: input.task, writingContext, mode: collectionMode, count: missingImages,
+        sources: imageSources, tools, config, signal: controller.signal, existingImages: candidate.images,
         complete: messages => completeStep(messages, "generate", 60_000), startStep, progress,
         onImage(image) {
           candidate.images = [...(candidate.images || []), image]
@@ -237,7 +248,7 @@ ${hasSourceArticle ? `# 公众号事实与观点母稿\n${sourceArticle}` : ""}`
       send("candidate", { candidate: publicCandidate(candidate) })
     }
     if (input.writingMode === "image_story" && (candidate.images?.length || 0) < 4) {
-      throw new Error(`多图少字需要至少 4 张配图，目前只保存 ${candidate.images?.length || 0} 张。请补充含原图的网页素材后重新生成。`)
+      throw new Error(`多图少字需要至少 4 张配图，目前只保存 ${candidate.images?.length || 0} 张。${candidate.imageMessage || "重试会重新采集缺少的真实图片。"}已保留内容。`)
     }
     const imageContext = articleImagesPrompt(candidate.images || [], input.writingMode || "standard")
     const prompt = `${writingContext}

@@ -5,6 +5,7 @@ import { chromium, type Browser, type Page } from "playwright"
 import { WRITING_TERMINAL_IMAGE } from "./config.ts"
 import { assertPublicHttpUrl, fetchPublicUrl } from "./utils/networkPolicy.ts"
 import { publicSourceUrl } from "./writingResearch.ts"
+import { usablePageText } from "./utils/search/webFetcher.ts"
 
 export interface WritingPageImage {
   id: string
@@ -237,9 +238,12 @@ export class WritingToolSession {
     if (!page) throw new WritingToolError("浏览器会话未能初始化")
     try { await page.goto(target, { waitUntil: "domcontentloaded", timeout: 20_000 }) }
     catch { this.available(); throw new WritingToolError("浏览器未能打开这个公开网页") }
-    // 等待动态正文出现；网页未出现时仍返回实际读到的页面状态。
-    await page.waitForFunction(() => (document.querySelector("#js_content,article,main") || document.body)?.textContent?.trim().length,
-      undefined, { timeout: 3000 }).catch(() => {})
+    // 公众号只等待文章正文，不能把“环境异常”等提示当成已加载正文。
+    await page.waitForFunction(() => {
+      const root = location.hostname === "mp.weixin.qq.com" ? document.querySelector("#js_content")
+        : document.querySelector("article,main") || document.body
+      return Boolean(root && (root.textContent?.trim() || root.querySelector("img")))
+    }, undefined, { timeout: 8000 }).catch(() => {})
     await this.handleVerification()
     return this.snapshot()
   }
@@ -269,7 +273,8 @@ export class WritingToolSession {
     const url = publicSourceUrl(this.page.url()) || this.sourceUrl
     if (!url) throw new WritingToolError("当前页面不是可读取的公开网页")
     const data = await this.page.evaluate(() => {
-      const root = document.querySelector<HTMLElement>("#js_content,article,main,[role=main]") || document.body
+      const root = location.hostname === "mp.weixin.qq.com" ? document.querySelector<HTMLElement>("#js_content")
+        : document.querySelector<HTMLElement>("article,main,[role=main]") || document.body
       const links = [...document.querySelectorAll<HTMLElement>("a[href],button:not([type=submit]),summary,[role=button]")]
         .filter(element => element.getClientRects().length && !element.closest("form")).slice(0, 50).map((element, index) => {
           const id = `E${index + 1}`
@@ -277,14 +282,17 @@ export class WritingToolSession {
           return { id, text: (element.innerText || element.getAttribute("aria-label") || "").trim().slice(0, 100),
             url: element instanceof HTMLAnchorElement ? element.href : undefined }
         })
-      const images = [...root.querySelectorAll<HTMLImageElement>("img")].map(image => ({
+      const images = [...(root?.querySelectorAll<HTMLImageElement>("img") || [])].map(image => ({
         url: image.getAttribute("data-original") || image.getAttribute("data-src") || image.currentSrc || image.src,
         alt: (image.alt || image.closest("figure")?.querySelector("figcaption")?.textContent || "").trim().slice(0, 220),
         width: image.naturalWidth || undefined, height: image.naturalHeight || undefined,
       })).filter(image => image.url && (!image.width || image.width >= 240) && (!image.height || image.height >= 120)).slice(0, 30)
-      return { title: document.title.slice(0, 180), text: root.innerText?.trim().slice(0, 24_000) || "", links, images }
+      return { title: document.title.slice(0, 180), text: root?.innerText?.trim().slice(0, 24_000) || "", links, images }
     })
     if (await this.verificationVisible()) throw new WritingToolError("人机验证尚未通过，这个页面不能当作已读正文")
+    if (new URL(url).hostname === "mp.weixin.qq.com" && !usablePageText(data.text)) {
+      throw new WritingToolError("微信未返回文章正文，当前是验证、异常或不可访问页面，未取得原图。")
+    }
     this.clickIds = new Set(data.links.map(link => link.id))
     this.savedFiles.set(`page-${this.savedFiles.size + 1}.txt`, `${url}\n${data.title}\n\n${data.text}`)
     const html = await this.page.content()
@@ -301,6 +309,7 @@ export class WritingToolSession {
     this.available()
     if (!this.page || this.screenshotCount >= 2) throw new WritingToolError("先打开网页，每篇最多截取两张真实页面画面")
     if (await this.verificationVisible()) throw new WritingToolError("验证码画面不能用作正文配图")
+    if (new URL(this.page.url()).hostname === "mp.weixin.qq.com") await this.snapshot()
     const url = publicSourceUrl(this.page.url())
     if (!url) throw new WritingToolError("当前页面不能截图")
     const title = (await this.page.title()).slice(0, 180)
