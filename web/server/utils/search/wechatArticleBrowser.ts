@@ -2,6 +2,7 @@ import { chromium } from "playwright"
 import { normalizeWechatArticleUrl } from "../../../shared/wechatArticleUrl.ts"
 import { fetchPublicUrl } from "../networkPolicy.ts"
 import { usablePageText } from "./webFetcher.ts"
+import { extractWechatArticle } from "./wechatArticleContent.ts"
 
 const ARTICLE_ORIGIN = "https://mp.weixin.qq.com"
 const SCRIPT_ORIGINS = new Set([ARTICLE_ORIGIN, "https://res.wx.qq.com"])
@@ -23,6 +24,7 @@ export async function readWechatArticleWithBrowser(rawUrl: string, signal: Abort
       const context = await browser.newContext({ serviceWorkers: "block", acceptDownloads: false })
       await context.routeWebSocket("**/*", socket => socket.close())
       const page = await context.newPage()
+      let documentHtml = ""
       await context.route("**/*", async route => {
         const request = route.request()
         const url = new URL(request.url())
@@ -61,22 +63,26 @@ export async function readWechatArticleWithBrowser(rawUrl: string, signal: Abort
             if (bytes > MAX_RESOURCE_BYTES) { await reader.cancel(); await route.abort(); return }
             chunks.push(value)
           }
+          const body = Buffer.concat(chunks, bytes)
+          if (articleDocument) documentHtml = body.toString("utf8")
           await route.fulfill({
             status: response.status,
             contentType: response.headers.get("content-type") || undefined,
-            body: Buffer.concat(chunks, bytes),
+            body,
           })
         } catch {
           await route.abort().catch(() => {})
         }
       })
       await page.goto(articleUrl, { waitUntil: "domcontentloaded", timeout: 8000 })
-      const content = await page.waitForFunction(() => {
-        const body = document.querySelector<HTMLElement>("#js_content")?.innerText.trim()
-        return body && body.length >= 12 ? body : false
+      const initial = extractWechatArticle(documentHtml, articleUrl)
+      if (usablePageText(initial)) return initial
+      await page.waitForFunction(() => {
+        const body = document.querySelector<HTMLElement>("#js_content, .rich_media_content")
+        return Boolean(body?.innerText.trim() || body?.querySelector("img[src], img[data-src]"))
       }, undefined, { timeout: 4000 })
-      const text = await content.jsonValue()
-      return typeof text === "string" && usablePageText(text) ? text : ""
+      const content = extractWechatArticle(await page.content(), articleUrl)
+      return usablePageText(content) ? content : ""
     } finally {
       signal.removeEventListener("abort", close)
       await browser.close().catch(() => {})

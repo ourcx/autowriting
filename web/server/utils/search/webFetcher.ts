@@ -16,6 +16,7 @@
 
 import { logger } from "../../logger.ts"
 import { assertPublicHttpUrl, fetchPublicUrl } from "../networkPolicy.ts"
+import { extractWechatArticle } from "./wechatArticleContent.ts"
 
 // ── 常量 ────────────────────────────────────────────────────────────────────────
 
@@ -144,20 +145,6 @@ function findMainContainer(html: string): string {
   if (bodyMatch) return bodyMatch[0]
 
   return html
-}
-
-function articleContainer(html: string, id: string): string {
-  const start = new RegExp(`<(div|section|article)\\b[^>]*\\bid\\s*=\\s*["']${id}["'][^>]*>`, "i").exec(html)
-  if (!start) return ""
-  const tag = new RegExp(`<(/?)${start[1]}\\b[^>]*>`, "gi")
-  const contentStart = start.index + start[0].length
-  tag.lastIndex = contentStart
-  let depth = 1
-  for (let match = tag.exec(html); match; match = tag.exec(html)) {
-    depth += match[1] ? -1 : 1
-    if (depth === 0) return html.slice(contentStart, match.index)
-  }
-  return ""
 }
 
 export function usablePageText(content: string): boolean {
@@ -343,18 +330,16 @@ export async function webFetch(url: string, options: FetchOptions = {}): Promise
       return `[未提取到正文] ${url} 可能是 JS 渲染页面或存在反爬机制，本期范围内不再重试。`
     }
 
-    if (isBlockPage(html)) {
+    const wechatContent = wechatArticle ? extractWechatArticle(html, resp.url || url) : ""
+    if (isBlockPage(html) && (!wechatArticle || !usablePageText(wechatContent))) {
       logger.warn("WEB-FETCH", "检测到反爬/验证页面", { url })
       return `[未提取到正文] ${url} 返回了人机验证或拦截页面，可能是 Cloudflare 等防护。`
     }
 
     // 4. HTML 正文提取
-    const cleaned = cleanNoiseTags(html)
-    // 微信正文有稳定的容器 ID。验证页、已删除页和导航不能当作文章。
-    const container = wechatArticle ? articleContainer(cleaned, "js_content") : findMainContainer(cleaned)
-    const markdown = htmlToMarkdown(container)
+    const markdown = wechatArticle ? wechatContent : htmlToMarkdown(findMainContainer(cleanNoiseTags(html)))
 
-    if (markdown.length < (wechatArticle ? 12 : 50) || !usablePageText(markdown)) {
+    if ((!wechatArticle && markdown.length < 50) || !usablePageText(markdown)) {
       logger.warn("WEB-FETCH", "正文提取后内容过短", { url, length: markdown.length })
       return `[未提取到正文] ${url} 可能是 JS 渲染页面或防爬墙，本期范围内不再重试。`
     }
