@@ -960,7 +960,7 @@ export const WeChatRenderer: React.FC<WeChatRendererProps> = ({ content, title, 
             </div>
           </div>
           <footer className="wr-publish-dock">
-            <span className="wr-publish-note">先保存微信草稿，最终发布在草稿箱中操作</span>
+            <span className="wr-publish-note" tabIndex={0} data-tooltip="这里保存排版与封面到微信草稿箱，最终发布在草稿箱中操作">微信草稿</span>
             <div className="wr-toolbar-right">
               <Button variant="plain" className={`wr-copy-btn ${copied ? 'success' : ''}`} onClick={handleCopy}>
                 {copied ? <Check size={15} /> : <Copy size={15} />}

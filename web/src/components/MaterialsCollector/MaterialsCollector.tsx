@@ -649,6 +649,7 @@ export default function MaterialsCollector({
             ['paste', <ClipboardPaste size={14} />, '手动粘贴'],
           ] as [typeof mode, React.ReactNode, string][]).map(([id, icon, label]) => (
             <Button key={id} className="mc-mode-tab" aria-pressed={mode === id} disabled={loading}
+              data-tooltip={id === 'search' ? '搜索先获取摘要，点击结果的「读全文」获取完整内容' : undefined}
               onClick={() => { setMode(id); if (id !== 'research') setResearchFile(undefined) }}>
               {icon}{label}
             </Button>
@@ -703,26 +704,16 @@ export default function MaterialsCollector({
               </Button>
             </div>
             {/* 搜索状态提示 */}
-            {searchProvider === 'searxng' ? (
-              <div className="mc-search-tip mc-search-tip--free">
-                <Globe size={12} />
-                SearXNG 聚合搜索，无需 API Key — 搜索后点击「读全文」获取完整内容
-              </div>
-            ) : deepSeekSearch ? (
+            {deepSeekSearch && !deepseekReady ? (
               <div className="mc-search-tip mc-search-tip--hint">
-                {deepseekReady ? 'DeepSeek 搜索 · 点击单条结果的「读全文」可读取原文' : '请在 AI 配置的「公共 Key」中配置 DeepSeek'}
+                请在 AI 配置的「公共 Key」中配置 DeepSeek
               </div>
-            ) : !canSearch ? (
+            ) : !canSearch && !deepSeekSearch && searchProvider !== 'searxng' ? (
               <div className="mc-search-tip mc-search-tip--warn">
                 <AlertCircle size={12} />
                 未配置搜索 Key —— 可在「AI 配置」切换到 SearXNG（免费）方案
               </div>
-            ) : (
-              <div className="mc-search-tip mc-search-tip--hint">
-                <BookOpen size={12} />
-                搜索结果仅含摘要，点击「读全文」可获取完整正文
-              </div>
-            )}
+            ) : null}
           </div>
         )}
 
@@ -1145,7 +1136,7 @@ export default function MaterialsCollector({
           {mode === 'search' && (
             <div className="mc-empty-inner">
               <Search size={28} className="mc-empty-icon" />
-              <p>输入关键词搜索，获取摘要后可点击「读全文」获取完整内容</p>
+              <p>搜索并选择素材</p>
               {searchProvider === 'searxng' && (
                 <span className="mc-empty-badge">SearXNG 免费搜索已启用</span>
               )}

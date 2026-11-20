@@ -113,7 +113,7 @@ export default function XiumiEditor({ articleId, article, title, pushing, onPush
         <label>
           <LayoutTemplate size={15} />
           <span>默认模板</span>
-          <SelectField aria-label="选择秀米画布默认模板" value={templateId}
+          <SelectField aria-label="选择秀米画布默认模板" value={templateId} data-tooltip={template?.desc || "保留正文结构，不添加模板装饰"}
             disabled={importing || pushing} onChange={event => {
               setTemplateId(event.target.value)
               setView("template")
@@ -126,40 +126,30 @@ export default function XiumiEditor({ articleId, article, title, pushing, onPush
           <Eye size={14} />预览模板
         </Button>
         <Button variant="secondary" disabled={!article || importing || pushing}
-          onClick={() => void receiveHtml(buildTemplateHtml())}>
-          <LayoutTemplate size={14} />用正文生成排版
+          onClick={() => void receiveHtml(buildTemplateHtml())} data-tooltip="使用所选模板排版当前正文，并保存到本机">
+          <LayoutTemplate size={14} />生成排版
         </Button>
-        <span>{template?.desc || "保留正文结构，不添加模板装饰"}</span>
-      </div>
-      <div className="cs-edit-bar">
-        <div className="cs-edit-actions">
           <Button variant="secondary" disabled={!article || importing || pushing}
-            onClick={() => void copyContent(buildTemplateHtml())}>
-            <Copy size={14} />复制模板正文到秀米
+            onClick={() => void copyContent(buildTemplateHtml())} data-tooltip="复制带样式的正文，然后粘贴到秀米继续编辑">
+            <Copy size={14} />复制正文
           </Button>
-          <a className="cs-xiumi-link" href={XIUMI_EDITOR_URL} target="_blank" rel="noopener noreferrer">
+          <a className="cs-xiumi-link" href={XIUMI_EDITOR_URL} target="_blank" rel="noopener noreferrer" data-tooltip="在新窗口完成排版后，点秀米对勾复制，再粘贴到下方保存">
             <ExternalLink size={14} />新窗口打开秀米
           </a>
-        </div>
-        <div className="cs-edit-actions">
           {(html || view === "template") && <Button variant="secondary" disabled={importing || pushing}
             onClick={() => setView(view === "editor" && html ? "saved" : "editor")}>
             <Eye size={14} />{view === "editor" ? "查看已保存排版" : "返回秀米编辑"}
           </Button>}
-        </div>
       </div>
       <div className="cs-xiumi-help">
-        <p>选择模板后，可用当前正文生成排版并保存，也可复制到秀米继续编辑。秀米编辑完成后，点击顶部对勾传回。</p>
-        <div>
-          <p>在新窗口编辑时，点秀米对勾复制排版，再粘贴到这里保存。</p>
-          <Textarea aria-label="粘贴秀米排版" placeholder="在此粘贴秀米图文，自动保存排版与图片"
+          <Textarea aria-label="粘贴秀米排版" placeholder="粘贴秀米排版" rows={1}
+            data-tooltip="点秀米对勾复制图文，粘贴到这里后自动转存图片并保存；旧排版会保留到保存成功"
             readOnly disabled={importing || pushing} onPaste={pasteContent} />
-        </div>
-        <div role="status">
-          {importing ? "正在转存图片并保存排版，请暂勿切换文章或离开页面…" : pendingHtml ? (
+        {(importing || pendingHtml) && <div role="status">
+          {importing ? "正在转存图片并保存…" : (
             <Button variant="secondary" disabled={pushing} onClick={() => void receiveHtml(pendingHtml)}>重试保存秀米排版</Button>
-          ) : html ? "已保存到本机；推送使用最近一次传回的排版。" : "排版完成后传回，即可保存并推送微信草稿。"}
-        </div>
+          )}
+        </div>}
       </div>
       <iframe ref={iframeRef} className="cs-xiumi-frame" title="秀米图文编辑器" hidden={view !== "editor"}
           src={XIUMI_EDITOR_URL} allow="clipboard-read; clipboard-write"
@@ -173,7 +163,7 @@ export default function XiumiEditor({ articleId, article, title, pushing, onPush
           srcDoc={`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{max-width:677px;margin:24px auto;padding:0 16px;overflow-wrap:break-word}img{max-width:100%}</style></head><body>${html}</body></html>`} />
       )}
       <footer className="cs-edit-bar">
-        <span>{html ? "当前推送内容：已保存的秀米排版" : "完成排版并传回后，即可保存微信草稿"}</span>
+        <span tabIndex={0} data-tooltip="推送使用最近一次保存到本机的排版；完成秀米编辑后先传回保存">{html ? '排版已保存' : '尚未保存排版'}</span>
         <div className="cs-edit-actions">
           <Button variant="secondary" disabled={!html || importing || pushing || !!pendingHtml} onClick={() => void copyContent(html)}>
             <Copy size={14} />复制已保存排版

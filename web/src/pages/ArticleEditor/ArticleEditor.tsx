@@ -691,7 +691,10 @@ export default function ArticleEditor() {
                 </Button>
               )
             })}
-
+            <span className="editor-flow-status" role="status" tabIndex={0}
+              data-tooltip={`${dirty ? '未保存的修改已保留恢复副本' : isLocalArticle ? '保存在此浏览器' : '已保存到服务器'}；活跃编辑约 ${Math.round((workflow.activeEditingMs || 0) / 60000)} 分钟，返工 ${workflow.reworkCount || 0} 次${workflow.selectedCandidateId ? '，已选稿' : ''}`}>
+              {saving ? '保存中…' : dirty ? '未保存' : '已保存'}
+            </span>
           </div>
           {(activeFlowStep === 'draft' || activeTab === 'cover' || activeTab === 'library') && <nav className="editor-tool-nav" aria-label="写作工具">
             <span className="editor-tool-label">写作工具</span>
@@ -705,10 +708,6 @@ export default function ArticleEditor() {
         </div>
 
         <div className="editor-content">
-          <div className="editor-document-meta">
-            <span role="status">{dirty ? "有未保存的修改，本标签页已保留恢复副本" : isLocalArticle ? "已保存在此浏览器" : "已保存到服务器"}</span>
-            <span>活跃编辑约 {Math.round((workflow.activeEditingMs || 0) / 60000)} 分钟 · 返工 {workflow.reworkCount || 0} 次{workflow.selectedCandidateId ? ' · 已选稿' : ''}</span>
-          </div>
           {recovery && <div className="editor-save-status">
             检测到上次未保存的修改。
             <Button variant="plain" className="btn btn-secondary btn-small" onClick={() => { setData(recovery); setRecovery(null) }}>恢复修改</Button>
@@ -790,20 +789,25 @@ export default function ArticleEditor() {
           {activeTab === 'materials' && <div className="editor-panel editor-panel--prepare">
                 <div className="materials-task">
                   <div className="materials-header-top">
-                    <label htmlFor="writing-task">先说清楚这篇要写什么</label>
-                    <Button variant="plain" onClick={() => setActiveTab('task')}>任务模板</Button>
-                    <Button variant="plain" onClick={handleGenerateOutline} disabled={generatingOutline || !data.task}>
+                    <label htmlFor="writing-task">写作任务</label>
+                    <div className="task-quick-options" role="group" aria-label="快捷选择任务模板">
+                      {taskTemplates.map(template => <Button variant="plain" key={template.id}
+                        aria-pressed={data.task === template.content} data-tooltip={template.desc}
+                        onClick={() => setData(prev => ({ ...prev, task: template.content }))}>{template.name}</Button>)}
+                    </div>
+                    <Button variant="plain" onClick={() => setActiveTab('task')} data-tooltip="管理、新建和编辑任务模板">管理模板</Button>
+                    <Button variant="plain" onClick={handleGenerateOutline} disabled={generatingOutline || !data.task} data-tooltip="根据当前写作任务生成大纲，确认后追加到素材">
                       {generatingOutline ? '生成中…' : '生成大纲'}
                     </Button>
                   </div>
-                  <Textarea id="writing-task" value={data.task} onChange={e => setData(prev => ({ ...prev, task: e.target.value }))} placeholder="写什么、写给谁、希望读者看完得到什么？素材可在下方补充" rows={3} />
+                  <Textarea id="writing-task" value={data.task} onChange={e => setData(prev => ({ ...prev, task: e.target.value }))} placeholder="选择模板后直接修改，或填写本篇写作要求" rows={2} />
                 </div>
             <div className="editor-panel editor-panel--materials">
               {/* 左侧：素材采集 */}
               <div className="materials-collector-pane">
                 <div className="panel-header materials-panel-header">
                   <h3>素材采集</h3>
-                  <p>搜索、解析链接或粘贴内容，勾选后写入右侧素材库</p>
+                  <Button variant="plain" className="editor-info-tip" aria-label="素材采集说明" data-tooltip="搜索、解析链接或粘贴内容，勾选后写入右侧素材库"><HelpCircle size={14} /></Button>
                 </div>
                 <MaterialsCollector
                   key={articleId}
@@ -825,6 +829,7 @@ export default function ArticleEditor() {
                 <div className="panel-header materials-panel-header">
                   <div className="materials-header-top">
                     <h3>素材库</h3>
+                    <Button variant="plain" className="editor-info-tip" aria-label="素材库说明" data-tooltip="可直接粘贴和编辑资料，也可从左侧采集后写入"><HelpCircle size={14} /></Button>
                     <Button variant="plain"
                       className="materials-refine-btn"
                       onClick={handleRefineMaterials}
@@ -836,7 +841,6 @@ export default function ArticleEditor() {
                         : <><Sparkles size={12} />AI 整理+去重</>}
                     </Button>
                   </div>
-                  <p>可直接粘贴资料，也可从左侧采集后写入</p>
                 </div>
 
                 {/* 大纲待确认卡片 */}
@@ -961,23 +965,27 @@ export default function ArticleEditor() {
             <div className="editor-panel editor-panel--publish">
               <div className="publish-workbench-head">
                 <div>
-                  <h3>{publishPlatform === 'wechat' ? '公众号排版与草稿' : `${publishPlatform === 'toutiao' ? '今日头条' : '小红书'}预览与发布`}</h3>
+                  <h3>排版</h3>
                 </div>
-                <Select label="发布平台" value={publishPlatform} onValueChange={value => selectPublishPlatform(resolvePublishPlatform(value))}
-                  options={PUBLISH_PLATFORMS.map(platform => ({ value: platform.id, label: platform.label }))} />
-                <div className={`publish-account-status ${publishAccountConnected ? 'is-ready' : ''}`} data-onboarding="publish-account-status">
-                  {publishAccountConnected ? <Link2 size={15} /> : <Link2Off size={15} />}
-                  <span>{publishAccountConnected ? '账号已连接' : '账号未连接'}</span>
-                  <Button variant="plain" onClick={() => navigate('/account')}>{publishAccountConnected ? '管理' : '去连接'}</Button>
-                </div>
-              </div>
               <nav className="publish-edit-tools" aria-label="排版工具">
                 <Button variant="plain" onClick={() => setActiveTab(publishPlatform === 'wechat' ? 'article' : publishPlatform)}><Edit3 size={14} />返回正文</Button>
-                <Button variant="plain" onClick={() => setActiveTab('cover')}><Image size={14} />生成 / 上传封面</Button>
+                <Button variant="plain" onClick={() => setActiveTab('cover')} data-tooltip="生成、上传或粘贴封面，已有封面会保留"><Image size={14} />封面</Button>
                 <Button variant="plain" onClick={() => setActiveTab('library')}><LayoutList size={14} />图片库</Button>
-                {publishPlatform === 'wechat' && <Button variant="plain" disabled={saving || !data.article.trim()} onClick={() => void openLayoutStudio()}><Palette size={14} />{hasSavedLayout ? '查看已保存秀米排版' : '秀米 / 画布排版'}</Button>}
+                {publishPlatform === 'wechat' && <Button variant="plain" disabled={saving || !data.article.trim()} onClick={() => void openLayoutStudio()}
+                  data-tooltip={hasSavedLayout ? '已有秀米排版，点击继续编辑或推送；本页预览使用正文与样式模板' : '在秀米、旧版排版或自由画布中继续编辑本篇文章'}><Palette size={14} />{hasSavedLayout ? '已保存秀米排版' : '秀米 / 画布'}</Button>}
               </nav>
-              {publishPlatform === 'wechat' && hasSavedLayout && <p className="publish-layout-note">已保存的秀米排版可从上方继续编辑、推送；下方预览使用当前正文与样式模板。</p>}
+                <div className="publish-platform-picker">
+                  <Select label="发布平台" value={publishPlatform} onValueChange={value => selectPublishPlatform(resolvePublishPlatform(value))}
+                    options={PUBLISH_PLATFORMS.map(platform => ({ value: platform.id, label: platform.label }))} />
+                </div>
+                <div className={`publish-account-status ${publishAccountConnected ? 'is-ready' : ''}`} data-onboarding="publish-account-status">
+                  <Button variant="plain" onClick={() => navigate('/account')}
+                    data-tooltip={publishAccountConnected ? '账号已连接，点击管理公众号与平台账号' : '账号未连接，点击配置'}>
+                    {publishAccountConnected ? <Link2 size={15} /> : <Link2Off size={15} />}
+                    {publishAccountConnected ? '已连接' : '连接账号'}
+                  </Button>
+                </div>
+              </div>
               <div className="publish-workbench-body" data-onboarding="publish-workbench">
                 {publishContent.trim() ? <WeChatRenderer
                   content={publishContent}

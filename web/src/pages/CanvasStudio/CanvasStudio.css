@@ -198,7 +198,11 @@
 }
 
 .cs-xiumi-help {
-  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 6px 16px;
   border-bottom: 1px solid var(--color-hairline);
   color: var(--color-muted);
   font-size: 12px;
@@ -215,9 +219,12 @@
 
 .cs-xiumi-help textarea {
   box-sizing: border-box;
-  width: 100%;
-  margin: 8px 0;
-  padding: 10px;
+  width: min(360px, 100%);
+  height: 34px;
+  min-height: 34px;
+  resize: none;
+  margin: 0;
+  padding: 6px 10px;
   border: 1px solid var(--color-hairline);
   border-radius: var(--rounded-md);
   font: inherit;
