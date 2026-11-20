@@ -109,6 +109,7 @@ export function parseCandidateInput(value: unknown): CandidateInput {
   if (!["none", "web", "generate"].includes(String(imageMode))) throw new CandidateError("配图方式不正确")
   if (writingMode === "image_story" && imageMode === "none") throw new CandidateError("多图少字模式需要启用配图")
   if (typeof imageCount !== "number" || !Number.isInteger(imageCount) || imageCount < 1 || imageCount > 8) throw new CandidateError("一篇文章最多配 1–8 张图")
+  if (writingMode === "image_story" && imageCount < 4) throw new CandidateError("多图少字模式至少需要 4 张配图")
   for (const key of ["browserTools", "terminalTools"]) {
     if (data[key] !== undefined && typeof data[key] !== "boolean") throw new CandidateError("工具权限参数不正确")
   }

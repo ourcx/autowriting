@@ -60,7 +60,7 @@ export default function MarkdownEditor({
   const handleSelect = useCallback((selection: ReturnType<InlineMarkdownInputHandle["getSelection"]>) => {
     const { start, end, left, top, bottom } = selection
     if (end <= start + 5) { setFloatMenu(null); return }
-    const selectedText = editorRef.current?.getValue().substring(start, end) || ""
+    const selectedText = editorRef.current?.getSelectedText(start, end) || ""
     if (!selectedText.trim()) { setFloatMenu(null); return }
     const POPUP_H = 52
     const viewH = window.innerHeight
@@ -244,7 +244,7 @@ export default function MarkdownEditor({
   const applyResult = () => {
     if (!floatMenu || !aiResult) return
     const editor = editorRef.current
-    if (!editor || editor.getValue().substring(floatMenu.selStart, floatMenu.selEnd) !== floatMenu.selectedText) {
+    if (!editor || editor.getSelectedText(floatMenu.selStart, floatMenu.selEnd) !== floatMenu.selectedText) {
       toast.warn("原文已变化，请重新选中后操作")
       return
     }
@@ -267,13 +267,6 @@ export default function MarkdownEditor({
     document.body.appendChild(element)
     element.click()
     document.body.removeChild(element)
-  }
-
-  const insertMarkdown = (before: string, after: string = '') => {
-    const editor = editorRef.current
-    if (!editor) return
-    const { start, end } = editor.getSelection()
-    editor.replace(start, end, before + editor.getValue().substring(start, end) + after)
   }
 
   interface Prompt {
@@ -312,21 +305,21 @@ export default function MarkdownEditor({
       />
 
       {/* ── Toolbar ── */}
-      <div className="editor-toolbar">
+      <div className="editor-toolbar" onMouseDown={event => { if ((event.target as HTMLElement).closest("button")) event.preventDefault() }}>
         <div className="toolbar-left">
           <div className="editor-view-options" role="group" aria-label="正文显示方式">
-            <Button variant="plain" className={`toolbar-btn${showImages ? " active" : ""}`} aria-pressed={showImages} onClick={() => setShowImages(true)}><FileText size={15} />图文</Button>
-            <Button variant="plain" className={`toolbar-btn${!showImages ? " active" : ""}`} aria-pressed={!showImages} onClick={() => setShowImages(false)}><Code2 size={15} />Markdown</Button>
+            <Button variant="plain" className={`toolbar-btn${showImages ? " active" : ""}`} aria-pressed={showImages} onClick={() => { setShowImages(true); setFloatMenu(null); setAiResult(null) }}><FileText size={15} />图文</Button>
+            <Button variant="plain" className={`toolbar-btn${!showImages ? " active" : ""}`} aria-pressed={!showImages} onClick={() => { setShowImages(false); setFloatMenu(null); setAiResult(null) }}><Code2 size={15} />Markdown</Button>
           </div>
         </div>
         <div className="toolbar-right">
-          <Button variant="plain" className="toolbar-btn" onClick={() => insertMarkdown('# ')} title="标题 1">H1</Button>
-          <Button variant="plain" className="toolbar-btn" onClick={() => insertMarkdown('## ')} title="标题 2">H2</Button>
-          <Button variant="plain" className="toolbar-btn" onClick={() => insertMarkdown('**', '**')} title="加粗 (Ctrl+B)"><strong>B</strong></Button>
-          <Button variant="plain" className="toolbar-btn" onClick={() => insertMarkdown('*', '*')} title="斜体 (Ctrl+I)"><em>I</em></Button>
-          <Button variant="plain" className="toolbar-btn" onClick={() => insertMarkdown('- ')} title="列表">≡</Button>
-          <Button variant="plain" className="toolbar-btn" onClick={() => insertMarkdown('[', '](url)')} title="链接"><Link size={16} /></Button>
-          <Button variant="plain" className="toolbar-btn" onClick={() => insertMarkdown('```\n', '\n```')} title="代码块">{'<>'}</Button>
+          <Button variant="plain" className="toolbar-btn" onClick={() => editorRef.current?.format("h1")} title="标题 1">H1</Button>
+          <Button variant="plain" className="toolbar-btn" onClick={() => editorRef.current?.format("h2")} title="标题 2">H2</Button>
+          <Button variant="plain" className="toolbar-btn" onClick={() => editorRef.current?.format("bold")} title="加粗 (Ctrl+B)"><strong>B</strong></Button>
+          <Button variant="plain" className="toolbar-btn" onClick={() => editorRef.current?.format("italic")} title="斜体 (Ctrl+I)"><em>I</em></Button>
+          <Button variant="plain" className="toolbar-btn" onClick={() => editorRef.current?.format("list")} title="列表">≡</Button>
+          <Button variant="plain" className="toolbar-btn" onClick={() => editorRef.current?.format("link")} title="链接"><Link size={16} /></Button>
+          <Button variant="plain" className="toolbar-btn" onClick={() => editorRef.current?.format("code")} title="代码块">{'<>'}</Button>
           <div className="toolbar-divider" />
           <Button variant="plain"
             className={`toolbar-btn toolbar-btn--image${uploading ? ' toolbar-btn--loading' : ''}`}

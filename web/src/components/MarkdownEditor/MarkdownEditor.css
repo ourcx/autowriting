@@ -289,44 +289,30 @@
   min-height: 0;
 }
 
-.inline-markdown-input { flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
-.inline-markdown-input .EasyMDEContainer { height: 100%; }
-.inline-markdown-input .EasyMDEContainer .CodeMirror {
-  height: 100%;
-  min-height: 100px;
-  padding: 0;
+.inline-markdown-input { flex: 1; min-width: 0; min-height: 0; overflow: auto; }
+.inline-markdown-input .tiptap,
+.markdown-source-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 100%;
+  padding: 28px max(18px, calc((100% - 760px) / 2)) 60px;
   border: 0;
-  border-radius: 0;
+  outline: none;
   background: #fff;
   color: var(--color-ink);
   font-family: inherit;
   font-size: 16px;
   line-height: 1.9;
+  overflow-wrap: anywhere;
 }
-.inline-markdown-input .CodeMirror-scroll { min-height: 100px; }
-/* 内容与光标测量层共享留白，不能单独移动 CodeMirror-code。 */
-.inline-markdown-input .CodeMirror-lines { padding: 28px max(18px, calc((100% - 760px) / 2)) 60px; }
-.inline-markdown-input .CodeMirror pre.CodeMirror-line,
-.inline-markdown-input .CodeMirror pre.CodeMirror-line-like { padding-inline: 0; }
-.inline-markdown-input .CodeMirror-cursor { border-left: 2px solid var(--color-brand-teal); }
-.inline-markdown-input .CodeMirror-placeholder { color: var(--color-muted-soft); }
-.inline-markdown-input .CodeMirror-selected { background: var(--color-surface-strong); }
-.inline-markdown-input .CodeMirror-focused .CodeMirror-selected { background: #a4d4c54d; }
-.inline-markdown-input .cm-header { color: var(--color-ink); font-weight: 650; }
-.inline-markdown-input .cm-header-1 { font-size: 28px; line-height: 1.45; }
-.inline-markdown-input .cm-header-2 { font-size: 22px; line-height: 1.5; }
-.inline-markdown-input .cm-header-3 { font-size: 18px; }
-.inline-markdown-input .cm-formatting { color: var(--color-muted-soft); }
-.inline-markdown-input .cm-link { color: var(--color-brand-teal); }
-.inline-markdown-input .cm-url { color: var(--color-muted); }
-.inline-markdown-input--source .CodeMirror { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 14px; line-height: 1.8; }
-.inline-article-image { display: inline-block; width: 100%; max-width: 100%; margin-block: 12px; vertical-align: top; cursor: pointer; white-space: normal; }
-.inline-article-image img { display: block; max-width: 100%; max-height: 460px; height: auto; margin-inline: auto; border-radius: 4px; object-fit: contain; }
-.inline-article-image-caption { display: block; margin-top: 8px; color: var(--color-muted); font-size: 12px; line-height: 1.6; text-align: center; overflow-wrap: anywhere; }
-.inline-article-image-caption:empty { display: none; }
-.inline-article-image:focus-visible { outline: 2px solid var(--color-brand-teal); outline-offset: 4px; }
-.inline-article-image--error { padding: 18px; box-sizing: border-box; border: 1px dashed var(--color-hairline); border-radius: 4px; }
-.inline-article-image--error .inline-article-image-caption { margin: 0; }
+.markdown-source-input { height: 100%; resize: none; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 14px; }
+.inline-markdown-input .tiptap ::selection { background: #a4d4c54d; }
+.inline-markdown-input .tiptap img { display: block; max-width: 100%; max-height: 460px; height: auto; margin: 16px auto; }
+.inline-markdown-input .tiptap .ProseMirror-selectednode { outline: 2px solid var(--color-brand-teal); }
+.inline-markdown-input .tiptap p.is-editor-empty:first-child::before { content: attr(data-placeholder); float: left; height: 0; color: var(--color-muted-soft); pointer-events: none; }
+.inline-markdown-input .tiptap table { border-collapse: collapse; width: 100%; }
+.inline-markdown-input .tiptap td,
+.inline-markdown-input .tiptap th { border: 1px solid var(--color-hairline); padding: 8px; }
 
 .editor-preview {
   flex: 1;
@@ -541,7 +527,8 @@
     flex-direction: column;
   }
 
-  .inline-markdown-input .CodeMirror-lines { padding: 20px 16px 40px; }
+  .inline-markdown-input .tiptap,
+  .markdown-source-input { padding: 20px 16px 40px; }
   .inline-markdown-input .cm-header-1 { font-size: 24px; }
   .inline-markdown-input .cm-header-2 { font-size: 20px; }
 

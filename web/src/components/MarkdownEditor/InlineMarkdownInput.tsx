@@ -1,7 +1,11 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react"
-import EasyMDE from "easymde"
+import { EditorContent, useEditor } from "@tiptap/react"
+import StarterKit from "@tiptap/starter-kit"
+import Image from "@tiptap/extension-image"
+import { Markdown } from "@tiptap/markdown"
+import { TableKit } from "@tiptap/extension-table"
+import { Placeholder } from "@tiptap/extensions"
 import { Textarea } from "../FormControls/FormControls"
-import "easymde/dist/easymde.min.css"
 
 interface SelectionRange {
   start: number
@@ -11,10 +15,13 @@ interface SelectionRange {
   bottom: number
 }
 
+export type EditorFormat = "h1" | "h2" | "bold" | "italic" | "list" | "link" | "code"
 export interface InlineMarkdownInputHandle {
   getValue: () => string
   getSelection: () => SelectionRange
+  getSelectedText: (_start: number, _end: number) => string
   replace: (_start: number, _end: number, _text: string) => void
+  format: (_format: EditorFormat) => void
   focus: () => void
   contains: (_target: Node) => boolean
 }
@@ -28,167 +35,117 @@ interface InlineMarkdownInputProps {
   onImageFiles: (_files: File[]) => void
 }
 
-/** 保留原始 Markdown 与撤销历史，只把图片语法显示为可点击的实际图片。 */
+/** 图文模式的选区、输入和撤销全部交给 Tiptap；Markdown 模式使用原生文本框。 */
 export default forwardRef<InlineMarkdownInputHandle, InlineMarkdownInputProps>(function InlineMarkdownInput(props, ref) {
-  const textarea = useRef<HTMLTextAreaElement>(null)
   const wrapper = useRef<HTMLDivElement>(null)
-  const instance = useRef<EasyMDE | null>(null)
+  const source = useRef<HTMLTextAreaElement>(null)
   const current = useRef(props)
-  const refreshImages = useRef<() => void>(() => {})
-  useEffect(() => { current.current = props })
+  current.current = props
+  const lastMarkdown = useRef(props.value)
+  const editor = useEditor({
+    extensions: [StarterKit.configure({ link: { openOnClick: false } }), Markdown, Image.configure({ allowBase64: true }), TableKit,
+      Placeholder.configure({ placeholder: props.placeholder })],
+    content: props.value,
+    contentType: "markdown",
+    editorProps: {
+      attributes: { class: "markdown-body", "aria-label": "文章正文", role: "textbox", "aria-multiline": "true" },
+      handlePaste: (_view, event) => {
+        const files = Array.from(event.clipboardData?.files || []).filter(file => file.type.startsWith("image/"))
+        if (!files.length) return false
+        current.current.onImageFiles(files)
+        return true
+      },
+      handleDrop: (view, event) => {
+        const files = Array.from(event.dataTransfer?.files || []).filter(file => file.type.startsWith("image/"))
+        if (!files.length) return false
+        const position = view.posAtCoords({ left: event.clientX, top: event.clientY })
+        if (position) editor?.commands.setTextSelection(position.pos)
+        current.current.onImageFiles(files)
+        return true
+      },
+    },
+    onUpdate: ({ editor: instance }) => {
+      lastMarkdown.current = instance.getMarkdown()
+      current.current.onChange(lastMarkdown.current)
+    },
+    onSelectionUpdate: ({ editor: instance }) => {
+      if (!current.current.showImages) return
+      const { from, to } = instance.state.selection
+      const coords = instance.view.coordsAtPos(to)
+      current.current.onSelect({ start: from, end: to, ...coords })
+    },
+  })
 
+  const selectedText = (start: number, end: number) => {
+    if (!current.current.showImages) return current.current.value.substring(start, end)
+    if (!editor || end > editor.state.doc.content.size) return ""
+    return editor.markdown?.serialize({ type: "doc", content: editor.state.doc.slice(start, end).content.toJSON() }) || ""
+  }
+  const selection = (): SelectionRange => {
+    if (!current.current.showImages && source.current) {
+      const rect = source.current.getBoundingClientRect()
+      return { start: source.current.selectionStart, end: source.current.selectionEnd, left: rect.left, top: rect.top, bottom: rect.top }
+    }
+    if (!editor) return { start: 0, end: 0, left: 0, top: 0, bottom: 0 }
+    const { from, to } = editor.state.selection
+    return { start: from, end: to, ...editor.view.coordsAtPos(to) }
+  }
+  const replace = (start: number, end: number, text: string) => {
+    if (current.current.showImages) {
+      editor?.chain().focus().insertContentAt({ from: start, to: end }, text, { contentType: "markdown" }).run()
+    } else {
+      const textarea = source.current
+      if (!textarea) return
+      textarea.setRangeText(text, start, end, "end")
+      current.current.onChange(textarea.value)
+      textarea.focus()
+    }
+  }
   useImperativeHandle(ref, () => ({
-    getValue: () => instance.current?.value() || "",
-    getSelection: () => {
-      const editor = instance.current?.codemirror
-      if (!editor) return { start: 0, end: 0, left: 0, top: 0, bottom: 0 }
-      const from = editor.getCursor("from")
-      const to = editor.getCursor("to")
-      const coords = editor.cursorCoords(to, "window")
-      return { start: editor.indexFromPos(from), end: editor.indexFromPos(to), ...coords }
-    },
-    replace: (start, end, text) => {
-      const editor = instance.current?.codemirror
+    getValue: () => lastMarkdown.current,
+    getSelection: selection,
+    getSelectedText: selectedText,
+    replace,
+    format: format => {
+      if (!current.current.showImages) {
+        const tokens = { h1: ["# ", ""], h2: ["## ", ""], bold: ["**", "**"], italic: ["*", "*"],
+          list: ["- ", ""], link: ["[", "](https://)"], code: ["```\n", "\n```"] }
+        const { start, end } = selection()
+        const [before, after] = tokens[format]
+        replace(start, end, before + selectedText(start, end) + after)
+        return
+      }
       if (!editor) return
-      editor.replaceRange(text, editor.posFromIndex(start), editor.posFromIndex(end), "+input")
-      editor.setCursor(editor.posFromIndex(start + text.length))
-      editor.focus()
+      const chain = editor.chain().focus()
+      if (format === "h1" || format === "h2") chain.toggleHeading({ level: format === "h1" ? 1 : 2 }).run()
+      else if (format === "bold") chain.toggleBold().run()
+      else if (format === "italic") chain.toggleItalic().run()
+      else if (format === "list") chain.toggleBulletList().run()
+      else if (format === "code") chain.toggleCodeBlock().run()
+      else {
+        const href = window.prompt("链接地址", editor.getAttributes("link").href || "https://")
+        if (href !== null) href.trim() ? chain.extendMarkRange("link").setLink({ href: href.trim() }).run() : chain.unsetLink().run()
+      }
     },
-    focus: () => instance.current?.codemirror.focus(),
+    focus: () => current.current.showImages ? editor?.commands.focus() : source.current?.focus(),
     contains: target => Boolean(wrapper.current?.contains(target)),
-  }), [])
+  }))
 
   useEffect(() => {
-    if (!textarea.current) return
-    const easy = new EasyMDE({
-      element: textarea.current,
-      initialValue: current.current.value,
-      placeholder: current.current.placeholder,
-      toolbar: false, status: false, spellChecker: false,
-      autoDownloadFontAwesome: false, autofocus: false,
-      indentWithTabs: false, tabSize: 4, minHeight: "100px",
-      shortcuts: { togglePreview: null, toggleSideBySide: null, toggleFullScreen: null, drawImage: null },
-    })
-    instance.current = easy
-    const editor = easy.codemirror
-    editor.getInputField().setAttribute("aria-label", "文章正文")
-    let frame = 0
-    let marks: ReturnType<typeof editor.markText>[] = []
+    if (props.value === lastMarkdown.current) return
+    lastMarkdown.current = props.value
+    editor?.commands.setContent(props.value, { contentType: "markdown", emitUpdate: false })
+  }, [props.value, editor])
 
-    const decorate = () => {
-      const scroll = editor.getScrollInfo()
-      editor.operation(() => {
-        marks.forEach(mark => mark.clear())
-        marks = []
-        if (!current.current.showImages) return
-        const text = editor.getValue()
-        const from = editor.indexFromPos(editor.getCursor("from"))
-        const to = editor.indexFromPos(editor.getCursor("to"))
-        const imagePattern = /!\[([^\]\n]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g
-        for (const match of text.matchAll(imagePattern)) {
-          if (marks.length >= 40) break
-          const start = match.index
-          const end = start + match[0].length
-          // 光标或选区进入图片语法时显示原文，方便直接修改或删除。
-          if (from <= end && to >= start && editor.hasFocus()) continue
-          let url: URL
-          try { url = new URL(match[2], window.location.href) } catch { continue }
-          if (!["http:", "https:"].includes(url.protocol) && !/^data:image\/(?:png|jpe?g|gif|webp|avif);base64,/i.test(match[2])) continue
-          const widget = document.createElement("span")
-          widget.className = "inline-article-image"
-          widget.setAttribute("role", "button")
-          widget.tabIndex = 0
-          widget.title = "点击修改图片链接或删除图片"
-          widget.setAttribute("aria-label", `编辑图片：${match[1] || "正文配图"}`)
-          const image = document.createElement("img")
-          image.src = url.href
-          image.alt = match[1] || "正文配图"
-          image.loading = "lazy"
-          image.referrerPolicy = "no-referrer"
-          const caption = document.createElement("span")
-          caption.className = "inline-article-image-caption"
-          caption.textContent = match[1]
-          widget.append(image, caption)
-          image.addEventListener("load", () => editor.refresh())
-          image.addEventListener("error", () => {
-            widget.classList.add("inline-article-image--error")
-            image.hidden = true
-            caption.textContent = `图片暂时无法显示 · ${match[1] || "点击修改链接"}`
-            editor.refresh()
-          })
-          const mark = editor.markText(editor.posFromIndex(start), editor.posFromIndex(end), {
-            replacedWith: widget, atomic: true, handleMouseEvents: false,
-          })
-          const editImage = () => {
-            mark.clear()
-            editor.setSelection(editor.posFromIndex(start), editor.posFromIndex(end))
-            editor.focus()
-          }
-          widget.addEventListener("click", editImage)
-          widget.addEventListener("keydown", event => {
-            if (event.key === "Enter" || event.key === " ") { event.preventDefault(); editImage() }
-          })
-          marks.push(mark)
-        }
-      })
-      editor.scrollTo(scroll.left, scroll.top)
-    }
-    const schedule = () => {
-      cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(decorate)
-    }
-    refreshImages.current = schedule
-    const changed = () => { current.current.onChange(editor.getValue()); schedule() }
-    const selected = () => {
-      schedule()
-      const coords = editor.cursorCoords(editor.getCursor("to"), "window")
-      current.current.onSelect({
-        start: editor.indexFromPos(editor.getCursor("from")),
-        end: editor.indexFromPos(editor.getCursor("to")), ...coords,
-      })
-    }
-    const paste = (_editor: EasyMDE["codemirror"], event: ClipboardEvent) => {
-      const files = Array.from(event.clipboardData?.files || []).filter(file => file.type.startsWith("image/"))
-      if (files.length) { event.preventDefault(); current.current.onImageFiles(files) }
-    }
-    const drop = (_editor: EasyMDE["codemirror"], event: DragEvent) => {
-      const files = Array.from(event.dataTransfer?.files || []).filter(file => file.type.startsWith("image/"))
-      if (!files.length) return
-      event.preventDefault()
-      const position = editor.coordsChar({ left: event.clientX, top: event.clientY }, "window")
-      editor.setCursor(position)
-      current.current.onImageFiles(files)
-    }
-    editor.on("change", changed)
-    editor.on("cursorActivity", selected)
-    editor.on("paste", paste)
-    editor.on("drop", drop)
-    editor.on("blur", schedule)
-    schedule()
-    return () => {
-      cancelAnimationFrame(frame)
-      editor.off("change", changed)
-      editor.off("cursorActivity", selected)
-      editor.off("paste", paste)
-      editor.off("drop", drop)
-      editor.off("blur", schedule)
-      marks.forEach(mark => mark.clear())
-      instance.current = null
-      easy.toTextArea()
-    }
-  }, [])
-
-  useEffect(() => {
-    const editor = instance.current?.codemirror
-    if (!editor || editor.getValue() === props.value) return
-    const scroll = editor.getScrollInfo()
-    const cursor = editor.indexFromPos(editor.getCursor())
-    editor.replaceRange(props.value, { line: 0, ch: 0 }, editor.posFromIndex(editor.getValue().length), "external")
-    editor.setCursor(editor.posFromIndex(Math.min(cursor, props.value.length)))
-    editor.scrollTo(scroll.left, scroll.top)
-  }, [props.value])
-  useEffect(() => { refreshImages.current() }, [props.showImages])
-  return <div ref={wrapper} className={`inline-markdown-input${props.showImages ? " inline-markdown-input--visual" : " inline-markdown-input--source"}`}>
-    <Textarea ref={textarea} aria-label="文章正文" defaultValue={props.value} />
+  return <div ref={wrapper} className="inline-markdown-input">
+    <div hidden={!props.showImages}><EditorContent editor={editor} /></div>
+    {!props.showImages && <Textarea ref={source} className="markdown-source-input" aria-label="Markdown 正文"
+      placeholder={props.placeholder} value={props.value}
+      onChange={event => props.onChange(event.target.value)}
+      onSelect={() => props.onSelect(selection())}
+      onPaste={event => {
+        const files = Array.from(event.clipboardData.files).filter(file => file.type.startsWith("image/"))
+        if (files.length) { event.preventDefault(); props.onImageFiles(files) }
+      }} />}
   </div>
 })

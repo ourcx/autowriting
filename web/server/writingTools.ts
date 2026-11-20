@@ -90,8 +90,8 @@ export function imagesInHtml(html: string, sourceUrl: string, pageTitle: string)
     }
     const meta = /^<meta/i.test(tag)
     if (meta && !/^(?:og:image|twitter:image)$/.test(attributes.get("property") || attributes.get("name") || "")) continue
-    const raw = meta ? attributes.get("content") : attributes.get("data-src") || attributes.get("data-original")
-      || attributes.get("src") || attributes.get("srcset")?.split(",")[0]?.trim().split(/\s/)[0]
+    const raw = meta ? attributes.get("content") : attributes.get("data-original") || attributes.get("data-src")
+      || (attributes.get("data-srcset") || attributes.get("srcset"))?.split(",").pop()?.trim().split(/\s/)[0] || attributes.get("src")
     if (!raw || /^(?:data|blob|javascript):/i.test(raw)) continue
     let url = ""
     try { url = publicSourceUrl(new URL(raw, sourceUrl).href) } catch { continue }
@@ -278,7 +278,7 @@ export class WritingToolSession {
             url: element instanceof HTMLAnchorElement ? element.href : undefined }
         })
       const images = [...root.querySelectorAll<HTMLImageElement>("img")].map(image => ({
-        url: image.getAttribute("data-src") || image.currentSrc || image.src,
+        url: image.getAttribute("data-original") || image.getAttribute("data-src") || image.currentSrc || image.src,
         alt: (image.alt || image.closest("figure")?.querySelector("figcaption")?.textContent || "").trim().slice(0, 220),
         width: image.naturalWidth || undefined, height: image.naturalHeight || undefined,
       })).filter(image => image.url && (!image.width || image.width >= 240) && (!image.height || image.height >= 120)).slice(0, 30)
@@ -290,7 +290,8 @@ export class WritingToolSession {
     const html = await this.page.content()
     this.savedFiles.set(`page-${this.savedFiles.size + 1}.html`, html.slice(0, 2_000_000))
     const images = this.addImages(data.images.flatMap(image => {
-      const imageUrl = publicSourceUrl(image.url)
+      let imageUrl: string
+      try { imageUrl = publicSourceUrl(new URL(image.url, url).href) } catch { return [] }
       return imageUrl ? [{ ...image, url: imageUrl, sourceUrl: url, pageTitle: data.title }] : []
     }))
     return { ...data, url, links: data.links.map(link => ({ ...link, url: link.url ? publicSourceUrl(link.url) || undefined : undefined })), images }
