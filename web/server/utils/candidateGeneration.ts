@@ -218,7 +218,8 @@ ${input.materials}
 ${hasSourceArticle ? `# 公众号事实与观点母稿\n${sourceArticle}` : ""}`
     }
     const imageMode = input.imageMode === "generate" ? "generate" : input.imageMode ? (input.imageMode === "none" ? "none" : "web") : "none"
-    const missingImages = (input.imageCount || 3) - (candidate.images?.length || 0)
+    const targetImages = Math.max(2, input.imageCount || 3)
+    const missingImages = targetImages - (candidate.images?.length || 0)
     if (imageMode !== "none" && missingImages > 0) {
       // 用户重试时重新采集缺少的真实图；已经尝试过的计费生成不再重复。
       const collectionMode = candidate.imagesPrepared ? "web" : imageMode
@@ -234,7 +235,8 @@ ${hasSourceArticle ? `# 公众号事实与观点母稿\n${sourceArticle}` : ""}`
       candidate.imagesPrepared = true
       candidate.imageMessage = "配图正在处理；恢复生成时会沿用已保存的图片。"
       checkpoint()
-      candidate.imageMessage = await prepareArticleImages({
+      try {
+        candidate.imageMessage = await prepareArticleImages({
         articleId, task: input.task, writingContext, mode: collectionMode, count: missingImages,
         sources: imageSources, tools, config, signal: controller.signal, existingImages: candidate.images,
         complete: messages => completeStep(messages, "generate", 60_000), startStep, progress,
@@ -243,12 +245,17 @@ ${hasSourceArticle ? `# 公众号事实与观点母稿\n${sourceArticle}` : ""}`
           checkpoint()
           send("candidate", { candidate: publicCandidate(candidate) })
         },
-      })
+        })
+      } catch {
+        controller.signal.throwIfAborted()
+        candidate.imageMessage = "配图暂未完成，正文继续生成。"
+      }
+      if (candidate.images?.length) {
+        candidate.imageMessage = candidate.images.length < targetImages
+          ? `本篇已保存 ${candidate.images.length} 张图，目标 ${targetImages} 张；已有图片会插入正文，缺图不影响正文生成。` : ""
+      }
       checkpoint()
       send("candidate", { candidate: publicCandidate(candidate) })
-    }
-    if (input.writingMode === "image_story" && (candidate.images?.length || 0) < 4) {
-      throw new Error(`多图少字需要至少 4 张配图，目前只保存 ${candidate.images?.length || 0} 张。${candidate.imageMessage || "重试会重新采集缺少的真实图片。"}已保留内容。`)
     }
     const imageContext = articleImagesPrompt(candidate.images || [], input.writingMode || "standard")
     const prompt = `${writingContext}
@@ -313,23 +320,6 @@ ${imageContext}`
       return placeArticleImages(result.trim(), candidate.images || []).trim()
     }
     candidate.content = cleanFinalContent(candidate.content)
-    if (input.writingMode === "image_story") {
-      const bodyLength = (content: string) => content.replace(/^#\s.*$/gm, "")
-        .replace(/!\[[^\]\n]*\]\([^)\n]+\)/g, "").replace(/\[([^\]]+)\]\([^)\n]+\)/g, "$1")
-        .replace(/[\s#*_`>~-]/g, "").length
-      if (bodyLength(candidate.content) < 300 || bodyLength(candidate.content) > 600) {
-        progress("正在把多图少字正文调整到 300–600 字")
-        const finish = startStep("write", "调整多图少字篇幅")
-        candidate.content = cleanFinalContent(await completeStep([
-          { role: "system", content: "调整这篇图文稿：保留一个 H1、全部已有图片 Markdown、事实和原有语气；正文严格写成 300–600 字，不计标题和图片地址。每张图只配简短说明，不加来源链接和参考资料，不补新事实。只输出完整 Markdown 正文。" },
-          { role: "user", content: candidate.content },
-        ], "generate", 60_000))
-        finish({ output: `正文 ${bodyLength(candidate.content)} 字，配图 ${candidate.images?.length || 0} 张。` })
-      }
-      if (bodyLength(candidate.content) < 300 || bodyLength(candidate.content) > 600) {
-        throw new Error("多图少字正文未达到 300–600 字，已保留候选稿，请调整后使用。")
-      }
-    }
     candidate.status = "complete"
     candidate.message = approved ? "生成完成" : "已保留初稿，优化稿未通过复核"
     candidate.finishedAt = new Date().toISOString()

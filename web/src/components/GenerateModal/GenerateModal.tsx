@@ -250,13 +250,13 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
           {imageMode !== "none" && <fieldset className="gc-choice">
             <legend>目标图片数</legend>
             <Select label="目标图片数" value={String(imageCount)} onValueChange={value => setImageCount(Number(value))}
-              options={(writingMode === "image_story" ? [4, 5, 6, 7, 8] : [1, 2, 3, 4, 5, 6, 7, 8]).map(value => ({ value: String(value), label: `${value} 张` }))} />
+              options={[2, 3, 4, 5, 6, 7, 8].map(value => ({ value: String(value), label: `${value} 张` }))} />
           </fieldset>}
           <Checkbox checked={browserTools} onCheckedChange={setBrowserTools}>浏览器查资料及处理验证码</Checkbox>
           <Checkbox checked={terminalTools} onCheckedChange={setTerminalTools}>终端整理资料</Checkbox>
         </div>
         <p>{imageMode === "generate" ? "本次已允许调用官方 GPT Image，生成的示意图会明确标注，可能单独计费。" : "优先原始照片、官方图和真实截图。找不到合适图片时会提示缺图，不会自动生成。"}</p>
-        {writingMode === "image_story" && <p>默认 6 张图，至少 4 张；正文 300–600 字。缺图或字数超出范围会提示，不标记为完成。</p>}
+        {writingMode === "image_story" && <p>默认目标 6 张图，要求模型至少配 2 张；正文以 300–600 字为目标。缺图不会中断正文生成。</p>}
         <p>先查历史文章和公开网页，再写作、审稿和优化。浏览器验证码处理需要当前模型支持看图。</p>
       </div>}
       {error && <div className="gc-alert" role="alert"><AlertCircle size={16} />{error}</div>}
