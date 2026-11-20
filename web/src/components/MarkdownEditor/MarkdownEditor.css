@@ -304,8 +304,8 @@
   line-height: 1.9;
 }
 .inline-markdown-input .CodeMirror-scroll { min-height: 100px; }
-.inline-markdown-input .CodeMirror-lines { padding: 28px clamp(18px, 4vw, 44px) 60px; }
-.inline-markdown-input .CodeMirror-code { max-width: 760px; margin-inline: auto; }
+/* 内容与光标测量层共享留白，不能单独移动 CodeMirror-code。 */
+.inline-markdown-input .CodeMirror-lines { padding: 28px max(18px, calc((100% - 760px) / 2)) 60px; }
 .inline-markdown-input .CodeMirror pre.CodeMirror-line,
 .inline-markdown-input .CodeMirror pre.CodeMirror-line-like { padding-inline: 0; }
 .inline-markdown-input .CodeMirror-cursor { border-left: 2px solid var(--color-brand-teal); }
