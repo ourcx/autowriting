@@ -203,7 +203,7 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
         <div className="gc-header-actions">
           {busy
             ? <Button className="gc-stop" onClick={stop}><Square size={12} />停止生成</Button>
-            : <Button variant="primary" className="gc-new" aria-expanded={setupOpen} onClick={() => setSetupOpen(open => !open)}><Settings2 size={15} />{setupOpen ? "生成设置" : "新建一批"}</Button>}
+            : <Button variant="primary" className="gc-new" aria-expanded={setupOpen} onClick={() => setSetupOpen(open => !open)}><Settings2 size={15} />{setupOpen ? "收起设置" : "新建一批"}</Button>}
           <Button className="gc-icon" onClick={close} title="关闭并保留候选稿" aria-label="关闭生成窗口"><X size={18} /></Button>
         </div>
       </header>
@@ -237,6 +237,7 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
             <Zap size={14} />{platform === "both" ? "生成双平台版本" : `生成${platform === "wechat" ? "公众号母稿" : "今日头条版本"}`}
           </Button>
         </div>
+        <Collapse className="gc-advanced-settings" label={`配图与工具设置 · ${imageMode === "none" ? "不配图" : `${imageCount} 张图`}`}>
         <div className="gc-media-settings">
           <fieldset className="gc-choice">
             <legend>正文配图</legend>
@@ -252,12 +253,15 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
             <Select label="目标图片数" value={String(imageCount)} onValueChange={value => setImageCount(Number(value))}
               options={[2, 3, 4, 5, 6, 7, 8].map(value => ({ value: String(value), label: `${value} 张` }))} />
           </fieldset>}
-          <Checkbox checked={browserTools} onCheckedChange={setBrowserTools}>浏览器查资料及处理验证码</Checkbox>
-          <Checkbox checked={terminalTools} onCheckedChange={setTerminalTools}>终端整理资料</Checkbox>
+          <div className="gc-tool-options">
+            <Checkbox checked={browserTools} onCheckedChange={setBrowserTools}>浏览器查资料及处理验证码</Checkbox>
+            <Checkbox checked={terminalTools} onCheckedChange={setTerminalTools}>终端整理资料</Checkbox>
+          </div>
         </div>
         <p>{imageMode === "generate" ? "本次已允许调用官方 GPT Image，生成的示意图会明确标注，可能单独计费。" : "优先原始照片、官方图和真实截图。找不到合适图片时会提示缺图，不会自动生成。"}</p>
         {writingMode === "image_story" && <p>默认目标 6 张图，要求模型至少配 2 张；正文以 300–600 字为目标。缺图不会中断正文生成。</p>}
         <p>先查历史文章和公开网页，再写作、审稿和优化。浏览器验证码处理需要当前模型支持看图。</p>
+        </Collapse>
       </div>}
       {error && <div className="gc-alert" role="alert"><AlertCircle size={16} />{error}</div>}
       <div className="gc-workspace">
