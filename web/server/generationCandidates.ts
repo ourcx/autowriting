@@ -8,6 +8,7 @@ interface StoredCandidate extends GenerationCandidate {
   input: CandidateInput
   writingBrief?: string
   draftComplete?: boolean
+  imagesPrepared?: boolean
 }
 
 export class CandidateError extends Error {
@@ -26,10 +27,11 @@ function filename(userId: string, articleId: string, id: string): string {
 }
 
 export function publicCandidate(stored: StoredCandidate): GenerationCandidate {
-  const { input, writingBrief, draftComplete, ...candidate } = stored
+  const { input, writingBrief, draftComplete, imagesPrepared, ...candidate } = stored
   void input
   void writingBrief
   void draftComplete
+  void imagesPrepared
   return candidate
 }
 
@@ -99,6 +101,17 @@ export function parseCandidateInput(value: unknown): CandidateInput {
   const count = data.count ?? 1
   if (typeof count !== "number" || !Number.isInteger(count) || count < 1 || count > 3) throw new CandidateError("一次只能生成 1–3 篇")
   const writingAgent = data.writingAgent === true
+  const writingMode = data.writingMode ?? "standard"
+  // 只有明确的 generate 参数才授予生成图片权限；旧版 auto 也按真实图片处理。
+  const imageMode = data.imageMode === "auto" ? "web" : data.imageMode ?? "web"
+  const imageCount = data.imageCount ?? (writingMode === "image_story" ? 6 : 3)
+  if (!["standard", "image_story"].includes(String(writingMode))) throw new CandidateError("文章生成方式不正确")
+  if (!["none", "web", "generate"].includes(String(imageMode))) throw new CandidateError("配图方式不正确")
+  if (writingMode === "image_story" && imageMode === "none") throw new CandidateError("多图少字模式需要启用配图")
+  if (typeof imageCount !== "number" || !Number.isInteger(imageCount) || imageCount < 1 || imageCount > 8) throw new CandidateError("一篇文章最多配 1–8 张图")
+  for (const key of ["browserTools", "terminalTools"]) {
+    if (data[key] !== undefined && typeof data[key] !== "boolean") throw new CandidateError("工具权限参数不正确")
+  }
   const references = data.referenceArticleIds ?? []
   if (!Array.isArray(references) || references.length > 8 || references.some(id => typeof id !== "string" || id.length > 160)) {
     throw new CandidateError("参考文章参数不正确")
@@ -108,6 +121,8 @@ export function parseCandidateInput(value: unknown): CandidateInput {
     sourceArticle: text("sourceArticle", 100000), selectedRagContext: text("selectedRagContext", 50000),
     referenceArticleIds: references, platform: data.platform, count,
     ...(writingAgent ? { writingAgent } : {}),
+    writingMode: writingMode as CandidateInput["writingMode"], imageMode: imageMode as CandidateInput["imageMode"],
+    imageCount, browserTools: data.browserTools !== false, terminalTools: data.terminalTools !== false,
   }
 }
 
@@ -123,6 +138,7 @@ export function createCandidates(userId: string, articleId: string, input: Candi
       const candidateInput: CandidateInput = {
         ...input,
         platform,
+        writingMode: input.writingMode, imageMode: input.imageMode, imageCount: input.imageCount,
         // 双平台候选共享任务与素材并行成稿；单独生成头条时仍可使用传入的公众号正文。
         ...(input.platform === "both" && platform === "toutiao" ? { sourceArticle: "" } : {}),
       }
@@ -132,6 +148,7 @@ export function createCandidates(userId: string, articleId: string, input: Candi
         pairId,
         label: input.platform === "both" ? `方案 ${index + 1} · ${platform === "wechat" ? "公众号" : "头条"}` : `候选 ${index + 1}`,
         platform,
+        writingMode: input.writingMode, imageMode: input.imageMode, imageCount: input.imageCount,
         status: "queued", content: "", message: "等待生成",
         createdAt: now, updatedAt: now, input: candidateInput,
       }

@@ -18,7 +18,7 @@ function authFetch(url: string, init: RequestInit = {}): Promise<Response> {
 }
 
 export type ArticleProvider = 'maas' | 'openai' | 'openai-compat' | 'zhipu' | 'deepseek'
-export type CoverProvider = 'local' | 'openai' | 'openrouter' | 'gencli' | 'stability' | 'siliconflow' | 'z-image' | 'qwen-edit' | 'doubao' | 'zhipu'
+export type CoverProvider = 'local' | 'openai' | 'gpt-image' | 'openrouter' | 'gencli' | 'stability' | 'siliconflow' | 'z-image' | 'qwen-edit' | 'doubao' | 'zhipu'
 
 export interface AIConfig {
   // 服务商公共 Key（工具自己的 Key 非空时仍优先使用工具 Key）
@@ -34,6 +34,7 @@ export interface AIConfig {
   // 封面生成
   coverProvider: CoverProvider
   coverApiKey: string
+  openaiImageModel: string
   openrouterApiKey: string
   zhipuImageApiKey: string
 
@@ -97,6 +98,7 @@ export const DEFAULT_CONFIG: AIConfig = {
 
   coverProvider: 'siliconflow',
   coverApiKey: '',
+  openaiImageModel: 'gpt-image-2',
   openrouterApiKey: '',
   zhipuImageApiKey: '',
 
@@ -156,11 +158,11 @@ export const CONFIG_PRESETS = [
   {
     id: 'openai-pro',
     name: 'OpenAI 专业方案',
-    desc: '使用 GPT-4o + DALL-E 3，质量最高',
+    desc: '使用 OpenAI 官方文章和图片模型',
     config: {
       articleProvider: 'openai',
       articleModel: 'gpt-4o',
-      coverProvider: 'openai',
+      coverProvider: 'gpt-image',
     }
   },
   {
@@ -371,6 +373,7 @@ export const PROVIDER_PRESETS: Array<{
 ]
 
 export const COVER_PROVIDER_PRESETS = [
+  { id: 'gpt-image'   as CoverProvider, name: 'GPT Image 官方', desc: 'OpenAI 官方 API，浏览器直连' },
   { id: 'local'       as CoverProvider, name: 'SVG 占位',      desc: '无需 API，免费即时生成' },
   { id: 'doubao'      as CoverProvider, name: '豆包 Seedream', desc: '火山方舟，中文提示词友好' },
   { id: 'zhipu'       as CoverProvider, name: '智谱 GLM-Image', desc: '文字与复杂版式表现更好' },

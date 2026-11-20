@@ -4,7 +4,7 @@ import { PassThrough } from "node:stream"
 import { text } from "node:stream/consumers"
 import type { NextFunction, Response } from "express"
 import { AxiosError } from "axios"
-import { BROWSER_MODEL_CHUNK, BROWSER_MODEL_HEADER, BROWSER_MODEL_RESPONSE_LIMIT, type BrowserModelJob } from "../shared/browserModel.ts"
+import { BROWSER_MODEL_CHUNK, BROWSER_MODEL_HEADER, BROWSER_MODEL_RESPONSE_LIMIT, OPENAI_IMAGE_ENDPOINT, type BrowserModelJob } from "../shared/browserModel.ts"
 import { startSseHeartbeat } from "./sseHeartbeat.ts"
 import type { AuthedRequest } from "./types.ts"
 
@@ -26,7 +26,7 @@ export function openBrowserModelSession(userId: string, response: Response): voi
   const id = randomUUID()
   const session = { userId, response, jobs: new Map<string, Job>(), claimed: false }
   sessions.set(id, session)
-  const timer = setTimeout(() => response.end(), 12 * 60_000)
+  const timer = setTimeout(() => response.end(), 35 * 60_000)
   response.once("close", () => {
     clearTimeout(timer)
     sessions.delete(id)
@@ -34,6 +34,7 @@ export function openBrowserModelSession(userId: string, response: Response): voi
   })
   response.set({
     "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache",
     Connection: "keep-alive",
     "X-Accel-Buffering": "no",
   })
@@ -122,7 +123,8 @@ export function requestBrowserModel(url: string, body: Record<string, unknown>, 
         }
       } else if (type === "chunk" && stream && typeof chunk === "string" && chunk.length <= BROWSER_MODEL_CHUNK) {
         received += Buffer.byteLength(chunk)
-        if (received > BROWSER_MODEL_RESPONSE_LIMIT) finish(new BrowserModelError("浏览器模型响应过大"))
+        // 图片 JSON 包含 base64，单独放宽官方图片响应；普通模型仍保持原限制。
+        if (received > (url === OPENAI_IMAGE_ENDPOINT ? 32 * 1024 * 1024 : BROWSER_MODEL_RESPONSE_LIMIT)) finish(new BrowserModelError("浏览器模型响应过大"))
         else stream.write(chunk)
       } else if (type === "end" && stream) finish()
       else return false

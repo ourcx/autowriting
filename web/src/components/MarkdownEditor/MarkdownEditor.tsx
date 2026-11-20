@@ -1,10 +1,11 @@
-import { Input, Textarea } from "../FormControls/FormControls"
+import { Input } from "../FormControls/FormControls"
 import Button from "../Button/Button"
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { toast } from '../Toast/Toast'
-import { Edit2, Copy, Download, Sparkles, Check, X, RotateCcw, ImagePlus, Loader2, Zap } from 'lucide-react'
+import { Copy, Download, Sparkles, Check, X, RotateCcw, ImagePlus, Loader2, Zap, FileText, Code2, Link } from 'lucide-react'
 import { aiRequestConfig, deepSeekKeyHeaders, loadAIConfig } from '../../utils/aiConfig'
 import PromptSelector from '../PromptSelector/PromptSelector'
+import InlineMarkdownInput, { type InlineMarkdownInputHandle } from "./InlineMarkdownInput"
 import './MarkdownEditor.css'
 
 interface MarkdownEditorProps {
@@ -39,8 +40,9 @@ export default function MarkdownEditor({
   height = '500px',
   articleId = '',
 }: MarkdownEditorProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const editorRef = useRef<InlineMarkdownInputHandle>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [showImages, setShowImages] = useState(true)
 
   // ── AI 内联助手状态 ──
   const [floatMenu, setFloatMenu] = useState<FloatMenu | null>(null)
@@ -55,60 +57,17 @@ export default function MarkdownEditor({
   // ── 提示词选择器状态 ──
   const [showPromptSelector, setShowPromptSelector] = useState(false)
 
-  // 监听选区变化，用 textarea 镜像层精确定位
-  const handleSelect = useCallback(() => {
-    const ta = textareaRef.current
-    if (!ta) return
-    const start = ta.selectionStart
-    const end = ta.selectionEnd
+  const handleSelect = useCallback((selection: ReturnType<InlineMarkdownInputHandle["getSelection"]>) => {
+    const { start, end, left, top, bottom } = selection
     if (end <= start + 5) { setFloatMenu(null); return }
-
-    const selectedText = value.substring(start, end)
+    const selectedText = editorRef.current?.getValue().substring(start, end) || ""
     if (!selectedText.trim()) { setFloatMenu(null); return }
-
-    // 用隐藏镜像 div 精确测量选区末尾坐标
-    const mirror = document.createElement('div')
-    const style = window.getComputedStyle(ta)
-      ;['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing',
-        'paddingTop', 'paddingLeft', 'paddingRight', 'paddingBottom',
-        'borderTopWidth', 'borderLeftWidth', 'borderRightWidth', 'borderBottomWidth',
-        'boxSizing', 'wordWrap', 'whiteSpace', 'tabSize',
-      ].forEach(p => { (mirror.style as unknown as Record<string, string>)[p] = style[p as keyof CSSStyleDeclaration] as string })
-    mirror.style.position = 'fixed'
-    mirror.style.visibility = 'hidden'
-    mirror.style.overflow = 'hidden'
-    mirror.style.width = `${ta.clientWidth}px`
-    mirror.style.height = 'auto'
-    mirror.style.top = '0'
-    mirror.style.left = '0'
-    mirror.style.whiteSpace = 'pre-wrap'
-
-    const textBefore = document.createElement('span')
-    textBefore.textContent = value.substring(0, end)
-    const caret = document.createElement('span')
-    caret.textContent = '|'
-    mirror.appendChild(textBefore)
-    mirror.appendChild(caret)
-    document.body.appendChild(mirror)
-
-    const taRect = ta.getBoundingClientRect()
-    const caretRect = caret.getBoundingClientRect()
-    document.body.removeChild(mirror)
-
-    // 将镜像坐标映射回 textarea 视口坐标（减去滚动偏移）
-    const rawY = taRect.top + (caretRect.top - ta.scrollTop)
-
-    // 浮窗出现在选区末尾下方 8px，超出 viewport 底部则向上翻转
     const POPUP_H = 52
     const viewH = window.innerHeight
-    const flippedY = rawY + caretRect.height + 8
-    const finalY = flippedY + POPUP_H > viewH - 12 ? rawY - POPUP_H - 6 : flippedY
-
-    // X 轴：跟随光标，右侧超出则右对齐
+    const flippedY = bottom + 8
+    const finalY = flippedY + POPUP_H > viewH - 12 ? top - POPUP_H - 6 : flippedY
     const POPUP_W = 340
-    const rawX = caretRect.left
-    const finalX = rawX + POPUP_W > window.innerWidth - 12 ? window.innerWidth - POPUP_W - 12 : rawX
-
+    const finalX = Math.max(12, Math.min(left, window.innerWidth - POPUP_W - 12))
     setFloatMenu({
       x: finalX,
       y: finalY,
@@ -118,14 +77,13 @@ export default function MarkdownEditor({
     })
     setAiResult(null)
     setAiAction(null)
-  }, [value])
+  }, [])
 
   // 点击外部关闭浮窗
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (floatRef.current && !floatRef.current.contains(e.target as Node)) {
-        const ta = textareaRef.current
-        if (ta && ta.contains(e.target as Node)) return
+        if (editorRef.current?.contains(e.target as Node)) return
         setFloatMenu(null)
         setAiResult(null)
       }
@@ -221,57 +179,21 @@ export default function MarkdownEditor({
 
   // 在光标处插入图片 Markdown 语法
   const insertImageMarkdown = useCallback((url: string, alt = '图片') => {
-    const ta = textareaRef.current
-    const cursor = ta ? ta.selectionStart : value.length
-    const mdImg = `![${alt}](${url})`
-    const newValue = value.substring(0, cursor) + mdImg + value.substring(cursor)
-    onChange(newValue)
-    // 移动光标到图片语法后
-    setTimeout(() => {
-      if (ta) {
-        ta.focus()
-        const newPos = cursor + mdImg.length
-        ta.setSelectionRange(newPos, newPos)
-      }
-    }, 0)
-  }, [value, onChange])
-
-  // 粘贴事件：拦截图片粘贴
-  const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const items = Array.from(e.clipboardData.items)
-    const imageItem = items.find(item => item.type.startsWith('image/'))
-    if (!imageItem) return // 非图片粘贴，走默认行为
-
-    e.preventDefault()
-    const file = imageItem.getAsFile()
-    if (!file) return
-
-    toast.info('正在上传粘贴的图片...')
-    const url = await uploadImageFile(file)
-    if (url) {
-      insertImageMarkdown(url, '图片')
-      toast.success('图片已上传并插入')
-    }
-  }, [uploadImageFile, insertImageMarkdown])
-
-  // 拖拽图片到编辑区
-  const handleDrop = useCallback(async (e: React.DragEvent<HTMLTextAreaElement>) => {
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'))
-    if (files.length === 0) return
-    e.preventDefault()
-
-    toast.info(`正在上传 ${files.length} 张图片...`)
+    const editor = editorRef.current
+    if (!editor) return
+    const { start, end } = editor.getSelection()
+    const caption = alt.replace(/[[\]\\\r\n]/g, " ").trim() || "图片"
+    editor.replace(start, end, `\n\n![${caption}](${url})\n\n`)
+  }, [])
+  const uploadImages = useCallback(async (files: File[]) => {
+    if (uploading) return
+    let saved = 0
     for (const file of files) {
       const url = await uploadImageFile(file)
-      if (url) insertImageMarkdown(url, file.name.replace(/\.[^.]+$/, ''))
+      if (url) { insertImageMarkdown(url, file.name.replace(/\.[^.]+$/, "")); saved++ }
     }
-    if (files.length > 0) toast.success('图片上传完成')
-  }, [uploadImageFile, insertImageMarkdown])
-
-  const handleDragOver = (e: React.DragEvent<HTMLTextAreaElement>) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'copy'
-  }
+    if (saved) toast.success(`已插入 ${saved} 张图片`)
+  }, [uploading, uploadImageFile, insertImageMarkdown])
 
   // 点击工具栏图片按钮
   const handleImageButtonClick = () => {
@@ -284,10 +206,7 @@ export default function MarkdownEditor({
     // reset
     e.target.value = ''
 
-    for (const file of files) {
-      const url = await uploadImageFile(file)
-      if (url) insertImageMarkdown(url, file.name.replace(/\.[^.]+$/, ''))
-    }
+    await uploadImages(files)
   }
 
   const handleAIAction = async (action: AIAction) => {
@@ -324,11 +243,12 @@ export default function MarkdownEditor({
 
   const applyResult = () => {
     if (!floatMenu || !aiResult) return
-    const newValue =
-      value.substring(0, floatMenu.selStart) +
-      aiResult +
-      value.substring(floatMenu.selEnd)
-    onChange(newValue)
+    const editor = editorRef.current
+    if (!editor || editor.getValue().substring(floatMenu.selStart, floatMenu.selEnd) !== floatMenu.selectedText) {
+      toast.warn("原文已变化，请重新选中后操作")
+      return
+    }
+    editor.replace(floatMenu.selStart, floatMenu.selEnd, aiResult)
     setFloatMenu(null)
     setAiResult(null)
     toast.success('已应用')
@@ -350,25 +270,10 @@ export default function MarkdownEditor({
   }
 
   const insertMarkdown = (before: string, after: string = '') => {
-    const textarea = textareaRef.current
-    if (!textarea) return
-    const start = textarea.selectionStart
-    const end = textarea.selectionEnd
-    const selectedText = value.substring(start, end)
-    const newValue =
-      value.substring(0, start) + before + selectedText + after + value.substring(end)
-    onChange(newValue)
-    setTimeout(() => {
-      textarea.focus()
-      const newCursorPos = start + before.length + selectedText.length
-      textarea.setSelectionRange(newCursorPos, newCursorPos)
-    }, 0)
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Tab') { e.preventDefault(); insertMarkdown('    ') }
-    if ((e.ctrlKey || e.metaKey) && e.key === 'b') { e.preventDefault(); insertMarkdown('**', '**') }
-    if ((e.ctrlKey || e.metaKey) && e.key === 'i') { e.preventDefault(); insertMarkdown('*', '*') }
+    const editor = editorRef.current
+    if (!editor) return
+    const { start, end } = editor.getSelection()
+    editor.replace(start, end, before + editor.getValue().substring(start, end) + after)
   }
 
   interface Prompt {
@@ -387,16 +292,10 @@ export default function MarkdownEditor({
   }
 
   const handlePromptSelect = (prompt: Prompt) => {
-    const textarea = textareaRef.current
-    if (!textarea) return
-    const cursor = textarea.selectionStart
-    const newValue = value.substring(0, cursor) + prompt.content + value.substring(cursor)
-    onChange(newValue)
-    setTimeout(() => {
-      textarea.focus()
-      const newPos = cursor + prompt.content.length
-      textarea.setSelectionRange(newPos, newPos)
-    }, 0)
+    const editor = editorRef.current
+    if (!editor) return
+    const { start, end } = editor.getSelection()
+    editor.replace(start, end, prompt.content)
     toast.success(`已插入提示词：${prompt.name}`)
   }
 
@@ -415,7 +314,10 @@ export default function MarkdownEditor({
       {/* ── Toolbar ── */}
       <div className="editor-toolbar">
         <div className="toolbar-left">
-          <Button variant="plain" className={`toolbar-btn active`} title="编辑模式"><Edit2 size={18} />编辑</Button>
+          <div className="editor-view-options" role="group" aria-label="正文显示方式">
+            <Button variant="plain" className={`toolbar-btn${showImages ? " active" : ""}`} aria-pressed={showImages} onClick={() => setShowImages(true)}><FileText size={15} />图文</Button>
+            <Button variant="plain" className={`toolbar-btn${!showImages ? " active" : ""}`} aria-pressed={!showImages} onClick={() => setShowImages(false)}><Code2 size={15} />Markdown</Button>
+          </div>
         </div>
         <div className="toolbar-right">
           <Button variant="plain" className="toolbar-btn" onClick={() => insertMarkdown('# ')} title="标题 1">H1</Button>
@@ -423,7 +325,7 @@ export default function MarkdownEditor({
           <Button variant="plain" className="toolbar-btn" onClick={() => insertMarkdown('**', '**')} title="加粗 (Ctrl+B)"><strong>B</strong></Button>
           <Button variant="plain" className="toolbar-btn" onClick={() => insertMarkdown('*', '*')} title="斜体 (Ctrl+I)"><em>I</em></Button>
           <Button variant="plain" className="toolbar-btn" onClick={() => insertMarkdown('- ')} title="列表">≡</Button>
-          <Button variant="plain" className="toolbar-btn" onClick={() => insertMarkdown('[', '](url)')} title="链接">🔗</Button>
+          <Button variant="plain" className="toolbar-btn" onClick={() => insertMarkdown('[', '](url)')} title="链接"><Link size={16} /></Button>
           <Button variant="plain" className="toolbar-btn" onClick={() => insertMarkdown('```\n', '\n```')} title="代码块">{'<>'}</Button>
           <div className="toolbar-divider" />
           <Button variant="plain"
@@ -453,20 +355,15 @@ export default function MarkdownEditor({
       </div>
 
       {/* ── Editor area ── */}
-      <div className="editor-container" style={{ height, position: 'relative' }}>
-        <Textarea
-          ref={textareaRef}
+      <div className="markdown-input-area" style={{ height, position: 'relative' }}>
+        <InlineMarkdownInput
+          ref={editorRef}
           value={value}
-          onChange={e => { onChange(e.target.value); setFloatMenu(null) }}
-          onKeyDown={handleKeyDown}
-          onMouseUp={handleSelect}
-          onKeyUp={handleSelect}
-          onPaste={handlePaste}
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
+          onChange={text => { onChange(text); setFloatMenu(null) }}
+          onSelect={handleSelect}
+          onImageFiles={files => { void uploadImages(files) }}
           placeholder={placeholder}
-          className={`editor-textarea${uploading ? ' editor-textarea--uploading' : ''}`}
-          spellCheck={false}
+          showImages={showImages}
         />
 
         {/* 上传遮罩 */}
@@ -539,7 +436,7 @@ export default function MarkdownEditor({
 
       {/* ── Footer ── */}
       <div className="editor-footer">
-        <span className="char-count">{value.length} 字符 · {value.split('\n').length} 行</span>
+        <span className="char-count">{value.length} 字符 · {(value.match(/!\[[^\]\n]*\]\([^)]+\)/g) || []).length} 张图</span>
         {uploading && <span className="char-count" style={{ color: 'var(--color-brand-teal)' }}>图片上传中...</span>}
         {!uploading && floatMenu && <span className="char-count" style={{ color: 'var(--color-brand-teal)' }}>已选 {floatMenu.selectedText.length} 字 · 选中后点击 AI 助手操作</span>}
         {!uploading && !floatMenu && <span className="char-count" style={{ color: 'var(--color-neutral-400)' }}>支持粘贴 / 拖拽图片到编辑区自动上传</span>}

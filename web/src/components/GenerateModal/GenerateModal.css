@@ -55,6 +55,8 @@
 .gc-segmented button[aria-pressed="true"] { color: var(--gc-accent); border-color: var(--gc-line); background: var(--color-canvas); font-weight: 650; }
 .gc-count-options button { min-width: 30px; }
 .gc-generate-button { margin-left: auto; }
+.gc-media-settings { display: flex; flex-wrap: wrap; align-items: end; gap: 10px 18px; margin-top: 10px; }
+.gc-media-settings .ui-checkbox { min-height: 32px; }
 .gc-settings p { margin: 8px 0 0; color: var(--gc-muted); font-size: 11px; line-height: 1.45; }
 .gc-alert { display: flex; align-items: center; gap: 8px; margin: 0; padding: 9px 15px; background: var(--color-surface-soft); color: var(--color-error); font-size: 12px; }
 .gc-workspace { display: grid; grid-template-columns: minmax(166px, 20%) minmax(0, 1fr); flex: 1; min-height: 0; }
@@ -95,7 +97,8 @@
 .gc-paper h2, .gc-paper h3 { margin: 23px 0 7px; line-height: 1.4; font-size: 1.16em; }
 .gc-paper p { margin: 0 0 1em; }
 .gc-paper a { color: var(--gc-accent); text-underline-offset: 3px; }
-.gc-paper img { max-width: 100%; }
+.gc-paper img { display: block; max-width: 100%; height: auto; margin: 10px auto; }
+.gc-paper p:has(> em:only-child) { color: var(--gc-muted); font-size: 12px; line-height: 1.5; }
 .gc-paper blockquote { margin: 13px 0; padding: 8px 12px; border-left: 2px solid var(--color-brand-teal); background: var(--color-surface-card); }
 .gc-paper blockquote p:last-child { margin-bottom: 0; }
 .gc-paper ul, .gc-paper ol { padding-inline-start: 1.6em; }

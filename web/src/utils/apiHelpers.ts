@@ -517,7 +517,7 @@ export async function streamGenerationCandidate(
   articleId: string, candidateId: string, aiConfig: Record<string, unknown>,
   signal: AbortSignal, onEvent: (event: CandidateEvent) => void,
 ): Promise<void> {
-  return withBrowserModel(browserArticleModel(aiConfig), signal, async relayHeaders => {
+  return withBrowserModel([...browserArticleModel(aiConfig), ...browserCoverModel("gpt-image", aiConfig)], signal, async relayHeaders => {
     const token = localStorage.getItem("auth_token")
     const response = await fetch(`/api/articles/${encodeURIComponent(articleId)}/candidates/${encodeURIComponent(candidateId)}/stream`, {
       method: "POST",
@@ -885,7 +885,7 @@ export async function generateCoverImage(input: Record<string, unknown>): Promis
   try {
     const config = input.aiConfig as Record<string, unknown> | undefined
     const response = await withBrowserModel(browserCoverModel(input.provider, config || {}), undefined, headers =>
-      axios.post("/api/generate-cover", input, { timeout: 190000, headers }))
+      axios.post("/api/generate-cover", input, { timeout: 260000, headers }))
     return response.data as { imageUrl: string; warning?: string }
   } catch (error) {
     throw normalizeApiError(error)

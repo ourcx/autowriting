@@ -1,6 +1,6 @@
 // 浏览器和后台任务只同步这些选项。连接地址、附加请求头和凭据留在浏览器。
 export const AI_PREFERENCE_KEYS = [
-  "articleProvider", "articleModel", "coverProvider", "siliconflowModel", "doubaoModel",
+  "articleProvider", "articleModel", "coverProvider", "openaiImageModel", "siliconflowModel", "doubaoModel",
   "embeddingModel", "embeddingDimensions", "embeddingInstruction", "localEmbeddingModel",
   "embeddingBatchSize", "embeddingBatchDelayMs", "zhipuKnowledgeMode", "zhipuKnowledgeIds",
   "zhipuKnowledgeRecallMethod", "zhipuKnowledgeRerank", "searchProvider", "searchEngine",

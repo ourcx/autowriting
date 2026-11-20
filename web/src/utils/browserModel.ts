@@ -31,8 +31,10 @@ export function browserEmbeddingModel(config: BrowserModelConfig): BrowserEndpoi
 
 export function browserCoverModel(provider: unknown, config: BrowserModelConfig): BrowserEndpoint[] {
   const coverKey = textKey(config.coverApiKey)
-  if (provider === "openai") {
-    const key = coverKey || textKey(config.articleApiKey)
+  if (provider === "openai" || provider === "gpt-image") {
+    const officialArticle = browserArticleEndpoint(config.articleProvider, config.articleBaseUrl) === "https://api.openai.com/v1/chat/completions"
+    const key = provider === "gpt-image" && officialArticle && !["openai", "gpt-image"].includes(String(config.coverProvider))
+      ? textKey(config.articleApiKey) : coverKey || textKey(config.articleApiKey)
     if (key) return [{ matches: target => target === OPENAI_IMAGE_ENDPOINT, key }]
   }
   if (provider === "stability" && coverKey) {

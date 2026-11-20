@@ -169,7 +169,8 @@ export default function AISettings() {
     || (config.coverProvider === 'zhipu' && Boolean(config.zhipuImageApiKey || config.zhipuApiKey))
     || (config.coverProvider === 'doubao' && Boolean(config.doubaoApiKey && config.doubaoModel))
     || (['siliconflow', 'z-image', 'qwen-edit'].includes(config.coverProvider) && Boolean(config.siliconflowApiKey))
-    || (['openai', 'stability'].includes(config.coverProvider) && Boolean(config.coverApiKey))
+    || (['openai', 'gpt-image'].includes(config.coverProvider) && Boolean(config.coverApiKey || config.articleApiKey))
+    || (config.coverProvider === 'stability' && Boolean(config.coverApiKey))
   const sharedZhipuReady = Boolean(config.zhipuApiKey || serverStatus?.zhipuReady)
   const searchKeyReady = Boolean(config.searchApiKey)
   const searchUsesFallback = config.searchProvider === 'serper' && !searchKeyReady
@@ -789,14 +790,20 @@ export default function AISettings() {
               )}
 
               {/* DALL-E / Stability */}
-              {['openai', 'stability'].includes(config.coverProvider) && (
+              {['openai', 'gpt-image', 'stability'].includes(config.coverProvider) && (
               <div className="as-card">
                 <div className="as-card-label-row">
-                  <span className="as-card-section-label">{config.coverProvider === 'openai' ? 'OpenAI' : 'Stability AI'}</span>
-                  <span className="as-card-tag as-card-tag--ochre">{config.coverProvider === 'openai' ? 'DALL-E 3' : 'Stable Diffusion'}</span>
+                  <span className="as-card-section-label">{config.coverProvider === 'stability' ? 'Stability AI' : 'OpenAI 官方'}</span>
+                  <span className="as-card-tag as-card-tag--ochre">{config.coverProvider === 'gpt-image' ? 'GPT Image' : config.coverProvider === 'openai' ? 'DALL-E 3' : 'Stable Diffusion'}</span>
                 </div>
+                {config.coverProvider === 'gpt-image' && <div className="as-field">
+                  <label className="as-label" htmlFor="as-official-image-model">官方图片模型</label>
+                  <Input id="as-official-image-model" className="as-input" value={config.openaiImageModel}
+                    onChange={e => set({ openaiImageModel: e.target.value })} list="as-official-image-models" placeholder="gpt-image-2" />
+                  <datalist id="as-official-image-models"><option value="gpt-image-2" /><option value="gpt-image-1.5" /><option value="gpt-image-1" /><option value="gpt-image-1-mini" /></datalist>
+                </div>}
                 <div className="as-field">
-                  <label className="as-label">{config.coverProvider === 'openai' ? 'OpenAI API Key' : 'Stability API Key'}</label>
+                  <label className="as-label">{config.coverProvider === 'stability' ? 'Stability API Key' : 'OpenAI API Key'}</label>
                   <div className="as-key-wrap">
                     <Input
                       className="as-input as-input-mono"
@@ -810,7 +817,7 @@ export default function AISettings() {
                     </Button>
                   </div>
                   <p className="as-hint">
-                    {config.coverProvider === 'openai' ? '文章也使用 OpenAI 时，可以填写同一个 Key。' : '填写 Stability AI 控制台生成的 Key。'}
+                    {config.coverProvider === 'stability' ? '填写 Stability AI 控制台生成的 Key。' : '留空时复用文章的官方 OpenAI Key。GPT Image 从当前浏览器直接请求 api.openai.com，封面和文章配图使用同一图片模型。'}
                   </p>
                 </div>
               </div>

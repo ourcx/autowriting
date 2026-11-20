@@ -2,11 +2,12 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--color-canvas);
-  border-radius: var(--rounded-lg);
+  min-width: 0;
+  min-height: 0;
+  background: #fff;
+  border-radius: var(--rounded-md);
   overflow: hidden;
   border: 1px solid var(--color-hairline);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 /* ── AI 内联助手浮窗（fixed 定位，跟随选区末尾）────────────────── */
@@ -197,12 +198,12 @@
 .ai-float-retry:hover { background: rgba(255,255,255,0.14); color: #fff; }
 .ai-float-cancel:hover { background: rgba(239,68,68,0.18); color: #fca5a5; border-color: rgba(239,68,68,0.3); }
 
-.editor-toolbar {
+.markdown-editor > .editor-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: linear-gradient(180deg, var(--color-surface-soft) 0%, var(--color-canvas) 100%);
+  padding: 10px 14px;
+  background: var(--color-surface-soft);
   border-bottom: 1px solid var(--color-hairline);
   gap: var(--spacing-xs);
   flex-wrap: wrap;
@@ -213,20 +214,22 @@
   display: flex;
   gap: 4px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
-.toolbar-btn {
-  padding: var(--spacing-xs) var(--spacing-sm);
-  background: var(--color-canvas);
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--rounded-md);
+.markdown-editor .toolbar-btn {
+  min-height: 32px;
+  padding: 5px 9px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--rounded-xs);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 12px;
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  color: var(--color-muted);
+  gap: 5px;
+  transition: background 0.15s, color 0.15s;
+  color: var(--color-body);
 }
 
 .toolbar-btn:hover {
@@ -235,13 +238,14 @@
   color: var(--color-brand-teal);
 }
 
-.toolbar-btn.active {
-  background: var(--color-brand-teal);
-  color: var(--color-on-dark);
-  border-color: var(--color-brand-teal);
-  box-shadow: 0 4px 12px rgba(26, 58, 58, 0.15);
+.markdown-editor .toolbar-btn.active {
+  background: var(--color-canvas);
+  color: var(--color-brand-teal);
+  border-color: var(--color-hairline);
+  font-weight: 650;
 }
 
+.editor-view-options { display: flex; gap: 2px; }
 .toolbar-btn strong,
 .toolbar-btn em {
   font-style: normal;
@@ -276,41 +280,53 @@
   transform: translateY(-1px);
 }
 
-.editor-container {
+.markdown-input-area {
   display: flex;
   flex: 1;
   overflow: hidden;
   gap: 0;
+  min-width: 0;
+  min-height: 0;
 }
 
-.editor-textarea {
-  flex: 1;
-  padding: var(--spacing-md);
-  border: none;
-  border-right: 1px solid var(--color-hairline);
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
-  font-size: 14px;
-  line-height: 1.6;
-  resize: none;
-  outline: none;
+.inline-markdown-input { flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
+.inline-markdown-input .EasyMDEContainer { height: 100%; }
+.inline-markdown-input .EasyMDEContainer .CodeMirror {
+  height: 100%;
+  min-height: 100px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
   color: var(--color-ink);
-  background: var(--color-canvas);
-  transition: background 0.2s ease;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.9;
 }
-
-.editor-textarea:focus {
-  background: var(--color-surface-soft);
-}
-
-/* 上传中状态 */
-.editor-textarea--uploading {
-  opacity: 0.6;
-  pointer-events: none;
-}
-
-.editor-textarea::placeholder {
-  color: var(--color-muted);
-}
+.inline-markdown-input .CodeMirror-scroll { min-height: 100px; }
+.inline-markdown-input .CodeMirror-lines { padding: 28px clamp(18px, 4vw, 44px) 60px; }
+.inline-markdown-input .CodeMirror-code { max-width: 760px; margin-inline: auto; }
+.inline-markdown-input .CodeMirror pre.CodeMirror-line,
+.inline-markdown-input .CodeMirror pre.CodeMirror-line-like { padding-inline: 0; }
+.inline-markdown-input .CodeMirror-cursor { border-left: 2px solid var(--color-brand-teal); }
+.inline-markdown-input .CodeMirror-placeholder { color: var(--color-muted-soft); }
+.inline-markdown-input .CodeMirror-selected { background: var(--color-surface-strong); }
+.inline-markdown-input .CodeMirror-focused .CodeMirror-selected { background: #a4d4c54d; }
+.inline-markdown-input .cm-header { color: var(--color-ink); font-weight: 650; }
+.inline-markdown-input .cm-header-1 { font-size: 28px; line-height: 1.45; }
+.inline-markdown-input .cm-header-2 { font-size: 22px; line-height: 1.5; }
+.inline-markdown-input .cm-header-3 { font-size: 18px; }
+.inline-markdown-input .cm-formatting { color: var(--color-muted-soft); }
+.inline-markdown-input .cm-link { color: var(--color-brand-teal); }
+.inline-markdown-input .cm-url { color: var(--color-muted); }
+.inline-markdown-input--source .CodeMirror { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 14px; line-height: 1.8; }
+.inline-article-image { display: inline-block; width: 100%; max-width: 100%; margin-block: 12px; vertical-align: top; cursor: pointer; white-space: normal; }
+.inline-article-image img { display: block; max-width: 100%; max-height: 460px; height: auto; margin-inline: auto; border-radius: 4px; object-fit: contain; }
+.inline-article-image-caption { display: block; margin-top: 8px; color: var(--color-muted); font-size: 12px; line-height: 1.6; text-align: center; overflow-wrap: anywhere; }
+.inline-article-image-caption:empty { display: none; }
+.inline-article-image:focus-visible { outline: 2px solid var(--color-brand-teal); outline-offset: 4px; }
+.inline-article-image--error { padding: 18px; box-sizing: border-box; border: 1px dashed var(--color-hairline); border-radius: 4px; }
+.inline-article-image--error .inline-article-image-caption { margin: 0; }
 
 .editor-preview {
   flex: 1;
@@ -448,12 +464,15 @@
 }
 
 .editor-footer {
-  padding: 8px 16px;
-  background: #f8f9fa;
-  border-top: 1px solid #e9ecef;
-  font-size: 12px;
-  color: #6c757d;
-  text-align: right;
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 9px 16px;
+  background: #fff;
+  border-top: 1px solid var(--color-hairline-soft);
+  font-size: 11px;
+  color: var(--color-muted);
 }
 
 .char-count {
@@ -518,26 +537,33 @@
 
 /* 响应式设计 */
 @media (max-width: 768px) {
-  .editor-container {
+  .markdown-input-area {
     flex-direction: column;
   }
 
-  .editor-textarea {
-    border-right: none;
-    border-bottom: 1px solid #e9ecef;
-  }
+  .inline-markdown-input .CodeMirror-lines { padding: 20px 16px 40px; }
+  .inline-markdown-input .cm-header-1 { font-size: 24px; }
+  .inline-markdown-input .cm-header-2 { font-size: 20px; }
 
   .toolbar-right {
     flex-wrap: wrap;
   }
 
-  .editor-toolbar {
+  .markdown-editor > .editor-toolbar {
     flex-direction: column;
     align-items: flex-start;
   }
+  .markdown-editor .toolbar-btn { min-height: 36px; padding-inline: 8px; }
+  .toolbar-divider { margin-inline: 2px; }
+  .ai-float-menu { max-width: calc(100vw - 24px); white-space: normal; }
+  .ai-float-actions { flex-wrap: wrap; }
 
   .toolbar-left,
   .toolbar-right {
     width: 100%;
   }
+}
+@media (prefers-reduced-motion: reduce) {
+  .markdown-editor .toolbar-btn { transition: none; }
+  .markdown-editor .ai-float-menu, .markdown-editor .spin { animation: none; }
 }

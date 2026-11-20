@@ -1,6 +1,17 @@
 export type CandidatePlatform = "wechat" | "toutiao"
 export type CandidateTarget = CandidatePlatform | "both"
 export type CandidateStatus = "queued" | "generating" | "complete" | "interrupted"
+export type ArticleWritingMode = "standard" | "image_story"
+export type ArticleImageMode = "none" | "web" | "generate"
+
+export interface ArticleImage {
+  id: string
+  url: string
+  alt: string
+  source: "web" | "generated"
+  sourceUrl?: string
+  placement: string
+}
 
 export interface CandidateResearchSource {
   title: string
@@ -22,7 +33,7 @@ export interface CandidateTraceStep {
   id: string
   attempt: number
   title: string
-  kind: "context" | "history" | "decision" | "search" | "read" | "find" | "outline" | "write" | "review" | "edit" | "verify"
+  kind: "context" | "history" | "decision" | "search" | "read" | "find" | "browser" | "terminal" | "image" | "outline" | "write" | "review" | "edit" | "verify"
   status: CandidateTraceStatus
   startedAt: string
   finishedAt?: string
@@ -49,6 +60,11 @@ export interface GenerationCandidate {
   referenceArticleIds?: string[]
   researchSources?: CandidateResearchSource[]
   trace?: CandidateTraceStep[]
+  writingMode?: ArticleWritingMode
+  imageMode?: ArticleImageMode
+  imageCount?: number
+  images?: ArticleImage[]
+  imageMessage?: string
 }
 
 export interface CandidateInput {
@@ -60,6 +76,11 @@ export interface CandidateInput {
   platform: CandidateTarget
   count: number
   writingAgent?: boolean
+  writingMode?: ArticleWritingMode
+  imageMode?: ArticleImageMode
+  imageCount?: number
+  browserTools?: boolean
+  terminalTools?: boolean
   /** 兼容历史候选稿：旧版双平台任务的头条稿会读取同组公众号母稿。 */
   sourceCandidateId?: string
 }

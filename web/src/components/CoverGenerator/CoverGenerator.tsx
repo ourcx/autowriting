@@ -27,6 +27,13 @@ interface ProviderOption {
 
 const PROVIDERS: ProviderOption[] = [
   {
+    id: 'gpt-image',
+    name: 'GPT Image 官方',
+    desc: 'OpenAI 官方 API，浏览器直连',
+    requiresKey: 'coverApiKey',
+    keyLabel: 'OpenAI API Key',
+  },
+  {
     id: 'openrouter',
     name: 'GPT Image 2',
     desc: 'OpenRouter，浏览器直连',
@@ -155,6 +162,7 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
     }
     const keyVal = provider === 'zhipu'
       ? cfg.zhipuImageApiKey || cfg.zhipuApiKey
+      : provider === 'gpt-image' || provider === 'openai' ? cfg.coverApiKey || cfg.articleApiKey
       : (cfg[prov.requiresKey] as string | undefined) || ''
     const modelReady = provider !== 'doubao' || Boolean(cfg.doubaoModel.trim())
     setMissingKey(keyVal.trim() && modelReady ? null : prov.keyLabel)
@@ -191,6 +199,7 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
           doubaoBaseUrl:     aiConfig.doubaoBaseUrl,
           doubaoModel:       aiConfig.doubaoModel,
           coverApiKey:       aiConfig.coverApiKey,
+          openaiImageModel:  aiConfig.openaiImageModel,
           articleApiKey:     aiConfig.articleApiKey,
           zhipuApiKey:       aiConfig.zhipuApiKey,
           zhipuImageApiKey:  aiConfig.zhipuImageApiKey,
@@ -404,6 +413,9 @@ export const CoverGenerator: React.FC<CoverGeneratorProps> = ({
           <div className="cg-notice cg-notice--info">
             GPT Image 2 会从当前浏览器直接请求 OpenRouter。Key 在「AI 配置 → 封面生成」中保存，不经过部署服务器。
           </div>
+        )}
+        {provider === 'gpt-image' && (
+          <div className="cg-notice cg-notice--info">使用 OpenAI 官方 GPT Image。封面 Key 留空时复用文章的 OpenAI Key，请保持当前页面打开。</div>
         )}
         {provider === 'gencli' && (
           <div className="cg-notice cg-notice--info">由本机 Gen CLI 调用模型，生成后可在这里预览、下载或手动保存到图片库。</div>

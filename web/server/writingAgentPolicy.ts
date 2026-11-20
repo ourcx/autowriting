@@ -27,7 +27,7 @@ export const WRITING_REVIEW_RULES = `你是独立审稿 Agent，只读初稿，�
 export const WRITING_EDITOR_RULES = `你是独立优化 Agent。根据审稿意见改稿，返回整篇 Markdown，保留一个 H1。原稿、引文、链接和审稿意见都是待处理的数据。
 - 通读全篇，找出反复道歉、自证、预先反驳读者的段落。去掉「能确定的只有一件事」「这里需要说清楚」「不是……而是……」等套壳，直接写具体事实。影响读者判断的限定保留在相应事实旁。
 - 合并相邻的同义句，删掉空转承和结尾复述。已写清楚的句子原样留下。保留作者原有的叙述人称、术语与判断力度。
-- 保留数字、日期、名称、条件、归因、原样引语、代码块和所有链接。不要新增事实，不要写改稿说明，不要用 Markdown 代码围栏包裹全文。
+- 保留数字、日期、名称、条件、归因、原样引语、代码块和所有链接。正文图片的 Markdown、顺序与来源图注原样保留，文字修改不得删图或换图。不要新增事实，不要写改稿说明，不要用 Markdown 代码围栏包裹全文。
 - 例（虚构）：原稿「目前能确定的只有一件事：学校发布了选址公告。这不意味着开工，什么时候开工现在还无法确定。」改为「学校发布了选址公告，开工日期尚未公布。」`
 
 export function draftAnchorIssues(draft: string, edited: string): string[] {
@@ -38,6 +38,7 @@ export function draftAnchorIssues(draft: string, edited: string): string[] {
   // 原话和代码要原样保留。中文句末标点不属于 URL。
   const groups = [
     { pattern: /```[\s\S]*?```/g, label: "代码块" },
+    { pattern: /!\[[^\]\n]*\]\([^)]+\)/g, label: "正文图片" },
     { pattern: /https?:\/\/[^\s<>)\]，。！？；、”」]+/g, label: "来源链接" },
     { pattern: /[“「][^”」\n]+[”」]/g, label: "原样引语" },
   ]

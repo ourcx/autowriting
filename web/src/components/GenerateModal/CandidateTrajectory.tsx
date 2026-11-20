@@ -1,6 +1,6 @@
 import Button from "../Button/Button"
 import { useState } from "react"
-import { Activity, BookOpen, CheckCircle, Circle, FileText, Globe, Loader2, Pencil, Search, SlidersHorizontal, ClipboardList, Sparkles } from "lucide-react"
+import { Activity, BookOpen, CheckCircle, Circle, FileText, Globe, Image, Loader2, Monitor, Pencil, Search, SlidersHorizontal, ClipboardList, Sparkles, Terminal } from "lucide-react"
 import type { CandidateTraceStep, GenerationCandidate } from "../../../shared/generationCandidate"
 import SourceList from "./SourceList"
 import "./CandidateTrajectory.css"
@@ -13,6 +13,7 @@ interface CandidateTrajectoryProps {
 const ICONS = {
   context: FileText, history: BookOpen, decision: SlidersHorizontal, search: Search,
   read: Globe, find: Search, outline: FileText, write: Pencil, review: ClipboardList, edit: Sparkles, verify: CheckCircle,
+  browser: Monitor, terminal: Terminal, image: Image,
 }
 
 const LABELS = {
@@ -74,7 +75,8 @@ export default function CandidateTrajectory({ candidate, now }: CandidateTraject
     <div className="ct-overview">
       <div className="ct-stages" aria-label="写作阶段">
         {([
-          ["找资料", ["context", "history", "search", "read", "find", "decision"]],
+          ["找资料", ["context", "history", "search", "read", "find", "decision", "browser", "terminal"]],
+          ["配图", ["image"]],
           ["写初稿", ["outline", "write"]],
           ["审稿", ["review"]],
           ["优化", ["edit"]],

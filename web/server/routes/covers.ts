@@ -24,6 +24,7 @@ import { mapWithConcurrency } from '../utils/concurrency.ts'
 import { authMiddleware } from '../authMiddleware.ts'
 import { logger } from '../logger.ts'
 import { generateWithDoubao } from '../utils/doubaoImage.ts'
+import { generateOfficialImage } from '../utils/openaiImage.ts'
 import { resolveOpenRouterApiKey, resolveZhipuApiKey } from '../utils/providerKeys.ts'
 import { generateOpenRouterCoverPrompt } from '../utils/coverPrompt.ts'
 import { openRouterForbiddenMessage } from '../utils/openrouterError.ts'
@@ -96,7 +97,7 @@ router.post('/generate-cover', async (req, res) => {
         error: 'SiliconFlow API Key 未配置。请前往「AI 配置」页面填写 SiliconFlow API Key 并保存。',
       })
     }
-    if (provider === 'openai' && !cfg.coverApiKey && !cfg.articleApiKey) {
+    if (['openai', 'gpt-image'].includes(provider) && !cfg.coverApiKey && !cfg.articleApiKey) {
       return res.status(400).json({ error: 'OpenAI API Key 未配置。请前往「AI 配置」页面填写。' })
     }
     if (provider === 'stability' && !coverApiKey) {
@@ -116,7 +117,8 @@ router.post('/generate-cover', async (req, res) => {
     }
 
     // ── 缓存检查（仅非自定义 prompt，provider 参与 key 避免跨 provider 污染） ──
-    const providerCacheKey = provider === 'doubao' ? `${provider}:${doubaoModel}` : provider === 'openrouter' ? 'openrouter:gpt-image-2:v1' : provider
+    const providerCacheKey = provider === 'gpt-image' ? `official:${cfg.openaiImageModel}|user:${coverUserId}`
+      : provider === 'doubao' ? `${provider}:${doubaoModel}` : provider === 'openrouter' ? 'openrouter:gpt-image-2:v1' : provider
     // 固定提示词只由标题决定，风格与颜色不能改变请求或缓存结果。
     const cacheKey = provider === 'openrouter'
       ? generateCacheKey(title.trim(), 'fixed', `${providerCacheKey}|user:${coverUserId}`)
@@ -135,6 +137,15 @@ router.post('/generate-cover', async (req, res) => {
     }
 
     const finalPrompt = customPrompt || generatePrompt(title, content, style, color)
+
+    if (provider === 'gpt-image') {
+      const image = await generateOfficialImage(finalPrompt, cfg, undefined, true)
+      const imageUrl = `data:image/jpeg;base64,${image.toString('base64')}`
+      cacheImage(cacheKey, imageUrl, { title, style, color, provider, model: cfg.openaiImageModel })
+      const historyItem = addToHistory(title, style, color, provider, imageUrl, cacheKey)
+      addImageToLibrary(imageUrl, title, 'cover', [style, color], provider)
+      return res.json({ imageUrl, historyId: historyItem.id })
+    }
 
     if (provider === 'openrouter') {
       // GPT Image 2 不接受 2.35:1；先取最接近的 21:9，再裁成公众号封面比例。

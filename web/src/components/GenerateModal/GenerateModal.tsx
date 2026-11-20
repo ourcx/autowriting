@@ -1,4 +1,4 @@
-import { Collapse } from "../FormControls/FormControls"
+import { Checkbox, Collapse, Select } from "../FormControls/FormControls"
 import Button from "../Button/Button"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Activity, AlertCircle, CheckCircle, Copy, FileText, Layers, Loader2, RefreshCw, Settings2, Sparkles, Square, X, Zap } from "lucide-react"
@@ -6,7 +6,7 @@ import {
   createGenerationCandidates, extractErrorMessage, fetchGenerationCandidates,
   streamGenerationCandidate,
 } from "../../utils/apiHelpers"
-import type { CandidatePlatform, CandidateTarget, GenerationCandidate } from "../../../shared/generationCandidate"
+import type { ArticleImageMode, ArticleWritingMode, CandidatePlatform, CandidateTarget, GenerationCandidate } from "../../../shared/generationCandidate"
 import MarkdownIt from "markdown-it"
 import { sanitizeHtml } from "../../utils/sanitizeHtml"
 import SourceList from "./SourceList"
@@ -24,7 +24,7 @@ interface Props {
   onClose: () => void
 }
 
-const markdown = new MarkdownIt({ html: false }).disable("image")
+const markdown = new MarkdownIt({ html: false })
 const STATUS = { queued: "排队中", generating: "生成中", complete: "已完成", interrupted: "已中断" }
 
 function DraftPreview({ content, label }: { content: string; label: string }) {
@@ -35,6 +35,11 @@ function DraftPreview({ content, label }: { content: string; label: string }) {
 export default function GenerateModal({ articleId, task, materials, sourceArticle = "", aiConfig, initialPlatform = "wechat", onComplete, onClose }: Props) {
   const [platform, setPlatform] = useState<CandidateTarget>(initialPlatform)
   const [count, setCount] = useState(1)
+  const [writingMode, setWritingMode] = useState<ArticleWritingMode>("standard")
+  const [imageMode, setImageMode] = useState<ArticleImageMode>("web")
+  const [imageCount, setImageCount] = useState(3)
+  const [browserTools, setBrowserTools] = useState(true)
+  const [terminalTools, setTerminalTools] = useState(true)
   const [rows, setRows] = useState<GenerationCandidate[]>([])
   const [activeId, setActiveId] = useState("")
   const [view, setView] = useState<"draft" | "trace" | "compare">("draft")
@@ -143,6 +148,7 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
     try {
       const created = await createGenerationCandidates(articleId, {
         task, materials, sourceArticle, platform, count, selectedRagContext: "", referenceArticleIds: [], writingAgent: true,
+        writingMode, imageMode, imageCount, browserTools, terminalTools,
       })
       if (stopped.current || !mounted.current) return
       setRows(previous => [...created, ...previous])
@@ -211,6 +217,17 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
             </div>
           </fieldset>
           <fieldset className="gc-choice">
+            <legend>文章形式</legend>
+            <div className="gc-segmented" role="group" aria-label="文章形式">
+              {([["standard", "正常图文"], ["image_story", "多图少字"]] as const).map(([value, label]) =>
+                <Button variant="plain" key={value} aria-pressed={writingMode === value} onClick={() => {
+                  setWritingMode(value)
+                  setImageCount(value === "image_story" ? 6 : 3)
+                  if (value === "image_story" && imageMode === "none") setImageMode("web")
+                }}>{label}</Button>)}
+            </div>
+          </fieldset>
+          <fieldset className="gc-choice">
             <legend>候选数量</legend>
             <div className="gc-segmented gc-count-options" role="group" aria-label="候选数量">
               {[1, 2, 3].map(value => <Button variant="plain" key={value} aria-pressed={count === value} onClick={() => setCount(value)}>{value}</Button>)}
@@ -220,7 +237,26 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
             <Zap size={14} />{platform === "both" ? "生成双平台版本" : `生成${platform === "wechat" ? "公众号母稿" : "今日头条版本"}`}
           </Button>
         </div>
-        <p>先查历史文章和公开网页，再起草、审稿、优化和复核。模型和联网工具可能分别计费。</p>
+        <div className="gc-media-settings">
+          <fieldset className="gc-choice">
+            <legend>正文配图</legend>
+            <Select label="正文配图方式" value={imageMode} onValueChange={value => setImageMode(value as ArticleImageMode)}
+              options={[
+                { value: "web", label: "只用真实图片" },
+                { value: "generate", label: "真实优先，允许 AI 补图" },
+                ...(writingMode === "standard" ? [{ value: "none", label: "不配图" }] : []),
+              ]} />
+          </fieldset>
+          {imageMode !== "none" && <fieldset className="gc-choice">
+            <legend>目标图片数</legend>
+            <Select label="目标图片数" value={String(imageCount)} onValueChange={value => setImageCount(Number(value))}
+              options={[1, 2, 3, 4, 5, 6, 7, 8].map(value => ({ value: String(value), label: `${value} 张` }))} />
+          </fieldset>}
+          <Checkbox checked={browserTools} onCheckedChange={setBrowserTools}>浏览器查资料及处理验证码</Checkbox>
+          <Checkbox checked={terminalTools} onCheckedChange={setTerminalTools}>终端整理资料</Checkbox>
+        </div>
+        <p>{imageMode === "generate" ? "本次已允许调用官方 GPT Image，生成的示意图会明确标注，可能单独计费。" : "优先原始照片、官方图和真实截图。找不到合适图片时会提示缺图，不会自动生成。"}</p>
+        <p>先查历史文章和公开网页，再写作、审稿和优化。浏览器验证码处理需要当前模型支持看图。</p>
       </div>}
       {error && <div className="gc-alert" role="alert"><AlertCircle size={16} />{error}</div>}
       <div className="gc-workspace">
@@ -251,7 +287,11 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
                   <Button className="gc-icon" title="复制正文" aria-label={`复制${row.label}`} disabled={!row.content} onClick={() => void copy(row.content)}><Copy size={15} /></Button>
                 </header>
                 {row.message && row.message !== "生成完成" && <p className={row.status === "interrupted" ? "gc-alert" : "gc-message"}>{row.message}</p>}
+                {row.imageMessage && <p className="gc-message">{row.imageMessage}</p>}
                 {row.content ? <DraftPreview content={row.content} label={`${row.label}正文`} /> : <div className="gc-empty"><FileText size={28} /><span>等待正文输出</span></div>}
+                {!!row.images?.length && <Collapse className="gc-evidence" label={`本篇配图 ${row.images.length} 张 · 查看出处`}>
+                  <SourceList sources={row.images.map(image => ({ title: `${image.source === "web" ? "真实来源" : "AI 生成示意图"} · ${image.alt}`, url: image.sourceUrl }))} />
+                </Collapse>}
                 {Boolean(row.researchSources?.length || row.referenceArticleIds?.length) && (
                   <Collapse className="gc-evidence" label={<>本次参考了 {row.referenceArticleIds?.length || 0} 篇历史文章，读了 {row.researchSources?.length || 0} 个网页</>}>
                     {!!row.researchSources?.length && <SourceList sources={row.researchSources} />}

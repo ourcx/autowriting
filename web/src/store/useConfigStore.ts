@@ -13,7 +13,7 @@ export interface ServerConfigStatus {
   maasReady: boolean
   maasEmail: string | null
   openaiReady: boolean
-  coverProvider: 'local' | 'openai' | 'openrouter' | 'stability' | 'siliconflow' | 'z-image' | 'qwen-edit' | 'doubao' | 'zhipu'
+  coverProvider: 'local' | 'openai' | 'gpt-image' | 'openrouter' | 'stability' | 'siliconflow' | 'z-image' | 'qwen-edit' | 'doubao' | 'zhipu'
   coverReady: boolean
   dalleReady: boolean
   stabilityReady: boolean
@@ -107,6 +107,7 @@ export function isCoverReady(s: ConfigState): boolean {
   if (localConfig.coverProvider === 'local') return true
   if (localConfig.coverProvider === 'openrouter') return Boolean(localConfig.openrouterApiKey)
   if (localConfig.coverProvider === 'gencli') return Boolean(loadGenCliPairingCode())
+  if (localConfig.coverProvider === 'gpt-image' || localConfig.coverProvider === 'openai') return Boolean(localConfig.coverApiKey || localConfig.articleApiKey) || Boolean(serverStatus?.openaiReady)
   const localReady = localConfig.coverProvider === 'doubao'
     ? Boolean(localConfig.doubaoApiKey && localConfig.doubaoModel)
     : ['siliconflow', 'z-image', 'qwen-edit'].includes(localConfig.coverProvider)

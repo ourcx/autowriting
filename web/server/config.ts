@@ -108,6 +108,8 @@ export const WECHAT_IMAGE_CACHE_MAX_BYTES = Math.max(
 export const HISTORY_FILE = path.join(DATA_DIR, 'cover_history.json')
 
 export const IMAGES_DIR = path.join(DATA_DIR, 'images')
+// 终端镜像由部署方提前拉取；文章生成不能自动安装依赖或挂载宿主文件。
+export const WRITING_TERMINAL_IMAGE = process.env.WRITING_TERMINAL_IMAGE || 'python:3.12-slim'
 export const IMAGES_METADATA_FILE = path.join(DATA_DIR, 'images_metadata.json')
 export const UPLOAD_DIR = path.join(DATA_DIR, 'uploads')
 export const ARTICLE_BACKUP_DIR = path.join(DATA_DIR, 'article-backups')
@@ -202,6 +204,7 @@ export const SERVER_AI_CONFIG = {
   maasUserEmail: process.env.MAAS_USER_EMAIL || '',
   // 封面
   coverProvider: process.env.COVER_PROVIDER || 'local',
+  openaiImageModel: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2',
   coverApiKey: process.env.COVER_API_KEY || process.env.OPENAI_API_KEY || '',
   openrouterApiKey: process.env.OPENROUTER_API_KEY || '',
   zhipuImageApiKey: process.env.ZHIPU_IMAGE_API_KEY || '',
