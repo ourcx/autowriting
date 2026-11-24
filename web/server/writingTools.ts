@@ -6,6 +6,7 @@ import { WRITING_TERMINAL_IMAGE } from "./config.ts"
 import { assertPublicHttpUrl, fetchPublicUrl } from "./utils/networkPolicy.ts"
 import { publicSourceUrl } from "./writingResearch.ts"
 import { usablePageText } from "./utils/search/webFetcher.ts"
+import { extractXiaohongshuArticle, isXiaohongshuArticle } from "./utils/search/xiaohongshuArticleContent.ts"
 
 export interface WritingPageImage {
   id: string
@@ -209,24 +210,36 @@ export class WritingToolSession {
         try {
           const resource = await assertPublicHttpUrl(request.url())
           const headers = request.headers()
-          const response = await fetchPublicUrl(resource.href, {
+          let response = await fetchPublicUrl(resource.href, {
             signal: AbortSignal.any([this.signal, AbortSignal.timeout(12_000)]),
             method: request.method(),
             ...(request.method() === "POST" ? { body: request.postData() || undefined } : {}),
             headers: { Accept: headers.accept || "*/*", "User-Agent": headers["user-agent"] || "Mozilla/5.0",
-              "Accept-Language": "zh-CN,zh;q=0.9",
+              "Accept-Language": "zh-CN,zh;q=0.9", "Accept-Encoding": "identity",
               ...(sameSite || verificationHost ? { Cookie: headers.cookie || "" } : {}),
               ...(verificationRequest ? { "Content-Type": headers["content-type"] || "application/x-www-form-urlencoded",
                 Origin: headers.origin || new URL(this.sourceUrl).origin, Referer: headers.referer || this.sourceUrl } : {}),
             },
           }, Boolean(headers.cookie || request.method() === "POST"))
+          // 有些公开网站拒绝 Chromium 的标识；匿名文档再按普通 HTTP 读取一次。
+          if (response.status === 403 && request.resourceType() === "document" && request.method() === "GET" && !headers.cookie) {
+            const fallback = await fetchPublicUrl(resource.href, {
+              signal: AbortSignal.any([this.signal, AbortSignal.timeout(12_000)]),
+              headers: { Accept: "text/html,application/xhtml+xml,*/*", "User-Agent": "Mozilla/5.0",
+                "Accept-Language": "zh-CN,zh;q=0.9", "Accept-Encoding": "identity" },
+            }).catch(() => null)
+            if (fallback?.ok) { await response.body?.cancel(); response = fallback }
+            else await fallback?.body?.cancel()
+          }
           if (request.resourceType() === "document" && response.url) this.sourceUrl = publicSourceUrl(response.url) || this.sourceUrl
           // 403/429 也可能是可操作的验证码页面，保留文档给模型识别。
           const body = await readPublicBytes(response, 12 * 1024 * 1024, request.resourceType() === "document")
           this.fetchedBytes += body.length
           if (this.fetchedBytes > 64 * 1024 * 1024) throw new WritingToolError("本篇浏览器资源读取已达到上限")
           const cookies = response.headers.getSetCookie()
-          await route.fulfill({ status: response.status, contentType: response.headers.get("content-type") || undefined,
+          const contentType = response.headers.get("content-type")
+            || (request.resourceType() === "document" && /<!doctype\s+html|<html\b|<body\b/i.test(body.subarray(0, 1000).toString("utf8")) ? "text/html; charset=utf-8" : undefined)
+          await route.fulfill({ status: response.status, contentType,
             headers: cookies.length ? { "set-cookie": cookies.join("\n") } : undefined, body })
         } catch { await route.abort().catch(() => {}) }
       })
@@ -241,7 +254,7 @@ export class WritingToolSession {
     // 公众号只等待文章正文，不能把“环境异常”等提示当成已加载正文。
     await page.waitForFunction(() => {
       const root = location.hostname === "mp.weixin.qq.com" ? document.querySelector("#js_content")
-        : document.querySelector("article,main") || document.body
+        : document.querySelector("#vsb_content,.v_news_content,article,main") || document.body
       return Boolean(root && (root.textContent?.trim() || root.querySelector("img")))
     }, undefined, { timeout: 8000 }).catch(() => {})
     await this.handleVerification()
@@ -274,7 +287,7 @@ export class WritingToolSession {
     if (!url) throw new WritingToolError("当前页面不是可读取的公开网页")
     const data = await this.page.evaluate(() => {
       const root = location.hostname === "mp.weixin.qq.com" ? document.querySelector<HTMLElement>("#js_content")
-        : document.querySelector<HTMLElement>("article,main,[role=main]") || document.body
+        : document.querySelector<HTMLElement>("#vsb_content,.v_news_content,article,main,[role=main]") || document.body
       const links = [...document.querySelectorAll<HTMLElement>("a[href],button:not([type=submit]),summary,[role=button]")]
         .filter(element => element.getClientRects().length && !element.closest("form")).slice(0, 50).map((element, index) => {
           const id = `E${index + 1}`
@@ -290,12 +303,13 @@ export class WritingToolSession {
       return { title: document.title.slice(0, 180), text: root?.innerText?.trim().slice(0, 24_000) || "", links, images }
     })
     if (await this.verificationVisible()) throw new WritingToolError("人机验证尚未通过，这个页面不能当作已读正文")
-    if (new URL(url).hostname === "mp.weixin.qq.com" && !usablePageText(data.text)) {
-      throw new WritingToolError("微信未返回文章正文，当前是验证、异常或不可访问页面，未取得原图。")
+    const html = await this.page.content()
+    if (isXiaohongshuArticle(url)) data.text = extractXiaohongshuArticle(html, url)
+    if (!usablePageText(data.text)) {
+      throw new WritingToolError("网页未返回可读正文，当前可能是登录、验证或不可访问页面。")
     }
     this.clickIds = new Set(data.links.map(link => link.id))
     this.savedFiles.set(`page-${this.savedFiles.size + 1}.txt`, `${url}\n${data.title}\n\n${data.text}`)
-    const html = await this.page.content()
     this.savedFiles.set(`page-${this.savedFiles.size + 1}.html`, html.slice(0, 2_000_000))
     const images = this.addImages(data.images.flatMap(image => {
       let imageUrl: string
@@ -411,13 +425,12 @@ export class WritingToolSession {
     } finally { this.verificationActive = false }
   }
 
-  private docker(args: string[], input?: string, timeout = 20_000): Promise<string> {
+  private docker(args: string[], input?: string): Promise<string> {
     return new Promise((resolve, reject) => {
       const process = spawn("docker", args, { stdio: ["pipe", "pipe", "pipe"] })
       let output = ""
       let tooLarge = false
       const kill = () => { process.kill("SIGKILL") }
-      const timer = setTimeout(kill, timeout)
       this.signal.addEventListener("abort", kill, { once: true })
       process.stdout.on("data", (chunk: Buffer) => {
         output += chunk.toString("utf8")
@@ -426,16 +439,14 @@ export class WritingToolSession {
       // Docker 的错误可能含主机路径，不把原始诊断或宿主信息交给模型。
       process.stderr.resume()
       process.on("error", () => {
-        clearTimeout(timer)
         this.signal.removeEventListener("abort", kill)
         reject(new WritingToolError("终端不可用，请启动 Docker 并准备终端镜像"))
       })
       process.on("close", code => {
-        clearTimeout(timer)
         this.signal.removeEventListener("abort", kill)
         if (this.signal.aborted && args[0] !== "rm") reject(this.signal.reason)
         else if (tooLarge) reject(new WritingToolError("终端输出过多，请缩小命令处理范围"))
-        else if (code !== 0) reject(new WritingToolError("终端命令未完成或超时，请使用较短命令"))
+        else if (code !== 0) reject(new WritingToolError(`终端命令执行失败（退出码 ${code ?? "未知"}）${args[0] === "exec" && output.trim() ? `：\n${output.slice(0, 4000)}` : ""}`))
         else resolve(output.slice(0, 16_000))
       })
       process.stdin.on("error", () => {})
@@ -459,14 +470,14 @@ export class WritingToolSession {
           "--cpus", "1", "--memory", "256m", "--pids-limit", "64", "--cap-drop", "ALL",
           "--security-opt", "no-new-privileges", "--tmpfs", "/work:rw,size=64m,uid=65534,gid=65534,mode=700",
           "--tmpfs", "/tmp:rw,size=32m,uid=65534,gid=65534,mode=700", "--workdir", "/work",
-          "--entrypoint", "python3", WRITING_TERMINAL_IMAGE, "-c", "import time; time.sleep(2400)"])
+          "--entrypoint", "python3", WRITING_TERMINAL_IMAGE, "-c", "import threading; threading.Event().wait()"])
         if (this.disposed || this.signal.aborted) {
-          await this.docker(["rm", "-f", container], undefined, 8000).catch(() => {})
+          await this.docker(["rm", "-f", container]).catch(() => {})
           this.available()
         }
       } catch (error) {
         // 取消时 docker 客户端可能先退出，按本次生成的名字再回收一次。
-        await this.docker(["rm", "-f", container], undefined, 8000).catch(() => {})
+        await this.docker(["rm", "-f", container]).catch(() => {})
         await this.closeTerminal()
         throw error
       }
@@ -480,7 +491,7 @@ export class WritingToolSession {
         this.exportedFiles.add(name)
       }
       // argv 直接传给 docker，只有容器内的 shell 会解释模型命令。
-      return await this.docker(["exec", this.container!, "/bin/sh", "-lc", `(${command}\n) 2>&1`], undefined, 30_000)
+      return await this.docker(["exec", this.container!, "/bin/sh", "-lc", `(${command}\n) 2>&1`])
     } catch (error) {
       await this.closeTerminal()
       throw error
@@ -490,7 +501,7 @@ export class WritingToolSession {
   private async closeTerminal() {
     const container = this.container
     this.container = undefined
-    if (container) await this.docker(["rm", "-f", container], undefined, 8000).catch(() => {})
+    if (container) await this.docker(["rm", "-f", container]).catch(() => {})
     if (this.terminalReserved) {
       this.terminalReserved = false
       activeTerminals--

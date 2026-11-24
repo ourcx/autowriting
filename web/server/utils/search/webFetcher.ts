@@ -16,7 +16,9 @@
 
 import { logger } from "../../logger.ts"
 import { assertPublicHttpUrl, fetchPublicUrl } from "../networkPolicy.ts"
-import { extractWechatArticle } from "./wechatArticleContent.ts"
+import { extractWechatArticle, toMarkdown } from "./wechatArticleContent.ts"
+import { load } from "cheerio"
+import { extractXiaohongshuArticle, isXiaohongshuArticle } from "./xiaohongshuArticleContent.ts"
 
 // ── 常量 ────────────────────────────────────────────────────────────────────────
 
@@ -109,7 +111,9 @@ function cleanNoiseTags(html: string): string {
     .replace(/<aside[\s\S]*?<\/aside>/gi, "")
     .replace(/<footer[\s\S]*?<\/footer>/gi, "")
     .replace(/<header[\s\S]*?<\/header>/gi, "")
-    .replace(/<form[\s\S]*?<\/form>/gi, "")
+    .replace(/<\/?form\b[^>]*>/gi, "")
+    .replace(/<(?:button|select|textarea)\b[\s\S]*?<\/(?:button|select|textarea)>/gi, "")
+    .replace(/<input\b[^>]*>/gi, "")
     .replace(/<iframe[\s\S]*?<\/iframe>/gi, "")
     //删除canvas\img等多媒体标签的内容
     .replace(/<canvas[^>]*>/gi, "")
@@ -150,6 +154,7 @@ function findMainContainer(html: string): string {
 export function usablePageText(content: string): boolean {
   const text = content.trim()
   return text.length > 0 && !/^\[(?:安全拦截|频率限制|抓取失败|内容提取失败|未提取到正文|超时)\]/.test(text)
+    && !/^(?:#+\s*)?(?:403(?:\s+forbidden)?|404(?:\s+not found)?|forbidden|502\s+bad gateway|503\s+service unavailable)(?:\s|$)/i.test(text)
     && !/(?:环境异常.{0,40}完成验证|完成安全验证后|此内容因违规无法查看|该内容已被发布者删除|该内容已删除|该内容暂时无法查看|访问过于频繁|robot check|just a moment|access denied|target .* returned status code|warning: .*captcha)/i.test(text.slice(0, 650))
 }
 
@@ -294,9 +299,10 @@ export async function webFetch(url: string, options: FetchOptions = {}): Promise
     const signal = options.signal ? AbortSignal.any([deadline, options.signal]) : deadline
     const resp = await fetchPublicUrl(url, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; autowriting-web-fetch/1.0)",
+        "User-Agent": "Mozilla/5.0",
         "Accept": "text/html,application/xhtml+xml,*/*",
         "Accept-Language": "zh-CN,zh;q=0.9",
+        "Accept-Encoding": "identity",
       },
       signal,
     }, options.sameOrigin)
@@ -307,8 +313,11 @@ export async function webFetch(url: string, options: FetchOptions = {}): Promise
 
     // 流式读取，最多 5MB
     const contentType = resp.headers.get("content-type") || ""
+    const body = await readBounded(resp)
     const isHtml = contentType.includes("text/html") || contentType.includes("application/xhtml")
+      || (!contentType && /<!doctype\s+html|<html\b|<body\b/i.test(body.slice(0, 1000)))
     const wechatArticle = new URL(resp.url || url).hostname === "mp.weixin.qq.com"
+    const xiaohongshuArticle = isXiaohongshuArticle(resp.url || url)
 
     if (!isHtml && (wechatArticle || (options.textOnly && !/^(text\/|application\/(?:json|xml))/i.test(contentType)))) {
       await resp.body?.cancel()
@@ -316,13 +325,13 @@ export async function webFetch(url: string, options: FetchOptions = {}): Promise
     }
     if (!isHtml) {
       // 非 HTML 页面：直接返回文本
-      const text = await readBounded(resp)
+      const text = body
       logger.info("WEB-FETCH", "抓取成功（非HTML）", { url, length: text.length })
       return text.slice(0, maxChars)
     }
 
     // HTML 页面：提取正文
-    const html = await readBounded(resp)
+    const html = body
 
     // 检测是否为反爬页面
     if (html.length < 200) {
@@ -337,7 +346,11 @@ export async function webFetch(url: string, options: FetchOptions = {}): Promise
     }
 
     // 4. HTML 正文提取
-    const markdown = wechatArticle ? wechatContent : htmlToMarkdown(findMainContainer(cleanNoiseTags(html)))
+    const universityContent = load(html)("#vsb_content, .v_news_content").first().html()
+    const markdown = wechatArticle ? wechatContent
+      : xiaohongshuArticle ? extractXiaohongshuArticle(html, resp.url || url)
+      : universityContent ? toMarkdown(universityContent, resp.url || url)
+      : htmlToMarkdown(findMainContainer(cleanNoiseTags(html)))
 
     if ((!wechatArticle && markdown.length < 50) || !usablePageText(markdown)) {
       logger.warn("WEB-FETCH", "正文提取后内容过短", { url, length: markdown.length })

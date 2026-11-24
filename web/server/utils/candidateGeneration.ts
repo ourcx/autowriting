@@ -36,7 +36,6 @@ export async function streamCandidate(userId: string, articleId: string, id: str
   if (!hasArticleApiKey(config)) throw new CandidateError("请先配置 AI API Key")
   const release = acquireCandidate(userId, id)
   const controller = new AbortController()
-  const deadline = setTimeout(() => controller.abort(), 30 * 60_000)
   let tools: WritingToolSession | undefined
   const disconnected = () => { if (!response.writableEnded) controller.abort() }
   response.once("close", disconnected)
@@ -352,7 +351,6 @@ ${imageContext}`
         recordTokenUsage({ articleId, userId, operation: "generate", model: candidate.model, outputTokens: Math.ceil(streamedCharacters / 1.5) })
       } catch { logger.warn("GENERATION", "候选稿用量记录失败", { articleId, candidateId: id }) }
     }
-    clearTimeout(deadline)
     await tools?.dispose()
     response.off("close", disconnected)
     release()

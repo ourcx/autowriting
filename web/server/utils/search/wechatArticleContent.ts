@@ -1,9 +1,11 @@
 import { load } from "cheerio"
 import TurndownService from "turndown"
 
-function toMarkdown(html: string, articleUrl: string): string {
+export function toMarkdown(html: string, articleUrl: string): string {
   const $ = load(html, {}, false)
-  $("script, style, iframe, form, noscript").remove()
+  $("script, style, iframe, noscript, input, button, select, textarea").remove()
+  // 部分网站把整篇文章放在 form 中，只去掉表单外壳。
+  $("form").each((_index, element) => { $(element).replaceWith($(element).contents()) })
   $("img, a").each((_index, element) => {
     const node = $(element)
     const image = node.is("img")
