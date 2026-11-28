@@ -9,6 +9,7 @@ process.env.DATA_DIR = join(directory, "data")
 process.env.DRAFTS_DIR = join(directory, "drafts")
 process.env.LOG_DIR = join(directory, "logs")
 const { readArticlePage } = await import("../server/utils/search/readArticlePage.ts")
+const { readWechatArticleWithBrowser } = await import("../server/utils/search/wechatArticleBrowser.ts")
 const { assessPageText, extractReadablePage } = await import("../server/utils/search/pageContent.ts")
 const { extractPublicSourceUrls } = await import("../server/utils/search/sourceUrls.ts")
 const { preservesDraftAnchors } = await import("../server/writingAgentPolicy.ts")
@@ -163,40 +164,35 @@ try {
     assert.match(fallback.content, /^\[校方公告\]/)
   } finally { globalThis.fetch = realFetch }
 
-  // Chromium 执行原站脚本后才出现正文，验证读取链路会回退到真实浏览器。
+  // 公众号阅读器只负责解析 DOM，浏览器启动、路由和回收由统一会话负责。
   const wechatUrl = "https://mp.weixin.qq.com/s/browser-fixture"
-  const scriptUrl = "https://mp.weixin.qq.com/fixture.js"
-  const requests: string[] = []
-  try {
-    globalThis.fetch = async input => {
-      const url = String(input)
-      requests.push(url)
-      if (url === scriptUrl) {
-        return new Response('document.querySelector("#js_content").innerText = "这是浏览器执行原站脚本后显示的公众号正文。正文列明了活动时间、承办单位、参赛范围和公开结果，并补充了现场安排、报名期限和结果核验方式。页面内容连续完整，可以排除导航壳、登录提示和人机验证页面，作为本次写作引用的公开原文。"', {
-          headers: { "Content-Type": "application/javascript; charset=utf-8" },
-        })
-      }
+  let disposed = false
+  const browserContent = "这是浏览器执行原站脚本后显示的公众号正文。正文列明了活动时间、承办单位、参赛范围和公开结果，并补充了现场安排、报名期限和结果核验方式。页面内容连续完整，可以排除导航壳、登录提示和人机验证页面，作为本次写作引用的公开原文。"
+  const browserPage = await readWechatArticleWithBrowser(wechatUrl, AbortSignal.timeout(12000), () => ({
+    async open(url, timeout) {
       assert.equal(url, wechatUrl)
-      return new Response('<body><div id="js_content"></div><script src="/fixture.js"></script><script src="https://1.1.1.1/unrelated.js"></script></body>', {
-        headers: { "Content-Type": "text/html; charset=utf-8" },
-      })
-    }
-    const browserPage = await readArticlePage(wechatUrl, { sameOrigin: true, signal: AbortSignal.timeout(12000) })
-    assert.equal(browserPage.method, "wechat-browser")
-    assert.match(browserPage.content, /执行原站脚本后显示/)
-    assert.deepEqual(requests, [wechatUrl, wechatUrl, scriptUrl])
-    const privatePage = "https://mp.weixin.qq.com/cgi-bin/home"
-    await assert.rejects(readArticlePage(privatePage), /已公开的公众号文章/)
-    assert.ok(!requests.includes(privatePage))
-    globalThis.fetch = async () => {
-      const page = new Response('<body><main>环境异常，请先完成验证</main></body>', {
-        headers: { "Content-Type": "text/html; charset=utf-8" },
-      })
-      Object.defineProperty(page, "url", { value: "https://mp.weixin.qq.com/mp/wappoc_appmsgcaptcha" })
-      return page
-    }
-    await assert.rejects(readArticlePage(wechatUrl), /微信未返回可读正文/)
-  } finally { globalThis.fetch = realFetch }
+      assert.equal(timeout, 8000)
+      return {
+        waitForFunction: async () => undefined,
+        content: async () => `<body><div id="js_content">${browserContent}</div></body>`,
+      }
+    },
+    async dispose() { disposed = true },
+  }))
+  assert.match(browserPage, /执行原站脚本后显示/)
+  assert.equal(disposed, true)
+  const blockedPage = await readWechatArticleWithBrowser(wechatUrl, AbortSignal.timeout(12000), () => ({
+    async open() {
+      return {
+        waitForFunction: async () => undefined,
+        content: async () => "<body><main>环境异常，请先完成验证</main></body>",
+      }
+    },
+    async dispose() {},
+  }))
+  assert.equal(blockedPage, "")
+  const privatePage = "https://mp.weixin.qq.com/cgi-bin/home"
+  await assert.rejects(readArticlePage(privatePage), /已公开的公众号文章/)
 
   const originalDraft = "# 招标进展\n\n能确定的只有一件事：公告于 5 月 10 日发布。原文「设计招标」见[公告](https://example.com/a)。"
   const rewrite = "# 招标进展\n\n公告于 5 月 10 日发布，原文「设计招标」见[公告](https://example.com/a)。"

@@ -1,14 +1,14 @@
 import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { z } from "zod"
-import { chromium, type Browser, type Page } from "playwright"
+import type { Page } from "playwright"
 import { WRITING_TERMINAL_IMAGE } from "./config.ts"
-import { assertPublicHttpUrl, fetchPublicUrl } from "./utils/networkPolicy.ts"
+import { fetchPublicUrl } from "./utils/networkPolicy.ts"
 import { publicSourceUrl } from "./writingResearch.ts"
 import { usablePageText } from "./utils/search/webFetcher.ts"
 import { extractXiaohongshuArticle, isXiaohongshuArticle } from "./utils/search/xiaohongshuArticleContent.ts"
 import { assessPageText, extractReadablePage } from "./utils/search/pageContent.ts"
-import { preparePublicBrowserContext, publicBrowserContextOptions, PUBLIC_BROWSER_ARGS } from "./utils/publicBrowser.ts"
+import { PublicPageBrowserError, PublicPageBrowserSession } from "./utils/publicPageBrowser.ts"
 
 export interface WritingPageImage {
   id: string
@@ -48,13 +48,11 @@ const verificationActionSchema = z.discriminatedUnion("action", [
 ])
 
 const VERIFICATION_MARKER = /captcha|verify you are human|verifying you are human|human verification|checking your browser|安全验证|人机验证|验证码|拖动滑块|完成拼图|请选择.*(?:图片|图中)|访问过于频繁/i
-const VERIFICATION_HOST = /(?:^|\.)(?:recaptcha\.net|google\.com|gstatic\.com|hcaptcha\.com|hcaptcha\.net|geetest\.com|geetest\.net|tencentcloudapi\.com|captcha\.qq\.com|challenges\.cloudflare\.com|alicdn\.com)$/
 
 export function isWritingVerificationText(text: string): boolean {
   return text.length < 1800 && VERIFICATION_MARKER.test(text)
 }
 
-let activeBrowsers = 0
 let activeTerminals = 0
 
 export async function readPublicBytes(response: Response, limit: number, allowErrorPage = false): Promise<Buffer> {
@@ -113,7 +111,7 @@ export function imagesInHtml(html: string, sourceUrl: string, pageTitle: string)
 /** 每篇候选稿独占匿名浏览器和临时终端；取消请求时一起回收。 */
 export class WritingToolSession {
   readonly images: WritingPageImage[] = []
-  private browser?: Browser
+  private browser?: PublicPageBrowserSession
   private page?: Page
   private container?: string
   private terminalReserved = false
@@ -123,8 +121,6 @@ export class WritingToolSession {
   private exportedFiles = new Set<string>()
   private clickIds = new Set<string>()
   private screenshotCount = 0
-  private fetchedBytes = 0
-  private sourceUrl = ""
   private verificationActive = false
   private verificationAttempts = 0
   private readonly abort = () => { void this.dispose() }
@@ -175,100 +171,25 @@ export class WritingToolSession {
     if (!this.browserEnabled) throw new WritingToolError("本次未开启浏览器工具")
     const target = publicSourceUrl(url)
     if (!target) throw new WritingToolError("浏览器只接受无凭据的公开网页链接")
-    await assertPublicHttpUrl(target)
-    this.sourceUrl = target
     if (!this.browser) {
-      if (activeBrowsers >= 3) throw new WritingToolError("浏览器正在处理其他文章，请使用网页读取工具")
-      activeBrowsers++
-      try {
-        this.browser = await chromium.launch({
-          headless: true,
-          chromiumSandbox: true,
-          timeout: 15_000,
-          args: PUBLIC_BROWSER_ARGS,
-        })
-      } catch {
-        activeBrowsers--
+      this.browser = new PublicPageBrowserSession(this.signal, {
+        verificationActive: () => this.verificationActive,
+      })
+    }
+    try { this.page = await this.browser.open(target) }
+    catch (error) {
+      this.available()
+      if (error instanceof PublicPageBrowserError && error.code === "busy") {
+        throw new WritingToolError("浏览器正在处理其他文章，请使用网页读取工具")
+      }
+      if (error instanceof PublicPageBrowserError && error.code === "launch") {
+        await this.browser.dispose().catch(() => {})
+        this.browser = undefined
         throw new WritingToolError("浏览器未能启动，请安装 Playwright Chromium")
       }
-      if (this.disposed || this.signal.aborted) {
-        await this.browser.close().catch(() => {})
-        this.browser = undefined
-        activeBrowsers--
-        this.available()
-      }
-      const browser = this.browser
-      if (!browser) throw new WritingToolError("浏览器会话未能初始化")
-      const context = await browser.newContext(publicBrowserContextOptions(browser, {
-        serviceWorkers: "block", acceptDownloads: false, viewport: { width: 1280, height: 900 },
-      }))
-      await preparePublicBrowserContext(context)
-      await context.routeWebSocket("**/*", socket => socket.close())
-      await context.route("**/*", async route => {
-        const request = route.request()
-        const requestUrl = new URL(request.url())
-        // 微信公开文章对 Node/TLS 指纹较敏感。固定官方域名的顶层 GET 交给 Chromium，
-        // 跳转后的每个新请求仍会重新经过本路由；其他资源继续走统一网络安全代理。
-        if (request.method() === "GET" && request.resourceType() === "document"
-          && requestUrl.hostname === "mp.weixin.qq.com") {
-          await route.continue()
-          return
-        }
-        const sameSite = requestUrl.hostname === new URL(this.sourceUrl).hostname
-        const verificationHost = VERIFICATION_HOST.test(requestUrl.hostname)
-        const verificationRequest = (sameSite || verificationHost)
-          && (this.verificationActive || /captcha|recaptcha|turnstile|challenge-platform|turing/i.test(requestUrl.href))
-          && /captcha|verify|verification|challenge|turnstile|recaptcha|check|validate|security|turing|sec(?:_|\/)|fc\/|gettype|ajax\.php/i.test(requestUrl.href)
-        // 验证页可以提交当前站点或验证码服务的验证请求，普通网页仍仅允许读取。
-        if ((!["GET", "HEAD"].includes(request.method()) && !(request.method() === "POST" && verificationRequest))
-          || ["media", "font"].includes(request.resourceType())) {
-          await route.abort().catch(() => {})
-          return
-        }
-        try {
-          const resource = await assertPublicHttpUrl(request.url())
-          const headers = request.headers()
-          let response = await fetchPublicUrl(resource.href, {
-            signal: AbortSignal.any([this.signal, AbortSignal.timeout(12_000)]),
-            method: request.method(),
-            ...(request.method() === "POST" ? { body: request.postData() || undefined } : {}),
-            headers: { Accept: headers.accept || "*/*", "User-Agent": headers["user-agent"] || "Mozilla/5.0",
-              "Accept-Language": "zh-CN,zh;q=0.9", "Accept-Encoding": "identity",
-              ...(sameSite || verificationHost ? { Cookie: headers.cookie || "" } : {}),
-              ...(verificationRequest ? { "Content-Type": headers["content-type"] || "application/x-www-form-urlencoded",
-                Origin: headers.origin || new URL(this.sourceUrl).origin, Referer: headers.referer || this.sourceUrl } : {}),
-            },
-          }, Boolean(headers.cookie || request.method() === "POST"))
-          // 有些公开网站拒绝 Chromium 的标识；匿名文档再按普通 HTTP 读取一次。
-          if (response.status === 403 && request.resourceType() === "document" && request.method() === "GET" && !headers.cookie) {
-            const fallback = await fetchPublicUrl(resource.href, {
-              signal: AbortSignal.any([this.signal, AbortSignal.timeout(12_000)]),
-              headers: { Accept: "text/html,application/xhtml+xml,*/*", "User-Agent": "Mozilla/5.0",
-                "Accept-Language": "zh-CN,zh;q=0.9", "Accept-Encoding": "identity" },
-            }).catch(() => null)
-            if (fallback?.ok) { await response.body?.cancel(); response = fallback }
-            else await fallback?.body?.cancel()
-          }
-          if (request.resourceType() === "document" && response.url) this.sourceUrl = publicSourceUrl(response.url) || this.sourceUrl
-          // 403/429 也可能是可操作的验证码页面，保留文档给模型识别。
-          const body = await readPublicBytes(response, 12 * 1024 * 1024, request.resourceType() === "document")
-          this.fetchedBytes += body.length
-          if (this.fetchedBytes > 64 * 1024 * 1024) throw new WritingToolError("本篇浏览器资源读取已达到上限")
-          const cookies = response.headers.getSetCookie()
-          const contentType = response.headers.get("content-type")
-            || (request.resourceType() === "document" && /<!doctype\s+html|<html\b|<body\b/i.test(body.subarray(0, 1000).toString("utf8")) ? "text/html; charset=utf-8" : undefined)
-          await route.fulfill({ status: response.status, contentType,
-            headers: cookies.length ? { "set-cookie": cookies.join("\n") } : undefined, body })
-        } catch { await route.abort().catch(() => {}) }
-      })
-      this.page = await context.newPage()
-      context.on("page", page => { if (page !== this.page) void page.close().catch(() => {}) })
-      this.page.setDefaultTimeout(8000)
+      throw new WritingToolError("浏览器未能打开这个公开网页")
     }
     const page = this.page
-    if (!page) throw new WritingToolError("浏览器会话未能初始化")
-    try { await page.goto(target, { waitUntil: "domcontentloaded", timeout: 20_000 }) }
-    catch { this.available(); throw new WritingToolError("浏览器未能打开这个公开网页") }
     // 公众号只等待文章正文，不能把“环境异常”等提示当成已加载正文。
     await page.waitForFunction(() => {
       const root = location.hostname === "mp.weixin.qq.com" ? document.querySelector("#js_content")
@@ -302,7 +223,7 @@ export class WritingToolSession {
   async snapshot(): Promise<WritingPageSnapshot> {
     this.available()
     if (!this.page) throw new WritingToolError("请先打开网页")
-    const url = publicSourceUrl(this.page.url()) || this.sourceUrl
+    const url = publicSourceUrl(this.page.url()) || this.browser?.sourceUrl
     if (!url) throw new WritingToolError("当前页面不是可读取的公开网页")
     const data = await this.page.evaluate(() => {
       const root = location.hostname === "mp.weixin.qq.com" ? document.querySelector<HTMLElement>("#js_content")
@@ -545,7 +466,7 @@ export class WritingToolSession {
     const browser = this.browser
     this.browser = undefined
     this.disposing = (async () => {
-      if (browser) { await browser.close().catch(() => {}); activeBrowsers-- }
+      await browser?.dispose().catch(() => {})
       await this.closeTerminal()
     })()
     return this.disposing
