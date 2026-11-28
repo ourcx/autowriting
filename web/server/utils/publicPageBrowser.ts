@@ -2,7 +2,9 @@ import { chromium, type Browser, type BrowserContext, type Page, type Route } fr
 import { assertPublicHttpUrl, fetchPublicUrl } from "./networkPolicy.ts"
 import { preparePublicBrowserContext, publicBrowserContextOptions, PUBLIC_BROWSER_ARGS } from "./publicBrowser.ts"
 
-const VERIFICATION_HOST = /(?:^|\.)(?:recaptcha\.net|google\.com|gstatic\.com|hcaptcha\.com|hcaptcha\.net|geetest\.com|geetest\.net|tencentcloudapi\.com|captcha\.qq\.com|challenges\.cloudflare\.com|alicdn\.com)$/
+const VERIFICATION_HOST = /(?:^|\.)(?:recaptcha\.net|google\.com|gstatic\.com|hcaptcha\.com|hcaptcha\.net|geetest\.com|geetest\.net|geevisit\.com|arkoselabs\.com|funcaptcha\.com|gtimg\.com|tencentcloudapi\.com|qcloud\.com|captcha\.qq\.com|challenges\.cloudflare\.com|alicdn\.com)$/
+const OPAQUE_VERIFICATION_POST_HOST = /(?:^|\.)(?:hcaptcha\.com|hcaptcha\.net|arkoselabs\.com|funcaptcha\.com|challenges\.cloudflare\.com)$/
+const VERIFICATION_PATH = /captcha|recaptcha|hcaptcha|turnstile|challenge-platform|challenge|turing|verify|verification|check|validate|security|arkose|funcaptcha|geetest|sec(?:_|\/)|fc\/|gettype|ajax\.php/i
 const MAX_SESSION_BYTES = 64 * 1024 * 1024
 let activeSessions = 0
 
@@ -16,6 +18,26 @@ export class PublicPageBrowserError extends Error {
 
 interface PublicPageBrowserOptions {
   verificationActive?: () => boolean
+}
+
+export function isPublicBrowserVerificationRequest(requestUrl: URL, sourceUrl: URL, method: string,
+  verificationActive: boolean): boolean {
+  const sameSite = requestUrl.hostname === sourceUrl.hostname
+  const verificationHost = VERIFICATION_HOST.test(requestUrl.hostname)
+  if (!sameSite && !verificationHost) return false
+  // 少数专用验证码服务的校验路径不带 captcha 等可识别单词；只对专用域名放行。
+  if (method === "POST" && verificationActive && OPAQUE_VERIFICATION_POST_HOST.test(requestUrl.hostname)) return true
+  return VERIFICATION_PATH.test(requestUrl.href)
+}
+
+export function publicBrowserResponseHeaders(response: Response, cookies: string[]): Record<string, string> {
+  const headers: Record<string, string> = {}
+  for (const name of ["access-control-allow-origin", "access-control-allow-credentials", "access-control-expose-headers", "cache-control", "content-language", "vary"]) {
+    const value = response.headers.get(name)
+    if (value) headers[name] = value
+  }
+  if (cookies.length) headers["set-cookie"] = cookies.join("\n")
+  return headers
 }
 
 async function readResponseBytes(response: Response, limit: number, allowErrorPage: boolean): Promise<Buffer> {
@@ -51,6 +73,7 @@ export class PublicPageBrowserSession {
   private currentPage?: Page
   private currentUrl = ""
   private fetchedBytes = 0
+  private verificationTrafficUntil = 0
   private reserved = false
   private disposed = false
   private disposing?: Promise<void>
@@ -114,10 +137,12 @@ export class PublicPageBrowserSession {
     const source = new URL(this.currentUrl)
     const sameSite = requestUrl.hostname === source.hostname
     const verificationHost = VERIFICATION_HOST.test(requestUrl.hostname)
-    const verificationActive = this.options.verificationActive?.() === true
-    const verificationRequest = (sameSite || verificationHost)
-      && (verificationActive || /captcha|recaptcha|turnstile|challenge-platform|turing/i.test(requestUrl.href))
-      && /captcha|verify|verification|challenge|turnstile|recaptcha|check|validate|security|turing|sec(?:_|\/)|fc\/|gettype|ajax\.php/i.test(requestUrl.href)
+    // 验证组件会在正文完成识别前先发起请求；看到专用服务或明确验证路径后，短暂开放其校验流量。
+    if ((verificationHost && OPAQUE_VERIFICATION_POST_HOST.test(requestUrl.hostname)) || VERIFICATION_PATH.test(requestUrl.href)) {
+      this.verificationTrafficUntil = Date.now() + 60_000
+    }
+    const verificationActive = this.options.verificationActive?.() === true || Date.now() < this.verificationTrafficUntil
+    const verificationRequest = isPublicBrowserVerificationRequest(requestUrl, source, request.method(), verificationActive)
     if ((!["GET", "HEAD"].includes(request.method()) && !(request.method() === "POST" && verificationRequest))
       || ["media", "font"].includes(request.resourceType())) {
       await route.abort().catch(() => {})
@@ -163,7 +188,7 @@ export class PublicPageBrowserSession {
       await route.fulfill({
         status: response.status,
         contentType,
-        headers: cookies.length ? { "set-cookie": cookies.join("\n") } : undefined,
+        headers: publicBrowserResponseHeaders(response, cookies),
         body,
       })
     } catch {

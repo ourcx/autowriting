@@ -149,9 +149,11 @@ export async function streamCandidate(userId: string, articleId: string, id: str
 {"action":"click","points":[{"x":100,"y":200}]}
 {"action":"fill","id":"C0-0","text":"图形验证码答案"}
 {"action":"drag","from":{"x":100,"y":200},"to":{"x":400,"y":200}}
+{"action":"press","key":"Enter"}
+{"action":"scroll","direction":"down","amount":500}
 {"action":"wait"}
 {"action":"stop"}
-看不清或不是可处理的图形验证码时返回 stop，不猜登录凭据。` },
+填写后需要提交时，下一步使用 press；验证码在画面外时使用 scroll。每一步只做当前画面能确认的操作，操作后会重新截图。看不清或不是可处理的图形验证码时返回 stop，不猜登录凭据。` },
           { role: "user", content: [
             { type: "text", text: `第 ${attempt} 步。页面提示及可填写的验证码框：\n${instructions}` },
             { type: "image_url", image_url: { url: `data:image/jpeg;base64,${screenshot}`, detail: "high" } },

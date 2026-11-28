@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { z } from "zod"
-import type { Page } from "playwright"
+import type { Frame, Page } from "playwright"
 import { WRITING_TERMINAL_IMAGE } from "./config.ts"
 import { fetchPublicUrl } from "./utils/networkPolicy.ts"
 import { publicSourceUrl } from "./writingResearch.ts"
@@ -43,9 +43,53 @@ const verificationActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("fill"), id: z.string().regex(/^C\d+-\d+$/), text: z.string().min(1).max(80) }),
   z.object({ action: z.literal("drag"), from: z.object({ x: z.number().min(0).max(1279), y: z.number().min(0).max(899) }),
     to: z.object({ x: z.number().min(0).max(1279), y: z.number().min(0).max(899) }) }),
+  z.object({ action: z.literal("press"), key: z.enum(["Enter", "Space", "Tab", "Escape", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]) }),
+  z.object({ action: z.literal("scroll"), direction: z.enum(["up", "down"]), amount: z.number().int().min(100).max(800) }),
   z.object({ action: z.literal("wait") }),
   z.object({ action: z.literal("stop") }),
 ])
+
+export type WritingVerificationAction = z.infer<typeof verificationActionSchema>
+
+export function parseWritingVerificationAction(raw: string): WritingVerificationAction {
+  const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "")
+  try { return verificationActionSchema.parse(JSON.parse(cleaned)) }
+  catch (originalError) {
+    const start = cleaned.indexOf("{")
+    const end = cleaned.lastIndexOf("}")
+    if (start < 0 || end <= start) throw originalError
+    return verificationActionSchema.parse(JSON.parse(cleaned.slice(start, end + 1)))
+  }
+}
+
+export async function executeWritingVerificationAction(page: Page, frames: Frame[], fields: Map<string, { frame: number }>,
+  action: WritingVerificationAction): Promise<void> {
+  if (action.action === "click") {
+    for (const point of action.points) {
+      await page.mouse.click(point.x, point.y, { delay: 80 })
+      await page.waitForTimeout(120)
+    }
+  } else if (action.action === "fill") {
+    const field = fields.get(action.id)
+    if (!field || !frames[field.frame]) throw new WritingToolError("验证码输入框已变化")
+    await frames[field.frame].locator(`[data-writing-verification-id="${action.id}"]`).fill(action.text)
+  } else if (action.action === "drag") {
+    await page.mouse.move(action.from.x, action.from.y)
+    await page.mouse.down()
+    try {
+      const distance = Math.hypot(action.to.x - action.from.x, action.to.y - action.from.y)
+      const steps = Math.max(24, Math.min(48, Math.ceil(distance / 8)))
+      await page.mouse.move(action.to.x, action.to.y, { steps })
+    } finally { await page.mouse.up() }
+  } else if (action.action === "press") {
+    await page.keyboard.press(action.key)
+  } else if (action.action === "scroll") {
+    await page.mouse.wheel(0, action.direction === "down" ? action.amount : -action.amount)
+    await page.waitForTimeout(150)
+  } else if (action.action === "wait") {
+    await page.waitForTimeout(2500)
+  }
+}
 
 const VERIFICATION_MARKER = /captcha|verify you are human|verifying you are human|human verification|checking your browser|安全验证|人机验证|验证码|拖动滑块|完成拼图|请选择.*(?:图片|图中)|访问过于频繁/i
 
@@ -122,7 +166,6 @@ export class WritingToolSession {
   private clickIds = new Set<string>()
   private screenshotCount = 0
   private verificationActive = false
-  private verificationAttempts = 0
   private readonly abort = () => { void this.dispose() }
 
   constructor(readonly browserEnabled: boolean, readonly terminalEnabled: boolean, private signal: AbortSignal,
@@ -296,7 +339,7 @@ export class WritingToolSession {
         if (!box || box.width < 50 || box.height < 25) continue
       }
       const state = await frame.evaluate(() => {
-        const widget = [...document.querySelectorAll<HTMLElement>('[class*="captcha"],[id*="captcha"],[class*="verify"],iframe[title*="challenge"],iframe[title*="验证"]')]
+        const widget = [...document.querySelectorAll<HTMLElement>('[class*="captcha"],[id*="captcha"],[class*="verify"],[data-sitekey],.cf-turnstile,.g-recaptcha,.h-captcha,iframe[title*="challenge"],iframe[title*="验证"],iframe[src*="captcha"],iframe[src*="recaptcha"],iframe[src*="hcaptcha"],iframe[src*="turnstile"],iframe[src*="challenge"]')]
           .some(element => {
             if (String(element.className).includes("success") || element.getAttribute("aria-checked") === "true") return false
             const rect = element.getBoundingClientRect()
@@ -317,7 +360,8 @@ export class WritingToolSession {
     this.verificationActive = true
     this.verification.report("running", "网页出现人机验证，正在让模型识别页面并处理")
     try {
-      while (this.verificationAttempts < 8) {
+      let attempt = 0
+      while (attempt < 8) {
         this.available()
         if (!await this.verificationVisible()) {
           this.verification.report("done", "人机验证已通过，继续读取原网页")
@@ -326,7 +370,7 @@ export class WritingToolSession {
         const frames = this.page.frames()
         const fields = new Map<string, { frame: number }>()
         const instructions: string[] = []
-        await this.page.locator('[class*="captcha"],[id*="captcha"],iframe[title*="challenge"],iframe[title*="验证"]')
+        await this.page.locator('[class*="captcha"],[id*="captcha"],[data-sitekey],.cf-turnstile,.g-recaptcha,.h-captcha,iframe[title*="challenge"],iframe[title*="验证"],iframe[src*="captcha"],iframe[src*="recaptcha"],iframe[src*="hcaptcha"],iframe[src*="turnstile"],iframe[src*="challenge"]')
           .filter({ visible: true }).first().scrollIntoViewIfNeeded({ timeout: 1000 }).catch(() => {})
         for (let frameIndex = 0; frameIndex < frames.length; frameIndex++) {
           const info = await frames[frameIndex].evaluate(index => {
@@ -343,24 +387,18 @@ export class WritingToolSession {
           for (const input of info.inputs) fields.set(input.id, { frame: frameIndex })
           instructions.push(JSON.stringify({ text: info.text, inputs: info.inputs }))
         }
-        this.verificationAttempts++
+        attempt++
         const screenshot = (await this.page.screenshot({ type: "jpeg", quality: 85, animations: "disabled", timeout: 8000 })).toString("base64")
-        const raw = await this.verification.solve({ screenshot, instructions: instructions.join("\n").slice(0, 6000), attempt: this.verificationAttempts })
-        const action = verificationActionSchema.parse(JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "")))
+        const raw = await this.verification.solve({ screenshot, instructions: instructions.join("\n").slice(0, 6000), attempt })
+        const action = parseWritingVerificationAction(raw)
         if (action.action === "stop") break
-        if (action.action === "click") {
-          for (const point of action.points) await this.page.mouse.click(point.x, point.y)
-        } else if (action.action === "fill") {
-          const field = fields.get(action.id)
-          if (!field) throw new WritingToolError("验证码输入框已变化")
-          await frames[field.frame].locator(`[data-writing-verification-id="${action.id}"]`).fill(action.text)
-        } else if (action.action === "drag") {
-          await this.page.mouse.move(action.from.x, action.from.y)
-          await this.page.mouse.down()
-          try { await this.page.mouse.move(action.to.x, action.to.y, { steps: 24 }) }
-          finally { await this.page.mouse.up() }
+        await executeWritingVerificationAction(this.page, frames, fields, action)
+        await this.page.waitForLoadState("networkidle", { timeout: 3000 }).catch(() => {})
+        // 验证服务经常在网络空闲后才异步写入 token；短轮询避免把成功状态再交给模型误点。
+        for (let poll = 0; poll < 8; poll++) {
+          if (!await this.verificationVisible()) break
+          await this.page.waitForTimeout(poll === 0 ? 600 : 300)
         }
-        await this.page.waitForLoadState("networkidle", { timeout: 2500 }).catch(() => {})
       }
       if (!await this.verificationVisible()) {
         this.verification.report("done", "人机验证已通过，继续读取原网页")
