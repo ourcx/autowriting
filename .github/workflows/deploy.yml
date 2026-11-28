@@ -238,6 +238,15 @@ jobs:
             echo "[deploy] dependencies installed at $(date -u +%FT%TZ)"
             test -f web/dist/index.html
 
+            echo "[deploy] stop unused container runtime"
+            if command -v systemctl >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
+              for unit in docker.service docker.socket containerd.service; do
+                if systemctl list-unit-files "$unit" >/dev/null 2>&1; then
+                  sudo -n systemctl disable --now "$unit" || echo "[deploy] warning: could not stop $unit" >&2
+                fi
+              done
+            fi
+
             echo "[deploy] pre-restart host diagnostics"
             pm2 status || true
             free -m || true

@@ -111,6 +111,8 @@ pm2 save
 
 生产环境还会启动 `autowriting-watchdog`。它从独立进程探测 `127.0.0.1:3000/health`，连续四次失败后重启业务进程，并设置五分钟冷却，避免故障期间反复重启。守护记录可用 `pm2 logs autowriting-watchdog --lines 100` 查看。
 
+当前 PM2 主机不承载 Docker 容器。发布脚本会停止并禁用该主机上遗留的 `docker.service`、`docker.socket` 和 `containerd.service`，但不会删除镜像、卷或 Docker 数据目录。
+
 ### 4. 常用 PM2 命令
 
 ```bash
