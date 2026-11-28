@@ -113,6 +113,8 @@ pm2 save
 
 当前 PM2 主机不承载 Docker 容器。发布脚本会停止并禁用该主机上遗留的 `docker.service`、`docker.socket` 和 `containerd.service`，但不会删除镜像、卷或 Docker 数据目录。
 
+当前主机上的 `autowriting` 和 `haiblogger` 都使用 SQLite，不依赖 MySQL。发布脚本会停止并禁用遗留的 MySQL/MariaDB 服务，但保留程序包和数据库文件，便于需要时恢复。
+
 ### 4. 常用 PM2 命令
 
 ```bash

@@ -245,6 +245,12 @@ jobs:
                   sudo -n systemctl disable --now "$unit" || echo "[deploy] warning: could not stop $unit" >&2
                 fi
               done
+              echo "[deploy] stop unused mysql services"
+              for unit in mysql.service mysqld.service mariadb.service; do
+                if systemctl list-unit-files "$unit" >/dev/null 2>&1; then
+                  sudo -n systemctl disable --now "$unit" || echo "[deploy] warning: could not stop $unit" >&2
+                fi
+              done
             fi
 
             echo "[deploy] pre-restart host diagnostics"
