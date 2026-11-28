@@ -42,5 +42,28 @@ module.exports = {
     
     // cron 重启（可选，每天凌晨 4 点重启）
     // cron_restart: '0 4 * * *',
+  }, {
+    name: 'autowriting-watchdog',
+    script: './scripts/health-watchdog.mjs',
+    interpreter: 'node',
+    instances: 1,
+    exec_mode: 'fork',
+    autorestart: true,
+    max_restarts: 10,
+    min_uptime: '10s',
+    max_memory_restart: '80M',
+    env: {
+      NODE_ENV: 'production',
+      WATCHDOG_HEALTH_URL: 'http://127.0.0.1:3000/health',
+      WATCHDOG_INTERVAL_MS: 15000,
+      WATCHDOG_TIMEOUT_MS: 5000,
+      WATCHDOG_FAILURE_THRESHOLD: 4,
+      WATCHDOG_RESTART_COOLDOWN_MS: 300000
+    },
+    error_file: './logs/watchdog-error.log',
+    out_file: './logs/watchdog-out.log',
+    log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    merge_logs: true,
+    watch: false,
   }]
 }

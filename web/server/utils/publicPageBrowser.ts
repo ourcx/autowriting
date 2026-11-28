@@ -6,6 +6,8 @@ const VERIFICATION_HOST = /(?:^|\.)(?:recaptcha\.net|google\.com|gstatic\.com|hc
 const OPAQUE_VERIFICATION_POST_HOST = /(?:^|\.)(?:hcaptcha\.com|hcaptcha\.net|arkoselabs\.com|funcaptcha\.com|challenges\.cloudflare\.com)$/
 const VERIFICATION_PATH = /captcha|recaptcha|hcaptcha|turnstile|challenge-platform|challenge|turing|verify|verification|check|validate|security|arkose|funcaptcha|geetest|sec(?:_|\/)|fc\/|gettype|ajax\.php/i
 const MAX_SESSION_BYTES = 64 * 1024 * 1024
+const MAX_SESSION_DURATION_MS = 3 * 60_000
+const MAX_ACTIVE_SESSIONS = 2
 let activeSessions = 0
 
 export type PublicPageBrowserErrorCode = "busy" | "launch" | "navigation"
@@ -77,6 +79,7 @@ export class PublicPageBrowserSession {
   private reserved = false
   private disposed = false
   private disposing?: Promise<void>
+  private lifetime?: ReturnType<typeof setTimeout>
   private readonly options: PublicPageBrowserOptions
   private readonly abort = () => { void this.dispose() }
 
@@ -92,7 +95,7 @@ export class PublicPageBrowserSession {
     this.signal.throwIfAborted()
     if (this.disposed) throw new PublicPageBrowserError("navigation")
     if (this.browser) return
-    if (activeSessions >= 3) throw new PublicPageBrowserError("busy")
+    if (activeSessions >= MAX_ACTIVE_SESSIONS) throw new PublicPageBrowserError("busy")
     activeSessions++
     this.reserved = true
     try {
@@ -102,6 +105,8 @@ export class PublicPageBrowserSession {
         timeout: 15_000,
         args: PUBLIC_BROWSER_ARGS,
       })
+      this.lifetime = setTimeout(() => { void this.dispose() }, MAX_SESSION_DURATION_MS)
+      this.lifetime.unref()
       if (this.disposed || this.signal.aborted) {
         await this.dispose()
         this.signal.throwIfAborted()
@@ -215,6 +220,8 @@ export class PublicPageBrowserSession {
     if (this.disposing) return this.disposing
     this.disposed = true
     this.signal.removeEventListener("abort", this.abort)
+    if (this.lifetime) clearTimeout(this.lifetime)
+    this.lifetime = undefined
     const browser = this.browser
     this.browser = undefined
     this.context = undefined

@@ -109,6 +109,8 @@ pm2 startup
 pm2 save
 ```
 
+生产环境还会启动 `autowriting-watchdog`。它从独立进程探测 `127.0.0.1:3000/health`，连续四次失败后重启业务进程，并设置五分钟冷却，避免故障期间反复重启。守护记录可用 `pm2 logs autowriting-watchdog --lines 100` 查看。
+
 ### 4. 常用 PM2 命令
 
 ```bash

@@ -238,14 +238,23 @@ jobs:
             echo "[deploy] dependencies installed at $(date -u +%FT%TZ)"
             test -f web/dist/index.html
 
+            echo "[deploy] pre-restart host diagnostics"
+            pm2 status || true
+            free -m || true
+            df -h "$PROJECT_DIR" || true
+            ps -eo pid,ppid,%cpu,%mem,rss,etime,comm --sort=-rss | head -n 25 || true
+
             echo "[deploy] recreate PM2 app from ecosystem config; Nginx keeps proxying port 3000"
             cd web
-            if pm2 describe autowriting >/dev/null 2>&1; then
-              # PM2 restart preserves the original interpreter and memory limit.
-              # Recreate the app so ecosystem changes always reach the real process.
-              pm2 delete autowriting
-            fi
+            for app in autowriting autowriting-watchdog; do
+              if pm2 describe "$app" >/dev/null 2>&1; then
+                # PM2 restart preserves the original interpreter and memory limit.
+                # Recreate the app so ecosystem changes always reach the real process.
+                pm2 delete "$app"
+              fi
+            done
             pm2 start ecosystem.config.cjs --only autowriting
+            pm2 start ecosystem.config.cjs --only autowriting-watchdog
 
             echo "[deploy] health check"
             for attempt in 1 2 3 4 5; do
