@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { chromium } from "playwright"
 import { wechatCollectorTestUtils } from "../server/utils/wechatCollector.ts"
 import { parseYuanbaoStream, readYuanbaoStream } from "../server/utils/yuanbaoSearch.ts"
+import { preparePublicBrowserContext, publicBrowserContextOptions, PUBLIC_BROWSER_ARGS } from "../server/utils/publicBrowser.ts"
 
 const tikhubItems = wechatCollectorTestUtils.collectArticleItems({
   items: [{
@@ -97,9 +98,14 @@ assert.deepEqual(ranked.articles.slice(0, 4).map(item => [new URL(item.url).path
 ])
 
 // Chromium 读取没有 charset 的元宝 SSE 时，回答和引用必须保留原始中文。
-const browser = await chromium.launch({ headless: true })
+const browser = await chromium.launch({ headless: true, args: PUBLIC_BROWSER_ARGS })
 try {
-  const page = await browser.newPage()
+  const context = await browser.newContext(publicBrowserContextOptions(browser))
+  await preparePublicBrowserContext(context)
+  const page = await context.newPage()
+  const identity = await page.evaluate(() => ({ userAgent: navigator.userAgent, webdriver: navigator.webdriver }))
+  assert.doesNotMatch(identity.userAgent, /HeadlessChrome/)
+  assert.notEqual(identity.webdriver, true)
   const pageUrl = "https://so.qq.com/iaimode/search"
   const searchUrl = "https://lizhiassistant.search.qq.com/browser_aimode/aimode/query_get"
   await page.route(pageUrl, route => route.fulfill({

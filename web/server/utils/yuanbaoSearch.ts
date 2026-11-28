@@ -1,8 +1,9 @@
 import { normalizeWechatArticleUrl } from "../../shared/wechatArticleUrl.ts"
-import { chromium, type Page } from 'playwright'
+import { chromium, type BrowserContext, type Page } from 'playwright'
 import { z } from 'zod'
 import type { YuanbaoArticle, YuanbaoSearchResult } from '../../shared/yuanbaoSearch.ts'
 import { readArticlePage } from './search/readArticlePage.ts'
+import { preparePublicBrowserContext, publicBrowserContextOptions, PUBLIC_BROWSER_ARGS } from './publicBrowser.ts'
 
 const PAGE_URL = 'https://so.qq.com/iaimode/search'
 const SEARCH_URL = 'https://lizhiassistant.search.qq.com/browser_aimode/aimode/query_get'
@@ -15,10 +16,16 @@ const MAX_STREAM_BYTES = 1024 * 1024
 const MAX_ARTICLES = 10
 const ARTICLE_CONCURRENCY = 3
 const DAY_MS = 86_400_000
+const CACHE_TTL_MS = 15 * 60_000
+const CACHE_LIMIT = 40
+const VERIFICATION_COOLDOWN_MS = 5 * 60_000
 const beijingDate = new Intl.DateTimeFormat('zh-CN', {
   timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
 })
 let searching = false
+let verificationBlockedUntil = 0
+const cache = new Map<string, { expiresAt: number; result: YuanbaoSearchResult }>()
+let anonymousStorageState: Awaited<ReturnType<BrowserContext['storageState']>> | undefined
 
 export class YuanbaoSearchError extends Error {
   constructor(message: string, readonly status = 502) {
@@ -46,7 +53,7 @@ const streamFrame = z.object({
 })
 
 function formatPublishedOn(timestamp: number): string {
-  return beijingDate.format(timestamp).replaceAll('/', '-')
+  return beijingDate.format(timestamp).replace(/\//g, '-')
 }
 
 function resolvePublishedOn(timestamp: unknown, date: unknown, now: number, today: string): string | undefined {
@@ -123,7 +130,7 @@ export function parseYuanbaoStream(stream: string, now = Date.now()): YuanbaoSea
   return { answer: text, articles: ranked }
 }
 
-type StreamCapture = { text: string } | { error: 'too-large' | 'invalid-stream' }
+type StreamCapture = { text: string } | { error: 'too-large' | 'invalid-stream' | 'anti-crawl' }
 
 export async function readYuanbaoStream(page: Page, url: string, signal: AbortSignal): Promise<YuanbaoSearchResult> {
   const bindingName = '__dashyCaptureYuanbaoStream'
@@ -149,9 +156,10 @@ export async function readYuanbaoStream(page: Page, url: string, signal: AbortSi
           return
         }
 
-        const decoder = new TextDecoder('utf-8', { fatal: true })
+        const decoder = new TextDecoder('utf-8')
         const chunks = []
         let size = 0
+        let preview = ''
         try {
           for (;;) {
             const { done, value } = await reader.read()
@@ -162,7 +170,14 @@ export async function readYuanbaoStream(page: Page, url: string, signal: AbortSi
               await capture({ error: 'too-large' })
               return
             }
-            chunks.push(decoder.decode(value, { stream: true }))
+            const chunk = decoder.decode(value, { stream: true })
+            chunks.push(chunk)
+            preview = (preview + chunk).slice(-12000)
+            if (/"data_type"\\s*:\\s*"anti_crawl"[\\s\\S]{0,600}"status"\\s*:\\s*"(?!pass)[^"]+"/i.test(preview)) {
+              void reader.cancel().catch(() => undefined)
+              await capture({ error: 'anti-crawl' })
+              return
+            }
           }
           chunks.push(decoder.decode())
           await capture({ text: chunks.join('') })
@@ -200,6 +215,8 @@ export async function readYuanbaoStream(page: Page, url: string, signal: AbortSi
         resolve(result.text)
       } else if ('error' in result && result.error === 'too-large') {
         reject(new YuanbaoSearchError('元宝返回的搜索结果过大'))
+      } else if ('error' in result && result.error === 'anti-crawl') {
+        reject(new YuanbaoSearchError('元宝要求浏览器验证，请稍后再试', 503))
       } else {
         reject(new YuanbaoSearchError('元宝返回的搜索结果无法解码，请重试'))
       }
@@ -221,19 +238,34 @@ export async function readYuanbaoStream(page: Page, url: string, signal: AbortSi
       page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 }),
     ])
     return parseYuanbaoStream(stream)
+  } catch (error) {
+    const pageText = await page.locator('body').innerText({ timeout: 1000 }).catch(() => '')
+    if (/当前请求量较大|安全验证|完成验证|验证码/.test(pageText)) {
+      throw new YuanbaoSearchError('元宝要求浏览器验证，请稍后再试', 503)
+    }
+    throw error
   } finally {
     cleanup()
   }
 }
 
 async function readSearchPage(query: string, signal: AbortSignal): Promise<YuanbaoSearchResult> {
-  const browser = await chromium.launch({ headless: true, chromiumSandbox: true, timeout: 20_000 })
+  const browser = await chromium.launch({
+    headless: true,
+    chromiumSandbox: true,
+    timeout: 20_000,
+    args: PUBLIC_BROWSER_ARGS,
+  })
   const closeBrowser = () => { void browser.close().catch(() => undefined) }
   signal.addEventListener('abort', closeBrowser, { once: true })
 
   try {
     signal.throwIfAborted()
-    const context = await browser.newContext({ serviceWorkers: 'block', acceptDownloads: false })
+    const context = await browser.newContext(publicBrowserContextOptions(browser, {
+      serviceWorkers: 'block', acceptDownloads: false, viewport: { width: 1440, height: 960 },
+      ...(anonymousStorageState ? { storageState: anonymousStorageState } : {}),
+    }))
+    await preparePublicBrowserContext(context)
     await context.routeWebSocket('**/*', socket => socket.close())
     await context.route('**/*', route => {
       const url = new URL(route.request().url())
@@ -252,12 +284,21 @@ async function readSearchPage(query: string, signal: AbortSignal): Promise<Yuanb
     // 匿名页面自行发出搜索请求，由站点完成会话初始化和请求校验。
     return await readYuanbaoStream(page, url.href, signal)
   } finally {
+    const context = browser.contexts()[0]
+    if (context) anonymousStorageState = await context.storageState().catch(() => anonymousStorageState)
     signal.removeEventListener('abort', closeBrowser)
     await browser.close().catch(() => undefined)
   }
 }
 
 export async function searchYuanbao(query: string, clientSignal: AbortSignal): Promise<YuanbaoSearchResult> {
+  const cacheKey = query.replace(/\s+/g, ' ').trim().toLowerCase()
+  const cached = cache.get(cacheKey)
+  if (cached && cached.expiresAt > Date.now()) return structuredClone(cached.result)
+  if (cached) cache.delete(cacheKey)
+  if (verificationBlockedUntil > Date.now()) {
+    throw new YuanbaoSearchError('元宝触发了访问保护，请 5 分钟后重试', 503)
+  }
   if (searching) throw new YuanbaoSearchError('已有元宝搜索正在进行，请稍后再试', 429)
   searching = true
   const searchSignal = AbortSignal.any([clientSignal, AbortSignal.timeout(55000)])
@@ -274,9 +315,14 @@ export async function searchYuanbao(query: string, clientSignal: AbortSignal): P
       }))
     }
     clientSignal.throwIfAborted()
+    cache.set(cacheKey, { expiresAt: Date.now() + CACHE_TTL_MS, result: structuredClone(result) })
+    while (cache.size > CACHE_LIMIT) cache.delete(cache.keys().next().value as string)
     return result
   } catch (error) {
     if (searchSignal.aborted && !clientSignal.aborted) throw new YuanbaoSearchError('元宝搜索超时，请稍后再试', 504)
+    if (error instanceof YuanbaoSearchError && /浏览器验证|访问保护/.test(error.message)) {
+      verificationBlockedUntil = Date.now() + VERIFICATION_COOLDOWN_MS
+    }
     throw error
   } finally {
     searching = false

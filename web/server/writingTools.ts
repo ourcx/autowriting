@@ -8,6 +8,7 @@ import { publicSourceUrl } from "./writingResearch.ts"
 import { usablePageText } from "./utils/search/webFetcher.ts"
 import { extractXiaohongshuArticle, isXiaohongshuArticle } from "./utils/search/xiaohongshuArticleContent.ts"
 import { assessPageText, extractReadablePage } from "./utils/search/pageContent.ts"
+import { preparePublicBrowserContext, publicBrowserContextOptions, PUBLIC_BROWSER_ARGS } from "./utils/publicBrowser.ts"
 
 export interface WritingPageImage {
   id: string
@@ -180,7 +181,12 @@ export class WritingToolSession {
       if (activeBrowsers >= 3) throw new WritingToolError("浏览器正在处理其他文章，请使用网页读取工具")
       activeBrowsers++
       try {
-        this.browser = await chromium.launch({ headless: true, chromiumSandbox: true, timeout: 15_000 })
+        this.browser = await chromium.launch({
+          headless: true,
+          chromiumSandbox: true,
+          timeout: 15_000,
+          args: PUBLIC_BROWSER_ARGS,
+        })
       } catch {
         activeBrowsers--
         throw new WritingToolError("浏览器未能启动，请安装 Playwright Chromium")
@@ -191,13 +197,23 @@ export class WritingToolSession {
         activeBrowsers--
         this.available()
       }
-      const context = await this.browser.newContext({
+      const browser = this.browser
+      if (!browser) throw new WritingToolError("浏览器会话未能初始化")
+      const context = await browser.newContext(publicBrowserContextOptions(browser, {
         serviceWorkers: "block", acceptDownloads: false, viewport: { width: 1280, height: 900 },
-      })
+      }))
+      await preparePublicBrowserContext(context)
       await context.routeWebSocket("**/*", socket => socket.close())
       await context.route("**/*", async route => {
         const request = route.request()
         const requestUrl = new URL(request.url())
+        // 微信公开文章对 Node/TLS 指纹较敏感。固定官方域名的顶层 GET 交给 Chromium，
+        // 跳转后的每个新请求仍会重新经过本路由；其他资源继续走统一网络安全代理。
+        if (request.method() === "GET" && request.resourceType() === "document"
+          && requestUrl.hostname === "mp.weixin.qq.com") {
+          await route.continue()
+          return
+        }
         const sameSite = requestUrl.hostname === new URL(this.sourceUrl).hostname
         const verificationHost = VERIFICATION_HOST.test(requestUrl.hostname)
         const verificationRequest = (sameSite || verificationHost)
