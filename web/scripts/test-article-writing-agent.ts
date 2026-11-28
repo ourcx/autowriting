@@ -9,6 +9,8 @@ process.env.DATA_DIR = join(directory, "data")
 process.env.DRAFTS_DIR = join(directory, "drafts")
 process.env.LOG_DIR = join(directory, "logs")
 const { readArticlePage } = await import("../server/utils/search/readArticlePage.ts")
+const { assessPageText, extractReadablePage } = await import("../server/utils/search/pageContent.ts")
+const { extractPublicSourceUrls } = await import("../server/utils/search/sourceUrls.ts")
 const { preservesDraftAnchors } = await import("../server/writingAgentPolicy.ts")
 const { prepareArticleWriting, WritingAgentModelError } = await import("../server/articleWritingAgent.ts")
 const { checkArticleFacts, reviseArticleDraft } = await import("../server/writingRevision.ts")
@@ -96,15 +98,50 @@ try {
     task: "写作任务", materials: "已有用户素材", platform: "wechat" as const, sourceArticle: "",
     writingContext: "", examples: [], signal, progress: () => {},
   }
+  assert.deepEqual(extractPublicSourceUrls([
+    "[校方公告](https://news.gzhu.edu.cn/info/1002/55287.htm)、[广州日报](https://news.dayoo.com/a)",
+    "原始链接：https://example.com/report.html），后续说明不属于 URL",
+  ].join("\n")), [
+    "https://news.gzhu.edu.cn/info/1002/55287.htm",
+    "https://news.dayoo.com/a",
+    "https://example.com/report.html",
+  ])
+  assert.equal(assessPageText("首页\n新闻\n通知\n机构设置\n联系我们\n返回顶部").usable, false)
+  const extracted = extractReadablePage(`<body><header>${"导航".repeat(100)}</header><div class="dy-article"><h1>大豆测产</h1><div id="text_content"><p>${"广州大学团队完成大豆实收测产，亩产数据经过现场核验。".repeat(4)}</p><p>${"报道同时说明了试验面积、品种名称和测产时间。".repeat(4)}</p></div><div class="related">${"相关推荐".repeat(100)}</div></div></body>`, "https://news.example.com/a")
+  assert.equal(extracted.selector, "#text_content")
+  assert.match(extracted.text, /广州大学团队完成大豆实收测产/)
+  assert.doesNotMatch(extracted.text, /导航|相关推荐/)
   const malformed = await prepareArticleWriting({ ...base, complete: async (_messages, phase) => phase === "decision" ? "无效动作" : "根据现有素材写作" })
   assert.match(malformed.prompt, /根据现有素材写作/)
+  const scopedActions = [
+    '{"action":"search_web","query":"广州大学 挑战杯"}',
+    '{"action":"read_source","id":"W1"}',
+    '{"action":"read_source","id":"W2"}',
+    '{"action":"finish","plan":{}}',
+  ]
+  const scoped = await prepareArticleWriting({
+    ...base, task: "# 写作任务要求\n- **文章主题**：广州大学比赛介绍", materials: "",
+    complete: async (_messages, phase) => phase === "outline" ? "只用广州大学来源写本校事实，别校页面只解释比赛概念。" : scopedActions.shift() || '{"action":"finish","plan":{}}',
+    web: {
+      search: async () => [
+        { url: "https://youth.gzhu.edu.cn/notice", title: "广州大学挑战杯通知", snippet: "预览", source: "校团委" },
+        { url: "https://example.edu.cn/notice", title: "广东理工职业学院挑战杯通知", snippet: "预览", source: "其他学校" },
+      ],
+      read: async url => url.includes("gzhu")
+        ? "广州大学发布挑战杯校赛通知，正文列明了参赛范围、作品要求、报名日期和校内负责单位。通知同时说明了评审流程和材料提交方式。"
+        : "广东理工职业学院发布本校挑战杯通知，正文列明了该校参赛范围、报名日期、评审流程和负责部门。这些安排只适用于该学院。",
+    },
+  })
+  assert.deepEqual(scoped.sources.map(source => source.scope), [undefined, "background"])
+  assert.match(scoped.prompt, /已读背景资料，只能解释通用概念/)
+  assert.match(scoped.prompt, /1 篇背景资料，不能用来证明任务主体/)
   const realFetch = globalThis.fetch
   const publicUrl = "https://1.1.1.1/fixture"
   try {
     globalThis.fetch = async input => {
       assert.equal(String(input), publicUrl)
       const page = new Response(
-        `<body><nav>导航 ${"甲".repeat(180)}</nav><div id="js_content"><div><p>公众号嵌套容器中的第一段正文。</p></div><p>第二段也应读取。</p></div><footer>页脚</footer></body>`,
+        `<body><nav>导航 ${"甲".repeat(180)}</nav><div id="js_content"><div><p>公众号嵌套容器中的第一段正文，说明项目于十一月启动，并给出了公开的建设范围和负责单位。</p></div><p>第二段也应读取，其中记录了公告时间、实施边界和后续安排，足以确认这不是外层菜单或验证页面。</p></div><footer>页脚</footer></body>`,
         { headers: { "Content-Type": "text/html" } },
       )
       Object.defineProperty(page, "url", { value: "https://mp.weixin.qq.com/s/fixture" })
@@ -120,7 +157,7 @@ try {
       { headers: { "Content-Type": "text/html" } },
     )
     const fallback = await readArticlePage(publicUrl, {
-      fetchWithDeepSeek: async () => "[校方公告](https://example.com) 仅公示设计招标。",
+      fetchWithDeepSeek: async () => "[校方公告](https://example.com) 仅公示设计招标，公告列明了项目范围、负责单位、申报期限和材料提交方式。页面没有宣布已经开工，也没有给出施工完成时间或现场施工安排，因此当前只能确认招标信息已经公开，不能把设计招标写成项目正式开工。",
     })
     assert.equal(fallback.method, "deepseek")
     assert.match(fallback.content, /^\[校方公告\]/)
@@ -135,7 +172,7 @@ try {
       const url = String(input)
       requests.push(url)
       if (url === scriptUrl) {
-        return new Response('document.querySelector("#js_content").innerText = "这是浏览器执行原站脚本后显示的公众号正文。"', {
+        return new Response('document.querySelector("#js_content").innerText = "这是浏览器执行原站脚本后显示的公众号正文。正文列明了活动时间、承办单位、参赛范围和公开结果，并补充了现场安排、报名期限和结果核验方式。页面内容连续完整，可以排除导航壳、登录提示和人机验证页面，作为本次写作引用的公开原文。"', {
           headers: { "Content-Type": "application/javascript; charset=utf-8" },
         })
       }

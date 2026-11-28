@@ -8,6 +8,7 @@ import { ArticlePageReadError } from "./utils/search/readArticlePage.ts"
 import { usablePageText } from "./utils/search/webFetcher.ts"
 import { nowDay } from "./utils/date.ts"
 import { isWritingVerificationText, WritingToolError, type WritingToolSession, type WritingPageSnapshot } from "./writingTools.ts"
+import { extractPublicSourceUrls } from "./utils/search/sourceUrls.ts"
 
 const MAX_SEARCHES = 2
 const MAX_READS = 3
@@ -49,6 +50,22 @@ interface Evidence extends CandidateResearchSource {
   id: string
   text: string
   matches?: string[]
+}
+
+const ORGANIZATION = /[\u4e00-\u9fff]{2,14}?(?:大学|学院)(?!生)|[\u4e00-\u9fff]{2,14}?(?:学校|医院|委员会|研究院|研究所|公司|集团)/g
+
+function organizationNames(text: string): string[] {
+  return [...new Set(text.match(ORGANIZATION) || [])]
+}
+
+function sourceScope(task: string, source: Evidence, content: string): CandidateResearchSource["scope"] {
+  const topic = task.match(/文章主题\*{0,2}\s*[：:]\s*([^\n]+)/)?.[1] || task
+  const subjects = organizationNames(topic.replace(/^\s*(?:请|帮我)?(?:写一篇|写|介绍|关于|围绕|核对|分析|调研)\s*/, ""))
+  if (!subjects.length) return undefined
+  const sourceOrganizations = organizationNames(`${source.title}\n${content.slice(0, 6000)}`)
+  if (sourceOrganizations.some(name => subjects.includes(name))) return undefined
+  // 页面明确写的是另一家机构时，只能解释通用背景，不能替代任务主体的证据。
+  return sourceOrganizations.length ? "background" : undefined
 }
 
 export type StartWritingStep = (
@@ -126,7 +143,10 @@ function renderEvidence(evidence: Evidence[], limit = MAX_EVIDENCE): string {
   let remaining = limit
   return [...evidence].sort((left, right) => Number(right.read) - Number(left.read)).flatMap(source => {
     if (remaining < 320) return []
-    const heading = `${source.id} · ${source.title}\n${source.url}\n${source.publishedAt || "日期未知"} · ${source.read ? "已读网页正文" : "搜索预览，仅供找线索"}`
+    const readState = source.read ? source.scope === "background"
+      ? "已读背景资料，只能解释通用概念，不能证明任务主体的事实" : "已读网页正文"
+      : "搜索预览，仅供找线索"
+    const heading = `${source.id} · ${source.title}\n${source.url}\n${source.publishedAt || "日期未知"} · ${readState}`
     const textLimit = Math.min(remaining - heading.length - 3, source.read ? 4200 : 760)
     if (textLimit < 100) return []
     const text = source.matches?.length ? `${source.matches.join("\n…\n")}\n\n${source.text}` : source.text
@@ -137,8 +157,7 @@ function renderEvidence(evidence: Evidence[], limit = MAX_EVIDENCE): string {
 }
 
 function sourceUrls(materials: string, sourceArticle: string): string[] {
-  const links = `${materials}\n${sourceArticle}`.match(/https?:\/\/[^\s<>"`\]）】]+/gi) || []
-  return [...new Set(links.map(url => publicSourceUrl(url.replace(/[)。，、；,.;]+$/, ""))).filter(Boolean))].slice(0, 8)
+  return extractPublicSourceUrls(`${materials}\n${sourceArticle}`)
 }
 
 function safeQuery(query: string): string {
@@ -200,7 +219,7 @@ export async function prepareArticleWriting(options: WritingAgentOptions) {
   const timeSensitive = TIME_SENSITIVE.test(`${task}\n${options.materials.slice(0, 6000)}\n${sourceArticle.slice(0, 6000)}`)
   let searchSucceeded = false
   let directive: z.infer<typeof planSchema> | undefined
-  const sourceInfo = ({ title, url, publishedAt }: Evidence) => ({ title, url, publishedAt })
+  const sourceInfo = ({ title, url, publishedAt, scope }: Evidence) => ({ title, url, publishedAt, scope })
 
   async function search(query: string) {
     if (!searchWeb) return
@@ -269,15 +288,16 @@ export async function prepareArticleWriting(options: WritingAgentOptions) {
   function recordRead(source: Evidence, content: string, finish: ReturnType<StartWritingStep>) {
     source.text = content.slice(0, 24_000)
     source.read = true
+    source.scope = sourceScope(task, source, source.text)
     observe(`${source.id}「${source.title}」已读到 ${source.text.length} 字正文。`)
-    finish({ output: `读到 ${source.text.length} 字正文。\n\n${source.text.slice(0, 500)}`, sources: [sourceInfo(source)] })
+    finish({ output: `读到 ${source.text.length} 字正文。${source.scope === "background" ? "页面主体与写作任务不同，已标为背景资料。" : ""}\n\n${source.text.slice(0, 500)}`, sources: [sourceInfo(source)] })
   }
 
   function recordBrowserPage(page: WritingPageSnapshot) {
     browserLinks.clear()
     for (const link of page.links) if (link.url) browserLinks.add(link.url)
     browserState = JSON.stringify({
-      url: page.url, title: page.title, links: page.links,
+      url: page.url, title: page.title, selector: page.selector, links: page.links,
       images: page.images.map(({ id, alt, width, height }) => ({ id, alt, width, height })),
     })
     let source = evidence.find(item => item.url === page.url)
@@ -289,6 +309,7 @@ export async function prepareArticleWriting(options: WritingAgentOptions) {
     if (usablePageText(page.text)) {
       source.text = page.text
       source.read = true
+      source.scope = sourceScope(task, source, source.text)
       opened.add(source.id)
       observe(`${source.id} 浏览器实际读到 ${page.text.length} 字，页面状态：${browserState}`)
     } else observe(`页面未读到正文，当前页面状态：${browserState}`)
@@ -296,7 +317,7 @@ export async function prepareArticleWriting(options: WritingAgentOptions) {
   }
 
   async function collectSourceImages(source: Evidence) {
-    if (!tools || !options.imageCount) return
+    if (!tools || !options.imageCount || source.scope === "background") return
     try {
       const images = await tools.collectImages(source.url, source.title)
       observe(`${source.id} 提取到的真实网页图片：${images.map(image => `${image.id} ${image.alt || "原网页未写图注"}`).join("；") || "无"}`)
@@ -610,11 +631,15 @@ ${options.imageCount ? `本篇希望配 ${options.imageCount} 张真实图片。
   if (!materials && !sourceArticle.trim() && verified.length === 0) {
     throw new Error("没有可用素材，网页也未读到可引用的内容。可补充素材或检查搜索服务后重试。")
   }
+  const primarySources = verified.filter(source => source.scope !== "background")
+  const backgroundSources = verified.filter(source => source.scope === "background")
   const researchBoundary = [
     !searchSucceeded && "本次没有成功完成联网搜索。",
     verified.length
       ? "时效结论只采用读到的原文能确认的日期和适用条件。页面没写日期或资料互相冲突时，明确写出截止点或待确认项。"
       : "没有读到可引用的网页。原素材里的旧数字与现状说法只沿用可确认的历史范围，不能写成最新结论。",
+    backgroundSources.length && `另有 ${backgroundSources.length} 篇背景资料，不能用来证明任务主体的具体事实。`,
+    verified.length && !primarySources.length && "没有读到任务主体的直接来源，不得把背景资料改写成任务主体已经发生的事实。",
   ].filter(Boolean).join(" ")
   progress("正在整理可引用证据和写作提纲")
   const outline = trace("outline", "整理提纲和待核对项")
@@ -656,6 +681,8 @@ ${options.imageCount ? `本篇希望配 ${options.imageCount} 张真实图片。
       `# 写作提纲（需对照来源复核）\n${prepared.trim()}`,
     ].filter(Boolean).join("\n\n"),
     referenceArticleIds: examples.map(item => item.id),
-    sources: verified.map(({ title, url, publishedAt, read }): CandidateResearchSource => ({ title, url, publishedAt, read })),
+    sources: verified.map(({ title, url, publishedAt, read, scope }): CandidateResearchSource => ({
+      title, url, publishedAt, read, ...(scope ? { scope } : {}),
+    })),
   }
 }

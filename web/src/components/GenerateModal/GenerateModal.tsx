@@ -292,7 +292,7 @@ export default function GenerateModal({ articleId, task, materials, sourceArticl
                   <SourceList sources={row.images.map(image => ({ title: `${image.source === "web" ? "真实来源" : "AI 生成示意图"} · ${image.alt}`, url: image.sourceUrl }))} />
                 </Collapse>}
                 {Boolean(row.researchSources?.length || row.referenceArticleIds?.length) && (
-                  <Collapse className="gc-evidence" label={<>本次参考了 {row.referenceArticleIds?.length || 0} 篇历史文章，读了 {row.researchSources?.length || 0} 个网页</>}>
+                  <Collapse className="gc-evidence" label={<>本次参考了 {row.referenceArticleIds?.length || 0} 篇历史文章，读了 {row.researchSources?.filter(source => source.scope !== "background").length || 0} 个主体来源{row.researchSources?.some(source => source.scope === "background") ? `，${row.researchSources.filter(source => source.scope === "background").length} 篇背景资料` : ""}</>}>
                     {!!row.researchSources?.length && <SourceList sources={row.researchSources} />}
                   </Collapse>
                 )}

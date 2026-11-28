@@ -70,23 +70,31 @@ async function storeArticleImage(buffer: Buffer, articleId: string, alt: string,
 export async function prepareArticleImages(options: ArticleImagesOptions): Promise<string> {
   const { tools, mode, count, signal, startStep, progress } = options
   if (mode === "none") return ""
+  const eligibleSources = options.sources.filter(source => source.scope !== "background")
+  const pageKey = (value: string) => {
+    try { const url = new URL(value); return `${url.hostname}${url.pathname.replace(/\/$/, "")}` }
+    catch { return "" }
+  }
+  const eligiblePages = new Set(eligibleSources.map(source => pageKey(source.url)).filter(Boolean))
+  const eligibleImages = () => tools.images.filter(image => eligiblePages.has(pageKey(image.sourceUrl)))
   progress("正在选择与正文相符的真实图片")
   const discovery = startStep("image", "采集原网页图片")
-  for (const source of options.sources.slice(0, 6)) {
+  for (const source of eligibleSources.slice(0, 6)) {
     signal.throwIfAborted()
     try { await tools.collectImages(source.url, source.title) } catch { signal.throwIfAborted() }
-    if (tools.browserEnabled && tools.images.filter(image => !image.screenshot).length < count) {
+    if (tools.browserEnabled && eligibleImages().filter(image => !image.screenshot).length < count) {
       try { await tools.open(source.url) } catch { signal.throwIfAborted() }
     }
   }
-  discovery({ status: tools.images.length ? "done" : "failed", output: `实际发现 ${tools.images.length} 张候选图片。`,
-    sources: options.sources.slice(0, 5).map(({ title, url }) => ({ title, url })) })
-  if (!tools.images.length && mode !== "generate") return "未取得可下载的原图，原网页可能无法访问。可补充公开网页链接后重试，重试会重新采集真实图片。"
+  const candidates = eligibleImages()
+  discovery({ status: candidates.length ? "done" : "failed", output: `从主体来源实际发现 ${candidates.length} 张候选图片。`,
+    sources: eligibleSources.slice(0, 5).map(({ title, url }) => ({ title, url })) })
+  if (!candidates.length && mode !== "generate") return "主体来源没有可下载的原图；背景资料中的图片不会混入本篇。可补充任务主体的公开网页链接后重试。"
   const finishReadImages = startStep("image", "读取候选图片")
   progress("正在下载原图，让模型实际看图后选择")
   const buffers = new Map<string, Buffer>()
   const previews: Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string; detail: "high" } }> = []
-  for (const image of tools.images.filter(item => !options.existingImages?.some(existing => existing.originalUrl === item.url)).slice(0, 24)) {
+  for (const image of candidates.filter(item => !options.existingImages?.some(existing => existing.originalUrl === item.url)).slice(0, 24)) {
     signal.throwIfAborted()
     try {
       const buffer = image.screenshot || await readPublicBytes(await fetchPublicUrl(image.url, {
@@ -109,7 +117,7 @@ export async function prepareArticleImages(options: ArticleImagesOptions): Promi
   const finishPlan = startStep("image", "选择配图和插入位置")
   let plan: z.infer<typeof imagePlanSchema>
   try {
-    const catalog = tools.images.filter(image => buffers.has(image.id))
+    const catalog = candidates.filter(image => buffers.has(image.id))
       .map(({ id, alt, sourceUrl, pageTitle, width, height, screenshot }) =>
       ({ id, alt, sourceUrl, pageTitle, width, height, screenshot: Boolean(screenshot) }))
     const raw = await options.complete([

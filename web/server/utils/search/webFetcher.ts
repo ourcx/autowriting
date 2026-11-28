@@ -19,6 +19,7 @@ import { assertPublicHttpUrl, fetchPublicUrl } from "../networkPolicy.ts"
 import { extractWechatArticle, toMarkdown } from "./wechatArticleContent.ts"
 import { load } from "cheerio"
 import { extractXiaohongshuArticle, isXiaohongshuArticle } from "./xiaohongshuArticleContent.ts"
+import { assessPageText, extractReadablePage } from "./pageContent.ts"
 
 // ── 常量 ────────────────────────────────────────────────────────────────────────
 
@@ -96,160 +97,8 @@ function checkUrlSecurity(url: string): string | null {
   return null
 }
 
-// ── HTML 正文提取 ───────────────────────────────────────────────────────────────
-
-/**
- * 清理噪声标签：script、style、nav、aside、footer、header、form、iframe
- * class/id 含 ads、banner、sidebar、comment 等关键词的元素一并删除
- */
-function cleanNoiseTags(html: string): string {
-  // 删除完整标签（script / style / nav / aside / footer / header / form / iframe）
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/<nav[\s\S]*?<\/nav>/gi, "")
-    .replace(/<aside[\s\S]*?<\/aside>/gi, "")
-    .replace(/<footer[\s\S]*?<\/footer>/gi, "")
-    .replace(/<header[\s\S]*?<\/header>/gi, "")
-    .replace(/<\/?form\b[^>]*>/gi, "")
-    .replace(/<(?:button|select|textarea)\b[\s\S]*?<\/(?:button|select|textarea)>/gi, "")
-    .replace(/<input\b[^>]*>/gi, "")
-    .replace(/<iframe[\s\S]*?<\/iframe>/gi, "")
-    //删除canvas\img等多媒体标签的内容
-    .replace(/<canvas[^>]*>/gi, "")
-    .replace(/<img[^>]*>/gi, "")
-    .replace(/<svg[^>]*>/gi, "")
-    .replace(/<audio[^>]*>/gi, "")
-    .replace(/<video[^>]*>/gi, "")
-    .replace(/<canvas[\s\S]*?<\/canvas>/gi, "")
-    // 删除带 noise class/id 的 div
-    .replace(/<div[^>]*\b(?:class|id)\s*=\s*"[^"]*(?:ads|banner|sidebar|comment|advertisement|popup|nav|menu|footer|header)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, "")
-}
-
-/**
- * 尝试从 HTML 中找到主内容容器
- * 优先找 <article>、<main>、[role=main]
- * 找不到则回退到 <body>
- */
-function findMainContainer(html: string): string {
-  // 尝试匹配 <article>...</article>
-  const articleMatch = html.match(/<article[\s>][\s\S]*?<\/article>/i)
-  if (articleMatch) return articleMatch[0]
-
-  // 尝试匹配 <main>...</main>
-  const mainMatch = html.match(/<main[\s>][\s\S]*?<\/main>/i)
-  if (mainMatch) return mainMatch[0]
-
-  // 尝试匹配 [role="main"]
-  const roleMainMatch = html.match(/<[^>]+role\s*=\s*"main"[^>]*>[\s\S]*?<\/[^>]+>/i)
-  if (roleMainMatch) return roleMainMatch[0]
-
-  // 回退到 body
-  const bodyMatch = html.match(/<body[\s>][\s\S]*?<\/body>/i)
-  if (bodyMatch) return bodyMatch[0]
-
-  return html
-}
-
 export function usablePageText(content: string): boolean {
-  const text = content.trim()
-  return text.length > 0 && !/^\[(?:安全拦截|频率限制|抓取失败|内容提取失败|未提取到正文|超时)\]/.test(text)
-    && !/^(?:#+\s*)?(?:403(?:\s+forbidden)?|404(?:\s+not found)?|forbidden|502\s+bad gateway|503\s+service unavailable)(?:\s|$)/i.test(text)
-    && !/(?:环境异常.{0,40}完成验证|完成安全验证后|此内容因违规无法查看|该内容已被发布者删除|该内容已删除|该内容暂时无法查看|访问过于频繁|robot check|just a moment|access denied|target .* returned status code|warning: .*captcha)/i.test(text.slice(0, 650))
-}
-
-/**
- * HTML → Markdown 简易转换
- * - h1-h6 → # ~ ######
- * - p → 段落
- * - strong/b → **粗体**
- * - em/i → *斜体*
- * - a → [text](url)
- * - pre/code → 代码块
- * - li → - 列表
- * - br → 换行
- * - 其他标签去除
- */
-function htmlToMarkdown(html: string): string {
-  let md = html
-
-  // 1. pre/code 代码块（在清标签之前处理）
-  md = md.replace(/<pre[^>]*><code[^>]*>([\s\S]*?)<\/code><\/pre>/gi, (_, code) => {
-    const decoded = code
-      .replace(/</g, "<")
-      .replace(/>/g, ">")
-      .replace(/&/g, "&")
-      .replace(/"/g, '"')
-      .trim()
-    return `\n\`\`\`\n${decoded}\n\`\`\`\n`
-  })
-
-  // 2. 标题 h1-h6
-  md = md.replace(/<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi, (_, level, content) => {
-    return `\n${"#".repeat(parseInt(level, 10))} ${stripInlineTags(content).trim()}\n`
-  })
-
-  // 3. 段落
-  md = md.replace(/<p[^>]*>([\s\S]*?)<\/p>/gi, (_, content) => {
-    return `\n${stripInlineTags(content).trim()}\n`
-  })
-
-  // 4. 列表项
-  md = md.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, (_, content) => {
-    return `- ${stripInlineTags(content).trim()}\n`
-  })
-
-  // 5. 换行
-  md = md.replace(/<br\s*\/?>/gi, "\n")
-
-  // 6. strong / b
-  md = md.replace(/<(?:strong|b)[^>]*>([\s\S]*?)<\/(?:strong|b)>/gi, "**$1**")
-
-  // 7. em / i
-  md = md.replace(/<(?:em|i)[^>]*>([\s\S]*?)<\/(?:em|i)>/gi, "*$1*")
-
-  // 8. 链接
-  md = md.replace(/<a[^>]*href\s*=\s*"([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, "[$2]($1)")
-
-  // 9. 表格简易处理
-  md = md.replace(/<table[^>]*>[\s\S]*?<\/table>/gi, (table) => {
-    const rows = table.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || []
-    const mdRows: string[] = []
-    for (let i = 0; i < rows.length; i++) {
-      const cells = rows[i].match(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi) || []
-      const mdCells = cells.map((c) => stripInlineTags(c.replace(/<[^>]+>/g, "").trim()))
-      mdRows.push(`| ${mdCells.join(" | ")} |`)
-      if (i === 0 && rows.length > 1) {
-        mdRows.push(`| ${mdCells.map(() => "---").join(" | ")} |`)
-      }
-    }
-    return `\n${mdRows.join("\n")}\n`
-  })
-
-  // 10. 去除所有剩余的 HTML 标签
-  md = md.replace(/<[^>]+>/g, "")
-
-  // 11. HTML 实体解码
-  md = md
-    .replace(/&nbsp;/g, " ")
-    .replace(/</g, "<")
-    .replace(/>/g, ">")
-    .replace(/&/g, "&")
-    .replace(/"/g, '"')
-    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)))
-
-  // 12. 压缩多余空行
-  md = md
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim()
-
-  return md
-}
-
-/** 去除内联标签但保留文本 */
-function stripInlineTags(text: string): string {
-  return text.replace(/<[^>]+>/g, "")
+  return assessPageText(content).usable
 }
 
 // ── 主抓取函数 ──────────────────────────────────────────────────────────────────
@@ -347,18 +196,23 @@ export async function webFetch(url: string, options: FetchOptions = {}): Promise
 
     // 4. HTML 正文提取
     const universityContent = load(html)("#vsb_content, .v_news_content").first().html()
+    const readable = !wechatArticle && !xiaohongshuArticle && !universityContent
+      ? extractReadablePage(html, resp.url || url) : undefined
     const markdown = wechatArticle ? wechatContent
       : xiaohongshuArticle ? extractXiaohongshuArticle(html, resp.url || url)
       : universityContent ? toMarkdown(universityContent, resp.url || url)
-      : htmlToMarkdown(findMainContainer(cleanNoiseTags(html)))
+      : readable?.text || ""
 
-    if ((!wechatArticle && markdown.length < 50) || !usablePageText(markdown)) {
-      logger.warn("WEB-FETCH", "正文提取后内容过短", { url, length: markdown.length })
+    const quality = assessPageText(markdown)
+    if ((!wechatArticle && markdown.length < 50) || !quality.usable) {
+      logger.warn("WEB-FETCH", "网页没有可用正文", { url, length: markdown.length, reason: quality.reason,
+        selector: readable?.selector || (universityContent ? "university-content" : wechatArticle ? "wechat-content" : xiaohongshuArticle ? "xiaohongshu-data" : "") })
       return `[未提取到正文] ${url} 可能是 JS 渲染页面或防爬墙，本期范围内不再重试。`
     }
 
     const truncated = markdown.slice(0, maxChars)
-    logger.info("WEB-FETCH", "抓取成功", { url, length: truncated.length })
+    logger.info("WEB-FETCH", "抓取成功", { url, length: truncated.length,
+      selector: readable?.selector || (universityContent ? "university-content" : wechatArticle ? "wechat-content" : xiaohongshuArticle ? "xiaohongshu-data" : "") })
     return truncated
   } catch (err: unknown) {
     const e = err as Error

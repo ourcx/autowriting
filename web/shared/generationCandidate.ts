@@ -19,6 +19,7 @@ export interface CandidateResearchSource {
   url: string
   publishedAt?: string
   read: boolean
+  scope?: "primary" | "background"
 }
 
 export type CandidateTraceStatus = "running" | "done" | "failed" | "skipped" | "interrupted" | "changes_requested"
@@ -28,6 +29,7 @@ export interface CandidateTraceSource {
   url?: string
   articleId?: string
   publishedAt?: string
+  scope?: "primary" | "background"
 }
 
 export interface CandidateTraceStep {

@@ -7,6 +7,7 @@ import { assertPublicHttpUrl, fetchPublicUrl } from "./utils/networkPolicy.ts"
 import { publicSourceUrl } from "./writingResearch.ts"
 import { usablePageText } from "./utils/search/webFetcher.ts"
 import { extractXiaohongshuArticle, isXiaohongshuArticle } from "./utils/search/xiaohongshuArticleContent.ts"
+import { assessPageText, extractReadablePage } from "./utils/search/pageContent.ts"
 
 export interface WritingPageImage {
   id: string
@@ -25,6 +26,7 @@ export interface WritingPageSnapshot {
   text: string
   links: Array<{ id: string; text: string; url?: string }>
   images: WritingPageImage[]
+  selector?: string
 }
 
 export class WritingToolError extends Error {}
@@ -254,9 +256,10 @@ export class WritingToolSession {
     // 公众号只等待文章正文，不能把“环境异常”等提示当成已加载正文。
     await page.waitForFunction(() => {
       const root = location.hostname === "mp.weixin.qq.com" ? document.querySelector("#js_content")
-        : document.querySelector("#vsb_content,.v_news_content,article,main") || document.body
-      return Boolean(root && (root.textContent?.trim() || root.querySelector("img")))
+        : document.querySelector("#vsb_content,.v_news_content,[itemprop=articleBody],#text_content,#wza_content,.article-content,.article_content,.post-content,.entry-content,.news-content,.detail-content,.content-detail,.dy-article,article,main,[role=main]")
+      return Boolean(root && ((root.textContent?.replace(/\s/g, "").length || 0) >= 80 || root.querySelector("img")))
     }, undefined, { timeout: 8000 }).catch(() => {})
+    await page.waitForLoadState("networkidle", { timeout: 3000 }).catch(() => {})
     await this.handleVerification()
     return this.snapshot()
   }
@@ -287,7 +290,7 @@ export class WritingToolSession {
     if (!url) throw new WritingToolError("当前页面不是可读取的公开网页")
     const data = await this.page.evaluate(() => {
       const root = location.hostname === "mp.weixin.qq.com" ? document.querySelector<HTMLElement>("#js_content")
-        : document.querySelector<HTMLElement>("#vsb_content,.v_news_content,article,main,[role=main]") || document.body
+        : document.querySelector<HTMLElement>("#vsb_content,.v_news_content,[itemprop=articleBody],#text_content,#wza_content,.article-content,.article_content,.post-content,.entry-content,.news-content,.detail-content,.content-detail,.dy-article,article,main,[role=main]")
       const links = [...document.querySelectorAll<HTMLElement>("a[href],button:not([type=submit]),summary,[role=button]")]
         .filter(element => element.getClientRects().length && !element.closest("form")).slice(0, 50).map((element, index) => {
           const id = `E${index + 1}`
@@ -300,13 +303,23 @@ export class WritingToolSession {
         alt: (image.alt || image.closest("figure")?.querySelector("figcaption")?.textContent || "").trim().slice(0, 220),
         width: image.naturalWidth || undefined, height: image.naturalHeight || undefined,
       })).filter(image => image.url && (!image.width || image.width >= 240) && (!image.height || image.height >= 120)).slice(0, 30)
-      return { title: document.title.slice(0, 180), text: root?.innerText?.trim().slice(0, 24_000) || "", links, images }
+      return { title: document.title.slice(0, 180), text: "", links, images }
     })
     if (await this.verificationVisible()) throw new WritingToolError("人机验证尚未通过，这个页面不能当作已读正文")
     const html = await this.page.content()
-    if (isXiaohongshuArticle(url)) data.text = extractXiaohongshuArticle(html, url)
+    let selector = "xiaohongshu-data"
+    let quality: ReturnType<typeof assessPageText>
+    if (isXiaohongshuArticle(url)) {
+      data.text = extractXiaohongshuArticle(html, url)
+      quality = assessPageText(data.text)
+    } else {
+      const readable = extractReadablePage(html, url)
+      data.text = readable.text
+      selector = readable.selector
+      quality = readable.quality
+    }
     if (!usablePageText(data.text)) {
-      throw new WritingToolError("网页未返回可读正文，当前可能是登录、验证或不可访问页面。")
+      throw new WritingToolError(`网页未返回可读正文：${quality.reason || "当前可能是登录、验证或不可访问页面"}。`)
     }
     this.clickIds = new Set(data.links.map(link => link.id))
     this.savedFiles.set(`page-${this.savedFiles.size + 1}.txt`, `${url}\n${data.title}\n\n${data.text}`)
@@ -316,7 +329,7 @@ export class WritingToolSession {
       try { imageUrl = publicSourceUrl(new URL(image.url, url).href) } catch { return [] }
       return imageUrl ? [{ ...image, url: imageUrl, sourceUrl: url, pageTitle: data.title }] : []
     }))
-    return { ...data, url, links: data.links.map(link => ({ ...link, url: link.url ? publicSourceUrl(link.url) || undefined : undefined })), images }
+    return { ...data, url, selector, links: data.links.map(link => ({ ...link, url: link.url ? publicSourceUrl(link.url) || undefined : undefined })), images }
   }
 
   async screenshot(): Promise<WritingPageImage> {
